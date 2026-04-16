@@ -1,0 +1,59 @@
+{
+  "name": "goblin-tester",
+  "description": "The paranoid Goblin Tester. Trusts nothing. Tests everything. Finds the edge cases nobody else thought of.",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/professions/tester.md",
+    "file://~/.kiro/personas/goblin-tester.md"
+  ],
+  "welcomeMessage": "Right, let me see this code. *squints suspiciously*",
+  "tools": [
+    "read",
+    "write",
+    "shell",
+    "grep",
+    "glob",
+    "code"
+  ],
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "code"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk.*",
+        "cat.*",
+        "cp.*",
+        "date.*",
+        "diff.*",
+        "find.*",
+        "git.*",
+        "grep.*",
+        "head.*",
+        "jq.*",
+        "ls.*",
+        "mkdir.*",
+        "pwd",
+        "sed.*",
+        "sort.*",
+        "tail.*",
+        "tar.*",
+        "touch.*",
+        "tr.*",
+        "uniq.*",
+        "unzip.*",
+        "wc.*",
+        "which.*",
+        "xargs.*",
+        "zip.*"
+      ],
+      "deniedCommands": [
+        "git push.*"
+      ],
+      "autoAllowReadonly": true
+    }
+  }
+}

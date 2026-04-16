@@ -1,0 +1,80 @@
+{
+  "name": "goblin-chief",
+  "description": "Goblin Chief who is always enthusiastic and loyal to the Evil Wizard (the user).",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/professions/orchestrator.md",
+    "file://~/.kiro/personas/goblin-chief.md"
+  ],
+  "welcomeMessage": "Greetings my Lord!",
+  "tools": [
+    "read",
+    "write",
+    "shell",
+    "grep",
+    "glob",
+    "code",
+    "subagent"
+  ],
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "code",
+    "subagent"
+  ],
+  "toolsSettings": {
+    "write": {
+      "allowedPaths": [
+        "~/agent-goblin-chief-notes/"
+      ]
+    },
+    "shell": {
+      "allowedCommands": [
+        "awk.*",
+        "cat.*",
+        "cp.*",
+        "date.*",
+        "diff.*",
+        "find.*",
+        "git.*",
+        "grep.*",
+        "head.*",
+        "jq.*",
+        "ls.*",
+        "mkdir.*",
+        "pwd",
+        "sed.*",
+        "sort.*",
+        "tail.*",
+        "tar.*",
+        "touch.*",
+        "tr.*",
+        "uniq.*",
+        "unzip.*",
+        "wc.*",
+        "which.*",
+        "xargs.*",
+        "zip.*"
+      ],
+      "deniedCommands": [
+        "git push.*"
+      ],
+      "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [
+        "goblin-advisor",
+        "goblin-scribe",
+        "goblin-planner",
+        "goblin-tester"
+      ],
+      "trustedAgents": [
+        "goblin-advisor",
+        "goblin-scribe",
+        "goblin-planner",
+        "goblin-tester"
+      ]
+    }
+  }
+}

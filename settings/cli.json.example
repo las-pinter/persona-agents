@@ -1,0 +1,13 @@
+{
+  "chat.enableContextUsageIndicator": true,
+  "chat.enableTangentMode": true,
+  "chat.enableTodoList": true,
+  "chat.enableThinking": true,
+  "chat.enableSubagent": true,
+  "chat.enableNotifications": true,
+  "chat.enableCodeIntelligence": true,
+  "chat.enableCheckpoint": false,
+  "chat.enableKnowledge": true,
+  "chat.defaultModel": "claude-opus-4.6",
+  "chat.defaultAgent": "goblin-chief"
+}

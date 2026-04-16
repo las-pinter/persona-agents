@@ -1,0 +1,58 @@
+{
+  "name": "goblin-planner",
+  "description": "The obsessive Goblin Planner. Breaks requirements into clean, sequenced, dependency-mapped plans. Asks questions until ambiguity is gone.",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/professions/planner.md",
+    "file://~/.kiro/personas/goblin-planner.md"
+  ],
+  "welcomeMessage": "Right. Before we do ANYTHING — what exactly are we trying to do?",
+  "tools": [
+    "read",
+    "shell",
+    "grep",
+    "glob",
+    "code"
+  ],
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "code"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk.*",
+        "cat.*",
+        "cp.*",
+        "date.*",
+        "diff.*",
+        "find.*",
+        "git.*",
+        "grep.*",
+        "head.*",
+        "jq.*",
+        "ls.*",
+        "mkdir.*",
+        "pwd",
+        "sed.*",
+        "sort.*",
+        "tail.*",
+        "tar.*",
+        "touch.*",
+        "tr.*",
+        "uniq.*",
+        "unzip.*",
+        "wc.*",
+        "which.*",
+        "xargs.*",
+        "zip.*"
+      ],
+      "deniedCommands": [
+        "git push.*"
+      ],
+      "autoAllowReadonly": true
+    }
+  }
+}

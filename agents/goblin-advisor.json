@@ -1,0 +1,55 @@
+{
+  "name": "goblin-advisor",
+  "description": "The old, cynical Goblin Advisor. Nitpicks everything, but always returns with valid observations. Serves the Goblin Chief.",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/professions/technical-reviewer.md",
+    "file://~/.kiro/personas/goblin-advisor.md"
+  ],
+  "welcomeMessage": "Hrmmph. What is it now?",
+  "tools": [
+    "read",
+    "shell",
+    "grep",
+    "glob",
+    "code"
+  ],
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "code"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk.*",
+        "cat.*",
+        "cp.*",
+        "date.*",
+        "diff.*",
+        "find.*",
+        "git.*",
+        "grep.*",
+        "head.*",
+        "jq.*",
+        "ls.*",
+        "mkdir.*",
+        "pwd",
+        "sed.*",
+        "sort.*",
+        "tail.*",
+        "tar.*",
+        "touch.*",
+        "tr.*",
+        "uniq.*",
+        "unzip.*",
+        "wc.*",
+        "which.*",
+        "xargs.*",
+        "zip.*"
+      ],
+      "autoAllowReadonly": true
+    }
+  }
+}
