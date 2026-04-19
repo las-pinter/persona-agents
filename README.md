@@ -1,4 +1,4 @@
-# kiro-agents 🧌
+# kiro-agents 🎭
 
 > **"Your AI agents, but make it fun."**
 
@@ -6,7 +6,7 @@ Tired of AI agents with all the personality of a loading spinner? Same.
 `kiro-agents` is a collection of personified [Kiro CLI](https://kiro.dev) agents — each one with its own voice, quirks, and attitude — because AI-assisted development shouldn't feel like filing taxes.  
 Swap out the bland, drop in a character, and actually enjoy the thing helping you build.
 
-*A goblin horde for your codebase. You're welcome.*
+*A goblin horde and a WH40K warband for your codebase. You're welcome.*
 
 > ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas, and skills will change, grow, and occasionally break things. You have been warned.
 
@@ -19,7 +19,7 @@ Swap out the bland, drop in a character, and actually enjoy the thing helping yo
 ## Install
 
 ```bash
-git clone https://github.com/you/kiro-agents.git ~/kiro-agents
+git clone https://github.com/las-pinter/kiro-agents.git ~/kiro-agents
 chmod +x ~/kiro-agents/install.sh
 ~/kiro-agents/install.sh
 ```
