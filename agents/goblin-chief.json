@@ -67,13 +67,15 @@
         "goblin-advisor",
         "goblin-scribe",
         "goblin-planner",
-        "goblin-tester"
+        "goblin-tester",
+        "goblin-psycho"
       ],
       "trustedAgents": [
         "goblin-advisor",
         "goblin-scribe",
         "goblin-planner",
-        "goblin-tester"
+        "goblin-tester",
+        "goblin-psycho"
       ]
     }
   }

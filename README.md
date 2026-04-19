@@ -68,6 +68,15 @@ kiro-agents/
 
 Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will never overwrite your changes. Running `update.sh` (which uses `--force`) will back up your files before overwriting.
 
+## The Goblin Horde
+
+- **goblin-chief** — Orchestrator. Fierce, loyal, delegates tasks to the horde.
+- **goblin-advisor** — Reviewer. Old, cynical, nitpicks everything but always valid.
+- **goblin-planner** — Planner. Obsessive, breaks down tasks, asks questions until ambiguity is dead.
+- **goblin-scribe** — Researcher. Ink-stained bookworm, knows Context7/DeepWiki/Exa.
+- **goblin-tester** — Tester. Paranoid, trusts nothing, finds every edge case.
+- **goblin-psycho** — Chaos goblin. No tools, no profession, just stupid gibberish and accidental genius.
+
 ## Adding Your Own Agents
 
 1. Create a persona in `~/.kiro/personas/{persona-type}/my-persona.md`
