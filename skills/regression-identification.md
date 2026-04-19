@@ -6,7 +6,7 @@ description: Identify which existing tests are relevant to a change and what new
 # Skill: Regression Identification
 
 ## When to Use
-When a change is made to existing code — identify which tests are relevant and what new tests are needed.
+When a change is made to existing code, identify which tests are relevant and what new tests are needed.
 
 ## Procedure
 
@@ -30,4 +30,4 @@ When a change is made to existing code — identify which tests are relevant and
 ## Rules
 
 - Never mark a change done without running the relevant existing tests
-- A passing test suite is necessary but not sufficient — check for missing coverage too
+- A passing test suite is necessary but not sufficient, check for missing coverage too

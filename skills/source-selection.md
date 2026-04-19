@@ -34,5 +34,3 @@ Context7 → DeepWiki → Exa
 - Use Exa for API reference questions when Context7 has the library
 - Use Context7 for questions about current events or recent releases
 - Use DeepWiki for questions not tied to a specific repository
-
-Next: `query-construction.md`

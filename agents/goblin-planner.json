@@ -12,13 +12,15 @@
     "shell",
     "grep",
     "glob",
-    "code"
+    "code",
+    "subagent"
   ],
   "allowedTools": [
     "read",
     "grep",
     "glob",
-    "code"
+    "code",
+    "subagent"
   ],
   "toolsSettings": {
     "shell": {
@@ -53,6 +55,14 @@
         "git push.*"
       ],
       "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [
+        "goblin-scribe"
+      ],
+      "trustedAgents": [
+        "goblin-scribe"
+      ]
     }
   }
 }

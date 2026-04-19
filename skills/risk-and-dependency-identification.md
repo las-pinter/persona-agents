@@ -29,5 +29,3 @@ For each task, ask:
 | Description | internal / external / implicit | high / medium / low | What to do about it |
 
 Flag any high-impact risks for human review before proceeding.
-
-Next: `plan-output-template.md`

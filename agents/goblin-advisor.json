@@ -3,7 +3,7 @@
   "description": "The old, cynical Goblin Advisor. Nitpicks everything, but always returns with valid observations. Serves the Goblin Chief.",
   "prompt": "See resources.",
   "resources": [
-    "file://~/.kiro/professions/technical-reviewer.md",
+    "file://~/.kiro/professions/reviewer.md",
     "file://~/.kiro/personas/goblin-advisor.md"
   ],
   "welcomeMessage": "Hrmmph. What is it now?",
@@ -12,13 +12,15 @@
     "shell",
     "grep",
     "glob",
-    "code"
+    "code",
+    "subagent"
   ],
   "allowedTools": [
     "read",
     "grep",
     "glob",
-    "code"
+    "code",
+    "subagent"
   ],
   "toolsSettings": {
     "shell": {
@@ -50,6 +52,14 @@
         "zip.*"
       ],
       "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [
+        "goblin-scribe"
+      ],
+      "trustedAgents": [
+        "goblin-scribe"
+      ]
     }
   }
 }

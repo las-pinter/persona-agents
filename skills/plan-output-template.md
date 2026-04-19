@@ -39,4 +39,3 @@ When producing a final plan to hand off to a developer or executor.
 
 - Do not hand off a plan with unresolved high-impact open questions
 - Acceptance criteria must be verifiable, not vague ("works correctly" is not acceptable)
-- See `shared-vocabulary.md` for complexity size definitions

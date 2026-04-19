@@ -67,5 +67,3 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 1. Create a persona in `~/.kiro/personas/my-persona.md`
 2. Create an agent config in `~/.kiro/agents/my-agent.json`
 3. Reference professions and skills via `file://~/.kiro/professions/...` in the agent's `resources` array
-
-See `agents/agent_config.json.example` for the agent config schema.

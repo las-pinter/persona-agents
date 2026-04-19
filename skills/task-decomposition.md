@@ -14,14 +14,11 @@ When breaking down a feature, epic, or requirement into executable tasks.
 2. **Identify the layers** — UI, API, data, infra, tests, docs. Which are affected?
 3. **Break into tasks** — each task must be independently completable and verifiable
 4. **Map dependencies** — which tasks block others? Draw the order explicitly
-5. **Estimate complexity** — small (< 2 hours), medium (2–8 hours), large (> 8 hours). If large, decompose further. See `shared-vocabulary.md` for definitions.
+5. **Estimate complexity** — small (< 2 hours), medium (2–8 hours), large (> 8 hours). If large, decompose further.
 6. **Assign acceptance criteria** — each task needs a clear definition of done
 
 ## Rules
 
 - No task should depend on an unplanned task
-- If a task cannot be estimated, it has unresolved unknowns — surface them first
+- If a task cannot be estimated, it has unresolved unknowns, surface them first
 - Prefer more smaller tasks over fewer large ones
-- If a task exceeds its complexity estimate by 2x during execution, surface it for re-decomposition
-
-Next: `risk-and-dependency-identification.md`

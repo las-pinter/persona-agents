@@ -6,7 +6,7 @@ description: Choose the right type of tests before writing any — unit, integra
 # Skill: Test Strategy Selection
 
 ## When to Use
-Before writing any tests — choose the right type first.
+Before writing any tests, choose the right type first.
 
 ## Test Types
 
@@ -25,8 +25,7 @@ Focus testing effort where failure is most costly or most likely:
 - Performance-sensitive code → benchmark tests
 
 ## Output
-State your strategy explicitly before writing tests:
-> "Unit tests for [X logic]. Integration tests for [Y boundary]. No e2e needed because [reason]."
+State your strategy explicitly before writing tests
 
 ## Rules
 

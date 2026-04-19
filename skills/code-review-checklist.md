@@ -1,55 +1,102 @@
 ---
 name: code-review-checklist
-description: Language-agnostic multi-pass checklist for thorough code reviews covering correctness, security, design, and maintainability.
+description: Structured checklist for reviewing code changes thoroughly and consistently.
 ---
 
 # Skill: Code Review Checklist
 
-Run passes in order. Stop and flag if Pass 1 fails — do not proceed to deeper passes on fundamentally broken code.
+Use this checklist when reviewing code. Not every item applies to every PR — focus on what's relevant.
 
-## Pass 1 — Intent
-- [ ] Do I understand what this change does and *why*?
-- [ ] Does the approach make sense at a high level?
-- [ ] Is the scope appropriate — not too large, not solving the wrong problem?
+## 1. PR Overview (First Pass)
 
-## Pass 2 — Correctness
-- [ ] Logic is sound; no obvious bugs or missed edge cases
-- [ ] Null/undefined/empty inputs are handled
-- [ ] Boundary conditions are covered (off-by-one, empty collections, max values)
-- [ ] Error cases are handled and surfaced — not silently swallowed
-- [ ] Concurrent access / race conditions considered where relevant
-- [ ] Resource cleanup: no leaked handles, connections, or memory
+- Does the PR description clearly explain what and why?
+- Do all changes logically belong in this PR (no unrelated changes)?
+- Is the scope appropriate — small enough to review thoroughly?
+- Does it match the linked ticket/issue/spec?
+- Are README, docs, or API specs updated if behavior changed?
 
-## Pass 3 — Security
-- [ ] All external input is validated and sanitized before use
-- [ ] No secrets, credentials, or PII hardcoded or logged
-- [ ] Authentication and authorization enforced on protected paths
-- [ ] No direct string concatenation into queries, commands, or HTML
-- [ ] Dependencies introduced are not flagged for vulnerabilities
+## 2. Design & Architecture
 
-## Pass 4 — Design
-- [ ] Change is in the right place (correct layer, module, file)
-- [ ] Follows existing patterns — deviations are intentional and explained
-- [ ] No unnecessary abstraction or missing abstraction
-- [ ] No N+1 queries, unbounded loops over external calls, or missing pagination
+- Does the overall design make sense? Do the pieces interact correctly?
+- Does it follow existing architectural patterns in the codebase?
+- Does it belong here, or should it be a library/shared module?
+- Does it make future changes easier or harder?
 
-## Pass 5 — Maintainability
-- [ ] Names communicate intent without needing comments
-- [ ] Comments explain *why*, not *what*
-- [ ] No dead code, commented-out blocks, or untracked TODOs
-- [ ] Test coverage exists for new behavior; tests are meaningful
+## 3. Correctness & Functionality
 
-## Pass 6 — Operational Readiness (production-bound changes only)
-- [ ] Failure modes are defined
-- [ ] External calls have timeouts and retry/backoff
-- [ ] New behavior is observable (loggable/traceable/measurable)
-- [ ] No breaking changes to public interfaces without a migration path
+- Does the code do what the developer intended?
+- Are edge cases handled?
+- Are there potential race conditions, deadlocks, or concurrency issues?
+- Does it handle failure modes gracefully (errors, timeouts, partial failures)?
 
-## Comment Labels
-Use these on all review comments so authors know what requires action:
-- `blocking:` — must fix before merge
-- `significant:` — should fix; meaningful quality concern
-- `minor:` — small improvement; fix if easy
-- `suggestion:` — optional; author's call
+## 4. Complexity
 
-See `shared-vocabulary.md` for severity definitions.
+- Is any function/class more complex than it needs to be?
+- Does each function/class do one thing (Single Responsibility Principle)?
+- Can a new developer understand this code quickly?
+- Is there over-engineering or speculative generality (YAGNI)?
+
+## 5. Security
+
+- Are all user inputs validated and sanitized?
+- Is authentication/authorization enforced correctly?
+- Is sensitive data (PII, credentials, tokens) handled safely — not logged, not exposed?
+- Are there SQL injection, XSS, or other injection risks?
+
+## 6. Tests
+
+- Are tests included in the same PR as the code?
+- Do tests cover the happy path, failure cases, and edge cases?
+- Will tests actually fail when the code is broken?
+- Are tests readable and do they reflect real-world scenarios?
+
+## 7. Error Handling & Resilience
+
+- Are errors caught and handled explicitly (not swallowed silently)?
+- Are error messages meaningful and actionable?
+- Do optional features degrade gracefully without breaking core flows?
+
+## 8. Performance
+
+- Are there unnecessary database calls, N+1 queries, or redundant network requests?
+- Is caching used appropriately?
+- Are there obvious algorithmic inefficiencies?
+- Focus on the 20% of optimizations that produce 80% of results — don't over-optimize.
+
+## 9. Naming & Readability
+
+- Are variable, function, and class names descriptive and unambiguous?
+- Is the code self-explanatory, or does it require excessive comments to understand?
+
+## 10. Comments & Documentation
+
+- Do comments explain why, not what?
+- Are there outdated comments or TODOs that can be removed?
+- Is public API / module-level documentation present and accurate?
+
+## 11. Style & Consistency
+
+- Does the code follow the team's style guide and conventions?
+- Is formatting consistent with the surrounding codebase?
+- Style-only nits should be prefixed with "Nit:" and never block a PR alone.
+
+## 12. Observability & Operations
+
+- Are new features covered by logging, metrics, or alerts?
+- Are log statements at appropriate levels (not logging PII)?
+
+## Reviewer Conduct
+
+- Read every changed line — don't skim.
+- Look at changes in the context of the whole file/system, not just the diff.
+- Raise out-of-scope issues as separate tasks; don't block the PR for them.
+- Prefer asking questions over making demands.
+- Prefix nitpicks with "Nit:". Use "we"/"this line" instead of "you".
+- Acknowledge good work — not just problems.
+
+## PR Type Variations
+
+- **Feature PRs**: full checklist + migration reversibility + monitoring additions
+- **Bug fix PRs**: verify root cause is addressed, not just symptoms; regression test added
+- **Refactor PRs**: behavior must be unchanged; test coverage should increase or stay same
+- **Dependency updates**: check changelog for breaking changes and security advisories
