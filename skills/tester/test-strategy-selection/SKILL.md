@@ -3,7 +3,7 @@ name: test-strategy-selection
 description: Choose the right type of tests before writing any — unit, integration, or e2e — based on risk and context. Use before writing any tests to determine the appropriate testing strategy.
 ---
 
-# Skill: Test Strategy Selection
+# Test Strategy Selection
 
 ## When to Use
 Before writing any tests, choose the right type first.

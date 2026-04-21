@@ -1,9 +1,9 @@
 ---
 name: task-decomposition
-description: Break down a feature or requirement into independently completable, estimated, dependency-mapped tasks. Use when breaking down a feature, epic, or requirement into executable tasks.
+description: Break down a feature or requirement into independently completable, estimated, dependency-mapped tasks.
 ---
 
-# Skill: Task Decomposition
+# Task Decomposition
 
 ## When to Use
 When breaking down a feature, epic, or requirement into executable tasks.

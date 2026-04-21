@@ -1,9 +1,9 @@
 ---
 name: plan-output-template
-description: Standard template for producing a final plan ready to hand off to a developer or executor. Use when producing a final plan to hand off to a developer or executor.
+description: Standard template for producing a final plan ready to hand off to a developer or executor.
 ---
 
-# Skill: Plan Output Template
+# Plan Output Template
 
 ## When to Use
 When producing a final plan to hand off to a developer or executor.

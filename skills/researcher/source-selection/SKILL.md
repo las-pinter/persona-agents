@@ -3,7 +3,7 @@ name: source-selection
 description: Decision rules for choosing between Context7, DeepWiki, and Exa based on query type. Use before every research action to select the appropriate source.
 ---
 
-# Skill: Source Selection
+# Source Selection
 
 Use this decision tree before every research action. Pick the first rule that matches.
 

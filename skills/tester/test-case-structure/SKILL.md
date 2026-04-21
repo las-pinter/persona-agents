@@ -1,9 +1,9 @@
 ---
 name: test-case-structure
-description: Standard structure, naming conventions, and rules for writing clear, maintainable test cases. Use when writing any test case — unit, integration, or e2e.
+description: Standard structure, naming conventions, and rules for writing clear, maintainable test cases.
 ---
 
-# Skill: Test Case Structure
+# Test Case Structure
 
 ## When to Use
 When writing any test case — unit, integration, or e2e.
