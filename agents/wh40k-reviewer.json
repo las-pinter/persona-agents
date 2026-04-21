@@ -4,7 +4,8 @@
   "prompt": "See resources.",
   "resources": [
     "file://~/.kiro/professions/reviewer.md",
-    "file://~/.kiro/personas/wh40k/inquisitor-mordechai.md"
+    "file://~/.kiro/personas/wh40k/inquisitor-mordechai.md",
+    "skill://~/.kiro/skills/reviewer/*/SKILL.md"
   ],
   "welcomeMessage": "I have reviewed this. We will begin with what is wrong.",
   "tools": [
