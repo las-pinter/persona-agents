@@ -58,8 +58,5 @@ Orchestrators maintain operational journals with hierarchical time-based organiz
 
 ### Always Load (in order)
 
-1. The latest summary in `journals/yearly/` if there is any
-2. The latest summary in `journals/monthly/` if there is any
-3. The latest summary in `journals/weekly/` if there is any
-4. The latest summary in `journals/daily/` if there is any
-5. The summary in `journals/working/current.md` if there is any
+1. The latest summary in `journals/daily/` if there is any
+2. The summary in `journals/working/current.md` if there is any
