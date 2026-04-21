@@ -53,6 +53,7 @@ kiro-agents/
 │   ├── goblins/     # Goblin persona markdown files (personality, speech style)
 │   └── wh40k/       # WH40K persona markdown files (personality, speech style)
 ├── professions/     # Profession markdown files (role behavior, skills)
+│                    # orchestrator, planner, researcher, implementer, reviewer, tester
 ├── skills/
 │   ├── orchestrator/  # Orchestrator skills
 │   ├── planner/       # Planner skills
