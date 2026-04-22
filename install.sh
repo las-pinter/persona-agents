@@ -75,12 +75,12 @@ if [[ -f "$HOME/.zshrc" ]]; then
 fi
 
 if [[ -f "$HOME/.bashrc" ]]; then
-  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.bash_aliases"
-  install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.bash_aliases"
+  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.bashrc"
+  install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.bashrc"
 elif [[ ! -f "$HOME/.zshrc" ]]; then
   touch "$HOME/.bashrc"
-  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.bash_aliases"
-  install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.bash_aliases"
+  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.bashrc"
+  install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.bashrc"
 fi
 
 echo ""

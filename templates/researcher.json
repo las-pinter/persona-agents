@@ -7,12 +7,52 @@
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
-  "tools": ["read", "shell", "grep", "glob", "@context7", "@deepwiki", "@exa"],
-  "allowedTools": ["read", "grep", "glob", "@context7", "@deepwiki", "@exa"],
+  "tools": [
+    "read",
+    "shell",
+    "grep",
+    "glob",
+    "web_search",
+    "@context7",
+    "@deepwiki",
+    "@exa"
+  ],
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "web_search",
+    "@context7",
+    "@deepwiki",
+    "@exa"
+  ],
   "toolsSettings": {
     "shell": {
-      "allowedCommands": ["awk.*", "cat.*", "date.*", "diff.*", "find.*", "grep.*", "head.*", "jq.*", "ls.*", "pwd", "sort.*", "tail.*", "tar.*", "tr.*", "uniq.*", "unzip.*", "wc.*", "which.*", "xargs.*", "zip.*"],
-      "deniedCommands": ["git push.*"],
+      "allowedCommands": [
+        "awk.*",
+        "cat.*",
+        "date.*",
+        "diff.*",
+        "find.*",
+        "grep.*",
+        "head.*",
+        "jq.*",
+        "ls.*",
+        "pwd",
+        "sort.*",
+        "tail.*",
+        "tar.*",
+        "tr.*",
+        "uniq.*",
+        "unzip.*",
+        "wc.*",
+        "which.*",
+        "xargs.*",
+        "zip.*"
+      ],
+      "deniedCommands": [
+        "git push.*"
+      ],
       "autoAllowReadonly": true
     }
   },

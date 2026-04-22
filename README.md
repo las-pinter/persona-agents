@@ -16,6 +16,20 @@ Swap out the bland, drop in a character, and actually enjoy the thing helping yo
 
 > **Warning:** Review `install.sh` before running. Files will be written to `~/.kiro/`.
 
+## Prerequisites
+
+`jq` is required for agent generation.
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install jq
+```
+
+**macOS:**
+```bash
+brew install jq
+```
+
 ## Install
 
 ```bash
@@ -36,8 +50,8 @@ This pulls the latest changes and reinstalls agents, personas, professions, and 
 
 | Repo path | Installed to | Notes |
 |-----------|-------------|-------|
-| `agents/*.json` | `~/.kiro/agents/` | Agent configurations |
-| `personas/goblins/*.md` | `~/.kiro/personas/goblins/` | Goblin persona definitions |
+| `agents.json` + `templates/*.json` | `~/.kiro/agents/` | Agent configurations generated from templates |
+| `personas/goblin/*.md` | `~/.kiro/personas/goblin/` | Goblin persona definitions |
 | `personas/wh40k/*.md` | `~/.kiro/personas/wh40k/` | WH40K persona definitions |
 | `professions/*.md` | `~/.kiro/professions/` | Profession/role definitions |
 | `skills/{profession}/*.md` | `~/.kiro/skills/{profession}/` | Skill documents organized by profession |
@@ -48,9 +62,11 @@ This pulls the latest changes and reinstalls agents, personas, professions, and 
 
 ```
 kiro-agents/
-├── agents/          # Agent JSON configs (name, prompt, tools, resources)
+├── agents.json      # Agent registry
+├── templates/       # Agent JSON templates
+├── generate-agents.sh  # Script to generate agents from templates
 ├── personas/
-│   ├── goblins/     # Goblin persona markdown files (personality, speech style)
+│   ├── goblin/      # Goblin persona markdown files (personality, speech style)
 │   └── wh40k/       # WH40K persona markdown files (personality, speech style)
 ├── professions/     # Profession markdown files (role behavior, skills)
 │                    # orchestrator, planner, researcher, implementer, reviewer, tester
@@ -94,5 +110,16 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 ## Adding Your Own Agents
 
 1. Create a persona in `~/.kiro/personas/{persona-type}/my-persona.md`
-2. Create an agent config in `~/.kiro/agents/my-agent.json`
-3. Reference professions and skills via `file://~/.kiro/professions/...` and `file://~/.kiro/skills/{profession}/...` in the agent's `resources` array
+2. Create an agent template in `~/.kiro/templates/my-agent.json` with the structure:
+   ```json
+   {
+     "name": "my-agent",
+     "prompt": "Agent description",
+     "resources": [
+       "file://~/.kiro/personas/{persona-type}/my-persona.md",
+       "file://~/.kiro/professions/{profession}.md"
+     ]
+   }
+   ```
+3. Add your agent to `agents.json` registry
+4. Run `./generate-agents.sh` to generate the final agent configs

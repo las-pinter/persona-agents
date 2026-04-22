@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
@@ -34,14 +34,21 @@ for theme in $(jq -r 'keys[]' "$AGENTS_JSON"); do
       agents_json="[]"
     fi
     
-    sed -e "s|{{AGENT_NAME}}|$agent_name|g" \
-        -e "s|{{THEME}}|$theme|g" \
-        -e "s|{{PERSONA_FILE}}|$persona_file|g" \
-        -e "s|{{DESCRIPTION}}|$description|g" \
-        -e "s|{{WELCOME_MESSAGE}}|$welcome_message|g" \
-        -e "s|{{AVAILABLE_AGENTS}}|$agents_json|g" \
-        -e "s|{{TRUSTED_AGENTS}}|$agents_json|g" \
-        "$template_file" | jq '.' > "$output_file"
+    jq -R -s --arg agent_name "$agent_name" \
+       --arg theme "$theme" \
+       --arg persona_file "$persona_file" \
+       --arg description "$description" \
+       --arg welcome_message "$welcome_message" \
+       --arg agents_json "$agents_json" \
+       'gsub("{{AGENT_NAME}}"; $agent_name) |
+        gsub("{{THEME}}"; $theme) |
+        gsub("{{PERSONA_FILE}}"; $persona_file) |
+        gsub("{{DESCRIPTION}}"; $description) |
+        gsub("{{WELCOME_MESSAGE}}"; $welcome_message) |
+        gsub("\"{{AVAILABLE_AGENTS}}\""; $agents_json) |
+        gsub("\"{{TRUSTED_AGENTS}}\""; $agents_json) |
+        fromjson' \
+       "$template_file" > "$output_file"
     
     echo "Generated: $output_file"
   done

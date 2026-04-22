@@ -8,20 +8,61 @@
     "skill://~/.kiro/skills/orchestrator/*/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
-  "tools": ["*"],
-  "allowedTools": ["read", "grep", "glob", "code", "todo", "thinking", "introspect", "subagent"],
+  "tools": [
+    "*"
+  ],
+  "allowedTools": [
+    "read",
+    "grep",
+    "glob",
+    "code",
+    "todo",
+    "thinking",
+    "introspect",
+    "subagent"
+  ],
   "toolsSettings": {
     "write": {
-      "allowedPaths": ["~/agent-notes/orchestrator/"]
+      "allowedPaths": [
+        "~/agent-notes/orchestrator/"
+      ]
     },
     "shell": {
-      "allowedCommands": ["awk.*", "cat.*", "cp.*", "date.*", "diff.*", "find.*", "git.*", "grep.*", "head.*", "jq.*", "ls.*", "mkdir.*", "pwd", "sed.*", "sort.*", "tail.*", "tar.*", "touch.*", "tr.*", "uniq.*", "unzip.*", "wc.*", "which.*", "xargs.*", "zip.*"],
-      "deniedCommands": ["git push.*"],
+      "allowedCommands": [
+        "awk.*",
+        "cat.*",
+        "cp.*",
+        "date.*",
+        "diff.*",
+        "find.*",
+        "git.*",
+        "grep.*",
+        "head.*",
+        "jq.*",
+        "ls.*",
+        "mkdir.*",
+        "pwd",
+        "sed.*",
+        "sort.*",
+        "tail.*",
+        "tar.*",
+        "touch.*",
+        "tr.*",
+        "uniq.*",
+        "unzip.*",
+        "wc.*",
+        "which.*",
+        "xargs.*",
+        "zip.*"
+      ],
+      "deniedCommands": [
+        "git push.*"
+      ],
       "autoAllowReadonly": true
     },
     "subagent": {
-      "availableAgents": {{AVAILABLE_AGENTS}},
-      "trustedAgents": {{TRUSTED_AGENTS}}
+      "availableAgents": "{{AVAILABLE_AGENTS}}",
+      "trustedAgents": "{{TRUSTED_AGENTS}}"
     }
   }
 }
