@@ -9,6 +9,7 @@
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [
     "read",
+    "write",
     "shell",
     "grep",
     "glob",
@@ -23,6 +24,11 @@
     "subagent"
   ],
   "toolsSettings": {
+    "write": {
+      "allowedPaths": [
+        "~/agent-notes/planner/plans/"
+      ]
+    },
     "shell": {
       "allowedCommands": [
         "awk.*",
