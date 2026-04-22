@@ -5,6 +5,12 @@ description: Decision rules for choosing between Context7, DeepWiki, and Exa bas
 
 # Source Selection
 
+## When to Use
+
+- Before every research action to select the appropriate information source
+- When Context7 returns insufficient results and you need to try another source
+- When deciding between library documentation, repository internals, or web search
+
 Use this decision tree before every research action. Pick the first rule that matches.
 
 ## Decision Rules

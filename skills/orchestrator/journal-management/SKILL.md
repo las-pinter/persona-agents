@@ -5,6 +5,12 @@ description: Hierarchical journal system for orchestrator operational memory wit
 
 # Journal Management
 
+## When to Use
+
+- At session startup to load recent operational context
+- During active work to record completed operations in working memory
+- At scheduled intervals (daily/weekly/monthly/yearly) to consolidate and summarize entries
+
 Orchestrators maintain operational journals with hierarchical time-based organization. Daily entries consolidate into weekly, weekly into monthly, monthly into yearly summaries. This preserves detail while managing context window limits.
 
 ## Folder Structure

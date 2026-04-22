@@ -5,12 +5,19 @@ description: Decision rules for assigning tasks to the correct specialist agent 
 
 # Task Routing
 
+## When to Use
+
+- When receiving a new task that needs to be assigned to a specialist agent
+- Before starting work to determine if you're the right agent for the job
+- When a task spans multiple types and needs decomposition before routing
+
 Route tasks using the first matching rule. When a task spans multiple types, decompose it first.
 
 ## Routing Rules
 
 ### Researcher
-- Task requires **finding information** not already in context
+- Task requires **finding information** not already in context, or requires using external tools to gather information
+- Task requires **synthesizing information** from multiple sources to form a conclusion or recommendation
 
 ### Reviewer
 - Task requires **evaluating existing work** against quality, correctness, or standards

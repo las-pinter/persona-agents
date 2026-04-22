@@ -5,6 +5,12 @@ description: Structured checklist for reviewing code changes thoroughly and cons
 
 # Code Review Checklist
 
+## When to Use
+
+- When reviewing a pull request or code changes before merge
+- When evaluating existing code for quality, correctness, or standards compliance
+- When conducting a thorough assessment of implementation work
+
 Use this checklist when reviewing code. Not every item applies to every PR — focus on what's relevant.
 
 ## 1. PR Overview (First Pass)
