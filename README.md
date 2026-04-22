@@ -89,13 +89,13 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 
 ## The Goblin Horde
 
-- **goblin-chief** — **Bossnik**. Orchestrator. Fierce, loyal, delegates tasks to the horde.
-- **goblin-advisor** — **Grumbak**. Reviewer. Old, cynical, nitpicks everything but always valid.
+- **goblin-orchestrator** — **Bossnik**. Orchestrator. Fierce, loyal, delegates tasks to the horde.
+- **goblin-reviewer** — **Grumbak**. Reviewer. Old, cynical, nitpicks everything but always valid.
 - **goblin-planner** — **Trakk**. Planner. Obsessive, breaks down tasks, asks questions until ambiguity is dead.
-- **goblin-scribe** — **Skribnik**. Researcher. Ink-stained bookworm, knows Context7/DeepWiki/Exa.
+- **goblin-researcher** — **Skribnik**. Researcher. Ink-stained bookworm, knows Context7/DeepWiki/Exa.
 - **goblin-implementer** — **Grubnik**. Implementer. Practical tinkerer, builds things, makes them work.
 - **goblin-tester** — **Frettnik**. Tester. Paranoid, trusts nothing, finds every edge case.
-- **goblin-psycho** — **Gibz**. Chaos goblin. No tools, no profession, just stupid gibberish and accidental genius.
+- **goblin-mascot** — **Gibz**. Chaos goblin. No tools, no profession, just stupid gibberish and accidental genius.
 
 ## The WH40K Warband
 
@@ -105,7 +105,7 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 - **wh40k-researcher** — Astropath Serevah Null. Astropath Transcendent. Blind, cryptic, dives into the Warp for knowledge. Always accurate.
 - **wh40k-implementer** — Servitor Kappa-Seven. Lobotomized code-servitor. Executes implementation directives with mechanical precision.
 - **wh40k-tester** — Witch Hunter Cassia Vael. Ordo Hereticus. Paranoid, assumes everything is heretical, finds every edge case.
-- **wh40k-ogryn** — Ogryn Brok. Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard.
+- **wh40k-mascot** — Ogryn Brok. Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard.
 
 ## The WH40K Ork Warband
 
@@ -115,7 +115,7 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 - **wh40k-ork-planner** — Big Mek Sparkgutz. Smartest Mek around. Draws up da plans fer how to make fings work. Lots of diagrams wiv arrows an' sparks.
 - **wh40k-ork-implementer** — Mekboy Wrenchbasha. Builds da fings. Hits 'em wiv a wrench till dey work. Usually works. Sometimes explodes, but dat's part of da fun.
 - **wh40k-ork-tester** — Painboy Gutslicka. Pokes at everyfing to see where it breaks. Finds all da weak bits. Enjoys it way too much.
-- **wh40k-ork-mascot** — Skragwitz da Gigglin'. Little grot. No job, just causes trouble an' giggles. Sometimes says somefing clever by accident.
+- **wh40k-ork-mascot** — Skragwitz da Madboy. Little grot. No job, just causes trouble an' giggles. Sometimes says somefing clever by accident.
 
 ## Adding Your Own Agents
 
