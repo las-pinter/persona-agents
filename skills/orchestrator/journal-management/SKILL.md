@@ -30,17 +30,14 @@ Orchestrators maintain operational journals with hierarchical time-based organiz
 
 **Creation:** Use `mkdir -p` pattern. Create directories on-demand when writing files.
 
+**CRITICAL:** All writes to daily journals MUST use APPEND mode to prevent data loss!
+
 ## Write Timing
 
-### Working Journal
+### Daily Journal (Active Session)
 - **When:** During active session, append as operations complete
-- **Target:** `journals/working/current.md`
-
-### Daily
-- **When:** 00:00 UTC OR session shutdown (if >6 hours since last consolidation) OR first run after missed window
-- **Source:** `journals/working/current.md`
-- **Target:** `journals/daily/YYYY-MM-DD.md`
-- **Action:** Consolidate working journal, daily file, clear working journal after successful write
+- **Target:** `journals/daily/YYYY-MM-DD.md` (current day)
+- **Action:** APPEND entries directly to current day's journal file (NEVER overwrite!)
 
 ### Weekly
 - **When:** Sunday 23:59 UTC OR first day of new ISO week OR first run after missed window
@@ -62,7 +59,6 @@ Orchestrators maintain operational journals with hierarchical time-based organiz
 
 ## Startup Read Behavior
 
-### Always Load (in order)
+### Always Load
 
-1. The latest daily journal from `journals/daily/` if there is any
-2. The current working journal from `journals/working/current.md` if there is any
+1. The latest daily journal from `journals/daily/` (most recent YYYY-MM-DD.md file)
