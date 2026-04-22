@@ -1,0 +1,11 @@
+{
+  "name": "{{AGENT_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [],
+  "allowedTools": []
+}

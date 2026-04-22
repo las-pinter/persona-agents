@@ -35,9 +35,17 @@ copy_if_missing() {
   echo "  created: $dest"
 }
 
+echo "Generating agents from templates..."
+if [[ -x "$REPO_DIR/generate-agents.sh" ]]; then
+  "$REPO_DIR/generate-agents.sh" "$DEST/agents"
+  echo "  agents generated"
+else
+  echo "  warning: generate-agents.sh not found or not executable"
+fi
+
 echo "Installing kiro-agents to $DEST ..."
 
-for dir in agents personas professions skills; do
+for dir in personas professions skills; do
   while IFS= read -r -d '' f; do
     rel="${f#$REPO_DIR/}"
     copy_file "$f" "$DEST/$rel"
@@ -62,16 +70,16 @@ install_alias() {
 echo "Installing kiro-cli aliases ..."
 
 if [[ -f "$HOME/.zshrc" ]]; then
-  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-chief" "$HOME/.zshrc"
+  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.zshrc"
   install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.zshrc"
 fi
 
 if [[ -f "$HOME/.bashrc" ]]; then
-  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-chief" "$HOME/.bash_aliases"
+  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.bash_aliases"
   install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.bash_aliases"
 elif [[ ! -f "$HOME/.zshrc" ]]; then
   touch "$HOME/.bashrc"
-  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-chief" "$HOME/.bash_aliases"
+  install_alias "kiro-goblin" "kiro-cli chat --agent goblin-orchestrator" "$HOME/.bash_aliases"
   install_alias "kiro-wh40k"  "kiro-cli chat --agent wh40k-orchestrator" "$HOME/.bash_aliases"
 fi
 

@@ -1,0 +1,20 @@
+{
+  "name": "{{AGENT_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/professions/implementer.md",
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": ["read", "write", "code", "shell", "grep", "glob"],
+  "allowedTools": ["read", "code", "grep", "glob"],
+  "toolsSettings": {
+    "write": {},
+    "shell": {
+      "allowedCommands": ["awk.*", "cat.*", "date.*", "diff.*", "find.*", "grep.*", "head.*", "jq.*", "ls.*", "pwd", "sort.*", "tail.*", "tar.*", "tr.*", "uniq.*", "unzip.*", "wc.*", "which.*", "xargs.*", "zip.*"],
+      "deniedCommands": ["git push.*"],
+      "autoAllowReadonly": true
+    }
+  }
+}

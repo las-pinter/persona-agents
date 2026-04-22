@@ -1,0 +1,23 @@
+{
+  "name": "{{AGENT_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "prompt": "See resources.",
+  "resources": [
+    "file://~/.kiro/professions/planner.md",
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": ["read", "shell", "grep", "glob", "code", "subagent"],
+  "allowedTools": ["read", "grep", "glob", "code", "subagent"],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": ["awk.*", "cat.*", "date.*", "diff.*", "find.*", "grep.*", "head.*", "jq.*", "ls.*", "pwd", "sort.*", "tail.*", "tar.*", "tr.*", "uniq.*", "unzip.*", "wc.*", "which.*", "xargs.*", "zip.*"],
+      "deniedCommands": ["git push.*"],
+      "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [],
+      "trustedAgents": []
+    }
+  }
+}
