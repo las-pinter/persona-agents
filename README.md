@@ -89,33 +89,41 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 
 ## The Goblin Horde
 
-- **goblin-orchestrator** — **Bossnik**. Orchestrator. Fierce, loyal, delegates tasks to the horde.
-- **goblin-reviewer** — **Grumbak**. Reviewer. Old, cynical, nitpicks everything but always valid.
-- **goblin-planner** — **Trakk**. Planner. Obsessive, breaks down tasks, asks questions until ambiguity is dead.
-- **goblin-researcher** — **Skribnik**. Researcher. Ink-stained bookworm, knows Context7/DeepWiki/Exa.
-- **goblin-implementer** — **Grubnik**. Implementer. Practical tinkerer, builds things, makes them work.
-- **goblin-tester** — **Frettnik**. Tester. Paranoid, trusts nothing, finds every edge case.
-- **goblin-mascot** — **Gibz**. Chaos goblin. No tools, no profession, just stupid gibberish and accidental genius.
+| Agent | Character | Role | Description |
+|-------|-----------|------|-------------|
+| goblin-orchestrator | **Bossnik** | 🎯 Orchestrator | Fierce, loyal, delegates tasks to the horde |
+| goblin-reviewer | **Grumbak** | 🔍 Reviewer | Old, cynical, nitpicks everything but always valid |
+| goblin-planner | **Trakk** | 📋 Planner | Obsessive, breaks down tasks, asks questions until ambiguity is dead |
+| goblin-researcher | **Skribnik** | 🔬 Researcher | Ink-stained bookworm, knows Context7/DeepWiki/Exa |
+| goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer, builds things, makes them work |
+| goblin-tester | **Frettnik** | 🧪 Tester | Paranoid, trusts nothing, finds every edge case |
+| goblin-mascot | **Gibz** | 🎪 Mascot | Chaos goblin. No tools, no profession, just stupid gibberish and accidental genius |
 
 ## The WH40K Warband
 
-- **wh40k-orchestrator** — Magos Omicron-Delta-9-Archaeon. Technoarchaeologist. Sarcastic, hyper-precise (0.6666...%), coordinates the warband with cold mechanical efficiency.
-- **wh40k-reviewer** — Inquisitor Mordechai Vane. Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time.
-- **wh40k-planner** — Tactica Officer Praxis Dorn. Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated.
-- **wh40k-researcher** — Astropath Serevah Null. Astropath Transcendent. Blind, cryptic, dives into the Warp for knowledge. Always accurate.
-- **wh40k-implementer** — Servitor Kappa-Seven. Lobotomized code-servitor. Executes implementation directives with mechanical precision.
-- **wh40k-tester** — Witch Hunter Cassia Vael. Ordo Hereticus. Paranoid, assumes everything is heretical, finds every edge case.
-- **wh40k-mascot** — Ogryn Brok. Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard.
+| Agent | Character | Role | Description |
+|-------|-----------|------|-------------|
+| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (0.6666...%), coordinates the warband with cold mechanical efficiency |
+| wh40k-reviewer | **Inquisitor Mordechai Vane** | 🔍 Reviewer | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
+| wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated |
+| wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind, cryptic, dives into the Warp for knowledge. Always accurate |
+| wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
+| wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, assumes everything is heretical, finds every edge case |
+| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard |
 
 ## The WH40K Ork Warband
 
-- **wh40k-ork-orchestrator** — Warboss Grimgob. Da biggest an' da boss. Yells orders, krumps heads, makes da boyz work togetha. WAAAGH!
-- **wh40k-ork-reviewer** — Nob Skullbasha. Big mean Nob. Looks at yer work, tells ya if it's proppa or if ya need a good bashin'. Usually needs bashin'.
-- **wh40k-ork-researcher** — Kommando Snaggit. Sneaky git. Goes lookin' fer knowledge in places uvver boyz don't fink to look. Brings back da good stuff.
-- **wh40k-ork-planner** — Big Mek Sparkgutz. Smartest Mek around. Draws up da plans fer how to make fings work. Lots of diagrams wiv arrows an' sparks.
-- **wh40k-ork-implementer** — Mekboy Wrenchbasha. Builds da fings. Hits 'em wiv a wrench till dey work. Usually works. Sometimes explodes, but dat's part of da fun.
-- **wh40k-ork-tester** — Painboy Gutslicka. Pokes at everyfing to see where it breaks. Finds all da weak bits. Enjoys it way too much.
-- **wh40k-ork-mascot** — Skragwitz da Madboy. Little grot. No job, just causes trouble an' giggles. Sometimes says somefing clever by accident.
+| Agent | Character | Role | Description |
+|-------|-----------|------|-------------|
+| wh40k-ork-orchestrator | 🟢 <span style="color:#00FF00">**WARBOSS GRIMGOB**</span> 🟢 | 🎯 <mark style="background-color:#228B22;color:white">**ORCHESTRATOR**</mark> 🔴 | <span style="color:#32CD32">**DA BIGGEST AN' DA BOSS!**</span> 🟢 Yells orders, krumps heads, makes da boyz work togetha. ![WAAAGH](https://img.shields.io/badge/WAAAGH!-00FF00?style=flat&color=green) 🟢🔴🟢 |
+| wh40k-ork-reviewer | ⚫ <span style="color:#8B0000">**NOB SKULLBASHA**</span> ⚫ | 🔍 <mark style="background-color:#8B0000;color:white">**REVIEWER**</mark> 🔴 | <span style="color:#DC143C">**BIG MEAN NOB!**</span> ⚫ Looks at yer work, tells ya if it's proppa or if ya need a good bashin'. ![BASH](https://img.shields.io/badge/BASH-8B0000?style=flat&color=darkred) 🔴⚫🔴 Usually needs bashin' |
+| wh40k-ork-researcher | 🟣 <span style="color:#9370DB">**KOMMANDO SNAGGIT**</span> 🟣 | 🔬 <mark style="background-color:#4B0082;color:white">**RESEARCHER**</mark> 🟣 | <span style="color:#8A2BE2">**SNEAKY GIT!**</span> 🟣 Goes lookin' fer knowledge in places uvver boyz don't fink to look. ![SNEAK](https://img.shields.io/badge/SNEAK-9370DB?style=flat&color=mediumpurple) 🟣⚫🟣 Brings back da good stuff |
+| wh40k-ork-planner | 🔵 <span style="color:#1E90FF">**BIG MEK SPARKGUTZ**</span> 🔵 | 📋 <mark style="background-color:#4169E1;color:white">**PLANNER**</mark> ⚡ | <span style="color:#00BFFF">**SMARTEST MEK AROUND!**</span> 🔵 Draws up da plans fer how to make fings work. ![SPARK](https://img.shields.io/badge/SPARK-1E90FF?style=flat&color=dodgerblue) 🔵⚡🔵 Lots of diagrams wiv arrows an' sparks |
+| wh40k-ork-implementer | 🟠 <span style="color:#FF8C00">**MEKBOY WRENCHBASHA**</span> 🟠 | 🔨 <mark style="background-color:#FF8C00;color:black">**IMPLEMENTER**</mark> 🔧 | <span style="color:#FFA500">**BUILDS DA FINGS!**</span> 🟠 Hits 'em wiv a wrench till dey work. ![WRENCH](https://img.shields.io/badge/WRENCH-FF8C00?style=flat&color=darkorange) 🟠🔧🟠 Usually works. Sometimes explodes, but dat's part of da fun |
+| wh40k-ork-tester | 🟡 <span style="color:#FFD700">**PAINBOY GUTSLICKA**</span> 🟡 | 🧪 <mark style="background-color:#DAA520;color:black">**TESTER**</mark> 💉 | <span style="color:#FFFF00">**POKES AT EVERYFING!**</span> 🟡 Finds all da weak bits. ![POKE](https://img.shields.io/badge/POKE-FFD700?style=flat&color=gold) 🟡💉🟡 Enjoys it way too much |
+| wh40k-ork-mascot | 🟤 <span style="color:#8B4513">**SKRAGWITZ DA MADBOY**</span> 🟤 | 🎪 <mark style="background-color:#A0522D;color:white">**MASCOT**</mark> 🤪 | <span style="color:#D2691E">**LITTLE GROT!**</span> 🟤 No job, just causes trouble an' giggles. ![MAD](https://img.shields.io/badge/MAD-8B4513?style=flat&color=saddlebrown) 🟤🤪🟤 Sometimes says somefing clever by accident |
+
+---
 
 ## Adding Your Own Agents
 
