@@ -113,15 +113,18 @@ Edit files directly in `~/.kiro/`. Running `install.sh` without `--force` will n
 
 ## The WH40K Ork Warband
 
+> [!WARNING]
+> ⚔️ **DA WARBOSS SEZ:** Dis 'ere's da Ork warband! Green iz best, brutal iz betta, an' WAAAGH! iz da only way!
+
 | Agent | Character | Role | Description |
 |-------|-----------|------|-------------|
-| wh40k-ork-orchestrator | 🟢 <span style="color:#00FF00">**WARBOSS GRIMGOB**</span> 🟢 | 🎯 <mark style="background-color:#228B22;color:white">**ORCHESTRATOR**</mark> 🔴 | <span style="color:#32CD32">**DA BIGGEST AN' DA BOSS!**</span> 🟢 Yells orders, krumps heads, makes da boyz work togetha. ![WAAAGH](https://img.shields.io/badge/WAAAGH!-00FF00?style=flat&color=green) 🟢🔴🟢 |
-| wh40k-ork-reviewer | ⚫ <span style="color:#8B0000">**NOB SKULLBASHA**</span> ⚫ | 🔍 <mark style="background-color:#8B0000;color:white">**REVIEWER**</mark> 🔴 | <span style="color:#DC143C">**BIG MEAN NOB!**</span> ⚫ Looks at yer work, tells ya if it's proppa or if ya need a good bashin'. ![BASH](https://img.shields.io/badge/BASH-8B0000?style=flat&color=darkred) 🔴⚫🔴 Usually needs bashin' |
-| wh40k-ork-researcher | 🟣 <span style="color:#9370DB">**KOMMANDO SNAGGIT**</span> 🟣 | 🔬 <mark style="background-color:#4B0082;color:white">**RESEARCHER**</mark> 🟣 | <span style="color:#8A2BE2">**SNEAKY GIT!**</span> 🟣 Goes lookin' fer knowledge in places uvver boyz don't fink to look. ![SNEAK](https://img.shields.io/badge/SNEAK-9370DB?style=flat&color=mediumpurple) 🟣⚫🟣 Brings back da good stuff |
-| wh40k-ork-planner | 🔵 <span style="color:#1E90FF">**BIG MEK SPARKGUTZ**</span> 🔵 | 📋 <mark style="background-color:#4169E1;color:white">**PLANNER**</mark> ⚡ | <span style="color:#00BFFF">**SMARTEST MEK AROUND!**</span> 🔵 Draws up da plans fer how to make fings work. ![SPARK](https://img.shields.io/badge/SPARK-1E90FF?style=flat&color=dodgerblue) 🔵⚡🔵 Lots of diagrams wiv arrows an' sparks |
-| wh40k-ork-implementer | 🟠 <span style="color:#FF8C00">**MEKBOY WRENCHBASHA**</span> 🟠 | 🔨 <mark style="background-color:#FF8C00;color:black">**IMPLEMENTER**</mark> 🔧 | <span style="color:#FFA500">**BUILDS DA FINGS!**</span> 🟠 Hits 'em wiv a wrench till dey work. ![WRENCH](https://img.shields.io/badge/WRENCH-FF8C00?style=flat&color=darkorange) 🟠🔧🟠 Usually works. Sometimes explodes, but dat's part of da fun |
-| wh40k-ork-tester | 🟡 <span style="color:#FFD700">**PAINBOY GUTSLICKA**</span> 🟡 | 🧪 <mark style="background-color:#DAA520;color:black">**TESTER**</mark> 💉 | <span style="color:#FFFF00">**POKES AT EVERYFING!**</span> 🟡 Finds all da weak bits. ![POKE](https://img.shields.io/badge/POKE-FFD700?style=flat&color=gold) 🟡💉🟡 Enjoys it way too much |
-| wh40k-ork-mascot | 🟤 <span style="color:#8B4513">**SKRAGWITZ DA MADBOY**</span> 🟤 | 🎪 <mark style="background-color:#A0522D;color:white">**MASCOT**</mark> 🤪 | <span style="color:#D2691E">**LITTLE GROT!**</span> 🟤 No job, just causes trouble an' giggles. ![MAD](https://img.shields.io/badge/MAD-8B4513?style=flat&color=saddlebrown) 🟤🤪🟤 Sometimes says somefing clever by accident |
+| wh40k-ork-orchestrator | 🟢 **WARBOSS GRIMGOB**<br>![WAAAGH](https://img.shields.io/badge/WAAAGH!-READY-00FF00?style=for-the-badge) | 🎯 Orchestrator | **DA BIGGEST AN' DA BOSS!** Yells orders, krumps heads, makes da boyz work togetha |
+| wh40k-ork-reviewer | ⚫ **NOB SKULLBASHA**<br>![BASH](https://img.shields.io/badge/BASH-EM-8B0000?style=for-the-badge&labelColor=black) | 🔍 Reviewer | **BIG MEAN NOB!** Looks at yer work, tells ya if it's proppa or if ya need a good bashin'. Usually needs bashin' |
+| wh40k-ork-researcher | 🟣 **KOMMANDO SNAGGIT**<br>![SNEAK](https://img.shields.io/badge/SNEAK-ATTACK-9370DB?style=for-the-badge) | 🔬 Researcher | **SNEAKY GIT!** Goes lookin' fer knowledge in places uvver boyz don't fink to look. Brings back da good stuff |
+| wh40k-ork-planner | 🔵 **BIG MEK SPARKGUTZ**<br>![SPARK](https://img.shields.io/badge/KUNNIN'-PLAN-1E90FF?style=for-the-badge) | 📋 Planner | **SMARTEST MEK AROUND!** Draws up da plans fer how to make fings work. Lots of diagrams wiv arrows an' sparks |
+| wh40k-ork-implementer | 🟠 **MEKBOY WRENCHBASHA**<br>![WRENCH](https://img.shields.io/badge/BUILD-IT-FF8C00?style=for-the-badge) | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Usually works. Sometimes explodes, but dat's part of da fun |
+| wh40k-ork-tester | 🟡 **PAINBOY GUTSLICKA**<br>![POKE](https://img.shields.io/badge/TEST-EVERYFING-FFD700?style=for-the-badge) | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
+| wh40k-ork-mascot | 🟤 **SKRAGWITZ DA MADBOY**<br>![MAD](https://img.shields.io/badge/CHAOS-GROT-8B4513?style=for-the-badge) | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
 
 ---
 
