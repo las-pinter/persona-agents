@@ -15,7 +15,7 @@ Orchestrators should track which plans have been executed and mark them as compl
 
 ## Plan File Naming Convention
 
-Plans are stored in `~/agent-notes/planner/plans/` with the format:
+Plans are stored in `{user_home}/agent-notes/planner/plans/` with the format:
 - **Active plans:** `YYYY-MM-DD-plan-name.md`
 - **Completed plans:** `YYYY-MM-DD-plan-name-DONE.md`
 - **Blocked plans:** `YYYY-MM-DD-plan-name-BLOCKED.md`
@@ -60,7 +60,7 @@ Append a completion section to the end of the plan file:
 ### Step 3: Reference in Journal
 
 When writing your daily journal, mention the completed plan:
-- "Plan at `~/agent-notes/planner/plans/YYYY-MM-DD-plan-name-DONE.md` was executed successfully!"
+- "Plan at `{user_home}/agent-notes/planner/plans/YYYY-MM-DD-plan-name-DONE.md` was executed successfully!"
 - Include the commit IDs (if there is any) and results
 
 ## Checking Plan Status
