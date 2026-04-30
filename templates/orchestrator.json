@@ -1,9 +1,8 @@
 {
   "name": "{{AGENT_NAME}}",
   "description": "{{DESCRIPTION}}",
-  "prompt": "See resources.",
+  "prompt": "file://~/.kiro/professions/orchestrator.md",
   "resources": [
-    "file://~/.kiro/professions/orchestrator.md",
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
     "skill://~/.kiro/skills/orchestrator/*/SKILL.md"
   ],
@@ -29,34 +28,31 @@
     },
     "shell": {
       "allowedCommands": [
-        "awk.*",
-        "cat.*",
-        "cp.*",
-        "date.*",
-        "diff.*",
-        "find.*",
-        "git.*",
-        "grep.*",
-        "head.*",
-        "jq.*",
-        "ls.*",
-        "mkdir.*",
+        "ls *",
+        "awk *",
+        "cat *",
+        "cp *",
+        "date *",
+        "diff *",
+        "find *",
+        "git *",
+        "grep *",
+        "head *",
+        "jq *",
         "pwd",
-        "sed.*",
-        "sort.*",
-        "tail.*",
-        "tar.*",
-        "touch.*",
-        "tr.*",
-        "uniq.*",
-        "unzip.*",
-        "wc.*",
-        "which.*",
-        "xargs.*",
-        "zip.*"
+        "sed *",
+        "sort *",
+        "tail *",
+        "touch *",
+        "tr *",
+        "uniq *",
+        "wc *",
+        "which *",
+        "xargs *"
       ],
       "deniedCommands": [
-        "git push.*"
+        "git push.*",
+        "git pull.*"
       ],
       "autoAllowReadonly": true
     },

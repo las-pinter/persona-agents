@@ -1,9 +1,8 @@
 {
   "name": "{{AGENT_NAME}}",
   "description": "{{DESCRIPTION}}",
-  "prompt": "See resources.",
+  "prompt": "file://~/.kiro/professions/researcher.md",
   "resources": [
-    "file://~/.kiro/professions/researcher.md",
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",

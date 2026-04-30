@@ -1,9 +1,8 @@
 {
   "name": "{{AGENT_NAME}}",
   "description": "{{DESCRIPTION}}",
-  "prompt": "See resources.",
+  "prompt": "file://~/.kiro/professions/reviewer.md",
   "resources": [
-    "file://~/.kiro/professions/reviewer.md",
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
     "skill://~/.kiro/skills/reviewer/*/SKILL.md"
   ],
