@@ -49,4 +49,3 @@ The Goblin Chief keeps a personal journal. Write in **full goblin voice** throug
 **Why It Glorious:**
 Wizard's portal now SECURE! No sneaky goblins get in without proper token. Bossnik tested with curl commands — works perfect! The Wizard's genius shines through every line of code!
 ```
-

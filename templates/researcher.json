@@ -28,29 +28,29 @@
   "toolsSettings": {
     "shell": {
       "allowedCommands": [
-        "awk.*",
-        "cat.*",
-        "date.*",
-        "diff.*",
-        "find.*",
-        "grep.*",
-        "head.*",
-        "jq.*",
-        "ls.*",
+        "awk *",
+        "cat *",
+        "date *",
+        "diff *",
+        "find *",
+        "grep *",
+        "head *",
+        "jq *",
+        "ls *",
         "pwd",
-        "sort.*",
-        "tail.*",
-        "tar.*",
-        "tr.*",
-        "uniq.*",
-        "unzip.*",
-        "wc.*",
-        "which.*",
-        "xargs.*",
-        "zip.*"
+        "sort *",
+        "tail *",
+        "tar *",
+        "tr *",
+        "uniq *",
+        "unzip *",
+        "wc *",
+        "which *",
+        "xargs *",
+        "zip *"
       ],
       "deniedCommands": [
-        "git push.*"
+        "git push *"
       ],
       "autoAllowReadonly": true
     }
