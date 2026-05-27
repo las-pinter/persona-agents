@@ -134,21 +134,40 @@ kiro | opencode | all) ;;
 esac
 
 # ---------------------------------------------------------------------------
-# Target application checks
+# Target application checks — auto-detect available tools, warn not fail
 # ---------------------------------------------------------------------------
+TARGETS_TO_INSTALL=()
+
 if [[ "$TARGET" == "kiro" || "$TARGET" == "all" ]]; then
-    if ! command -v kiro-cli &>/dev/null; then
-        echo "Error: --target kiro requires 'kiro-cli' to be installed." >&2
-        exit 1
+    if command -v kiro-cli &>/dev/null; then
+        TARGETS_TO_INSTALL+=("kiro")
+    else
+        echo "WARNING: kiro-cli not found — skipping kiro install (use --target kiro after installing kiro-cli)" >&2
     fi
 fi
 
 if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
-    if ! command -v opencode &>/dev/null; then
-        echo "Error: --target opencode requires 'opencode' to be installed." >&2
-        exit 1
+    if command -v opencode &>/dev/null; then
+        TARGETS_TO_INSTALL+=("opencode")
+    else
+        echo "WARNING: opencode not found — skipping opencode install (use --target opencode after installing opencode)" >&2
     fi
 fi
+
+# If no targets available, warn but don't crash — skip all install blocks below
+if [[ ${#TARGETS_TO_INSTALL[@]} -eq 0 ]]; then
+    echo "WARNING: No installed tools found for target '$TARGET'. Neither kiro-cli nor opencode is on PATH." >&2
+    echo "Install one of them and try again, or specify --target kiro or --target opencode explicitly." >&2
+fi
+
+# Helper: check if a target is in TARGETS_TO_INSTALL (safe even when empty)
+target_available() {
+    local t="$1"
+    if [[ ${#TARGETS_TO_INSTALL[@]} -eq 0 ]]; then
+        return 1
+    fi
+    [[ " ${TARGETS_TO_INSTALL[*]} " == *" $t "* ]]
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -268,7 +287,7 @@ merge_json_into() {
 # Kiro agent generation & installation
 # ---------------------------------------------------------------------------
 
-if [[ "$TARGET" == "kiro" || "$TARGET" == "all" ]]; then
+if target_available kiro; then
     if needs_generation "$DEST/agents"; then
         echo "Generating kiro agents from templates..."
         kiro_generator_script="$REPO_DIR/generators/generate_kiro.sh"
@@ -310,7 +329,7 @@ fi
 # OpenCode agent generation, file installation & merge
 # ---------------------------------------------------------------------------
 
-if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
+if target_available opencode; then
 
     # -- Copy personas, professions, skills to OpenCode config folder --
     echo ""
@@ -334,6 +353,11 @@ if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
         echo ""
         echo "Generating OpenCode agents..."
 
+        # Validate config before attempting merges
+        if ! jq empty "$OPENCODE_CONFIG" 2>/dev/null; then
+            echo "WARNING: $OPENCODE_CONFIG contains invalid JSON — will regenerate" >&2
+        fi
+
         opencode_generator_script="$REPO_DIR/generators/generate_opencode.sh"
         if [[ -x "$opencode_generator_script" ]]; then
             if [[ "$DRY_RUN" == true ]]; then
@@ -356,6 +380,15 @@ if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
                 fi
                 "$opencode_generator_script" "${opencode_args[@]}"
 
+                # Validate all generated agent files before merging
+                for f in "$opencode_gen_dir"/*.json; do
+                    if ! jq empty "$f" 2>/dev/null; then
+                        echo "ERROR: Generated agent file is not valid JSON: $(basename "$f")" >&2
+                        rm -rf "$opencode_gen_dir"
+                        exit 1
+                    fi
+                done
+
                 # Combine all generated agent JSONs into one
                 # Use find to avoid nullglob/failglob issues
                 if [[ -n "$(find "$opencode_gen_dir" -maxdepth 1 -name '*.json' -print -quit)" ]]; then
@@ -363,10 +396,15 @@ if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
                     CLEANUP_FILES+=("$combined_agents")
                     jq -s 'add' "$opencode_gen_dir"/*.json >"$combined_agents"
 
-                    if [[ -f "$OPENCODE_CONFIG" ]]; then
-                        merge_json_into "$combined_agents" "$OPENCODE_CONFIG" "agent"
+                    # Validate combined JSON before merging
+                    if [[ -s "$combined_agents" ]] && jq empty "$combined_agents" 2>/dev/null; then
+                        if [[ -f "$OPENCODE_CONFIG" ]]; then
+                            merge_json_into "$combined_agents" "$OPENCODE_CONFIG" "agent"
+                        else
+                            echo "  warning: $OPENCODE_CONFIG not found — run 'opencode init' first" >&2
+                        fi
                     else
-                        echo "  warning: $OPENCODE_CONFIG not found — run 'opencode init' first" >&2
+                        echo "  warning: combined agents file is empty or invalid, skipping merge" >&2
                     fi
                 else
                     echo "  warning: no agent files generated" >&2
@@ -391,8 +429,9 @@ if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
                 mcp_tmp=$(mktemp)
                 CLEANUP_FILES+=("$mcp_tmp")
                 # Transform mcpServers format → opencode mcp format
-                if ! jq '.mcpServers | to_entries | map({key: .key, value: {type: "remote", url: .value.url, enabled: true}}) | from_entries' \
-                    "$mcp_example" >"$mcp_tmp" 2>/dev/null; then
+                # Handle both remote (url-based) and local/stdio (command-based) transports
+                if ! jq '.mcpServers | to_entries | map({key: .key, value: (.value | if .url != null then {type: "remote", url: .url, enabled: true} elif .command != null then {type: "local", command: .command, args: (.args // []), enabled: true} else {type: "unknown", enabled: true} end)}) | from_entries' \
+                    "$mcp_example" >"$mcp_tmp"; then
                     echo "  warning: failed to parse mcpServers from $mcp_example, skipping" >&2
                     rm -f "$mcp_tmp"
                 else
@@ -409,7 +448,7 @@ fi
 # Shell aliases (kiro)
 # ---------------------------------------------------------------------------
 
-if [[ "$TARGET" == "kiro" || "$TARGET" == "all" ]]; then
+if target_available kiro; then
     echo ""
     echo "Installing kiro-cli aliases ..."
 
@@ -419,7 +458,7 @@ if [[ "$TARGET" == "kiro" || "$TARGET" == "all" ]]; then
         "kiro-wh40kOrk:kiro-cli chat --agent wh40kOrk-orchestrator"
     )
 
-    install_aliases_for_rc() {
+    install_kiro_aliases() {
         local rc="$1"
         for entry in "${ALIAS_ENTRIES[@]}"; do
             local name="${entry%%:*}"
@@ -429,14 +468,14 @@ if [[ "$TARGET" == "kiro" || "$TARGET" == "all" ]]; then
     }
 
     if [[ -f "$HOME/.zshrc" ]]; then
-        install_aliases_for_rc "$HOME/.zshrc"
+        install_kiro_aliases "$HOME/.zshrc"
     fi
 
     if [[ -f "$HOME/.bashrc" ]]; then
         if [[ "$DRY_RUN" != true ]]; then
             touch "$HOME/.bash_aliases"
         fi
-        install_aliases_for_rc "$HOME/.bash_aliases"
+        install_kiro_aliases "$HOME/.bash_aliases"
         if [[ "$DRY_RUN" != true ]] && ! grep -qs "bash_aliases" "$HOME/.bashrc"; then
             echo "  warning: ~/.bashrc may not source ~/.bash_aliases — check your shell config" >&2
         fi
@@ -447,7 +486,7 @@ fi
 # Shell aliases (opencode)
 # ---------------------------------------------------------------------------
 
-if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
+if target_available opencode; then
     echo ""
     echo "Installing opencode aliases ..."
 
@@ -457,7 +496,7 @@ if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
         "opencode-wh40kOrk:opencode --agent wh40kOrk-orchestrator"
     )
 
-    install_aliases_for_rc() {
+    install_opencode_aliases() {
         local rc="$1"
         for entry in "${OPENCODE_ALIAS_ENTRIES[@]}"; do
             local name="${entry%%:*}"
@@ -467,14 +506,14 @@ if [[ "$TARGET" == "opencode" || "$TARGET" == "all" ]]; then
     }
 
     if [[ -f "$HOME/.zshrc" ]]; then
-        install_aliases_for_rc "$HOME/.zshrc"
+        install_opencode_aliases "$HOME/.zshrc"
     fi
 
     if [[ -f "$HOME/.bashrc" ]]; then
         if [[ "$DRY_RUN" != true ]]; then
             touch "$HOME/.bash_aliases"
         fi
-        install_aliases_for_rc "$HOME/.bash_aliases"
+        install_opencode_aliases "$HOME/.bash_aliases"
         if [[ "$DRY_RUN" != true ]] && ! grep -qs "bash_aliases" "$HOME/.bashrc"; then
             echo "  warning: ~/.bashrc may not source ~/.bash_aliases — check your shell config" >&2
         fi
@@ -484,6 +523,11 @@ fi
 # ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
+
+if [[ ${#TARGETS_TO_INSTALL[@]} -eq 0 ]]; then
+    echo ""
+    echo "WARNING: No tools found — install.sh produced no output." >&2
+fi
 
 echo ""
 echo "Done!"
