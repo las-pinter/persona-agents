@@ -1,6 +1,7 @@
 ---
 name: risk-and-dependency-identification
 description: >-
+  Skill for the planner agent.
   Identify risks, blockers, and dependencies in a plan before finalizing it. Use
   after task decomposition, before finalizing a plan. This skill provides a
   systematic methodology for surfacing hidden risks, mapping dependency chains,

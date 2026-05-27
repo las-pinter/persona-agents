@@ -1,6 +1,7 @@
 ---
 name: regression-identification
 description: >-
+  Skill for the tester agent.
   Identify which existing tests are relevant to code changes and what new tests
   are needed to cover gaps. Use this skill whenever code changes are made —
   during PR review, before committing, or when planning test coverage. Includes

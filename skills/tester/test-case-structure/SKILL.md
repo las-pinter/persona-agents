@@ -1,6 +1,7 @@
 ---
 name: test-case-structure
 description: >-
+  Skill for the tester agent.
   Language-agnostic structure, naming conventions, and rules for writing clear,
   maintainable test cases. Use this skill when writing ANY test — unit,
   integration, or e2e — in any programming language. Covers naming patterns,

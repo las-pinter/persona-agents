@@ -1,6 +1,12 @@
 ---
 name: journal-management
-description: Hierarchical journal system for orchestrator operational context with time-based consolidation. Use this skill whenever you need to read, write, or consolidate operational journals - including at session startup, after completing tasks, before ending a session, or when reviewing past work. Do NOT attempt to manage journal context manually; always consult this skill for all journal operations.
+description: >-
+  Skill for the orchestrator agent.
+  Hierarchical journal system for orchestrator operational context with time-based
+  consolidation. Use this skill whenever you need to read, write, or consolidate
+  operational journals - including at session startup, after completing tasks,
+  before ending a session, or when reviewing past work. Do NOT attempt to manage
+  journal context manually; always consult this skill for all journal operations.
 ---
 
 # Journal Management

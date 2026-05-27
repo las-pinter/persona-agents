@@ -1,6 +1,7 @@
 ---
 name: plan-output-template
 description: >-
+  Skill for the planner agent.
   Standard template for producing a final plan ready to hand off to a developer
   or executor. Use this skill whenever a planner finalizes a plan, produces
   output for handoff, or needs to validate that a plan meets quality standards

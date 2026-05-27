@@ -1,6 +1,7 @@
 ---
 name: task-routing
-description: |
+description: >-
+  Skill for the orchestrator agent.
   Decision rules for assigning tasks to the correct specialist agent type.
   Consult this skill whenever you receive a new task, before dispatching any
   subagent. Use the decision tree to route deterministically, decompose complex
