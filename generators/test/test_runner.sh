@@ -22,12 +22,12 @@ if [[ -x "${GENERATE_KIRO_SCRIPT}" ]]; then
         --agents-json "$TEST_AGENTS_JSON"
     echo "  agents generated"
 else
-    echo "Rrror: generate_kiro.sh not found or not executable at ${GENERATE_KIRO_SCRIPT}"
+    echo "Error: generate_kiro.sh not found or not executable at ${GENERATE_KIRO_SCRIPT}"
     exit 1
 fi
 
 echo "Generating opencode test agents from templates..."
-if [[ -x "${GENERATE_KIRO_SCRIPT}" ]]; then
+if [[ -x "${GENERATE_OPENCODE_SCRIPT}" ]]; then
     "$GENERATE_OPENCODE_SCRIPT" \
         --output "$TEST_OUTPUT_DIR/test-opencode-agents" \
         --agents-dir "$TEST_GENERIC_AGENTS_DIR" \
@@ -35,7 +35,7 @@ if [[ -x "${GENERATE_KIRO_SCRIPT}" ]]; then
         --skills-dir "$TEST_SKILLS_DIR"
     echo "  agents generated"
 else
-    echo "Rrror: generate_opencode.sh not found or not executable at ${GENERATE_OPENCODE_SCRIPT}"
+    echo "Error: generate_opencode.sh not found or not executable at ${GENERATE_OPENCODE_SCRIPT}"
     exit 1
 fi
 
