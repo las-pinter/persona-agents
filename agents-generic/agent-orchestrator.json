@@ -6,7 +6,8 @@
     "code": "allow",
     "edit": {
       "default": "ask",
-      "~/agent-notes/orchestrator/**": "allow"
+      "~/agent-notes/orchestrator/**": "allow",
+      "~/agent-notes/planner/plans/**": "allow"
     },
     "glob": "allow",
     "grep": "allow",
@@ -19,13 +20,16 @@
       },
       "default": "ask",
       "awk *": "allow",
+      "bash -n *": "allow",
+      "bash -n *;*": "deny",
+      "bash -n *>*": "deny",
       "cat *": "allow",
       "cat *>*": "ask",
       "date *": "allow",
       "diff *": "allow",
       "find * -name *": "allow",
       "find * -type *": "allow",
-      "git status": "allow",
+      "git status *": "allow",
       "git log *": "allow",
       "git diff *": "allow",
       "git show *": "allow",
@@ -34,6 +38,7 @@
       "head *": "allow",
       "jq *": "allow",
       "ls *": "allow",
+      "mkdir *": "allow",
       "pwd": "allow",
       "sort *": "allow",
       "tail *": "allow",
@@ -55,7 +60,8 @@
     "todo": "allow",
     "write": {
       "default": "ask",
-      "~/agent-notes/orchestrator/**": "allow"
+      "~/agent-notes/orchestrator/**": "allow",
+      "~/agent-notes/planner/plans/**": "allow"
     }
   },
   "skills": {

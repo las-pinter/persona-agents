@@ -1,6 +1,7 @@
 ---
 name: code-review-checklist
 description: >-
+  Skill for the reviewer agent.
   Structured, methodology-driven checklist for reviewing code changes with
   depth and consistency. Whenever you need to review a pull request, assess
   code quality, evaluate implementation work, or conduct a code audit — for

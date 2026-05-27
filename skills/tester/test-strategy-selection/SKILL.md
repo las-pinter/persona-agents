@@ -1,6 +1,7 @@
 ---
 name: test-strategy-selection
 description: >-
+  Skill for the tester agent.
   Choose the right type of tests before writing any — unit, integration,
   contract, e2e, or static — based on risk, context, and ROI. Use before
   writing any tests to determine the appropriate testing strategy. Covers

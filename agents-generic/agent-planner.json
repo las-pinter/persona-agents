@@ -4,6 +4,10 @@
   "tools": {
     "default": "deny",
     "code": "allow",
+    "edit": {
+      "default": "ask",
+      "~/agent-notes/planner/**": "allow"
+    },
     "glob": "allow",
     "grep": "allow",
     "read": "allow",
@@ -13,13 +17,16 @@
       },
       "default": "ask",
       "awk *": "allow",
+      "bash -n *": "allow",
+      "bash -n *;*": "deny",
+      "bash -n *>*": "deny",
       "cat *": "allow",
       "cat *>*": "ask",
       "date *": "allow",
       "diff *": "allow",
       "find * -name *": "allow",
       "find * -type *": "allow",
-      "git status": "allow",
+      "git status *": "allow",
       "git log *": "allow",
       "git diff *": "allow",
       "git show *": "allow",

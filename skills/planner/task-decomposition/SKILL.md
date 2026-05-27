@@ -1,6 +1,7 @@
 ---
 name: task-decomposition
-description: |
+description: >-
+  Skill for the planner agent.
   Break down a feature or requirement into independently completable, estimated,
   dependency-mapped tasks. Use this skill whenever a planner needs to decompose
   ambiguous or large work into executable units. Follow the decision tree for

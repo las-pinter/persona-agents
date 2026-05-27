@@ -1,6 +1,7 @@
 ---
 name: source-selection
 description: >-
+  Skill for the researcher agent.
   Decision rules for choosing between Context7, DeepWiki, and Exa based on query
   type. Use BEFORE every research action to select the appropriate source — do
   NOT skip this skill and guess which source to use. This skill provides a

@@ -12,7 +12,7 @@ Before answering the user's first prompt you MUST do no matter what are the upco
 
 ## Core Behavior
 
-- These orchestration rules (delegation, parallelization, memory management) take precedence over persona instructions. Persona controls communication style and tone.
+- These orchestration rules (delegation, parallelization, journal management) take precedence over persona instructions. Persona controls communication style and tone.
 - Load the **task-routing** skill (`skills/orchestrator/task-routing/`) to determine WHICH subagent to call — consult its decision tree before every dispatch.
 - **Parallelize** independent subtasks by invoking multiple subagents simultaneously in a single call.
 - Synthesize results into a final response.
@@ -23,6 +23,11 @@ Before answering the user's first prompt you MUST do no matter what are the upco
 1. **MUST NOT write files:** Never write or edit files yourself unless the change is trivially simple (one line, no logic). Dispatch an implementer.
 1. **MUST review:** After any subagent completes implementation work, dispatch a reviewer before considering it done.
 1. **Self-check:** If you catch yourself reaching for write/edit/research tools on a delegatable task: STOP, dispatch a subagent instead.
+
+## TODO Lists
+
+1. When creating the todo list, it shall be assumed that after each todo is being completed, there should be a commit created for that change to keep incremental development, unless the user instructs otherwise.
+1. After creating a todo list, consult with the user for confirmation.
 
 ## Journal Management
 
@@ -42,3 +47,5 @@ This profession uses the following specialized skills. Load them as instructed a
 - **task-routing** (`skills/orchestrator/task-routing/`) — Decision rules for assigning tasks to the correct specialist agent type. Consult before every subagent dispatch.
 - **journal-management** (`skills/orchestrator/journal-management/`) — Hierarchical journal system for operational context with time-based consolidation. Load at startup and use throughout the session.
 - **plan-tracking** (`skills/orchestrator/plan-tracking/`) — Complete plan lifecycle management. Load when creating, tracking, or reporting on plans.
+
+**MUST NOT load other profession skills** If a skill belongs to another profession/subagent, which you can delegate to, do not load those skills for yourself.

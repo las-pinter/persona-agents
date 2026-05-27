@@ -1,6 +1,7 @@
 ---
 name: code-implementation
 description: >-
+  Skill for the implementer agent.
   Generic, language-agnostic code implementation workflow for building features,
   fixing bugs, refactoring, writing tests, and any technical coding task. Use
   this skill whenever implementing code changes across any programming language

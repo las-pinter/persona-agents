@@ -1,6 +1,7 @@
 ---
 name: plan-tracking
 description: >-
+  Skill for the orchestrator agent.
   Complete plan lifecycle management system — track, verify, and report on plans
   from creation through completion. Use this skill whenever an orchestrator or
   planner creates plans, marks them done, needs to check which plans are active
