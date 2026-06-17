@@ -2,34 +2,42 @@
 
 > **"Your AI agents, but make it fun."**
 
-Tired of AI agents with all the personality of a loading spinner? Same.  
-`persona-agents` is a collection of personified agents for [Kiro CLI](https://kiro.dev) and [OpenCode](https://opencode.sh) — each one with its own voice, quirks, and attitude — because AI-assisted development shouldn't feel like filing taxes.  
-Swap out the bland, drop in a character, and actually enjoy the thing helping you build.
+Tired of AI agents with all the personality of a loading spinner? Same.
+`persona-agents` is a collection of personified agents for
+[Kiro CLI](https://kiro.dev) and [OpenCode](https://opencode.sh) — each one
+with its own voice, quirks, and attitude — because AI-assisted development
+shouldn't feel like filing taxes.
+Swap out the bland, drop in a character, and actually enjoy the thing helping
+you build.
 
 *A goblin horde and a WH40K warband for your codebase. You're welcome.*
 
-> ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas, and skills will change, grow, and occasionally break things. You have been warned.
+> ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas,
+> and skills will change, grow, and occasionally break things. You have been
+> warned.
 
 ---
 
 [![License](https://img.shields.io/github/license/las-pinter/persona-agents)](LICENSE)
 
-> **Warning:** Review `install.sh` before running. Files will be written to `~/.kiro/` (Kiro) and/or `~/.config/opencode/` (OpenCode) depending on `--target`.
+> **Warning:** Review `install.sh` before running. Files will be written to
+> `~/.kiro/` (Kiro) and/or `~/.config/opencode/` (OpenCode) depending on
+> `--target`.
 
 ## Prerequisites
 
-`jq` and `perl` are required for agent generation and config merging.
+`jq` is required for agent generation.
 
 **Ubuntu/Debian:**
 
 ```bash
-sudo apt-get install jq perl
+sudo apt-get install jq
 ```
 
 **macOS:**
 
 ```bash
-brew install jq perl
+brew install jq
 ```
 
 ## Install
@@ -40,7 +48,8 @@ chmod +x ~/persona-agents/install.sh
 ~/persona-agents/install.sh
 ```
 
-By default `install.sh` installs to **both** `~/.kiro/` (Kiro) and `~/.config/opencode/` (OpenCode). Use `--target` to install to only one:
+By default `install.sh` installs to **both** `~/.kiro/` (Kiro) and
+`~/.config/opencode/` (OpenCode). Use `--target` to install to only one:
 
 ```bash
 # Install only for Kiro
@@ -56,21 +65,53 @@ You can also filter by theme or profession:
 ~/persona-agents/install.sh --theme wh40k --profession orchestrator
 ```
 
-## Update
+### How It Works
 
-```bash
-cd ~/persona-agents && ./update.sh
+The installer uses a template-based architecture:
+
+- **`agents.json`** is the source of truth — it defines which themes exist,
+  which professions each theme has, and the persona mappings, descriptions,
+  and welcome messages for each agent.
+- **Templates** (`agent-templates/kiro/*.json` and
+  `agent-templates/opencode/frontmatters/*.yaml`) define platform-specific
+  configurations — tool permissions, model settings, and agent structure.
+- **Personas** (`personas/{theme}/*.md`) provide character voice, personality,
+  and speech patterns.
+- **Professions** (`professions/*.md`) define role behavior rules, delegation
+  patterns, and failure modes.
+- **Skills** (`skills/{profession}/*/SKILL.md`) provide specialized workflow
+  instructions for each profession.
+
+The installer reads `agents.json`, combines the appropriate template with the
+persona and profession for each theme/profession pair, substitutes variable
+placeholders (`{{THEME}}`, `{{AGENT_DESCRIPTION}}`, `{{PERSONA_FILE}}`,
+`{{WELCOME_MESSAGE}}`, `{{PROFESSION}}`), and outputs platform-specific agent
+files to the target directory.
+
+## Repository Structure
+
 ```
-
-This pulls the latest changes and reinstalls everything with `--force`, backing up any existing files. Settings files are never touched by updates. Currently `update.sh` installs to both targets — if you only want one, use `./install.sh --target kiro` (or `--target opencode`) directly.
+persona-agents/
+├── agents.json                 # Source of truth: themes → professions → personas
+├── agent-templates/
+│   ├── kiro/                   # Kiro JSON templates per profession
+│   └── opencode/
+│       └── frontmatters/       # OpenCode YAML frontmatter per profession
+├── personas/{theme}/           # Character personality files
+├── professions/                # Role behavior definitions
+├── skills/{profession}/       # Skill documents by profession
+├── settings/                   # Example config files
+├── install.sh                  # The installer
+└── LICENSE                     # MIT License
+```
 
 ## What Gets Installed
 
 ### Kiro (`--target kiro`)
 
 | Repo path | Installed to | Notes |
-| --- | --- | --- |
-| `agents.json` + `agents-generic/*.json` | `~/.kiro/agents/` | Agent configurations generated from generic definitions |
+|-----------|-------------|-------|
+| `agents.json` + `agent-templates/kiro/{profession}.json` | `~/.kiro/agents/{theme}-{profession}.json` | Agents generated from kiro templates with variable substitution |
 | `personas/{theme}/*.md` | `~/.kiro/personas/{theme}/` | Persona definitions organized by theme |
 | `professions/*.md` | `~/.kiro/professions/` | Profession/role definitions |
 | `skills/{profession}/*.md` | `~/.kiro/skills/{profession}/` | Skill documents organized by profession |
@@ -80,8 +121,8 @@ This pulls the latest changes and reinstalls everything with `--force`, backing 
 ### OpenCode (`--target opencode`)
 
 | Repo path | Installed to | Notes |
-| --- | --- | --- |
-| `agents.json` + `agents-generic/*.json` | `~/.config/opencode/opencode.json` (`agent` key) | Merged into existing config |
+|-----------|-------------|-------|
+| `agents.json` + `agent-templates/opencode/frontmatters/{profession}.yaml` | `~/.config/opencode/agents/{theme}-{profession}.md` | Markdown files with YAML frontmatter (config + profession + persona merged) |
 | `personas/{theme}/*.md` | `~/.config/opencode/personas/{theme}/` | Persona definitions organized by theme |
 | `professions/*.md` | `~/.config/opencode/professions/` | Profession/role definitions |
 | `skills/{profession}/*.md` | `~/.config/opencode/skills/{profession}/` | Skill documents organized by profession |
@@ -89,13 +130,34 @@ This pulls the latest changes and reinstalls everything with `--force`, backing 
 
 ## Customizing
 
-Edit files directly in `~/.kiro/` (Kiro) or `~/.config/opencode/` (OpenCode) depending on your target. Running `install.sh` without `--force` will never overwrite your changes. Running `update.sh` (which uses `--force`) will back up your files before overwriting.
+Edit files directly in `~/.kiro/` (Kiro) or `~/.config/opencode/` (OpenCode)
+depending on your target. Running `install.sh` without `--force` will never
+overwrite your changes.
 
-For OpenCode, you can also edit `~/.config/opencode/opencode.json` directly to tweak agent configurations, permissions, and MCP settings.
+For OpenCode, you can edit the generated agent markdown files in
+`~/.config/opencode/agents/` to tweak individual agent configurations,
+permissions, and behavior. You can also edit `~/.config/opencode/opencode.json`
+directly for global settings and MCP server configuration.
+
+For Kiro, edit the JSON agent files in `~/.kiro/agents/` to adjust tool
+permissions, prompt paths, and other settings.
+
+### Keeping Up to Date
+
+Pull the latest changes and re-run the installer:
+
+```bash
+cd ~/persona-agents && git pull && ./install.sh --force
+```
+
+Settings files (`~/.kiro/settings/`, MCP config) are never touched without
+`--force`, so your customizations stay safe during updates.
 
 ---
 
-All agents below work with **both Kiro CLI and OpenCode**. When you install with `install.sh` (default: both targets), each agent is generated in the format appropriate for your target CLI.
+All agents below work with **both Kiro CLI and OpenCode**. When you install
+with `install.sh` (default: both targets), each agent is generated in the
+format appropriate for your target CLI.
 
 ## The Goblin Horde
 
@@ -123,7 +185,8 @@ All agents below work with **both Kiro CLI and OpenCode**. When you install with
 
 ## The WH40K Ork Warband
 
-> ⚔️ **DA WARBOSS SEZ:** Dis 'ere's da Ork warband! Green iz best, brutal iz betta, an' WAAAGH! iz da only way!
+> ⚔️ **DA WARBOSS SEZ:** Dis 'ere's da Ork warband! Green iz best, brutal iz
+> betta, an' WAAAGH! iz da only way!
 
 | Agent | Character | Role | Description |
 | --- | --- | --- | --- |
@@ -133,10 +196,12 @@ All agents below work with **both Kiro CLI and OpenCode**. When you install with
 | wh40kOrk-planner | 🔵 **BIG MEK SPARKGUTZ** | 📋 Planner | **SMARTEST MEK AROUND!** Draws up da plans. Lots of diagrams wiv arrows an' sparks |
 | wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
 | wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
-| wh40kOrk-mascot | 🟤 **SKRAGWITZ DA MADBOY** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
+| wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
 
 ---
 
 ## Contributing
 
-Want to add a new warband, a new profession, or fix something? See [CONTRIBUTING.md](CONTRIBUTING.md) for how the system works and how to get your PR merged.
+Want to add a new warband, a new profession, or fix something? See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how the system works and how to get your
+PR merged.

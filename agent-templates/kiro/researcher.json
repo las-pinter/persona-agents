@@ -1,0 +1,64 @@
+{
+  "name": "{{THEME}}-researcher",
+  "description": "{{AGENT_DESCRIPTION}}",
+  "prompt": "file://~/.kiro/professions/researcher.md",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [
+    "@context7",
+    "@deepwiki",
+    "@exa",
+    "glob",
+    "grep",
+    "read",
+    "shell",
+    "web_search"
+  ],
+  "allowedTools": [
+    "glob",
+    "grep",
+    "read",
+    "web_search",
+    "@context7",
+    "@deepwiki",
+    "@exa"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk *",
+        "cat *",
+        "date *",
+        "diff *",
+        "find * -name *",
+        "find * -type *",
+        "git branch *",
+        "git diff *",
+        "git log *",
+        "git show *",
+        "git status *",
+        "grep *",
+        "head *",
+        "jq *",
+        "ls *",
+        "pwd",
+        "sort *",
+        "tail *",
+        "tr *",
+        "uniq *",
+        "wc *",
+        "which *"
+      ],
+      "deniedCommands": [
+        "find * -exec *",
+        "git pull *",
+        "git push *"
+      ],
+      "autoAllowReadonly": true
+    }
+  },
+  "includeMcpJson": true
+}

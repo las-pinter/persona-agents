@@ -1,0 +1,98 @@
+{
+  "name": "{{THEME}}-tester",
+  "description": "{{AGENT_DESCRIPTION}}",
+  "prompt": "file://~/.kiro/professions/tester.md",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [
+    "code",
+    "glob",
+    "grep",
+    "read",
+    "shell",
+    "subagent",
+    "write"
+  ],
+  "allowedTools": [
+    "code",
+    "glob",
+    "grep",
+    "read",
+    "subagent"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk *",
+        "bash -n *",
+        "cat *",
+        "date *",
+        "diff *",
+        "docker inspect *",
+        "docker logs *",
+        "docker ps *",
+        "find * -name *",
+        "find * -type *",
+        "git branch *",
+        "git diff *",
+        "git log *",
+        "git show *",
+        "git status *",
+        "grep *",
+        "head *",
+        "jq *",
+        "ls *",
+        "mypy *",
+        "node --version",
+        "npm run *",
+        "npm test *",
+        "npx eslint *",
+        "npx jest *",
+        "npx prettier *",
+        "pwd",
+        "python -m black *",
+        "python -m flake8 *",
+        "python -m isort *",
+        "python -m mypy *",
+        "python -m pylint *",
+        "python -m pytest *",
+        "python -m ruff *",
+        "python -m unittest *",
+        "python3 -m black *",
+        "python3 -m flake8 *",
+        "python3 -m isort *",
+        "python3 -m mypy *",
+        "python3 -m pylint *",
+        "python3 -m pytest *",
+        "python3 -m ruff *",
+        "python3 -m unittest *",
+        "ruff *",
+        "sort *",
+        "tail *",
+        "tr *",
+        "uniq *",
+        "wc *",
+        "which *"
+      ],
+      "deniedCommands": [
+        "bash -n *;*",
+        "bash -n *>*",
+        "find * -exec *",
+        "git pull *",
+        "git push *"
+      ],
+      "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [
+        "{{THEME}}-researcher"
+      ],
+      "trustedAgents": [
+        "{{THEME}}-researcher"
+      ]
+    }
+  }
+}
