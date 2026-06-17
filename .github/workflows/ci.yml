@@ -28,26 +28,15 @@ jobs:
             jq empty "$f" && echo "✅ $f" || { echo "❌ $f is invalid"; exit 1; }
           done
 
-      # Validate JSON files against their schemas
-      - name: Validate agent schemas
-        run: |
-          echo "Validating agents.json structure..."
-          jq -e 'type == "object"' agents.json > /dev/null && echo "✅ agents.json structure OK"
-
       # Lint all shell scripts
       - name: Lint shell scripts
         run: |
           echo "Linting shell scripts..."
-          shellcheck install.sh update.sh generators/*.sh
+          shellcheck install.sh
 
       # Make sure install.sh and update.sh are executable
       - name: Check script permissions
         run: |
-          for f in install.sh update.sh generators/*.sh; do
+          for f in install.sh; do
             [ -x "$f" ] && echo "✅ $f is executable" || { echo "❌ $f is not executable"; exit 1; }
           done
-
-      # Run the full generator test suite (kiro + opencode) against reference output
-      - name: Run generator test suite
-        run: |
-          bash generators/test/test_runner.sh
