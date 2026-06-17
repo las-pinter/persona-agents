@@ -561,5 +561,4 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "This was a dry run — no files were modified."
 fi
 echo "Re-run with --force to overwrite existing files."
-echo "Edit files in $DEST directly to customize — they won't be overwritten without --force."
 echo "Reload your shell: source ~/.zshrc (zsh) or source ~/.bashrc (bash)"
