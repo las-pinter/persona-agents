@@ -486,7 +486,7 @@ if target_available opencode; then
     else
         mkdir -p "$PLUGINS_DIR"
         PLUGIN_BUNDLE="$REPO_DIR/dist/plugin-bundled.js"
-        PLUGIN_DEST="$PLUGINS_DIR/persona-agents.mjs"
+        PLUGIN_DEST="$PLUGINS_DIR/persona-agents.js"
         if [[ -f "$PLUGIN_BUNDLE" ]]; then
             # Copy the bundled self-contained plugin to auto-discovery directory.
             # The plugin resolves resource paths (agents.json, personas/, professions/)
