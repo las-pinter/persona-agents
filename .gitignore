@@ -12,3 +12,8 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Node / Build
+node_modules/
+dist/
+*.tgz

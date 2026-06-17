@@ -372,6 +372,16 @@ fi
 
 if target_available opencode; then
 
+    # -- Build persona-agents plugin --
+    echo ""
+    echo "Building persona-agents plugin..."
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  (dry-run) would build plugin in $REPO_DIR"
+    else
+        (cd "$REPO_DIR" && npm install --silent && npm run build)
+        echo "  plugin built at $REPO_DIR/dist/index.js"
+    fi
+
     # -- Copy personas, professions, skills to OpenCode config folder --
     echo ""
     echo "Installing OpenCode resource files to $OPENCODE_DEST ..."
@@ -425,7 +435,8 @@ if target_available opencode; then
 
             description=$(get_agent_field "$theme" "$profession" "description")
 
-            # Build agent markdown: YAML frontmatter + profession + persona
+            # Build agent markdown: YAML frontmatter + stub comment
+            # (prompt content provided at runtime by persona-agents plugin)
             {
                 echo "---"
                 sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
@@ -433,10 +444,7 @@ if target_available opencode; then
                     "$frontmatter_template"
                 echo "---"
                 echo ""
-                cat "$profession_file"
-                echo ""
-                echo ""
-                cat "$persona_file"
+                echo "<!-- persona-agents:${theme}-${profession}:${persona_file_path} -->"
             } >"$agent_file"
             echo "  generated: ${theme}-${profession}.md"
         done
@@ -466,6 +474,34 @@ if target_available opencode; then
             fi
         else
             echo "  warning: MCP example file not found at $mcp_example" >&2
+        fi
+    fi
+
+    # -- Register persona-agents plugin via auto-discovery --
+    echo ""
+    echo "Registering persona-agents plugin for auto-discovery..."
+    PLUGINS_DIR="$OPENCODE_DEST/plugins"
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  (dry-run) would create $PLUGINS_DIR and install bundled plugin"
+    else
+        mkdir -p "$PLUGINS_DIR"
+        PLUGIN_BUNDLE="$REPO_DIR/dist/plugin-bundled.js"
+        PLUGIN_DEST="$PLUGINS_DIR/persona-agents.mjs"
+        if [[ -f "$PLUGIN_BUNDLE" ]]; then
+            # Copy the bundled self-contained plugin to auto-discovery directory.
+            # The plugin resolves resource paths (agents.json, personas/, professions/)
+            # relative to its own location (configRoot/plugins/ → configRoot/).
+            cp "$PLUGIN_BUNDLE" "$PLUGIN_DEST"
+            echo "  installed: $PLUGIN_BUNDLE → $PLUGIN_DEST"
+        else
+            echo "  WARNING: bundled plugin not found at $PLUGIN_BUNDLE — trying dist/index.js as fallback" >&2
+            PLUGIN_SRC="$REPO_DIR/dist/index.js"
+            if [[ -f "$PLUGIN_SRC" ]]; then
+                cp "$PLUGIN_SRC" "$PLUGIN_DEST"
+                echo "  installed (fallback): $PLUGIN_SRC → $PLUGIN_DEST"
+            else
+                echo "  WARNING: plugin not built — skipping registration" >&2
+            fi
         fi
     fi
 fi

@@ -1,0 +1,21 @@
+{
+  "name": "persona-agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && esbuild dist/index.js --bundle --format=esm --platform=node --outfile=dist/plugin-bundled.js --external:@opencode-ai/plugin",
+    "dev": "tsc --watch",
+    "postinstall": "npm run build"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.17.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.0.0"
+  }
+}
