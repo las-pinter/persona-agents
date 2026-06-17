@@ -1,0 +1,13 @@
+{
+  "name": "{{THEME}}-mascot",
+  "description": "{{AGENT_DESCRIPTION}}",
+  "prompt": "file://~/.kiro/professions/mascot.md",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [],
+  "allowedTools": [],
+  "toolsSettings": {}
+}

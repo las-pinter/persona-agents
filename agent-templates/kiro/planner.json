@@ -1,0 +1,76 @@
+{
+  "name": "{{THEME}}-planner",
+  "description": "{{AGENT_DESCRIPTION}}",
+  "prompt": "file://~/.kiro/professions/planner.md",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [
+    "code",
+    "glob",
+    "grep",
+    "read",
+    "shell",
+    "subagent",
+    "write"
+  ],
+  "allowedTools": [
+    "code",
+    "glob",
+    "grep",
+    "read",
+    "subagent"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk *",
+        "bash -n *",
+        "cat *",
+        "date *",
+        "diff *",
+        "find * -name *",
+        "find * -type *",
+        "git branch *",
+        "git diff *",
+        "git log *",
+        "git show *",
+        "git status *",
+        "grep *",
+        "head *",
+        "jq *",
+        "ls *",
+        "pwd",
+        "sort *",
+        "tail *",
+        "tr *",
+        "uniq *",
+        "wc *",
+        "which *"
+      ],
+      "deniedCommands": [
+        "bash -n *;*",
+        "bash -n *>*",
+        "find * -exec *",
+        "git pull *",
+        "git push *"
+      ],
+      "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [
+        "{{THEME}}-researcher"
+      ],
+      "trustedAgents": [
+        "{{THEME}}-researcher"
+      ]
+    },
+    "write": {
+      "allowedPaths": [
+        "~/agent-notes/planner/**"
+      ]
+    }
+  }
+}

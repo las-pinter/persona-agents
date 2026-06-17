@@ -15,7 +15,8 @@ set -euo pipefail
 # ============================================================================
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-DEST="$HOME/.kiro"
+AGENTS_JSON="$REPO_DIR/agents.json"
+KIRO_DEST="$HOME/.kiro"
 OPENCODE_DEST="$HOME/.config/opencode"
 OPENCODE_CONFIG="$OPENCODE_DEST/opencode.json"
 FORCE=false
@@ -39,16 +40,6 @@ cleanup() {
     fi
 }
 trap cleanup EXIT INT TERM
-
-# ---------------------------------------------------------------------------
-# Dependency check
-# ---------------------------------------------------------------------------
-for cmd in jq perl; do
-    if ! command -v "$cmd" &>/dev/null; then
-        echo "Error: '$cmd' is required but not installed." >&2
-        exit 1
-    fi
-done
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -132,6 +123,29 @@ kiro | opencode | all) ;;
     exit 1
     ;;
 esac
+
+# ---------------------------------------------------------------------------
+# agents.json — source of truth for theme/profession/persona mappings
+# ---------------------------------------------------------------------------
+
+if [[ ! -f "$AGENTS_JSON" ]]; then
+    echo "ERROR: agents.json not found at $AGENTS_JSON" >&2
+    exit 1
+fi
+
+get_themes() {
+    jq -r 'keys[]' "$AGENTS_JSON"
+}
+
+get_professions() {
+    local theme="$1"
+    jq -r ".[\"$theme\"] | keys[]" "$AGENTS_JSON"
+}
+
+get_agent_field() {
+    local theme="$1" profession="$2" field="$3"
+    jq -r ".[\"$theme\"][\"$profession\"].$field" "$AGENTS_JSON"
+}
 
 # ---------------------------------------------------------------------------
 # Target application checks — auto-detect available tools, warn not fail
@@ -288,41 +302,68 @@ merge_json_into() {
 # ---------------------------------------------------------------------------
 
 if target_available kiro; then
-    if needs_generation "$DEST/agents"; then
-        echo "Generating kiro agents from templates..."
-        kiro_generator_script="$REPO_DIR/generators/generate_kiro.sh"
-        if [[ -x "$kiro_generator_script" ]]; then
-            kiro_args=("--output" "$DEST/agents")
-            if [[ -n "$THEME" ]]; then
-                kiro_args+=("--theme" "$THEME")
-            fi
-            if [[ -n "$PROFESSION" ]]; then
-                kiro_args+=("--profession" "$PROFESSION")
-            fi
-            run "$kiro_generator_script" "${kiro_args[@]}"
-            echo "  kiro agents generated"
-        else
-            echo "  warning: generate_kiro.sh not found or not executable" >&2
-        fi
-    else
-        echo "  skipped (agents exist, use --force to regenerate): $DEST/agents"
-    fi
 
     echo ""
-    echo "Installing kiro-agents to $DEST ..."
+    echo "Generating kiro agents from templates..."
+
+    KIRO_AGENTS_DIR="$KIRO_DEST/agents"
+    mkdir -p "$KIRO_AGENTS_DIR"
+
+    for theme in $(get_themes); do
+        [[ -n "$THEME" && "$theme" != "$THEME" ]] && continue
+        for profession in $(get_professions "$theme"); do
+            [[ -n "$PROFESSION" && "$profession" != "$PROFESSION" ]] && continue
+
+            template="$REPO_DIR/agent-templates/kiro/${profession}.json"
+            agent_file="$KIRO_AGENTS_DIR/${theme}-${profession}.json"
+
+            if [[ ! -f "$template" ]]; then
+                echo "  warning: no kiro template for ${profession}, skipping" >&2
+                continue
+            fi
+
+            if [[ -f "$agent_file" && "$FORCE" != true ]]; then
+                echo "  skipped (exists): ${theme}-${profession}.json"
+                continue
+            fi
+
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  (dry-run) would generate: ${theme}-${profession}.json"
+                continue
+            fi
+
+            description=$(get_agent_field "$theme" "$profession" "description")
+            persona_file=$(get_agent_field "$theme" "$profession" "personaFile")
+            welcome_message=$(get_agent_field "$theme" "$profession" "welcomeMessage")
+
+            # Escape sed special chars in welcome message (&, /, \, |)
+            welcome_escaped=$(printf '%s\n' "$welcome_message" | sed 's|[\/&|]|\\&|g')
+
+            sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
+                -e "s|{{THEME}}|${theme}|g" \
+                -e "s|{{PERSONA_FILE}}|${persona_file}|g" \
+                -e "s|{{WELCOME_MESSAGE}}|${welcome_escaped}|g" \
+                -e "s|{{PROFESSION}}|${profession}|g" \
+                "$template" >"$agent_file"
+            echo "  generated: ${theme}-${profession}.json"
+        done
+    done
+
+    echo ""
+    echo "Installing kiro resource files to $KIRO_DEST ..."
 
     for dir in personas professions skills; do
         if [[ -d "$REPO_DIR/$dir" ]]; then
             while IFS= read -r -d '' f; do
                 rel="${f#"$REPO_DIR"/}"
-                copy_file "$f" "$DEST/$rel"
+                copy_file "$f" "$KIRO_DEST/$rel"
             done < <(find "$REPO_DIR/$dir" -type f -print0)
         fi
     done
 
     # Settings: only install if not already present — never overwrite user customizations
-    copy_if_missing "$REPO_DIR/settings/kiro-cli.json.example" "$DEST/settings/cli.json"
-    copy_if_missing "$REPO_DIR/settings/mcp.json.example" "$DEST/settings/mcp.json"
+    copy_if_missing "$REPO_DIR/settings/kiro-cli.json.example" "$KIRO_DEST/settings/cli.json"
+    copy_if_missing "$REPO_DIR/settings/mcp.json.example" "$KIRO_DEST/settings/mcp.json"
 fi
 
 # ---------------------------------------------------------------------------
@@ -344,77 +385,62 @@ if target_available opencode; then
         fi
     done
 
-    # -- Generate and merge OpenCode agents --
-    if [[ "$FORCE" != true ]] && [[ -f "$OPENCODE_CONFIG" ]] &&
-        jq -e '.agent | length > 0' "$OPENCODE_CONFIG" &>/dev/null; then
-        echo ""
-        echo "  skipped (agents already in config, use --force to regenerate)"
-    else
-        echo ""
-        echo "Generating OpenCode agents..."
+    # -- Generate OpenCode agents as markdown files with YAML frontmatter --
+    echo ""
+    echo "Generating OpenCode agents..."
 
-        # Validate config before attempting merges
-        if ! jq empty "$OPENCODE_CONFIG" 2>/dev/null; then
-            echo "WARNING: $OPENCODE_CONFIG contains invalid JSON — will regenerate" >&2
-        fi
+    OPENCODE_AGENTS_DIR="$OPENCODE_DEST/agents"
+    mkdir -p "$OPENCODE_AGENTS_DIR"
 
-        opencode_generator_script="$REPO_DIR/generators/generate_opencode.sh"
-        if [[ -x "$opencode_generator_script" ]]; then
-            if [[ "$DRY_RUN" == true ]]; then
-                echo "  (dry-run) would run opencode generator..."
-            else
-                opencode_gen_dir=$(mktemp -d)
-                CLEANUP_DIRS+=("$opencode_gen_dir")
+    for theme in $(get_themes); do
+        [[ -n "$THEME" && "$theme" != "$THEME" ]] && continue
+        for profession in $(get_professions "$theme"); do
+            [[ -n "$PROFESSION" && "$profession" != "$PROFESSION" ]] && continue
 
-                opencode_args=(
-                    "--output" "$opencode_gen_dir"
-                    "--agents-dir" "$REPO_DIR/agents-generic"
-                    "--agents-json" "$REPO_DIR/agents.json"
-                    "--skills-dir" "$REPO_DIR/skills"
-                )
-                if [[ -n "$THEME" ]]; then
-                    opencode_args+=("--theme" "$THEME")
-                fi
-                if [[ -n "$PROFESSION" ]]; then
-                    opencode_args+=("--profession" "$PROFESSION")
-                fi
-                "$opencode_generator_script" "${opencode_args[@]}"
+            frontmatter_template="$REPO_DIR/agent-templates/opencode/frontmatters/${profession}.yaml"
+            profession_file="$REPO_DIR/professions/${profession}.md"
+            persona_file_path=$(get_agent_field "$theme" "$profession" "personaFile")
+            persona_file="$REPO_DIR/personas/${theme}/${persona_file_path}"
+            agent_file="$OPENCODE_AGENTS_DIR/${theme}-${profession}.md"
 
-                # Validate all generated agent files before merging
-                for f in "$opencode_gen_dir"/*.json; do
-                    if ! jq empty "$f" 2>/dev/null; then
-                        echo "ERROR: Generated agent file is not valid JSON: $(basename "$f")" >&2
-                        rm -rf "$opencode_gen_dir"
-                        exit 1
-                    fi
-                done
-
-                # Combine all generated agent JSONs into one
-                # Use find to avoid nullglob/failglob issues
-                if [[ -n "$(find "$opencode_gen_dir" -maxdepth 1 -name '*.json' -print -quit)" ]]; then
-                    combined_agents=$(mktemp)
-                    CLEANUP_FILES+=("$combined_agents")
-                    jq -s 'add' "$opencode_gen_dir"/*.json >"$combined_agents"
-
-                    # Validate combined JSON before merging
-                    if [[ -s "$combined_agents" ]] && jq empty "$combined_agents" 2>/dev/null; then
-                        if [[ -f "$OPENCODE_CONFIG" ]]; then
-                            merge_json_into "$combined_agents" "$OPENCODE_CONFIG" "agent"
-                        else
-                            echo "  warning: $OPENCODE_CONFIG not found — run 'opencode init' first" >&2
-                        fi
-                    else
-                        echo "  warning: combined agents file is empty or invalid, skipping merge" >&2
-                    fi
-                else
-                    echo "  warning: no agent files generated" >&2
-                fi
+            # Check required files
+            missing=""
+            [[ ! -f "$frontmatter_template" ]] && missing="$missing frontmatter"
+            [[ ! -f "$profession_file" ]] && missing="$missing profession"
+            [[ ! -f "$persona_file" ]] && missing="$missing persona"
+            if [[ -n "$missing" ]]; then
+                echo "  warning: missing${missing} for ${theme}-${profession}, skipping" >&2
+                continue
             fi
-            echo "  OpenCode agents generated and merged"
-        else
-            echo "  warning: generate_opencode.sh not found or not executable" >&2
-        fi
-    fi
+
+            if [[ -f "$agent_file" && "$FORCE" != true ]]; then
+                echo "  skipped (exists): ${theme}-${profession}.md"
+                continue
+            fi
+
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  (dry-run) would generate: ${theme}-${profession}.md"
+                continue
+            fi
+
+            description=$(get_agent_field "$theme" "$profession" "description")
+
+            # Build agent markdown: YAML frontmatter + profession + persona
+            {
+                echo "---"
+                sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
+                    -e "s|{{THEME}}|${theme}|g" \
+                    "$frontmatter_template"
+                echo "---"
+                echo ""
+                cat "$profession_file"
+                echo ""
+                echo ""
+                cat "$persona_file"
+            } >"$agent_file"
+            echo "  generated: ${theme}-${profession}.md"
+        done
+    done
 
     # -- Merge MCP settings into OpenCode config --
     if [[ -f "$OPENCODE_CONFIG" ]]; then

@@ -1,0 +1,75 @@
+{
+  "name": "{{THEME}}-orchestrator",
+  "description": "{{AGENT_DESCRIPTION}}",
+  "prompt": "file://~/.kiro/professions/orchestrator.md",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [
+    "*"
+  ],
+  "allowedTools": [
+    "code",
+    "glob",
+    "grep",
+    "introspect",
+    "read",
+    "subagent",
+    "thinking",
+    "todo"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk *",
+        "bash -n *",
+        "cat *",
+        "date *",
+        "diff *",
+        "find * -name *",
+        "find * -type *",
+        "git branch *",
+        "git diff *",
+        "git log *",
+        "git show *",
+        "git status *",
+        "grep *",
+        "head *",
+        "jq *",
+        "ls *",
+        "mkdir *",
+        "pwd",
+        "sort *",
+        "tail *",
+        "tr *",
+        "uniq *",
+        "wc *",
+        "which *"
+      ],
+      "deniedCommands": [
+        "bash -n *;*",
+        "bash -n *>*",
+        "find * -exec *",
+        "git pull *",
+        "git push *"
+      ],
+      "autoAllowReadonly": true
+    },
+    "subagent": {
+      "availableAgents": [
+        "*"
+      ],
+      "trustedAgents": [
+        "{{THEME}}-*"
+      ]
+    },
+    "write": {
+      "allowedPaths": [
+        "~/agent-notes/orchestrator/**",
+        "~/agent-notes/planner/plans/**"
+      ]
+    }
+  }
+}
