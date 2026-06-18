@@ -26,7 +26,8 @@ you build.
 
 ## Prerequisites
 
-`jq` is required for agent generation.
+- **`jq`** — required for agent generation (JSON processing)
+- **Node.js** (v18+) and **npm** — required for building the OpenCode plugin
 
 **Ubuntu/Debian:**
 
@@ -39,6 +40,9 @@ sudo apt-get install jq
 ```bash
 brew install jq
 ```
+
+Node.js and npm are available from [nodejs.org](https://nodejs.org/) or your
+package manager of choice.
 
 ## Install
 
@@ -65,9 +69,19 @@ You can also filter by theme or profession:
 ~/persona-agents/install.sh --theme wh40k --profession orchestrator
 ```
 
+> 💡 Use `--dry-run` to preview what would be installed without touching your config:
+> ```bash
+> ~/persona-agents/install.sh --dry-run
+> ~/persona-agents/install.sh --dry-run --target opencode --theme goblin
+> ```
+
 ### How It Works
 
-The installer uses a template-based architecture:
+This project runs **two systems** from the same source of truth.
+
+#### 1. Static Template Generation (Kiro)
+
+The original system — a template-based agent generator:
 
 - **`agents.json`** is the source of truth — it defines which themes exist,
   which professions each theme has, and the persona mappings, descriptions,
@@ -88,6 +102,31 @@ placeholders (`{{THEME}}`, `{{AGENT_DESCRIPTION}}`, `{{PERSONA_FILE}}`,
 `{{WELCOME_MESSAGE}}`, `{{PROFESSION}}`), and outputs platform-specific agent
 files to the target directory.
 
+#### 2. Runtime Plugin Injection (OpenCode)
+
+A TypeScript/Node.js plugin for OpenCode that replaces the old
+static-merge approach:
+
+- **TypeScript source** in `src/` compiles to `dist/` via `tsc` + esbuild.
+- **Entry point:** `src/index.ts` exports an OpenCode `Plugin` via named export
+  `server`.
+- **Hook:** Implements `experimental.chat.system.transform` (see
+  `src/system-transform.ts`).
+- **Stub comments:** Generated `.md` agent files contain only YAML frontmatter
+  plus a single HTML comment stub:
+  `<!-- persona-agents:{theme}-{profession}:{personaFile} -->`
+- **On-demand loading:** At runtime the plugin scans system prompt entries for
+  stub markers and replaces them with the `profession.md + persona.md` content
+  loaded from disk (`src/agent-registry.ts`).
+- **Structured logging:** Uses `client.app.log()` via the `Logger` interface
+  (`src/types.ts`) — no more `console.log`/`console.error`.
+- **No dedup logic:** The old dedup was removed; the stub is fully replaced on
+  every match, and if the system prompt is reconstructed fresh each call the
+  replacement runs again harmlessly.
+- **Installer builds the plugin:** `install.sh` runs
+  `npm install && npm run build` and copies `dist/plugin-bundled.js` into
+  `~/.config/opencode/plugins/persona-agents.js`.
+
 ## Repository Structure
 
 ```
@@ -100,8 +139,29 @@ persona-agents/
 ├── personas/{theme}/           # Character personality files
 ├── professions/                # Role behavior definitions
 ├── skills/{profession}/       # Skill documents by profession
+├── src/                        # TypeScript plugin source
+│   ├── index.ts                # Plugin entry point — exports `server`
+│   ├── system-transform.ts     # system.transform hook implementation
+│   ├── agent-registry.ts       # Stub parsing + on-demand prompt loading
+│   └── types.ts                # AgentIdentity, Logger interfaces
+├── dist/                       # Compiled plugin output
+│   ├── plugin-bundled.js       # Self-contained bundle for OpenCode
+│   ├── index.js                # Compiled entry point
+│   └── ...                     # Declaration files, source maps
+├── node_modules/               # npm dependencies (gitignored)
 ├── settings/                   # Example config files
-├── install.sh                  # The installer
+├── install.sh                  # The installer — generates agents + builds plugin
+├── package.json                # Node.js package definition
+├── package-lock.json           # Dependency lockfile
+├── tsconfig.json               # TypeScript configuration (rootDir: src, outDir: dist)
+├── .editorconfig               # Editor formatting rules
+├── .github/                    # GitHub Actions workflows
+│   └── workflows/
+│       └── ci.yml              # CI pipeline (jq validation, shellcheck)
+├── .gitignore                  # Git ignore rules (dist/, node_modules/)
+├── .mdlrc                      # Markdown lint configuration
+├── CONTRIBUTING.md             # Contribution guide
+├── README.md                   # You are here
 └── LICENSE                     # MIT License
 ```
 
@@ -122,11 +182,46 @@ persona-agents/
 
 | Repo path | Installed to | Notes |
 |-----------|-------------|-------|
-| `agents.json` + `agent-templates/opencode/frontmatters/{profession}.yaml` | `~/.config/opencode/agents/{theme}-{profession}.md` | Markdown files with YAML frontmatter (config + profession + persona merged) |
+| `agents.json` + `agent-templates/opencode/frontmatters/{profession}.yaml` | `~/.config/opencode/agents/{theme}-{profession}.md` | Markdown files with YAML frontmatter + a **stub comment** (`<!-- persona-agents:... -->`). Persona content is injected at runtime by the plugin |
 | `personas/{theme}/*.md` | `~/.config/opencode/personas/{theme}/` | Persona definitions organized by theme |
 | `professions/*.md` | `~/.config/opencode/professions/` | Profession/role definitions |
 | `skills/{profession}/*.md` | `~/.config/opencode/skills/{profession}/` | Skill documents organized by profession |
 | `settings/mcp.json.example` | `~/.config/opencode/opencode.json` (`mcp` key) | Merged into existing config (transformed) |
+| `src/` → `dist/plugin-bundled.js` | `~/.config/opencode/plugins/persona-agents.js` | Self-contained plugin bundle (auto-discovered by OpenCode) |
+
+## Plugin Architecture
+
+The OpenCode plugin uses a **stub comment → runtime injection** pattern:
+
+```
+install.sh generates:
+  ~/.config/opencode/agents/goblin-orchestrator.md
+    → YAML frontmatter (config)
+    → <!-- persona-agents:goblin-orchestrator:bossnik-chief.md -->
+
+AT RUNTIME:
+  1. OpenCode loads the plugin from ~/.config/opencode/plugins/persona-agents.js
+  2. Plugin registers the experimental.chat.system.transform hook
+  3. On each LLM call, the hook scans all system prompt entries
+  4. When it finds <!-- persona-agents:{theme}-{profession}:{personaFile} -->
+     it calls parseAgentFromStubComment() → loadSinglePrompt()
+  5. loadSinglePrompt reads profession.md + persona.md from disk
+  6. The stub comment is FULLY REPLACED with the concatenated content
+  7. If files are missing, the stub stays visible as a misconfiguration signal
+```
+
+Key design decisions:
+
+- **On-demand loading:** No prompt pre-loading at startup. Only loaded when the
+  transform hook encounters a stub.
+- **No dedup needed:** The stub is fully replaced on first match. If the system
+  prompt is reconstructed fresh each call, the replacement runs again
+  harmlessly.
+- **Self-contained:** The plugin resolves resource paths (`personas/`,
+  `professions/`) relative to its own location in
+  `~/.config/opencode/plugins/`, so it works without the original repo.
+- **Structured logging:** All logging goes through `client.app.log()` with
+  service name `persona-agents` — never `console.log`.
 
 ## Customizing
 
