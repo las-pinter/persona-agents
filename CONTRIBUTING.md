@@ -25,7 +25,11 @@ welcome here.
 
 ## How It Works
 
-At its core, `persona-agents` is a **template-based agent generation system**.
+This project runs **two systems** from the same source of truth (`agents.json`).
+
+### 1. Static Template Generation (Kiro)
+
+The original system at its core is a **template-based agent generation system**.
 
 **`agents.json`** is the source of truth — a registry that defines which themes
 (e.g., `goblin`, `wh40k`, `wh40kOrk`) exist and which professions each theme
@@ -49,9 +53,33 @@ pair it:
 
 1. Reads the platform template (Kiro JSON or OpenCode YAML)
 2. Substitutes template variables (`{{THEME}}`, `{{AGENT_DESCRIPTION}}`, etc.)
-3. For OpenCode: appends the profession markdown and persona markdown to the
-   YAML frontmatter to produce a single agent `.md` file
-4. Outputs the result to the appropriate target directory
+3. For Kiro: writes a JSON agent file referencing external prompt files
+4. For OpenCode: generates a `.md` file with YAML frontmatter + a stub comment
+5. Copies resource files (personas, professions, skills) to the target directory
+
+### 2. Runtime Plugin Injection (OpenCode)
+
+OpenCode agent files no longer contain inline persona content. Instead they use
+a **stub comment** that the persona-agents plugin replaces at runtime.
+
+**Stub comment format:**
+`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`
+
+Example:
+`<!-- persona-agents:goblin-orchestrator:bossnik-chief.md -->`
+
+The plugin (TypeScript source in `src/`, compiled to `dist/plugin-bundled.js`):
+
+- Lives at `~/.config/opencode/plugins/persona-agents.js` after installation
+- Registers the `experimental.chat.system.transform` hook
+- On each LLM call, scans system prompt entries for stub markers
+- When a stub is found, parses it (`parseAgentFromStubComment`) and loads the
+  `profession.md + persona.md` content from disk (`loadSinglePrompt`)
+- Replaces the stub fully — no marker remains
+
+The installer builds the plugin automatically: `npm install && npm run build`
+produces `dist/plugin-bundled.js`, which is copied into the OpenCode plugins
+directory.
 
 ## Repository Structure
 
@@ -118,10 +146,30 @@ persona-agents/
 │   │   └── plan-output-template/SKILL.md
 │   └── shared/
 │       └── journal-management-generic/SKILL.md
+├── src/                               # TypeScript plugin source
+│   ├── index.ts                       # Plugin entry point — exports `server`
+│   ├── system-transform.ts            # system.transform hook implementation
+│   ├── agent-registry.ts              # Stub parsing + on-demand prompt loading
+│   └── types.ts                       # AgentIdentity, Logger interfaces
+├── dist/                              # Compiled plugin output
+│   ├── plugin-bundled.js              # Self-contained bundle for OpenCode
+│   ├── index.js                       # Compiled entry point
+│   ├── index.d.ts                     # Type declarations
+│   └── ...                            # Other compiled files, source maps
+├── node_modules/                      # npm dependencies (gitignored)
 ├── settings/
 │   ├── kiro-cli.json.example          # Example Kiro CLI config
 │   └── mcp.json.example               # Example MCP server config
-├── install.sh                         # The installer — reads agents.json, generates agents
+├── install.sh                         # The installer — generates agents + builds plugin
+├── package.json                       # Node.js package definition
+├── package-lock.json                  # Dependency lockfile
+├── tsconfig.json                      # TypeScript configuration (rootDir: src, outDir: dist)
+├── .editorconfig                      # Editor formatting rules
+├── .github/
+│   └── workflows/
+│       └── ci.yml                     # CI pipeline (jq validation, shellcheck)
+├── .gitignore                         # Git ignore rules (dist/, node_modules/)
+├── .mdlrc                             # Markdown lint configuration
 ├── README.md
 ├── CONTRIBUTING.md                    # You are here
 └── LICENSE                            # MIT License
@@ -129,7 +177,10 @@ persona-agents/
 
 ## Architecture Overview
 
-The agent generation pipeline works as follows:
+The project has **two pipelines** — one for static generation (Kiro) and one
+for runtime injection (OpenCode).
+
+### Static Generation Pipeline (Kiro)
 
 ```
 agents.json  ────── reads ──┐
@@ -147,10 +198,21 @@ agents.json  ────── reads ──┐
                                │     {{PROFESSION}}          → profession name
                                │
                                ├── Kiro: write JSON to ~/.kiro/agents/{theme}-{profession}.json
-                               ├── OpenCode: write .md (frontmatter + profession + persona)
+                               ├── OpenCode: write .md (frontmatter + stub comment)
                                │            to ~/.config/opencode/agents/{theme}-{profession}.md
                                └── Copy resource files (personas, professions, skills)
                                    to target directory
+```
+
+### Runtime Plugin Pipeline (OpenCode)
+
+```
+install.sh → generates stub .md files with <!-- persona-agents:... --> comment
+
+AT RUNTIME:
+  plugin (src/index.ts) → system.transform hook → parseAgentFromStubComment()
+  → loadSinglePrompt(configRoot, identity) → profession.md + persona.md
+  → inject into system prompt
 ```
 
 **Key design decisions:**
@@ -161,6 +223,11 @@ agents.json  ────── reads ──┐
   All 5 placeholders are substituted at install time.
 - **Two-platform output:** The same `agents.json` + templates produce agents
   for both Kiro CLI and OpenCode from a single source.
+- **On-demand loading:** The plugin loads prompts at runtime only when a stub
+  comment is encountered — no pre-loading, no startup cost.
+- **Self-contained plugin:** The plugin resolves resource paths relative to its
+  own location (`~/.config/opencode/plugins/`), so it works without the
+  original repository after installation.
 
 ## Development Setup
 
@@ -174,11 +241,24 @@ agents.json  ────── reads ──┐
 2. Make sure dependencies are installed:
 
    ```bash
-    # Check for jq
+    # Check for jq (required for agent generation)
     which jq
+
+    # Check for Node.js and npm (required for the OpenCode plugin)
+    node --version
+    npm --version
    ```
 
-3. (Optional) Make a test directory to inspect generated output without
+3. Install Node.js dependencies and build the plugin:
+
+   ```bash
+   npm install
+   npm run build
+   ```
+
+   This compiles TypeScript and produces `dist/plugin-bundled.js`.
+
+4. (Optional) Make a test directory to inspect generated output without
    touching your real config:
 
    ```bash
@@ -187,7 +267,7 @@ agents.json  ────── reads ──┐
    ./install.sh --dry-run --target all
    ```
 
-4. For quick iteration, use `--theme` and `--profession` filters:
+5. For quick iteration, use `--theme` and `--profession` filters:
 
    ```bash
    ./install.sh --dry-run --target opencode --theme goblin --profession orchestrator
@@ -198,6 +278,12 @@ agents.json  ────── reads ──┐
 Adding a new theme means creating a whole new cast of characters (e.g., a
 cyberpunk crew, a fantasy guild, a team of kitchen appliances). Each theme
 needs one persona file per profession.
+
+> **Note:** The OpenCode plugin is fully data-driven — adding a new theme
+> requires **no TypeScript changes**. Just add to `agents.json` and create
+> persona files as described below. The stub comment format
+> (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`) is parsed
+> dynamically at runtime, so new themes work automatically.
 
 ### Step-by-step
 
@@ -249,14 +335,21 @@ needs one persona file per profession.
 
 The installer will generate 7 agents (one per profession) for both Kiro and
 OpenCode targets, each combining the template, profession rules, and your new
-persona. Your theme's agents are accessible as `mytheme-orchestrator`,
-`mytheme-planner`, etc.
+persona. For OpenCode, the generated `.md` files will contain the YAML
+frontmatter plus a stub comment for runtime injection. Your theme's agents are
+accessible as `mytheme-orchestrator`, `mytheme-planner`, etc.
 
 ## Adding a New Profession
 
-Professions define *what an agent does* — the role behavior rules, delegation
+Professsions define *what an agent does* — the role behavior rules, delegation
 patterns, and tool permissions. Adding a new profession (e.g., `architect`,
 `scrum-master`, `devops`) makes it available to all existing themes.
+
+> **Note:** The OpenCode plugin is fully data-driven — adding a new profession
+> requires **no TypeScript code changes**. You only need a template + a
+> `profession.md` file + an `agents.json` entry. The stub comment format
+> (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`) contains the
+> profession name in the agent name portion, parsed dynamically at runtime.
 
 ### Step-by-step
 
@@ -399,6 +492,12 @@ Check the generated output to verify the persona content renders correctly:
 cat ~/.config/opencode/agents/goblin-orchestrator.md
 ```
 
+Verify the stub comment is present and correctly formatted:
+
+```bash
+grep '<!-- persona-agents:' ~/.config/opencode/agents/goblin-orchestrator.md
+```
+
 For Kiro, check that the `prompt` file reference points to the right persona:
 
 ```bash
@@ -458,6 +557,32 @@ permission:
     "{{THEME}}-*": "allow"
   # ...
 ```
+
+### Stub comment format
+
+OpenCode agent files now use a **single-line HTML comment** instead of inline
+persona content:
+
+```
+<!-- persona-agents:{theme}-{profession}:{personaFile} -->
+```
+
+The plugin replaces this at runtime with the actual `profession.md +
+persona.md` content.
+
+**Examples:**
+
+- `<!-- persona-agents:goblin-orchestrator:bossnik-chief.md -->`
+- `<!-- persona-agents:wh40kOrk-planner:sparkgutz-bigmek.md -->`
+
+**Parsing rules** (implemented in `src/agent-registry.ts`):
+
+1. Extract content between `<!--` and `-->`
+2. Strip `persona-agents:` prefix
+3. Split on the **last** `:` — right side is `personaFile`, left side is
+   agent name
+4. Split agent name on the **last** `-` — right side is `profession`,
+   left side is `theme`
 
 ### Permission mapping (Kiro → OpenCode)
 
@@ -554,6 +679,22 @@ bash -n install.sh
 
 This checks for bash syntax errors without executing anything.
 
+### TypeScript compilation
+
+Verify the plugin compiles without errors:
+
+```bash
+npm run build
+# or for type-checking only (no emit):
+npx tsc --noEmit
+```
+
+Check that the plugin bundle exists:
+
+```bash
+ls -la dist/plugin-bundled.js
+```
+
 ### Dry-run preview
 
 Preview what would be installed without touching your real config:
@@ -605,6 +746,10 @@ After running, verify:
 - **No unsubstituted placeholders**: `grep -r '{{' ~/.kiro/agents/` and
   `grep -r '{{' ~/.config/opencode/agents/` should return nothing (or only
   false positives from markdown content).
+- **Stub comments present and correctly formatted**:
+  `grep '<!-- persona-agents:' ~/.config/opencode/agents/*.md` — every agent
+  file should have exactly one stub comment.
+- **Plugin bundle exists**: `ls ~/.config/opencode/plugins/persona-agents.js`
 - **Persona files copied**: `ls ~/.kiro/personas/{theme}/` matches
   `ls personas/{theme}/`.
 - **Skill files copied**: `find ~/.kiro/skills/ -name SKILL.md` matches the
@@ -632,6 +777,7 @@ After running, verify:
 
    ```bash
    bash -n install.sh
+   npm run build
    ./install.sh --dry-run --force
    ```
 
@@ -668,9 +814,13 @@ After running, verify:
 Before submitting, check:
 
 - [ ] `bash -n install.sh` passes
+- [ ] `npm run build` (or `npx tsc --noEmit`) compiles without errors
+- [ ] Plugin bundle is generated (`dist/plugin-bundled.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
 - [ ] All 21 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output
+- [ ] OpenCode agent `.md` files contain valid stub comments
+      (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`)
 - [ ] Persona files follow the required format (`# Name the Title Persona`,
       `## Personality`, `## Speech Style`, `## Rules`)
 - [ ] Profession files follow the required format (`# Profession`,
