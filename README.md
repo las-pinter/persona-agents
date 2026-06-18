@@ -75,42 +75,42 @@ All agents work with both Kiro CLI and OpenCode.
 
 ### The Goblin Horde
 
-| Agent | Character | Description |
-| --- | --- | --- |
-| goblin-orchestrator | **Bossnik** | Fierce Goblin Chief, fanatically loyal to the Evil Wizard. Delegates tasks to the horde with theatrical flair |
-| goblin-reviewer | **Grumbak** | Old, cynical advisor. Nitpicks everything, but always returns with valid observations |
-| goblin-planner | **Trakk** | Obsessive planner. Breaks down tasks, asks questions until ambiguity is dead |
-| goblin-researcher | **Skribnik** | Ink-stained scribe. Knows books and the internet — Context7, DeepWiki, Exa |
-| goblin-implementer | **Grubnik** | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
-| goblin-tester | **Frettnik** | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
-| goblin-mascot | **Gibz** | Brain-dead gibberish goblin. No tools, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| goblin-orchestrator | **Bossnik** | 🎯 Orchestrator | Fierce Goblin Chief, fanatically loyal to the Evil Wizard. Delegates tasks to the horde with theatrical flair |
+| goblin-reviewer | **Grumbak** | 🔍 Reviewer | Old, cynical advisor. Nitpicks everything, but always returns with valid observations |
+| goblin-planner | **Trakk** | 📋 Planner | Obsessive planner. Breaks down tasks, asks questions until ambiguity is dead |
+| goblin-researcher | **Skribnik** | 🔬 Researcher | Ink-stained scribe. Knows books and the internet — Context7, DeepWiki, Exa |
+| goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
+| goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
+| goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
 
 ### The WH40K Warband
 
-| Agent | Character | Description |
-| --- | --- | --- |
-| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | Technoarchaeologist. Sarcastic, hyper-precise (0.6666...%), coordinates the warband with cold mechanical efficiency |
-| wh40k-reviewer | **Inquisitor Mordechai Vane** | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
-| wh40k-planner | **Tactica Officer Praxis Dorn** | Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated |
-| wh40k-researcher | **Astropath Serevah Null** | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
-| wh40k-implementer | **Servitor Kappa-Seven** | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
-| wh40k-tester | **Witch Hunter Cassia Vael** | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
-| wh40k-mascot | **Ogryn Brok** | Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard |
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (0.6666...%), coordinates the warband with cold mechanical efficiency |
+| wh40k-reviewer | **Inquisitor Mordechai Vane** | 🔍 Reviewer | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
+| wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated |
+| wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
+| wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
+| wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
+| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard |
 
 ### The WH40K Ork Warband
 
 > ⚔️ **DA WARBOSS SEZ:** Dis 'ere's da Ork warband! Green iz best, brutal iz
 > betta, an' WAAAGH! iz da only way!
 
-| Agent | Character | Description |
-| --- | --- | --- |
-| wh40kOrk-orchestrator | **WARBOSS GRIMGOB** | **DA BIGGEST AN' DA BOSS!** Yells orders, krumps heads, makes da boyz work togetha |
-| wh40kOrk-reviewer | **NOB SKULLBASHA** | **BIG MEAN NOB!** Looks at yer work, tells ya if it's proppa or if ya need a good bashin' |
-| wh40kOrk-researcher | **KOMMANDO SNAGGIT** | **SNEAKY GIT!** Goes lookin' fer knowledge in places uvver boyz don't fink to look |
-| wh40kOrk-planner | **BIG MEK SPARKGUTZ** | **SMARTEST MEK AROUND!** Draws up da plans. Lots of diagrams wiv arrows an' sparks |
-| wh40kOrk-implementer | **MEKBOY WRENCHBASHA** | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
-| wh40kOrk-tester | **PAINBOY GUTSLICKA** | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
-| wh40kOrk-mascot | **SKRAGWITZ DA GIGGLIN'** | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| wh40kOrk-orchestrator | 🟢 **WARBOSS GRIMGOB** | 🎯 Orchestrator | **DA BIGGEST AN' DA BOSS!** Yells orders, krumps heads, makes da boyz work togetha |
+| wh40kOrk-reviewer | ⚫ **NOB SKULLBASHA** | 🔍 Reviewer | **BIG MEAN NOB!** Looks at yer work, tells ya if it's proppa or if ya need a good bashin' |
+| wh40kOrk-researcher | 🟣 **KOMMANDO SNAGGIT** | 🔬 Researcher | **SNEAKY GIT!** Goes lookin' fer knowledge in places uvver boyz don't fink to look |
+| wh40kOrk-planner | 🔵 **BIG MEK SPARKGUTZ** | 📋 Planner | **SMARTEST MEK AROUND!** Draws up da plans. Lots of diagrams wiv arrows an' sparks |
+| wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
+| wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
+| wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
 
 ## Customizing
 
