@@ -8,9 +8,6 @@ permission:
   edit:
     "*": ask
     "~/agent-notes/planner/**": allow
-  write:
-    "*": "ask"
-    "~/agent-notes/planner/**": "allow"
   glob: allow
   grep: allow
   read: allow

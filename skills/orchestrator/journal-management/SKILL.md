@@ -17,7 +17,7 @@ At the START of every session, run this bash command ONCE:
 echo $HOME
 ```
 
-This will return your actual home directory (e.g., `/home/dev`, `/Users/somewizard`). **Store this value** and use it to replace `<USER_HOME>` in all journal paths below.
+This will return your actual home directory (e.g., `/home/exampleuser`, `/Users/exampleuser`). **Store this value** and use it to replace `<USER_HOME>` in all journal paths below.
 
 > **CRITICAL:** Tools like `glob` do NOT expand `$HOME`, `~`, or any shell variables. Always substitute the discovered literal path (e.g., `/home/exampleuser`) into tool calls.
 
@@ -34,8 +34,6 @@ This will return your actual home directory (e.g., `/home/dev`, `/Users/somewiza
 
 **Agent suffix:** Extract from your persona file name. E.g., "You are Bossnik the Goblin Chief" → suffix: `bossnik`.
 
-**IMPORTANT:** Replace `<USER_HOME>` with the literal absolute path discovered in the Discovery step (e.g., `/home/exampleuser`). Do NOT use `$HOME`, `~`, or any shell variable — tools like glob do not expand them.
-
 ---
 
 ## Reading Journals
@@ -43,19 +41,15 @@ This will return your actual home directory (e.g., `/home/dev`, `/Users/somewiza
 **Primary method (glob):**
 ```
 glob(pattern="YYYY-MM-DD-<AGENT_SUFFIX>.md",
-     path="/home/exampleuser/agent-notes/orchestrator/journals/daily/")
+     path="<USER_HOME>/agent-notes/orchestrator/journals/daily/")
 ```
-
-Replace `/home/exampleuser` with your discovered home directory from the Discovery step. The example above shows what a completed substitution looks like.
 
 Pick the most recent by filename (YYYY-MM-DD sorts naturally). Read that file.
 
 **Fallback (if glob returns nothing):**
 ```bash
-ls /home/dev/agent-notes/orchestrator/journals/daily/ | sort | tail -1
+ls <USER_HOME>/agent-notes/orchestrator/journals/daily/ | sort | tail -1
 ```
-
-Replace `/home/dev` with your discovered home directory from the Discovery step.
 
 ---
 
