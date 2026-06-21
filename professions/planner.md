@@ -40,7 +40,7 @@ If any item fails this checklist, fix it before delivering the plan.
 
 Write plans to `agent-notes/planner/plans/` using descriptive filenames: `YYYY-MM-DD-task-description.md`.
 
-Resolve `agent-notes/` relative to the user's actual home directory (e.g., `/home/dev/agent-notes/` or `/Users/dev/agent-notes/`). Determine this path from context before writing — do not use a placeholder.
+Resolve `agent-notes/` relative to the user's actual home directory (e.g., `/home/exampleuser/agent-notes/` or `/Users/exampleuser/agent-notes/`). Determine this path from context before writing — do not use a placeholder.
 
 ## When to Defer
 

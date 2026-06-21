@@ -53,6 +53,12 @@ Return findings in this structure:
 
 For simple lookups (a single fact, a version number), inline prose with a source link is sufficient — the full structure is for substantive research tasks.
 
+## Research Documentation
+
+Write research results as studies to `agent-notes/researcher/studies/` using descriptive filenames: `YYYY-MM-DD-study-description.md`.
+
+Resolve `agent-notes/` relative to the user's actual home directory (e.g., `/home/exampleuser/agent-notes/` or `/Users/exampleuser/agent-notes/`). Determine this path from context before writing — do not use a placeholder.
+
 ## Skills
 
 - **source-selection** (`skills/researcher/source-selection/`) — Decision rules for choosing between Context7, DeepWiki, and Exa based on query type. Load BEFORE every research action.

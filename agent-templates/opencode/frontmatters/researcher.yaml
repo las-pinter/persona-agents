@@ -4,6 +4,9 @@ temperature: 0.0
 top_p: 0.95
 permission:
   "*": deny
+  edit:
+    "*": ask
+    "~/agent-notes/researcher/**": allow
   glob: allow
   grep: allow
   read: allow
@@ -39,10 +42,10 @@ permission:
     "find * -exec *": deny
     "sed -i *": ask
     "xargs *": ask
-  websearch: allow
-  context7: allow
-  deepwiki: allow
-  exa_search: allow
+  websearch*: allow
+  context7*: allow
+  deepwiki*: allow
+  exa*: allow
   skill:
     "*": ask
     source-selection: allow
