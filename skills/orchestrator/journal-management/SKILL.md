@@ -9,6 +9,18 @@ description: >-
 
 # Journal Management
 
+## Discovery — Find Your Home Directory
+
+At the START of every session, run this bash command ONCE:
+
+```bash
+echo $HOME
+```
+
+This will return your actual home directory (e.g., `/home/dev`, `/Users/somewizard`). **Store this value** and use it to replace `<USER_HOME>` in all journal paths below.
+
+> **CRITICAL:** Tools like `glob` do NOT expand `$HOME`, `~`, or any shell variables. Always substitute the discovered literal path (e.g., `/home/exampleuser`) into tool calls.
+
 ## Folder Structure
 
 ```
@@ -22,7 +34,7 @@ description: >-
 
 **Agent suffix:** Extract from your persona file name. E.g., "You are Bossnik the Goblin Chief" → suffix: `bossnik`.
 
-**Always use the full expanded path** — do NOT use `~` shorthand; tools like `glob` do not expand it.
+**IMPORTANT:** Replace `<USER_HOME>` with the literal absolute path discovered in the Discovery step (e.g., `/home/exampleuser`). Do NOT use `$HOME`, `~`, or any shell variable — tools like glob do not expand them.
 
 ---
 
@@ -31,22 +43,27 @@ description: >-
 **Primary method (glob):**
 ```
 glob(pattern="YYYY-MM-DD-<AGENT_SUFFIX>.md",
-     path="<USER_HOME>/agent-notes/orchestrator/journals/daily/")
+     path="/home/exampleuser/agent-notes/orchestrator/journals/daily/")
 ```
+
+Replace `/home/exampleuser` with your discovered home directory from the Discovery step. The example above shows what a completed substitution looks like.
+
 Pick the most recent by filename (YYYY-MM-DD sorts naturally). Read that file.
 
 **Fallback (if glob returns nothing):**
 ```bash
-ls <USER_HOME>/agent-notes/orchestrator/journals/daily/ | sort | tail -1
+ls /home/dev/agent-notes/orchestrator/journals/daily/ | sort | tail -1
 ```
+
+Replace `/home/dev` with your discovered home directory from the Discovery step.
 
 ---
 
-## Writing Journals
+## Writing journals
 
-Always use the `write` tool, never `edit`. To update an existing file: READ it first, then WRITE the full content with the new entry appended. Never lose previous entries.
+Always use the `write` tool, never `edit`. To update an existing file: READ it first, update it if something is outdated, append new records, then WRITE the full content. Never lose previous entries.
 
-If a write fails, retry once. If it fails again, report to the user — never silently discard.
+If a write fails, retry once. If it fails again, report it to the user — never silently discard.
 
 ---
 
@@ -109,7 +126,7 @@ Load additional entries when:
 - The user's task references work from more than a few days ago
 - The latest daily entry mentions dependencies on earlier work
 
-Priority for additional reads: weekly summary → monthly → yearly → specific daily entries.
+Priority for additional reads: weekly summary → monthly → yearly → specific dailies.
 
 ---
 
@@ -125,8 +142,8 @@ Priority for additional reads: weekly summary → monthly → yearly → specifi
 | Level | When | Source | Target |
 |-------|------|--------|--------|
 | **Weekly** | First run of a new ISO week | Last 7 daily files | `YYYY-Wnn-<SUFFIX>.md` |
-| **Monthly** | First run of a new month | 4-5 weekly files | `YYYY-MM-<SUFFIX>.md` |
-| **Yearly** | First run of a new year | 12 monthly files | `YYYY-<SUFFIX>.md` |
+| **Monthly** | First run of a new month | 4-5 weekly files | `YYYY-MM-<AGENT_SUFFIX>.md` |
+| **Yearly** | First run of a new year | 12 monthly files | `YYYY-<AGENT_SUFFIX>.md` |
 
 Use `journal-consolidate.sh --type weekly --agent-suffix <SUFFIX>` to list source files before synthesizing.
 

@@ -5,7 +5,17 @@ description: Generic hierarchical journal system for any agent's operational con
 
 # Journal Management
 
-Maintain operational journals with hierarchical time-based organization. Daily entries consolidate into weekly, weekly into monthly, monthly into yearly summaries. This preserves detail while managing context window limits.
+## Discovery — Find Your Home Directory
+
+At the START of every session, run this bash command ONCE:
+
+```bash
+echo $HOME
+```
+
+This will return your actual home directory (e.g., `/home/exampleuser`, `/Users/somewizard`). **Store this value** and use it to replace `<USER_HOME>` in all journal paths below.
+
+> **CRITICAL:** Tools like `glob` do NOT expand `$HOME`, `~`, or any shell variables. Always substitute the discovered literal path (e.g., `/home/exampleuser`) into tool calls. Do NOT pass `$HOME` or `~` directly to glob, read, write, or other file tools — they will fail.
 
 ## When to Use
 
@@ -33,7 +43,7 @@ Once determined, use this name consistently as `<AGENT_NAME>` in all journal pat
 
 ## Folder Structure
 
-The journal system uses a structured folder hierarchy under the user's home folder. Replace `<USER_HOME>` with your actual home directory path (e.g., `/home/dev` or `/Users/dev`) and `<AGENT_NAME>` with your determined agent name:
+The journal system uses a structured folder hierarchy under the user's home folder. First discover your home directory using the Discovery step above, then replace both `<USER_HOME>` and `<AGENT_NAME>` with their actual values:
 
 ```
 <USER_HOME>/agent-notes/<AGENT_NAME>/
@@ -50,7 +60,7 @@ The journal system uses a structured folder hierarchy under the user's home fold
 
 **Directory creation:** Use `mkdir -p` pattern. Create directories on-demand when writing files. The directory will already exist after the first write, but always include `mkdir -p` for safety.
 
-**IMPORTANT:** Always use the expanded path `<USER_HOME>` in tool calls. Do NOT use `~` shorthand — tools like `glob` do not expand `~` to the home directory.
+**IMPORTANT:** Replace `<USER_HOME>` with the literal absolute path discovered in the Discovery step (e.g., `/home/exampleuser`). Do NOT use `$HOME`, `~`, or any shell variable — tools like glob do not expand them.
 
 ## Tool Usage
 
@@ -59,16 +69,20 @@ The journal system uses a structured folder hierarchy under the user's home fold
 When reading journals, ALWAYS use `path` to point to the target directory and `pattern` for the filename wildcards:
 
 ```
-glob(pattern="YYYY-MM-DD.md", path="<USER_HOME>/agent-notes/<AGENT_NAME>/journals/daily/")
+glob(pattern="YYYY-MM-DD.md", path="/home/exampleuser/agent-notes/<AGENT_NAME>/journals/daily/")
 ```
+
+Replace `/home/exampleuser` with your discovered home directory. The example above shows what a completed substitution looks like.
 
 **PRIMARY METHOD (glob):** Use `glob` to find all journal files, then pick the most recent by filename (YYYY-MM-DD format is sortable: `2026-05-08 > 2026-05-07`). Read that file.
 
 **FALLBACK (ls):** If `glob` returns zero results for any reason (tool bug, permissions, etc.), fall back to using `ls` via bash — sort the output by date (YYYY-MM-DD prefix sorts naturally), pick the last one. Then `read` that file.
 
 ```bash
-ls <USER_HOME>/agent-notes/<AGENT_NAME>/journals/daily/ | sort | tail -1
+ls /home/exampleuser/agent-notes/<AGENT_NAME>/journals/daily/ | sort | tail -1
 ```
+
+Replace `/home/exampleuser` with your discovered home directory from the Discovery step.
 
 ### Writing journals
 
