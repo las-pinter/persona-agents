@@ -1,77 +1,82 @@
 description: "{{AGENT_DESCRIPTION}}"
-mode: "all"
+mode: all
 temperature: 0.4
 top_p: 0.95
 permission:
-  "*": "deny"
-  "code": "allow"
-  "edit": "ask"
-  "write": "ask"
-  "glob": "allow"
-  "grep": "allow"
-  "read": "allow"
-  "bash":
-    "*": "ask"
-    "awk*": "allow"
-    "bash -n *": "allow"
-    "bash -n *;*": "deny"
-    "bash -n *>*": "deny"
-    "cat*": "allow"
-    "cat *>*": "ask"
-    "date *": "allow"
-    "diff*": "allow"
-    "find *-name*": "allow"
-    "find *-type*": "allow"
-    "git status *": "allow"
-    "git log*": "allow"
-    "git diff *": "allow"
-    "git show*": "allow"
-    "git branch *": "allow"
-    "grep*": "allow"
-    "head *": "allow"
-    "jq*": "allow"
-    "ls *": "allow"
-    "pwd": "allow"
-    "sort *": "allow"
-    "tail*": "allow"
-    "tr *": "allow"
-    "uniq*": "allow"
-    "wc *": "allow"
-    "which*": "allow"
-    "git push *": "deny"
-    "git pull*": "deny"
-    "find * -exec *": "deny"
-    "sed -i *": "ask"
-    "xargs *": "ask"
-    "python -m pytest *": "allow"
-    "python -m unittest *": "allow"
-    "python3 -m pytest *": "allow"
-    "python3 -m unittest *": "allow"
-    "python -m flake8 *": "allow"
-    "python -m mypy *": "allow"
-    "python -m pylint *": "allow"
-    "python3 -m flake8 *": "allow"
-    "python3 -m mypy *": "allow"
-    "python3 -m pylint *": "allow"
-    "python -m black *": "allow"
-    "python -m isort *": "allow"
-    "python3 -m black *": "allow"
-    "python3 -m isort *": "allow"
-    "ruff*": "allow"
-    "python -m ruff *": "allow"
-    "python3 -m ruff *": "allow"
-    "node --version": "allow"
-    "npm test *": "allow"
-    "npm run *": "allow"
-    "npx jest *": "allow"
-    "npx eslint *": "allow"
-    "npx prettier *": "allow"
-    "docker ps *": "allow"
-    "docker logs *": "allow"
-    "docker inspect *": "allow"
-    "mypy*": "allow"
-  "task":
-    "*": "deny"
-    "{{THEME}}-researcher": "allow"
-  "skill":
-    "*": "ask"
+  "*": deny
+  code: allow
+  edit: ask
+  write: ask
+  glob: allow
+  grep: allow
+  read: allow
+  bash:
+    "*": ask
+    "awk *": allow
+    "bash -n *": allow
+    "cat *": allow
+    "cat *>*": ask
+    "date *": allow
+    "diff *": allow
+    "echo *": allow
+    "echo *>*": ask
+    "find *-name*": allow
+    "find *-type*": allow
+    "find * -exec *": deny
+    "git status *": allow
+    "git log*": allow
+    "git diff *": allow
+    "git show *": allow
+    "git branch *": allow
+    "grep *": allow
+    "head *": allow
+    "jq *": allow
+    "ls *": allow
+    "pwd": allow
+    "sort *": allow
+    "tail *": allow
+    "tr *": allow
+    "uniq *": allow
+    "wc *": allow
+    "which *": allow
+    "git push *": deny
+    "git pull *": deny
+    "sed -i *": ask
+    "xargs *": ask
+    "python --version": allow
+    "python3 --version": allow
+    "pytest *": allow
+    "python -m pytest *": allow
+    "python3 -m pytest *": allow
+    "python -m unittest *": allow
+    "python3 -m unittest *": allow
+    "mypy *": allow
+    "python -m mypy *": allow
+    "python3 -m mypy *": allow
+    "python -m flake8 *": allow
+    "python3 -m flake8 *": allow
+    "python -m pylint *": allow
+    "python3 -m pylint *": allow
+    "python -m black *": allow
+    "python3 -m black *": allow
+    "python -m isort *": allow
+    "python3 -m isort *": allow
+    "ruff *": allow
+    "python -m ruff *": allow
+    "python3 -m ruff *": allow
+    "node --version": allow
+    "npm test *": allow
+    "npm run *": allow
+    "npx jest *": allow
+    "npx eslint *": allow
+    "npx prettier *": allow
+    "docker ps *": allow
+    "docker logs *": allow
+    "docker inspect *": allow
+    "rq *": allow
+  task:
+    "*": deny
+    "{{THEME}}-researcher": allow
+  skill:
+    "*": ask
+    code-implementation: allow
