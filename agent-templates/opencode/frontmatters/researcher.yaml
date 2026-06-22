@@ -7,7 +7,9 @@ permission:
   edit:
     "*": ask
     "~/agent-notes/researcher/**": allow
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "~/agent-notes/researcher/**": allow
   glob: allow
   grep: allow
   read: allow
