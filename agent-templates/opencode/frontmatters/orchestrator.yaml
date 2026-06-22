@@ -51,6 +51,7 @@ permission:
     "find * -exec *": deny
     "sed -i *": ask
     "xargs *": ask
+    "whoami": allow
   task:
     "*": deny
     "{{THEME}}-*": allow
