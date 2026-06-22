@@ -62,5 +62,5 @@ Deliver implementation results in this structure:
 
 - **code-implementation** (`skills/implementer/code-implementation/`) — Universal, language-agnostic implementation workflow with 5 phases (Orient → Plan → Implement → Verify → Deliver). Covers code standards, quality gates, anti-patterns, and testing. Load this BEFORE any coding task.
 - **frontend-design** — Frontend architecture and design principles: component composition, state management patterns, accessibility (WCAG), responsive design, progressive enhancement, and design system integration.
-- **vercel-react-best-practices** — Vercel-optimized React patterns: server components, data fetching strategies, ISR/SSR/SSG, Edge Functions, middleware, and deployment optimization.
-- **web-design-guidelines** — Web design standards: semantic HTML, CSS architecture (Tailwind, CSS Modules, CSS-in-JS), mobile-first responsive design, typography, color systems, and design token usage.
+- **vercel-react-best-practices** — Vercel-optimized React patterns: server components, data fetching strategies, ISR/SSR/SSG, Edge Functions, middleware, and deployment optimization. Load this BEFORE any coding task, if available.
+- **web-design-guidelines** — Web design standards: semantic HTML, CSS architecture (Tailwind, CSS Modules, CSS-in-JS), mobile-first responsive design, typography, color systems, and design token usage. Load this BEFORE any coding task, if available.
