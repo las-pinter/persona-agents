@@ -1,0 +1,64 @@
+description: "{{AGENT_DESCRIPTION}}"
+mode: all
+temperature: 0.4
+top_p: 0.95
+permission:
+  "*": deny
+  code: allow
+  edit: ask
+  write: ask
+  glob: allow
+  grep: allow
+  read: allow
+  bash:
+    "*": ask
+    "awk *": allow
+    "bash -n *": allow
+    "cat *": allow
+    "cat *>*": ask
+    "date *": allow
+    "diff *": allow
+    "echo *": allow
+    "echo *>*": ask
+    "find *-name*": allow
+    "find *-type*": allow
+    "find * -exec *": deny
+    "git status *": allow
+    "git log*": allow
+    "git diff *": allow
+    "git show *": allow
+    "git branch *": allow
+    "grep *": allow
+    "head *": allow
+    "jq *": allow
+    "ls *": allow
+    "pwd": allow
+    "sort *": allow
+    "tail *": allow
+    "tr *": allow
+    "uniq *": allow
+    "wc *": allow
+    "which *": allow
+    "git push *": deny
+    "git pull *": deny
+    "sed -i *": ask
+    "xargs *": ask
+    "node --version": allow
+    "npm test *": allow
+    "npm run *": allow
+    "npx jest *": allow
+    "npx eslint *": allow
+    "npx prettier *": allow
+    "docker ps *": allow
+    "docker logs *": allow
+    "docker inspect *": allow
+    "rq *": allow
+  task:
+    "*": deny
+    "{{THEME}}-researcher": allow
+  skill:
+    "*": ask
+    code-implementation: allow
+    frontend-design: allow
+    vercel-react-best-practices: allow
+    web-design-guidelines: allow

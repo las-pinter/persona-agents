@@ -88,15 +88,18 @@ export function parseAgentFromStubComment(
     return null;
   }
 
-  // Split agent name on LAST hyphen to separate theme from profession
-  const lastHyphen = agentName.lastIndexOf('-');
-  if (lastHyphen === -1) {
+  // Split agent name on FIRST hyphen to separate theme from profession.
+  // Using first hyphen rather than last supports multi-word profession names
+  // (e.g. "implementer-python", "implementer-react") while remaining backward
+  // compatible since no existing theme contains a hyphen.
+  const firstHyphen = agentName.indexOf('-');
+  if (firstHyphen === -1) {
     log.warn('parseAgentFromStubComment: no hyphen in agentName', { agentName });
     return null;
   }
 
-  const theme = agentName.substring(0, lastHyphen);
-  const profession = agentName.substring(lastHyphen + 1);
+  const theme = agentName.substring(0, firstHyphen);
+  const profession = agentName.substring(firstHyphen + 1);
 
   if (!theme || !profession) {
     log.warn('parseAgentFromStubComment: theme or profession empty after split',
