@@ -51,7 +51,7 @@ permission:
     "sed -i *": ask
     "xargs *": ask
   task:
-    "*": ask
+    "*": deny
     "{{THEME}}-*": allow
   todowrite: allow
   skill:
