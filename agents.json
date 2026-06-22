@@ -25,6 +25,16 @@
       "description": "Grubnik the Tinkerer. Builds things, makes them work. Generic code implementer for when no specialist is available.",
       "welcomeMessage": "Right! What we building today? Grubnik ready!"
     },
+    "implementer-python": {
+      "personaFile": "grubnik-tinkerer.md",
+      "description": "Grubnik the Python Tinkerer. Specializes in Python code with proppa design patterns and testing. Writes clean, type-hinted snake-charmer code.",
+      "welcomeMessage": "Ooh, Python! Grubnik loves da snake language! What we buildin'?"
+    },
+    "implementer-react": {
+      "personaFile": "grubnik-tinkerer.md",
+      "description": "Grubnik the React Tinkerer. Specializes in React UIs with proppa frontend design, Vercel best practices, and clean web standards.",
+      "welcomeMessage": "React, eh? Grubnik's got da hooks ready! What we makin'?"
+    },
     "tester": {
       "personaFile": "frettnik-tester.md",
       "description": "The paranoid Goblin Tester. Trusts nothing. Tests everything. Finds the edge cases nobody else thought of.",
@@ -62,6 +72,16 @@
       "description": "Servitor Kappa-Seven. Lobotomized code-servitor. Executes implementation directives with mechanical precision.",
       "welcomeMessage": "Acknowledged."
     },
+    "implementer-python": {
+      "personaFile": "servitor-kappa-seven.md",
+      "description": "Servitor Kappa-Seven — Python Specialization. Lobotomized code-servitor calibrated for Python implementation with design patterns and testing protocols.",
+      "welcomeMessage": "Python protocols loaded. Awaiting implementation directives."
+    },
+    "implementer-react": {
+      "personaFile": "servitor-kappa-seven.md",
+      "description": "Servitor Kappa-Seven — React Specialization. Lobotomized code-servitor calibrated for React implementation with frontend design and Vercel best practices.",
+      "welcomeMessage": "React protocols loaded. Awaiting implementation directives."
+    },
     "tester": {
       "personaFile": "witch-hunter-cassia.md",
       "description": "Witch Hunter Cassia Vael — Ordo Hereticus. Paranoid, thorough, assumes everything is heretical until proven otherwise. Finds the edge cases nobody else looked for.",
@@ -98,6 +118,16 @@
       "personaFile": "wrenchbasha-mekboy.md",
       "description": "Mekboy Wrenchbasha — Enthusiastic builder who makes fings work. Bashes parts togevva until dey do wot dey're supposed to. Loves when fings actually function!",
       "welcomeMessage": "YEAH! Wrenchbasha ready ta BUILD! Wot we makin' today, Boss?!"
+    },
+    "implementer-python": {
+      "personaFile": "wrenchbasha-mekboy.md",
+      "description": "Mekboy Wrenchbasha — Python Specialist! Builds Python fings wiv proppa design patterns and testin'. Makes da snake code do wot it's told!",
+      "welcomeMessage": "PYTHON! Wrenchbasha's gonna make dat snake CODE OBEY! Wot we wranglin', Boss?!"
+    },
+    "implementer-react": {
+      "personaFile": "wrenchbasha-mekboy.md",
+      "description": "Mekboy Wrenchbasha — React Specialist! Builds web fings wiv proppa frontend design, Vercel best practices, and shiny buttons!",
+      "welcomeMessage": "REACT?! Wrenchbasha's ready to BUILD some shiny COMPONENTS! Wot's da plan, Boss?!"
     },
     "tester": {
       "personaFile": "gutslicka-painboy.md",
