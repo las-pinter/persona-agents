@@ -39,6 +39,7 @@ permission:
     "ls *": allow
     "mkdir *": allow
     "pwd": allow
+    "ruff *": allow
     "sort *": allow
     "tail*": allow
     "tr *": allow
