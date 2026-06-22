@@ -59,5 +59,5 @@ Deliver implementation results in this structure:
 ## Skills
 
 - **code-implementation** (`skills/implementer/code-implementation/`) — Universal, language-agnostic implementation workflow with 5 phases (Orient → Plan → Implement → Verify → Deliver). Covers code standards, quality gates, anti-patterns, and testing. Load this BEFORE any coding task.
-- **python-design-patterns** — Python-specific design patterns and idioms: context managers, decorators, metaclasses, protocols, factory patterns, dependency injection, and async patterns.
-- **python-testing-patterns** — Python testing best practices: pytest fixtures, parameterization, mocking, property-based testing, integration test patterns, and test architecture.
+- **python-design-patterns** — Python-specific design patterns and idioms: context managers, decorators, metaclasses, protocols, factory patterns, dependency injection, and async patterns. Load this BEFORE any coding task, if available.
+- **python-testing-patterns** — Python testing best practices: pytest fixtures, parameterization, mocking, property-based testing, integration test patterns, and test architecture. Load this BEFORE any coding task, if available.
