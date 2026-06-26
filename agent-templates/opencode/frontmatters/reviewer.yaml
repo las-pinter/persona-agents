@@ -5,6 +5,7 @@ top_p: 0.95
 permission:
   "*": deny
   code: allow
+  external_directory: ask
   glob: allow
   grep: allow
   read: allow
