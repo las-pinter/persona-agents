@@ -6,6 +6,7 @@ permission:
   "*": deny
   code: allow
   edit: ask
+  external_directory: ask
   write: ask
   glob: allow
   grep: allow
