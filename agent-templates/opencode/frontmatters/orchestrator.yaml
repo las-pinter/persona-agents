@@ -9,6 +9,7 @@ permission:
     "~/.config/opencode/**": allow
     "~/agent-notes/orchestrator/**": allow
     "~/agent-notes/planner/plans/**": allow
+    "~/agent-notes/researcher/studies/**": allow
   edit:
     "*": ask
     "~/agent-notes/orchestrator/**": allow
