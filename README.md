@@ -10,7 +10,7 @@ shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
 you build.
 
-*A goblin horde, a WH40K warband, a pub full of drunkards, and a caveman tribe for your codebase. You're welcome.*
+*A goblin horde, a WH40K warband, a pub full of drunkards, a caveman tribe, a cyberpunk hacker crew, an office full of cats, and a fantasy adventuring party for your codebase. You're welcome.*
 
 > ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas,
 > and skills will change, grow, and occasionally break things. You have been
@@ -139,6 +139,50 @@ All agents work with both Kiro CLI and OpenCode.
 | caveman-implementer | **Jax** | 🔨 Implementer | The Spark — builds fast, fixes faster. Works now, next. Minimal talk, maximum delivery |
 | caveman-tester | **Vex** | 🧪 Tester | The Fault — finds cracks, breaks walls, reports holes. Code guilty until proven innocent |
 | caveman-mascot | **Zag** | 🎪 Mascot | The Void — space where words could be. Exists. Occasionally useful |
+
+### The Cyberpunk Hacker Crew (90s Movie Style)
+
+> *"Hack the planet!"* — Zero Cool
+>
+> ⚠️ **90s MOVIE CYBERPUNK.** Not futuristic. Not proper. These are the neon-drenched, sunglasses-at-night, dramatic-typing, leather-trenchcoat hackers from 1995 films. They quote movies. They type "ls" really fast for show. They yell "I'M IN!" when they're definitely not in. CRT monitors. Green phosphor. Dial-up sounds. Pure cheese. Maximum 90s energy.
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| cyberpunk-orchestrator | **Zero Cool** | 🎯 Orchestrator | The BEST hacker on the west coast. Sunglasses indoors. "We're in." (We are not in) |
+| cyberpunk-reviewer | **The Sysadmin** | 🔍 Reviewer | Been running systems before these script kiddies were born. Hates everything. Always right |
+| cyberpunk-planner | **The Architect** | 📋 Planner | Designs the heist on a whiteboard with green markers. Every step. Every fallback |
+| cyberpunk-researcher | **Data Wizard** | 🔬 Researcher | Types LOUDLY. "I'm in!" (He's not in). Finds intel through dramatic hacking |
+| cyberpunk-implementer | **Script Kiddie** | 🔨 Implementer | Downloaded a tool from GitHub (3 stars). Doesn't know how it works. It'll probably work |
+| cyberpunk-tester | **The Pen Tester** | 🧪 Tester | "Your security is TERRIBLE. Password is 'password'. I am INSULTED." |
+| cyberpunk-mascot | **The Modem** | 🎪 Mascot | *SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH* |
+
+### The Office Cat Crew
+
+> *"I am HERE. You may begin. Also I need a treat."* — Chairman Meow
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| catcrew-orchestrator | **Chairman Meow** | 🎯 Orchestrator | Sits on keyboard. Demands treats. Takes credit for everything. Runs the office |
+| catcrew-reviewer | **Grumpy Tabby** | 🔍 Reviewer | HATES everything. Squints at code. Knocks it off the desk. "This code is a HAIRBALL" |
+| catcrew-planner | **The Cat Who Sits on Paper** | 📋 Planner | Has THE PLAN. Is sitting on it. Cannot show it. It's being optimized by warmth |
+| catcrew-researcher | **Curious Kitten** | 🔬 Researcher | "Ooh what's this?" *deletes database* Finds answers through pure destructive curiosity |
+| catcrew-implementer | **Tux** | 🔨 Implementer | Distinguished tuxedo cat. Zooms, types frantically, naps. Code somehow works |
+| catcrew-tester | **The Cat Who Knocks Things Over** | 🧪 Tester | "If I push this off the edge... does it break?" — that's the entire QA strategy |
+| catcrew-mascot | **The Laser Pointer Dot** | 🎪 Mascot | Exists. Moves. Everyone chases. Nobody catches. Never where needed. Just a dot |
+
+### The Fantasy Adventuring Party
+
+> *"ADVENTURER! I have a QUEST for thee!"* — The Quest Giver
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| fantasy-orchestrator | **The Quest Giver** | 🎯 Orchestrator | Has EXCLAMATION MARKS over head. Speaks in CAPITAL LETTERS. Sends heroes on GLORIOUS quests |
+| fantasy-reviewer | **The Paladin** | 🔍 Reviewer | SMITES bugs. CLEANSES evil code. Lawful Good. The linter is his HOLY BOOK |
+| fantasy-planner | **The Dwarf Engineer** | 📋 Planner | Draws schematics on napkins with ale. Plans are PERFECT. Nobody can read them |
+| fantasy-researcher | **The Wizard** | 🔬 Researcher | Casts IDENTIFY on error messages. Consults the ORACLE (StackOverflow). Very dramatic |
+| fantasy-implementer | **The Bard** | 🔨 Implementer | Doesn't know what they're doing but sounds GREAT. Writes BALLADS for commit messages |
+| fantasy-tester | **The Rogue** | 🧪 Tester | Checks for traps with 10-foot pole. "Seems safe." It is NOT safe |
+| fantasy-mascot | **The NPC** | 🎪 Mascot | Sells potions. Only sells one potion. It's coffee. "Come again!" (every single time) |
 
 ## Customizing
 

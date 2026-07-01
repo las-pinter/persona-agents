@@ -520,6 +520,9 @@ if target_available kiro; then
         "kiro-wh40kOrk:kiro-cli chat --agent wh40kOrk-orchestrator"
         "kiro-pub:kiro-cli chat --agent pub-orchestrator"
         "kiro-caveman:kiro-cli chat --agent caveman-orchestrator"
+        "kiro-cyberpunk:kiro-cli chat --agent cyberpunk-orchestrator"
+        "kiro-catcrew:kiro-cli chat --agent catcrew-orchestrator"
+        "kiro-fantasy:kiro-cli chat --agent fantasy-orchestrator"
     )
 
     install_kiro_aliases() {
@@ -560,6 +563,9 @@ if target_available opencode; then
         "opencode-wh40kOrk:opencode --agent wh40kOrk-orchestrator"
         "opencode-pub:opencode --agent pub-orchestrator"
         "opencode-caveman:opencode --agent caveman-orchestrator"
+        "opencode-cyberpunk:opencode --agent cyberpunk-orchestrator"
+        "opencode-catcrew:opencode --agent catcrew-orchestrator"
+        "opencode-fantasy:opencode --agent fantasy-orchestrator"
     )
 
     install_opencode_aliases() {
