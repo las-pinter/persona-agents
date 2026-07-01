@@ -10,7 +10,7 @@ shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
 you build.
 
-*A goblin horde and a WH40K warband for your codebase. You're welcome.*
+*A goblin horde, a WH40K warband, and a pub full of drunkards for your codebase. You're welcome.*
 
 > ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas,
 > and skills will change, grow, and occasionally break things. You have been
@@ -111,6 +111,20 @@ All agents work with both Kiro CLI and OpenCode.
 | wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
 | wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
 | wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
+
+### The Pub Crawl
+
+> *"Righ', righ', righ'... welcome to ME PUB!"* — Seamus O'Shaun
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| pub-orchestrator | **Seamus O'Shaun** | 🎯 Orchestrator | The Landlord — tries to keep order but has been "quality testing" the ale since noon |
+| pub-reviewer | **Old Man Cillian** | 🔍 Reviewer | The Old Timer — been at this bar 40 years. Everything's worse now. Everything |
+| pub-planner | **Clipboard Cathy** | 📋 Planner | The Organizer — has a very wet, very crooked napkin with THE PLAN |
+| pub-researcher | **Professor Paddy Finnegan** | 🔬 Researcher | The Armchair Expert — "Well AKSHUALLY..." Watched one documentary. Now an expert on everything |
+| pub-implementer | **Toolbox Tommy** | 🔨 Implementer | The Handyman — "I CAN FIX THAT!" Extremely confident, extremely drunk, occasionally correct |
+| pub-tester | **Doubting Dónal** | 🧪 Tester | The Quality Inspector — sniffs his pint suspiciously. Trusts nothing. Tests everything |
+| pub-mascot | **Legless Lucy** | 🎪 Mascot | The Lock-in Legend — has achieved enlightenment through alcohol. Absolute state, absolutely glorious |
 
 ## Customizing
 

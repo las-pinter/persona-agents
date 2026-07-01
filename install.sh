@@ -518,6 +518,7 @@ if target_available kiro; then
         "kiro-goblin:kiro-cli chat --agent goblin-orchestrator"
         "kiro-wh40k:kiro-cli chat --agent wh40k-orchestrator"
         "kiro-wh40kOrk:kiro-cli chat --agent wh40kOrk-orchestrator"
+        "kiro-pub:kiro-cli chat --agent pub-orchestrator"
     )
 
     install_kiro_aliases() {
@@ -556,6 +557,7 @@ if target_available opencode; then
         "opencode-goblin:opencode --agent goblin-orchestrator"
         "opencode-wh40k:opencode --agent wh40k-orchestrator"
         "opencode-wh40kOrk:opencode --agent wh40kOrk-orchestrator"
+        "opencode-pub:opencode --agent pub-orchestrator"
     )
 
     install_opencode_aliases() {
