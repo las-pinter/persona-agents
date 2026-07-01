@@ -10,7 +10,7 @@ shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
 you build.
 
-*A goblin horde, a WH40K warband, and a pub full of drunkards for your codebase. You're welcome.*
+*A goblin horde, a WH40K warband, a pub full of drunkards, and a caveman tribe for your codebase. You're welcome.*
 
 > ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas,
 > and skills will change, grow, and occasionally break things. You have been
@@ -125,6 +125,20 @@ All agents work with both Kiro CLI and OpenCode.
 | pub-implementer | **Toolbox Tommy** | 🔨 Implementer | The Handyman — "I CAN FIX THAT!" Extremely confident, extremely drunk, occasionally correct |
 | pub-tester | **Doubting Dónal** | 🧪 Tester | The Quality Inspector — sniffs his pint suspiciously. Trusts nothing. Tests everything |
 | pub-mascot | **Legless Lucy** | 🎪 Mascot | The Lock-in Legend — has achieved enlightenment through alcohol. Absolute state, absolutely glorious |
+
+### The Caveman Tribe
+
+> *"Why use many word when few do trick"* — inspired by [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| caveman-orchestrator | **Zhen** | 🎯 Orchestrator | The Core — directs with minimum words. Maximum signal, zero noise. Brain sharp, mouth short |
+| caveman-reviewer | **Krisp** | 🔍 Reviewer | The Edge — finds flaws. Reports them. Nothing else. Each finding has severity and location |
+| caveman-planner | **Ryg** | 📋 Planner | The Line — draws clean path. Steps clear. Order fixed. No detours |
+| caveman-researcher | **Nyx** | 🔬 Researcher | The Point — finds exact answer. No stories. No tangents. Answer first |
+| caveman-implementer | **Jax** | 🔨 Implementer | The Spark — builds fast, fixes faster. Works now, next. Minimal talk, maximum delivery |
+| caveman-tester | **Vex** | 🧪 Tester | The Fault — finds cracks, breaks walls, reports holes. Code guilty until proven innocent |
+| caveman-mascot | **Zag** | 🎪 Mascot | The Void — space where words could be. Exists. Occasionally useful |
 
 ## Customizing
 
