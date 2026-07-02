@@ -53,7 +53,7 @@ permission:
     "docker ps *": allow
     "docker logs *": allow
     "docker inspect *": allow
-    "rq *": allow
+    "rg *": allow
   task:
     "*": deny
     "{{THEME}}-researcher": allow
