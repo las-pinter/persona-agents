@@ -11,14 +11,13 @@
     "*"
   ],
   "allowedTools": [
-    "code",
+    "edit",
     "glob",
     "grep",
-    "introspect",
+    "question",
     "read",
     "subagent",
-    "thinking",
-    "todo"
+    "todowrite"
   ],
   "toolsSettings": {
     "shell": {
@@ -28,9 +27,9 @@
         "cat *",
         "date *",
         "diff *",
+        "echo *",
         "find * -name *",
         "find * -type *",
-        "git branch *",
         "git diff *",
         "git log *",
         "git show *",
@@ -41,12 +40,14 @@
         "ls *",
         "mkdir *",
         "pwd",
+        "ruff *",
         "sort *",
         "tail *",
         "tr *",
         "uniq *",
         "wc *",
-        "which *"
+        "which *",
+        "whoami"
       ],
       "deniedCommands": [
         "bash -n *;*",
@@ -59,13 +60,13 @@
     },
     "subagent": {
       "availableAgents": [
-        "*"
+        "{{THEME}}-*"
       ],
       "trustedAgents": [
         "{{THEME}}-*"
       ]
     },
-    "write": {
+    "edit": {
       "allowedPaths": [
         "~/agent-notes/orchestrator/**",
         "~/agent-notes/planner/plans/**"

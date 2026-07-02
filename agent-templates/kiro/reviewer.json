@@ -30,6 +30,7 @@
         "cat *",
         "date *",
         "diff *",
+        "echo *",
         "find * -name *",
         "find * -type *",
         "git branch *",
