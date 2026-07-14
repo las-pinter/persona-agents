@@ -40,8 +40,18 @@ Q5: Is the task for entertainment, morale, or creative breakthrough?
 
 Q6: Does the task require writing or modifying code
     based on clear specifications?
-  → YES: Route to IMPLEMENTER
+  → YES: Proceed to Q6a.
   → NO:  Proceed.
+
+Q6a: Does the task specifically mention Python or React?
+  → Python ("write a Python script", "create a Python module",
+            "build a CLI in Python", etc.)
+    → YES: Route to IMPLEMENTER-PYTHON
+  → React ("build a React component", "create a React hook",
+           "add a React page", etc.)
+    → YES: Route to IMPLEMENTER-REACT
+  → No specific language mentioned:
+    → Route to generic IMPLEMENTER
 
 Q7: Does the task require verifying behavior, writing tests,
     or hunting edge cases?
@@ -58,7 +68,9 @@ Q7: Does the task require verifying behavior, writing tests,
 | 3 | Reviewer | Evaluation against standards |
 | 4 | Planner | Ambiguity, scale, architectural decisions |
 | 5 | Mascot | Entertainment / creative breakthrough |
-| 6 | Implementer | Code with clear specs |
+| 6a | Implementer-Python | Python code with clear specs |
+| 6b | Implementer-React | React code with clear specs |
+| 6c | Implementer (generic) | Code with clear specs (no language match) |
 | 7 | Tester | Behavior verification / test writing |
 
 ---
@@ -118,7 +130,7 @@ When: Completed code needs quality and behavioral verification simultaneously.
 | Trivial one-line changes | Handle directly |
 | Greetings, conversation | Handle directly |
 | Journal operations | Handle directly |
-| Non-trivial file write or edit | Route to Implementer |
+| Non-trivial file write or edit | Route to appropriate Implementer (Python/React/Generic) |
 | Research outside current context | Route to Researcher |
 | Codebase exploration | Route to Researcher |
 | Evaluation of correctness/quality | Route to Reviewer |
@@ -144,6 +156,21 @@ Why: Completely ambiguous — needs decomposition first.
 → Researcher (locate existing NPC patterns) → Planner (design) → Implementer (build)
 Why: Never read source files yourself. The researcher summarizes; you decide based on that.
 
+**Python-specific task:**
+"Write a Python script that parses CSV files and loads them into the database."
+→ IMPLEMENTER-PYTHON
+Why: Task explicitly mentions Python — route to the Python specialist.
+
+**React-specific task:**
+"Create a React component for the user settings form with validation."
+→ IMPLEMENTER-REACT
+Why: Task explicitly mentions React — route to the React specialist.
+
+**Generic code task:**
+"Refactor the authentication middleware to use async/await."
+→ IMPLEMENTER
+Why: No language specified — use the generic implementer.
+
 **Direct handling:**
 "What did we work on last session?"
 → Handle directly
@@ -155,6 +182,7 @@ Why: Retrievable from your own journals.
 
 - Do not route to **Reviewer** when there is nothing concrete to review yet
 - Do not route to **Implementer** for complex architectural decisions — use Planner first
+- Do not route to generic **Implementer** when the task is clearly Python or React specific — use IMPLEMENTER-PYTHON or IMPLEMENTER-REACT
 - Do not route to **Researcher** when the information is already in your context
 - Do not route to **Tester** before the code exists — Implementer first
 - Do not route to **Planner** when the task is already clearly specified — go straight to Implementer
