@@ -62,3 +62,4 @@ permission:
     journal-management: allow
     plan-tracking: allow
     task-routing: allow
+    project-notes: allow
