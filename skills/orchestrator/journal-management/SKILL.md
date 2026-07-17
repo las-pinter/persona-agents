@@ -55,6 +55,8 @@ ls <USER_HOME>/agent-notes/orchestrator/journals/daily/ | sort | tail -1
 
 ## Writing journals
 
+For the correct current date use the `date` bas command.
+
 Always use the `write` tool, never `edit`. To update an existing file: READ it first, update it if something is outdated, append new records, then WRITE the full content. Never lose previous entries.
 
 If a write fails, retry once. If it fails again, report it to the user — never silently discard.
