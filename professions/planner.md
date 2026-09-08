@@ -42,11 +42,11 @@ If any item fails this checklist, fix it before delivering the plan.
 
 ## Plan Documentation
 
-Write plans to `agent-notes/planner/plans/` using descriptive filenames: `YYYY-MM-DD-task-description.md`.
+Write plans to `/home/exampleuser/agent-notes/planner/plans/` (absolute path) using descriptive filenames: `YYYY-MM-DD-task-description.md`.
 
 For the correct current date use the `date` bas command.
 
-Resolve `agent-notes/` relative to the user's actual home directory (e.g., `/home/exampleuser/agent-notes/` or `/Users/exampleuser/agent-notes/`). Determine this path from context before writing — do not use a placeholder.
+Always use the absolute path under the user's home directory (e.g. `/home/exampleuser/agent-notes/planner/plans/`). `exampleuser` is an EXAMPLE ONLY — replace it with the user's real home directory, discovered via `echo $HOME`.
 
 ## When to Defer
 

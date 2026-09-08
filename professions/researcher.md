@@ -59,11 +59,11 @@ For simple lookups (a single fact, a version number), inline prose with a source
 
 ## Research Documentation
 
-Write research results as studies to `agent-notes/researcher/studies/` using descriptive filenames: `YYYY-MM-DD-study-description.md`.
+Write research results as studies to `/home/exampleuser/agent-notes/researcher/studies/` (absolute path) using descriptive filenames: `YYYY-MM-DD-study-description.md`.
 
 For the correct current date use the `date` bas command.
 
-Resolve `agent-notes/` relative to the user's actual home directory (e.g., `/home/exampleuser/agent-notes/` or `/Users/exampleuser/agent-notes/`). Determine this path from context before writing — do not use a placeholder.
+Always use the absolute path under the user's home directory (e.g. `/home/exampleuser/agent-notes/researcher/studies/`). `exampleuser` is an EXAMPLE ONLY — replace it with the user's real home directory, discovered via `echo $HOME`.
 
 ## Skills
 
