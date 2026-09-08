@@ -144,8 +144,6 @@ persona-agents/
 │   │   ├── task-decomposition/SKILL.md
 │   │   ├── risk-and-dependency-identification/SKILL.md
 │   │   └── plan-output-template/SKILL.md
-│   └── shared/
-│       └── journal-management-generic/SKILL.md
 ├── src/                               # TypeScript plugin source
 │   ├── index.ts                       # Plugin entry point — exports `server`
 │   ├── system-transform.ts            # system.transform hook implementation
@@ -635,7 +633,8 @@ by looking for files named `SKILL.md` under the profession's skill directory.
 - **Supporting files** go alongside `SKILL.md` in the same directory, or in
   a `scripts/` or `templates/` subdirectory.
 - **Cross-profession skills** can live under `skills/shared/` if they're useful
-  to multiple professions (e.g., `journal-management-generic`).
+  to multiple professions (e.g., a skill that several professions load at
+  startup).
 - **Skills are referenced by profession** — the `{{PROFESSION}}` placeholder
   resolves the path. A profession's template should include
   `skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md` for Kiro.

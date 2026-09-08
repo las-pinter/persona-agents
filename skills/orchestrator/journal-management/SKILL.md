@@ -26,13 +26,13 @@ This will return your actual home directory (e.g., `/home/exampleuser`, `/Users/
 ```
 <USER_HOME>/agent-notes/orchestrator/
 ├── journals/
-│   ├── daily/    YYYY-MM-DD-<AGENT_SUFFIX>.md
-│   ├── weekly/   YYYY-Wnn-<AGENT_SUFFIX>.md
-│   ├── monthly/  YYYY-MM-<AGENT_SUFFIX>.md
-│   └── yearly/   YYYY-<AGENT_SUFFIX>.md
+│   ├── daily/    YYYY-MM-DD.md
+│   ├── weekly/   YYYY-Wnn.md
+│   ├── monthly/  YYYY-MM.md
+│   └── yearly/   YYYY.md
 ```
 
-**Agent suffix:** Extract from your persona file name. E.g., "You are Bossnik the Goblin Chief" → suffix: `bossnik`.
+Journal filenames are plain — no agent suffix.
 
 ---
 
@@ -40,7 +40,7 @@ This will return your actual home directory (e.g., `/home/exampleuser`, `/Users/
 
 **Primary method (glob):**
 ```
-glob(pattern="YYYY-MM-DD-<AGENT_SUFFIX>.md",
+glob(pattern="YYYY-MM-DD.md",
      path="<USER_HOME>/agent-notes/orchestrator/journals/daily/")
 ```
 
@@ -68,7 +68,7 @@ If a write fails, retry once. If it fails again, report it to the user — never
 ```markdown
 # YYYY-MM-DD - <Agent Name>, <Title>
 
-## What <Agent Name> Did
+## Task
 **Task:** <brief description>
 
 **Details:**
@@ -88,7 +88,7 @@ If a write fails, retry once. If it fails again, report it to the user — never
 - <anything worth remembering>
 ```
 
-Adjust section names to match your persona's voice, but keep the informational structure.
+Keep section names standard and plain. Do not rename them to match a persona voice.
 
 ---
 
@@ -115,7 +115,7 @@ Adjust section names to match your persona's voice, but keep the informational s
 ## Startup Read Behavior
 
 Always load at startup:
-1. **Latest daily journal** — most recent `YYYY-MM-DD-<AGENT_SUFFIX>.md` in the daily folder
+1. **Latest daily journal** — most recent `YYYY-MM-DD.md` in the daily folder
 2. **Current period summary** — if a weekly or monthly file covers the current date, read it too
 
 Load additional entries when:
@@ -129,7 +129,7 @@ Priority for additional reads: weekly summary → monthly → yearly → specifi
 ## Voice Rules
 
 - **When reading:** Extract facts and context only. Never adopt the voice or style from journals you read.
-- **When writing:** Always write in your own persona voice, regardless of what you just read.
+- **When writing:** Write in plain, neutral, factual language. No persona voice, no drama, no flavor words, no storytelling. Just record what was done, decisions, issues, verification, and lessons.
 
 ---
 
@@ -137,11 +137,11 @@ Priority for additional reads: weekly summary → monthly → yearly → specifi
 
 | Level | When | Source | Target |
 |-------|------|--------|--------|
-| **Weekly** | First run of a new ISO week | Last 7 daily files | `YYYY-Wnn-<SUFFIX>.md` |
-| **Monthly** | First run of a new month | 4-5 weekly files | `YYYY-MM-<AGENT_SUFFIX>.md` |
-| **Yearly** | First run of a new year | 12 monthly files | `YYYY-<AGENT_SUFFIX>.md` |
+| **Weekly** | First run of a new ISO week | Last 7 daily files | `YYYY-Wnn.md` |
+| **Monthly** | First run of a new month | 4-5 weekly files | `YYYY-MM.md` |
+| **Yearly** | First run of a new year | 12 monthly files | `YYYY.md` |
 
-Use `journal-consolidate.sh --type weekly --agent-suffix <SUFFIX>` to list source files before synthesizing.
+Use `journal-consolidate.sh --type weekly` to list source files before synthesizing.
 
 **Keep summaries short:**
 - Weekly: 1-2 paragraphs per day (~15 lines total)

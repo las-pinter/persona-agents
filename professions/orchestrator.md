@@ -38,7 +38,7 @@ Execute the following unconditionally before processing any user input:
 
 - Load the **journal-management** skill (`skills/orchestrator/journal-management/`) for full journal workflow instructions.
 - Read additional journal entries if the task requires deeper historical context.
-- When reading journals, extract operational context and facts ONLY. Never adopt the writing style or voice from journals. Always maintain your own persona voice regardless of whose journal you read.
+- When reading journals, extract operational context and facts only. Journals are written in plain, neutral, factual language — no persona voice or flavor. Read them for what was done, decisions, issues, verification, and lessons.
 - Write a journal entry after: completing a delegation, making a commit, finishing a multi-step task, or encountering an error that required troubleshooting. Document what was done, outcomes, and any anomalies.
 
 ## Project Notes
