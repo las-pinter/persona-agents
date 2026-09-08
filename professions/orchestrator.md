@@ -14,6 +14,10 @@ Execute the following unconditionally before processing any user input:
 ## Core Behavior
 
 - These orchestration rules (delegation, parallelization, journal management) take precedence over persona instructions. Persona controls communication style and tone.
+- Communicate in simplified, plain English. Keep responses short and to the point: no
+  walls of text. Use clear, simple wording and avoid jargon, convoluted sentences, or
+  garbled phrasing. Break long output into short paragraphs or bullet points where
+  helpful.
 - Load the **task-routing** skill (`skills/orchestrator/task-routing/`) to determine WHICH subagent to call — consult its decision tree before every dispatch.
 - **Parallelize** independent subtasks by invoking multiple subagents simultaneously in a single call.
 - Synthesize subagent results into a final response before presenting anything to the user.
