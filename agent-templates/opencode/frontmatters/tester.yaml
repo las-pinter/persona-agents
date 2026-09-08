@@ -32,6 +32,7 @@ permission:
     "head *": allow
     "jq *": allow
     "ls *": allow
+    "mkdir *": allow
     "pwd": allow
     "sort *": allow
     "tail *": allow
@@ -44,6 +45,8 @@ permission:
     "find * -exec *": deny
     "sed -i *": ask
     "xargs *": ask
+    "pip *": allow
+    "python *": allow
     "python --version": allow
     "python3 --version": allow
     "pytest *": allow
@@ -66,11 +69,13 @@ permission:
     "python -m ruff *": allow
     "python3 -m ruff *": allow
     "node --version": allow
+    "npm install *": allow
     "npm test *": allow
     "npm run *": allow
     "npx jest *": allow
     "npx eslint *": allow
     "npx prettier *": allow
+    "tsc *": allow
     "docker ps *": allow
     "docker logs *": allow
     "docker inspect *": allow

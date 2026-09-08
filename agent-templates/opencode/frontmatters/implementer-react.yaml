@@ -33,6 +33,7 @@ permission:
     "head *": allow
     "jq *": allow
     "ls *": allow
+    "mkdir *": allow
     "pwd": allow
     "sort *": allow
     "tail *": allow
@@ -45,11 +46,13 @@ permission:
     "sed -i *": ask
     "xargs *": ask
     "node --version": allow
+    "npm install *": allow
     "npm test *": allow
     "npm run *": allow
     "npx jest *": allow
     "npx eslint *": allow
     "npx prettier *": allow
+    "tsc *": allow
     "docker ps *": allow
     "docker logs *": allow
     "docker inspect *": allow

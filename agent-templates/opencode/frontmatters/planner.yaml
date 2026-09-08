@@ -32,6 +32,7 @@ permission:
     "head *": allow
     "jq *": allow
     "ls *": allow
+    "mkdir *": allow
     "pwd": allow
     "sort *": allow
     "tail *": allow

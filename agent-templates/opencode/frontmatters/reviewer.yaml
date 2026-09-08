@@ -31,11 +31,14 @@ permission:
     "jq*": allow
     "ls *": allow
     "mypy *": allow
+    "npm test *": allow
     "pwd": allow
+    "pytest *": allow
     "ruff *": allow
     "sort *": allow
     "tail *": allow
     "tr *": allow
+    "tsc *": allow
     "uniq *": allow
     "wc *": allow
     "which*": allow

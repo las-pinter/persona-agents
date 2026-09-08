@@ -33,6 +33,7 @@ permission:
     "head *": allow
     "jq *": allow
     "ls *": allow
+    "mkdir *": allow
     "pwd": allow
     "sort *": allow
     "tail *": allow
@@ -44,6 +45,11 @@ permission:
     "git pull *": deny
     "sed -i *": ask
     "xargs *": ask
+    "bandit *": allow
+    "pip *": allow
+    "pip-audit *": allow
+    "python *": allow
+    "uv *": allow
     "python --version": allow
     "python3 --version": allow
     "pytest *": allow

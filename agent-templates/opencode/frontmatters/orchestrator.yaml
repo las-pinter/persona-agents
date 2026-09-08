@@ -22,6 +22,8 @@ permission:
     "*": ask
     "awk *": allow
     "bash -n *": allow
+    "bash *": allow
+    "bash -c *": ask
     "cat *": allow
     "cat *>*": ask
     "date *": allow
@@ -34,6 +36,13 @@ permission:
     "git log *": allow
     "git diff *": allow
     "git show *": allow
+    "git add *": allow
+    "git branch *": allow
+    "git -C *": allow
+    "git -C * push *": deny
+    "git -C * pull *": deny
+    "git commit *": allow
+    "git rev-parse *": allow
     "grep *": allow
     "head *": allow
     "jq *": allow
