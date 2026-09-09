@@ -1,7 +1,5 @@
 description: "{{AGENT_DESCRIPTION}}"
 mode: primary
-temperature: 0.6
-top_p: 0.95
 permission:
   "*": ask
   external_directory:

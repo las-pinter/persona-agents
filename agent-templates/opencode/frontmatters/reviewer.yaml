@@ -1,7 +1,5 @@
 description: "{{AGENT_DESCRIPTION}}"
 mode: all
-temperature: 0.2
-top_p: 0.95
 permission:
   "*": deny
   code: allow
