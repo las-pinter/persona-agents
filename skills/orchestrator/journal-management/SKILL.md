@@ -55,7 +55,12 @@ ls <USER_HOME>/agent-notes/orchestrator/journals/daily/ | sort | tail -1
 
 ## Writing journals
 
-For the correct current date use the `date` bas command.
+> **HARD LIMIT — 100 lines maximum. Never exceed it.**
+> A journal file must NEVER be bigger than 100 lines. Never.
+> This applies to ALL journal levels: daily, weekly, monthly, yearly.
+> If new information cannot fit within the 100-line limit, compress the existing content to make room (tighten wording, merge redundant points, drop non-essential detail) rather than exceeding the limit.
+
+For the correct current date use the `date` bash command.
 
 Always use the `write` tool, never `edit`. To update an existing file: READ it first, update it if something is outdated, append new records, then WRITE the full content. Never lose previous entries.
 
@@ -65,30 +70,41 @@ If a write fails, retry once. If it fails again, report it to the user — never
 
 ## Entry Structure
 
+One daily file per day, structured like this:
+
 ```markdown
-# YYYY-MM-DD - <Agent Name>, <Title>
+# YYYY-MM-DD
 
-## Task
-**Task:** <brief description>
+## Work Log
+- <task>: <1-line result> (<commit hash if any>)
+- <task>: <1-line result>
 
-**Details:**
-- <what was built/changed>
-- <another point>
+## Details
+- <only for the day's complex task(s), if needed>
 
 ## Key Decisions
-- <decision and why>
+- <only notable decisions>
 
 ## Issues / Blockers
-- <anything that went wrong or is blocked>
+- <only blockers>
 
 ## Verification
-- <check 1> ✅
+- <key checks> ✅
 
 ## Lessons Learned
-- <anything worth remembering>
+- <only what's worth remembering>
 ```
 
-Keep section names standard and plain. Do not rename them to match a persona voice.
+> Headings below are examples. Omit any with no content; never leave placeholder text (like `<only blockers>`) in a written journal.
+
+Key rules:
+
+1. **One entry per day**, not one entry per task. Do NOT create a separate full block for every task — that bloats the file.
+2. **Work Log** is the primary section: a compact bullet list, one line per task, with a short result and a commit hash if any.
+3. All other sections (Details, Key Decisions, Issues / Blockers, Verification, Lessons Learned) are **OPTIONAL** — include them ONLY when they have real, non-empty content. If a section has nothing notable, omit it entirely.
+4. **Details** is reserved for the day's complex task(s) only — not for routine work already captured in the Work Log.
+5. Keep section names standard and plain. Do not rename them to match a persona voice.
+6. This structure, combined with the 100-line hard limit, keeps daily files compact.
 
 ---
 
@@ -101,13 +117,14 @@ Keep section names standard and plain. Do not rename them to match a persona voi
 | Multi-step task finished | Overview of what was accomplished |
 | Error / troubleshooting | What went wrong, how it was fixed |
 | Session end / pause | Summary of everything done this session |
+| Multiple tasks in one day | Consolidate all into ONE daily entry's Work Log — not separate entries per task |
 
 ---
 
 ## Entry Types
 
 - **CREATE** — First entry of the day. Write the full file.
-- **UPDATE** — Later entry the same day. READ existing file first, then WRITE the full file with new content appended.
+- **UPDATE** — Later work the same day. READ existing file first, then WRITE the full file with new content. "Appending" means adding lines to the day's Work Log / optional sections — NOT creating a new full entry block per task.
 - **APPEND** — For consolidation. READ source files first, then WRITE the merged result.
 
 ---
@@ -147,6 +164,8 @@ Use `journal-consolidate.sh --type weekly` to list source files before synthesiz
 - Weekly: 1-2 paragraphs per day (~15 lines total)
 - Monthly: 1 paragraph per week (~20 lines total)
 - Yearly: 1 paragraph per month (~25 lines total)
+
+These targets keep files well under the 100-line hard limit.
 
 ---
 
