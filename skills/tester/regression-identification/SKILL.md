@@ -1,10 +1,6 @@
 ---
 name: regression-identification
-description: >-
-  Skill for the tester agent.
-  Identify which existing tests are relevant to code changes and what new tests
-  are needed to cover gaps. Load WHENEVER code changes are made — during PR
-  review, before committing, or when planning test coverage.
+description: Identify which existing tests are relevant to code changes and what new tests are needed to cover gaps.
 ---
 
 # Regression Identification
@@ -75,20 +71,18 @@ Run the relevant existing tests and confirm: all previously passing tests still 
 | Bug fix | Unit (reproduces the bug) | Prevents regression |
 | API change | Contract | Catches consumer/provider mismatch |
 
-Write the test that would have caught the bug before it was introduced.
-
 ---
 
 ## Change Impact Heuristics
 
-| Change Type | Regression Risk | What to Test |
-|-------------|----------------|-------------|
-| Bug fix | 🟠 Medium | Fix + adjacent behavior + regression test |
-| Refactor (no behavior change) | 🟢 Low | Run existing; add characterization tests if missing |
-| New feature | 🟢 Low for existing | New paths; verify integration points unchanged |
-| Interface/API change | 🔴 High | All callers; contract tests; backward compat |
-| Dependency upgrade | 🔴 High | Full suite; check changelog for breaking changes |
-| Data schema migration | 🔴 Very High | Migration forward + rollback; data integrity |
+| Change Type | What to Test |
+|-------------|-------------|
+| Bug fix | Fix + adjacent behavior |
+| Refactor (no behavior change) | Run existing; add characterization tests if missing |
+| New feature | New paths; verify integration points unchanged |
+| Interface/API change | All callers; contract tests; backward compat |
+| Dependency upgrade | Full suite; check changelog for breaking changes |
+| Data schema migration | Migration forward + rollback; data integrity |
 
 ---
 

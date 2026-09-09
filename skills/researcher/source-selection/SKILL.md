@@ -1,10 +1,6 @@
 ---
 name: source-selection
-description: >-
-  Skill for the researcher agent.
-  Decision rules for choosing between Context7, DeepWiki, and Exa based on
-  query type. Load BEFORE every research action — do NOT guess which source to
-  use without consulting this skill.
+description: Decision rules for choosing between Context7, DeepWiki, and Exa based on query type.
 ---
 
 # Source Selection
@@ -114,12 +110,4 @@ Use date filters for current topics: `after:2025` or `after:2026`.
 Report: "Unable to find satisfactory results — here's what was tried"
 ```
 
----
-
-## Key Rules
-
-1. Classify before you search — a 2-second classification saves a wasted query.
-2. Always resolve Context7 library IDs before querying.
-3. Use date filters on Exa for current or fast-moving topics.
-4. Prefer Context7 over web search for library-specific questions — faster and more accurate.
-5. Note which sources you used in your output.
+Note which sources you used in your output.

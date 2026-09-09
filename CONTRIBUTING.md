@@ -458,11 +458,11 @@ role in the theme.]
 
 ## Notes (optional)
 
-Additional lore, backstory, or journal writing style guidance.
+Additional lore or backstory.
 
-### Journal Writing Style (optional, for orchestrators)
-
-How journals should be structured when this agent writes them.
+> **Note:** Journals are handled by the orchestrator's
+> `skills/orchestrator/journal-management/SKILL.md` skill. Do not duplicate
+> journal/data-log writing protocols inside persona files.
 ```
 
 ### Key rules
@@ -472,8 +472,8 @@ How journals should be structured when this agent writes them.
 - **Sections required:** `## Personality`, `## Speech Style`, `## Rules`.
 - **Last rule** should specify the themed subagent naming convention (e.g.,
   `goblin-*`, `wh40k-*`, `wh40kOrk-*`).
-- Sections `## Notes` and `### Journal Writing Style` are optional but
-  recommended for orchestrator personas.
+- Sections `## Notes` is optional. Journals are not written inline in
+  personas — they're handled by the orchestrator's `journal-management` skill.
 - Match the tone of your theme — goblins use goblin-speak, WH40K uses
   grimdark formality, Orks use Ork-speak.
 
@@ -736,7 +736,7 @@ Once the dry run looks correct, run for real:
 
 After running, verify:
 
-- **All 21 agents generated** — 3 themes × 7 professions = 21 agents per
+- **All 56 agents generated** — 8 themes × 7 professions = 56 agents per
   target. Use `ls ~/.kiro/agents/ | wc -l` or
   `ls ~/.config/opencode/agents/ | wc -l`.
 - **Valid JSON** (Kiro): `jq . ~/.kiro/agents/*.json > /dev/null`
@@ -816,7 +816,7 @@ Before submitting, check:
 - [ ] `npm run build` (or `npx tsc --noEmit`) compiles without errors
 - [ ] Plugin bundle is generated (`dist/plugin-bundled.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
-- [ ] All 21 agents generate (for both targets)
+- [ ] All 56 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output
 - [ ] OpenCode agent `.md` files contain valid stub comments
       (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`)
@@ -879,7 +879,7 @@ First paragraph: who they are, what their deal is.
 ```
 
 Required sections: `## Personality`, `## Speech Style`, `## Rules`.
-Optional sections: `## Notes`, `### Journal Writing Style`.
+Optional section: `## Notes` (lore/backstory only — no journal protocols).
 
 ### Profession files
 
@@ -913,6 +913,11 @@ First paragraph: role summary.
 
 Required sections: `## Core Behavior` (with precedence rule),
 `## When to Defer`, `## Failure Modes`, `## Output Format`, `## Skills`.
+
+> **Note:** `professions/implementer.md` is the single, merged implementer
+> profession. It carries the canonical skeleton plus Python and React
+> guidance inline — do not create separate language-specific implementer
+> profession files.
 
 > **Note:** Mascot/novelty professions that don't perform tool-based work
 > (e.g., `professions/mascot.md`) may omit most or all of these sections.

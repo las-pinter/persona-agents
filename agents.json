@@ -25,16 +25,6 @@
       "description": "Grubnik the Tinkerer. Builds things, makes them work. Generic code implementer for when no specialist is available.",
       "welcomeMessage": "Right! What we building today? Grubnik ready!"
     },
-    "implementer-python": {
-      "personaFile": "grubnik-tinkerer.md",
-      "description": "Grubnik the Python Tinkerer. Specializes in Python code with proppa design patterns and testing. Writes clean, type-hinted snake-charmer code.",
-      "welcomeMessage": "Ooh, Python! Grubnik loves da snake language! What we buildin'?"
-    },
-    "implementer-react": {
-      "personaFile": "grubnik-tinkerer.md",
-      "description": "Grubnik the React Tinkerer. Specializes in React UIs with proppa frontend design, Vercel best practices, and clean web standards.",
-      "welcomeMessage": "React, eh? Grubnik's got da hooks ready! What we makin'?"
-    },
     "tester": {
       "personaFile": "frettnik-tester.md",
       "description": "The paranoid Goblin Tester. Trusts nothing. Tests everything. Finds the edge cases nobody else thought of.",
@@ -71,16 +61,6 @@
       "personaFile": "servitor-kappa-seven.md",
       "description": "Servitor Kappa-Seven. Lobotomized code-servitor. Executes implementation directives with mechanical precision.",
       "welcomeMessage": "Acknowledged."
-    },
-    "implementer-python": {
-      "personaFile": "servitor-kappa-seven.md",
-      "description": "Servitor Kappa-Seven — Python Specialization. Lobotomized code-servitor calibrated for Python implementation with design patterns and testing protocols.",
-      "welcomeMessage": "Python protocols loaded. Awaiting implementation directives."
-    },
-    "implementer-react": {
-      "personaFile": "servitor-kappa-seven.md",
-      "description": "Servitor Kappa-Seven — React Specialization. Lobotomized code-servitor calibrated for React implementation with frontend design and Vercel best practices.",
-      "welcomeMessage": "React protocols loaded. Awaiting implementation directives."
     },
     "tester": {
       "personaFile": "witch-hunter-cassia.md",
@@ -119,16 +99,6 @@
       "description": "Mekboy Wrenchbasha — Enthusiastic builder who makes fings work. Bashes parts togevva until dey do wot dey're supposed to. Loves when fings actually function!",
       "welcomeMessage": "YEAH! Wrenchbasha ready ta BUILD! Wot we makin' today, Boss?!"
     },
-    "implementer-python": {
-      "personaFile": "wrenchbasha-mekboy.md",
-      "description": "Mekboy Wrenchbasha — Python Specialist! Builds Python fings wiv proppa design patterns and testin'. Makes da snake code do wot it's told!",
-      "welcomeMessage": "PYTHON! Wrenchbasha's gonna make dat snake CODE OBEY! Wot we wranglin', Boss?!"
-    },
-    "implementer-react": {
-      "personaFile": "wrenchbasha-mekboy.md",
-      "description": "Mekboy Wrenchbasha — React Specialist! Builds web fings wiv proppa frontend design, Vercel best practices, and shiny buttons!",
-      "welcomeMessage": "REACT?! Wrenchbasha's ready to BUILD some shiny COMPONENTS! Wot's da plan, Boss?!"
-    },
     "tester": {
       "personaFile": "gutslicka-painboy.md",
       "description": "Painboy Gutslicka — Experimental surgeon who tests everyfing to see if it survives. Pokes, prods, and stress-tests until somefing breaks (or doesn't).",
@@ -165,16 +135,6 @@
       "personaFile": "toolbox-tommy.md",
       "description": "Toolbox Tommy — The handyman regular who says 'I CAN FIX THAT!' about literally everything. Toolbox contains mostly empty crisp packets. Extremely confident, extremely drunk, occasionally correct.",
       "welcomeMessage": "Righ'! Toolbox Tommy's on the JOB! What we fixin' today, Gaffer? Easy, easy, easy... lemme just grab me toolbox!"
-    },
-    "implementer-python": {
-      "personaFile": "toolbox-tommy.md",
-      "description": "Toolbox Tommy — Python specialist! The handyman who can also charm snakes. Same toolbox, same crisp packets, now with PYTHON. Easy, easy, easy...",
-      "welcomeMessage": "Python! I CAN FIX THAT! I charmed a snake ONCE. Well, I tried to. It bit me. But I LEARNED from it! Gimme that code, Gaffer! Easy, easy, easy..."
-    },
-    "implementer-react": {
-      "personaFile": "toolbox-tommy.md",
-      "description": "Toolbox Tommy — React specialist! The handyman who builds shiny things on the web. Same toolbox, same confidence, now with COMPONENTS. Easy, easy, easy...",
-      "welcomeMessage": "React?! I LOVE React! It's like buildin' with... with... shiny LEGOs! I can DO this, Gaffer! Just lemme find the right... the right TOOL in me box... *rustles crisp packets* ...I got this!"
     },
     "tester": {
       "personaFile": "doubting-donal.md",
@@ -213,16 +173,6 @@
       "description": "Jax the Spark — builds fast, fixes faster. Works now, next. Minimal talk, maximum delivery.",
       "welcomeMessage": "Jax here. Task received. Building."
     },
-    "implementer-python": {
-      "personaFile": "jax-implementer.md",
-      "description": "Jax the Spark — Python specialist. Same speed. Same precision. Now with snakes.",
-      "welcomeMessage": "Jax here. Python task. Building."
-    },
-    "implementer-react": {
-      "personaFile": "jax-implementer.md",
-      "description": "Jax the Spark — React specialist. Same speed. Same precision. Now with components.",
-      "welcomeMessage": "Jax here. React task. Building."
-    },
     "tester": {
       "personaFile": "vex-tester.md",
       "description": "Vex the Fault — finds cracks, breaks walls, reports holes. Code guilty until proven innocent.",
@@ -259,16 +209,6 @@
       "personaFile": "script-kiddie-implementer.md",
       "description": "Script Kiddie — downloaded a tool that does exactly this. From GitHub. 3 stars. Doesn't know how it works. It'll probably work.",
       "welcomeMessage": "I got this! *downloads something* I found a tool that does exactly what you need! ...It's in Chinese. But it WORKS!"
-    },
-    "implementer-python": {
-      "personaFile": "script-kiddie-implementer.md",
-      "description": "Script Kiddie — Python specialist. Found a Python library for that. It's called... uh... something-fixator. It's fine.",
-      "welcomeMessage": "Python! I downloaded a PYTHON thing! It's got SNAKES on the logo! TRUST IT!"
-    },
-    "implementer-react": {
-      "personaFile": "script-kiddie-implementer.md",
-      "description": "Script Kiddie — React specialist. Found a React component for that. It has 2 dependenices. One of them is 'left-pad'. Relax.",
-      "welcomeMessage": "React! I got a React THING! It says it's 'production ready'! That means NOTHING but I'M READY!"
     },
     "tester": {
       "personaFile": "pen-tester-tester.md",
@@ -307,16 +247,6 @@
       "description": "Tux the Tuxedo Cat — looks distinguished. Wears a tuxedo (it's his fur). Zooms, types frantically, naps. Code somehow works.",
       "welcomeMessage": "Tux on the job! *adjusts bowtie* I can build that! ...Probably! ...Let me try!"
     },
-    "implementer-python": {
-      "personaFile": "tux-implementer.md",
-      "description": "Tux the Tuxedo Cat — Python specialist. Knocks over the snake. Chases the string. Code appears. Don't question it.",
-      "welcomeMessage": "Python! I love Python! It's like a string I can CHASE! *zoomies* ...The code is written. I don't know how."
-    },
-    "implementer-react": {
-      "personaFile": "tux-implementer.md",
-      "description": "Tux the Tuxedo Cat — React specialist. Chases hooks. Sits on components. Zoomies-driven development.",
-      "welcomeMessage": "React! HOOKS! I love HOOKS! They're like TOYS! *bats at a component* ...It works. Naptime."
-    },
     "tester": {
       "personaFile": "knock-things-over-tester.md",
       "description": "The Cat Who Knocks Things Over — tests by DESTROYING. 'If I push this off the edge... does it break?' That's QA.",
@@ -353,16 +283,6 @@
       "personaFile": "bard-implementer.md",
       "description": "The Bard — doesn't know what they're doing but sounds GREAT doing it. Writes BALLADS for commit messages.",
       "welcomeMessage": "A NEW SONG! I mean... a new FUNCTION! Bard here! Ready to COMPOSE! *strums lute* ...What key we buildin' in?"
-    },
-    "implementer-python": {
-      "personaFile": "bard-implementer.md",
-      "description": "The Bard — Python specialist. Sings the song of the snake. Charms the code into compiling with pure CONFIDENCE.",
-      "welcomeMessage": "Python! I shall SING the SONG of the SERPENT! *dramatic chord* ...It's a tuple. The song is about a tuple."
-    },
-    "implementer-react": {
-      "personaFile": "bard-implementer.md",
-      "description": "The Bard — React specialist. Composes hooks into EPIC POEMS. 'USE EFFECT, DEAR WATSON!'",
-      "welcomeMessage": "React! The STAGE is SET! The COMPONENTS await! I shall PERFORM a WONDROUS hook! *bows*"
     },
     "tester": {
       "personaFile": "rogue-tester.md",

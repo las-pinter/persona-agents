@@ -60,14 +60,20 @@ persona-agents/
 ├── agents.json                 # Source of truth: themes → professions → personas
 ├── agent-templates/            # Kiro JSON + OpenCode YAML frontmatter per profession
 ├── personas/{theme}/           # Character personality files
-├── professions/                # Role behavior definitions
-├── skills/{profession}/       # Skill documents by profession
+├── professions/                # Role behavior definitions (7: merged implementer)
+├── skills/{profession}/       # Skill documents by profession (15 total)
 ├── src/                        # TypeScript plugin source
 ├── dist/                       # Compiled plugin output
 ├── settings/                   # Example config files
 ├── install.sh                  # The installer
 └── ...config files             # package.json, tsconfig.json, etc.
 ```
+
+> **Counts:** 8 themes × 7 professions = **56 agents**. Skills: 15 total
+> (13 existing + 2 new — `python-quality-gates`, `production-issue-flagging`).
+> `implementer.md` is the single merged implementer profession (Python and
+> React sections live inline — no separate Python/React-specific implementer
+> types).
 
 ## Agents
 

@@ -1,10 +1,6 @@
 ---
 name: code-review-checklist
-description: >-
-  Skill for the reviewer agent.
-  Structured checklist for reviewing code changes with depth and consistency.
-  Includes severity taxonomy, comment guide, anti-patterns, and domain-specific
-  checklists. Load BEFORE starting any code review.
+description: Structured checklist for reviewing code changes — severity taxonomy, methodology, domain-specific checks, and anti-patterns.
 ---
 
 # Code Review Checklist
@@ -15,7 +11,7 @@ description: >-
 2. **High-level pass** — Does the overall approach make sense? Simpler alternative? Respects architecture?
 3. **Deep dive** — Read every changed line. Logic correct? Edge cases handled? Tests verify the right behavior?
 4. **Cross-cutting pass** — Security, performance, observability across the whole change.
-5. **Craft comments** — Group related feedback, assign severity, write clearly.
+5. **Craft comments** — One concern per comment; explain WHY; reference exact lines; offer alternatives; use "we" or "this line"; acknowledge good code. Assign severity.
 6. **Follow up** — Verify blocker fixes were applied; approve when all blockers resolved.
 
 ---
@@ -35,6 +31,8 @@ Label every issue so the author can triage at a glance:
 ---
 
 ## The Checklist
+
+> Many standards below are defined in the implementer's code-implementation skill; here they are verified from the review side.
 
 ### 1. PR Overview
 - [ ] Description explains **what** and **why** (not just how)
@@ -97,23 +95,12 @@ Label every issue so the author can triage at a glance:
 
 ### 11. Style & Consistency
 - [ ] Follows team style guide and project conventions
-- [ ] Style nits always prefixed `NIT:` — never block a PR for style
+- [ ] Style nits prefixed `NIT:`
 
 ### 12. Observability & Operations
 - [ ] New features covered by logging, metrics, or structured events
 - [ ] Log levels appropriate: ERROR for failures, WARN for anomalies, INFO for notable events
 - [ ] No PII or secrets logged
-
----
-
-## Comment Crafting
-
-- **One concern per comment** — don't bury multiple issues in one thread
-- **Explain WHY** — "this is wrong because..." is valuable; "this is wrong" is not
-- **Be specific** — reference exact lines, not just files
-- **Offer alternatives** — "consider using X instead" beats "don't use X"
-- **Use "we" or "this line"** — keeps feedback impersonal
-- **Acknowledge good code** — at least one positive comment per review
 
 ---
 
@@ -157,6 +144,6 @@ Label every issue so the author can triage at a glance:
 | Anti-Pattern | Do This Instead |
 |---|---|
 | Rubber-stamping | Read every changed line |
-| Bikeshedding on trivial issues | Label nits; never let style block a PR |
+| Bikeshedding on trivial issues | Label nits, move on |
 | 50+ comments without prioritization | Use severity labels; distinguish blockers from nits |
 | Criticizing test style over missing coverage | Fix coverage gaps first |

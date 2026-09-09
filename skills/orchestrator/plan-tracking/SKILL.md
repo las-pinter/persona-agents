@@ -1,11 +1,6 @@
 ---
 name: plan-tracking
-description: >-
-  Skill for the orchestrator agent.
-  Complete plan lifecycle management — track, verify, and report on plans from
-  creation through completion. Use whenever creating plans, marking them done,
-  checking active vs completed status, or verifying plan integrity.
-  Do NOT manage plans manually; always use the scripts documented here.
+description: Plan lifecycle management — track, verify, and report on plans from creation through completion.
 ---
 
 # Plan Tracking
@@ -20,7 +15,6 @@ description: >-
                      ┌──────▼───────┐
                      │   ACTIVE     │
                      └──────┬───────┘
-                            │
               ┌─────────────┼────────────┐
               │             │            │
        ┌──────▼──────┐ ┌────▼────┐ ┌─────▼─────┐
@@ -144,11 +138,6 @@ If some tasks are done and some remain — do NOT rename the file. Append instea
 
 ## Plan Blocking & Abandonment
 
-```bash
-plan-mark.sh <plan.md> --status blocked \
-  --reason "Waiting on third-party API keys"
-```
-
 Blocked plans append:
 
 ```markdown
@@ -185,14 +174,3 @@ Blocked plans append:
 3. **Orchestrator** runs `plan-verify.sh`
 4. **Orchestrator** runs `plan-mark.sh --status done`
 5. **Orchestrator** references the completed plan in the daily journal
-
----
-
-## Script Reference
-
-| Script | Purpose | Key Flags |
-|--------|---------|-----------|
-| `plan-list.sh` | List plans by status | `--status`, `--format`, `--dir` |
-| `plan-mark.sh` | Transition plan status | `--status`, `--commits`, `--by`, `--results`, `--reason`, `--dry-run` |
-| `plan-verify.sh` | Check plan integrity | `--dir`, `--fix` |
-| `plan-report.sh` | Generate status report | `--output`, `--journal` |

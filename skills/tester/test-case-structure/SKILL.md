@@ -1,9 +1,6 @@
 ---
 name: test-case-structure
-description: >-
-  Skill for the tester agent.
-  Language-agnostic structure, naming conventions, and rules for writing clear,
-  maintainable test cases. Load BEFORE writing or reviewing any test code.
+description: Language-agnostic structure, naming conventions, and rules for writing clear, maintainable test cases.
 ---
 
 # Test Case Structure

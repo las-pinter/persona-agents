@@ -1,9 +1,6 @@
 ---
 name: code-implementation
-description: >-
-  Skill for the implementer agent.
-  Language-agnostic code implementation workflow for features, bugs, refactors,
-  and tests. Load before writing or modifying any code.
+description: Language-agnostic code implementation workflow for features, bugs, refactors, and tests.
 ---
 
 # Code Implementation
@@ -14,12 +11,8 @@ description: >-
 1. ORIENT    → Read configs, run baseline, trace a similar feature
 2. PLAN      → Read full files, consider edge cases, identify changes
 3. IMPLEMENT → Follow patterns, handle all states, comment WHY not WHAT
-4. VERIFY    → Type check → Lint → Tests → Build → New Tests (in order)
+4. VERIFY    → Run quality gates in order (see Phase 4)
 5. DELIVER   → Self-review, update docs, leave commits to orchestrator
-
-GATES: ☐ Acceptance met  ☐ Conventions  ☐ Type check: 0 errors
-       ☐ Lint: 0 warnings  ☐ Tests pass  ☐ Build succeeds
-       ☐ Edge cases  ☐ No secrets  ☐ Docs updated
 ```
 
 ---
@@ -50,8 +43,7 @@ Before touching a single line:
 - Follow existing code patterns and conventions — match the project's style, not your preference.
 - Handle ALL states, not just the happy path: success, error, empty, and edge cases.
 - Single responsibility — if a function name contains "and", split it.
-- Handle errors properly: fail fast, meaningful messages, enforce contracts at boundaries.
-- Use the language's type system fully. No `any`, no loose types.
+- Handle errors properly: meaningful messages, enforce contracts at boundaries.
 - Search for existing helpers before writing new code (DRY).
 - Make minimal changes — do not refactor unrelated code in the same change.
 - Comment WHY, not WHAT. The code already says what it does.
@@ -124,7 +116,7 @@ Type Check → Lint → Existing Tests → Build → New Tests
 
 ## Testing Standards
 
-Write tests for ALL new functionality. Every test follows Arrange → Act → Assert (one Act per test).
+Write tests for ALL new functionality, following Arrange → Act → Assert with one Act per test. Structure and naming conventions live in `skills/tester/test-case-structure/`.
 
 | Scenario | Test |
 |----------|------|
@@ -133,8 +125,6 @@ Write tests for ALL new functionality. Every test follows Arrange → Act → As
 | Edge cases | Boundaries, empty input, special values |
 | Error messages | Helpful and accurate? |
 | Permissions | Unauthorized actions rejected? |
-
-Test names describe **behavior**, not implementation: `test_create_order_returns_400_when_inventory_empty` ✅, `test_function_2` ❌.
 
 ---
 
@@ -147,12 +137,3 @@ Test names describe **behavior**, not implementation: `test_create_order_returns
 | Leaving TODOs/FIXMEs | Implement properly or create a tracked task |
 | Refactoring while adding features | Separate tasks |
 | Writing clever code | Write clear, obvious code |
-| Changing unrelated files | Touch only what's needed |
-| Silent error handling | Handle, log, or propagate — never swallow |
-| Mixing concerns in one function | Split into focused functions |
-
----
-
-## Specialized Skills
-
-This skill is generic and always sufficient. If a language-specific skill exists (`python-development`, `typescript-development`, etc.) and matches the project, load it additionally for language-specific depth.

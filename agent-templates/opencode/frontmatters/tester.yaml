@@ -86,3 +86,4 @@ permission:
     regression-identification: allow
     test-case-structure: allow
     test-strategy-selection: allow
+    production-issue-flagging: allow

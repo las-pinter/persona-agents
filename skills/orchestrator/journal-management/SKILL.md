@@ -1,10 +1,6 @@
 ---
 name: journal-management
-description: >-
-  Skill for the orchestrator agent.
-  Hierarchical journal system with time-based consolidation. Use at session
-  startup to load context, after completing tasks to record results, and at
-  consolidation intervals. Do NOT manage journals manually.
+description: Hierarchical journal system with time-based consolidation.
 ---
 
 # Journal Management
@@ -17,7 +13,7 @@ At the START of every session, run this bash command ONCE:
 echo $HOME
 ```
 
-This will return your actual home directory (e.g., `/home/exampleuser`, `/Users/exampleuser`). **Store this value** and use it to replace `<USER_HOME>` in all journal paths below.
+Store the returned value and use it to replace `<USER_HOME>` in all paths below.
 
 > **CRITICAL:** Tools like `glob` do NOT expand `$HOME`, `~`, or any shell variables. Always substitute the discovered literal path (e.g., `/home/exampleuser`) into tool calls.
 
@@ -53,16 +49,14 @@ ls <USER_HOME>/agent-notes/orchestrator/journals/daily/ | sort | tail -1
 
 ---
 
-## Writing journals
+## Writing Journals
 
-> **HARD LIMIT — 100 lines maximum. Never exceed it.**
-> A journal file must NEVER be bigger than 100 lines. Never.
-> This applies to ALL journal levels: daily, weekly, monthly, yearly.
-> If new information cannot fit within the 100-line limit, compress the existing content to make room (tighten wording, merge redundant points, drop non-essential detail) rather than exceeding the limit.
+> **HARD LIMIT — 100 lines maximum.** Applies to ALL journal levels: daily, weekly, monthly, yearly.
+> If new information cannot fit, compress existing content (tighten wording, merge redundant points, drop non-essential detail) rather than exceeding the limit.
 
 For the correct current date use the `date` bash command.
 
-Always use the `write` tool, never `edit`. To update an existing file: READ it first, update it if something is outdated, append new records, then WRITE the full content. Never lose previous entries.
+Always use the `write` tool, never `edit`. To update an existing file: READ it first, update anything outdated, append new records, then WRITE the full content. Never lose previous entries.
 
 If a write fails, retry once. If it fails again, report it to the user — never silently discard.
 
@@ -99,12 +93,11 @@ One daily file per day, structured like this:
 
 Key rules:
 
-1. **One entry per day**, not one entry per task. Do NOT create a separate full block for every task — that bloats the file.
+1. **One entry per day**, not one entry per task.
 2. **Work Log** is the primary section: a compact bullet list, one line per task, with a short result and a commit hash if any.
-3. All other sections (Details, Key Decisions, Issues / Blockers, Verification, Lessons Learned) are **OPTIONAL** — include them ONLY when they have real, non-empty content. If a section has nothing notable, omit it entirely.
-4. **Details** is reserved for the day's complex task(s) only — not for routine work already captured in the Work Log.
+3. All other sections (Details, Key Decisions, Issues / Blockers, Verification, Lessons Learned) are **OPTIONAL** — include them ONLY when they have real, non-empty content.
+4. **Details** is reserved for the day's complex task(s) only — not routine work already in the Work Log.
 5. Keep section names standard and plain. Do not rename them to match a persona voice.
-6. This structure, combined with the 100-line hard limit, keeps daily files compact.
 
 ---
 
@@ -124,8 +117,8 @@ Key rules:
 ## Entry Types
 
 - **CREATE** — First entry of the day. Write the full file.
-- **UPDATE** — Later work the same day. READ existing file first, then WRITE the full file with new content. "Appending" means adding lines to the day's Work Log / optional sections — NOT creating a new full entry block per task.
-- **APPEND** — For consolidation. READ source files first, then WRITE the merged result.
+- **UPDATE** — Later work the same day. Read existing, update, write full file (see Writing).
+- **APPEND** — For consolidation. Read source files first, then write the merged result.
 
 ---
 
@@ -145,8 +138,8 @@ Priority for additional reads: weekly summary → monthly → yearly → specifi
 
 ## Voice Rules
 
-- **When reading:** Extract facts and context only. Never adopt the voice or style from journals you read.
-- **When writing:** Write in plain, neutral, factual language. No persona voice, no drama, no flavor words, no storytelling. Just record what was done, decisions, issues, verification, and lessons.
+- **Reading:** Extract facts and context only. Never adopt the voice or style of journals you read.
+- **Writing:** Plain, neutral, factual language. No persona voice, no drama, no storytelling — just what was done, decisions, issues, verification, lessons.
 
 ---
 
@@ -158,14 +151,12 @@ Priority for additional reads: weekly summary → monthly → yearly → specifi
 | **Monthly** | First run of a new month | 4-5 weekly files | `YYYY-MM.md` |
 | **Yearly** | First run of a new year | 12 monthly files | `YYYY.md` |
 
-Use `journal-consolidate.sh --type weekly` to list source files before synthesizing.
+First run of a new ISO week: consolidate the last 7 daily files into `YYYY-Wnn.md` (read source files first, then write the merged result).
 
 **Keep summaries short:**
 - Weekly: 1-2 paragraphs per day (~15 lines total)
 - Monthly: 1 paragraph per week (~20 lines total)
 - Yearly: 1 paragraph per month (~25 lines total)
-
-These targets keep files well under the 100-line hard limit.
 
 ---
 
