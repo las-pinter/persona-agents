@@ -71,8 +71,9 @@ Example:
 The plugin (TypeScript source in `src/`, compiled to `dist/plugin-bundled.js`):
 
 - Lives at `~/.config/opencode/plugins/persona-agents.js` after installation
-- Registers the `experimental.chat.system.transform` hook
-- On each LLM call, scans system prompt entries for stub markers
+- Registers the OpenCode v2 `ctx.session.hook("context", ...)` hook (the
+  v2 successor of the v1 `experimental.chat.system.transform` hook)
+- Before each model dispatch, scans the system prompt parts for stub markers
 - When a stub is found, parses it (`parseAgentFromStubComment`) and loads the
   `profession.md + persona.md` content from disk (`loadSinglePrompt`)
 - Replaces the stub fully — no marker remains

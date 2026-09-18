@@ -17,10 +17,11 @@ export interface AgentIdentity {
 }
 
 /**
- * Structured logger matching the OpenCode client.app.log() pattern.
+ * Structured logger used across the plugin.
  *
- * Fire-and-forget by default — logging never blocks the calling code.
- * All methods are void (not Promise) to keep hooks non-blocking.
+ * In V2 the plugin context no longer exposes the V1 client.app.log() API,
+ * so this is backed by console output. All methods are void (not Promise)
+ * to keep hooks non-blocking.
  */
 export interface Logger {
   debug(message: string, extra?: Record<string, unknown>): void;
