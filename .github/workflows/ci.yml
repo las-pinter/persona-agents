@@ -37,6 +37,4 @@ jobs:
       # Make sure install.sh is executable
       - name: Check script permissions
         run: |
-          for f in install.sh; do
-            [ -x "$f" ] && echo "✅ $f is executable" || { echo "❌ $f is not executable"; exit 1; }
-          done
+          [ -x install.sh ] && echo "✅ install.sh is executable" || { echo "❌ install.sh is not executable"; exit 1; }
