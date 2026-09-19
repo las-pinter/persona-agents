@@ -35,6 +35,9 @@ permissions:
     resource: "cat *>*"
     effect: ask
   - action: shell
+    resource: "cut *"
+    effect: allow
+  - action: shell
     resource: "date *"
     effect: allow
   - action: shell
@@ -86,6 +89,9 @@ permissions:
     resource: "npm test *"
     effect: allow
   - action: shell
+    resource: "od *"
+    effect: allow
+  - action: shell
     resource: "pwd"
     effect: allow
   - action: shell
@@ -116,6 +122,9 @@ permissions:
     resource: "which*"
     effect: allow
   - action: shell
+    resource: "xxd *"
+    effect: allow
+  - action: shell
     resource: "git push *"
     effect: deny
   - action: shell
@@ -124,6 +133,9 @@ permissions:
   - action: shell
     resource: "find * -exec *"
     effect: deny
+  - action: shell
+    resource: "sed *"
+    effect: allow
   - action: shell
     resource: "sed -i *"
     effect: ask
