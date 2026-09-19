@@ -539,23 +539,45 @@ They use YAML with `{{...}}` placeholders:
 
 ```yaml
 description: "{{AGENT_DESCRIPTION}}"
-mode: "primary"
-temperature: 0.6
-top_p: 0.95
-permission:
-  "*": "ask"
-  "read": "allow"
-  "glob": "allow"
-  "grep": "allow"
-  "bash":
-    "*": "ask"
-    "git status *": "allow"
-    # ...
-  "task":
-    "*": "ask"
-    "{{THEME}}-*": "allow"
+mode: primary
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "~/agent-notes/orchestrator/*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: shell
+    resource: "git status *"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "{{THEME}}-*"
+    effect: allow
+  - action: "*"
+    resource: "*"
+    effect: ask
   # ...
 ```
+
+Permissions are an **ordered array** of `{ action, resource, effect }` entries —
+each rule pairs an action with a resource pattern and an effect (`allow`,
+`ask`, or `deny`). Known action names include `read`, `glob`, `grep`, `edit`,
+`shell`, `subagent`, `skill`, `execute`, `external_directory`, `question`, and
+`*`. (V1 action names were renamed in the V2 schema: `bash` → `shell`,
+`task` → `subagent`, `write` → `edit`, `code` → `execute`; `todowrite` was
+dropped.)
 
 ### Stub comment format
 
@@ -590,17 +612,18 @@ roughly like this:
 
 | Kiro concept | OpenCode equivalent |
 |---|---|
-| `allowedTools: ["read", "glob", ...]` | `permission.read: "allow"`, `permission.glob: "allow"` |
-| `toolsSettings.shell.allowedCommands[]` | `permission.bash["command*"]: "allow"` |
-| `toolsSettings.shell.deniedCommands[]` | `permission.bash["command*"]: "deny"` |
-| `toolsSettings.subagent.trustedAgents[]` | `permission.task["pattern"]: "allow"` |
-| `toolsSettings.write.allowedPaths[]` | `permission.edit["path"]: "allow"` |
-| `tools: ["*"]` | `permission["*"]: "ask"` |
+| `allowedTools: ["read", "glob", ...]` | `{ action: read, resource: "*", effect: allow }`, `{ action: glob, resource: "*", effect: allow }` |
+| `toolsSettings.shell.allowedCommands[]` | `{ action: shell, resource: "command*", effect: allow }` |
+| `toolsSettings.shell.deniedCommands[]` | `{ action: shell, resource: "command*", effect: deny }` |
+| `toolsSettings.subagent.trustedAgents[]` | `{ action: subagent, resource: "pattern", effect: allow }` |
+| `toolsSettings.write.allowedPaths[]` | `{ action: edit, resource: "path", effect: allow }` |
+| `tools: ["*"]` | `{ action: "*", resource: "*", effect: ask }` |
 
 The Kiro format uses lists of allowed/denied commands. The OpenCode format
-uses map-based rules with string keys matching command patterns. When adding
-shell permissions, prefer the most specific pattern possible — `"git status *"`
-over `"git*"`.
+uses an ordered array of permission entries, each combining an `action`, a
+`resource` pattern, and an `effect` (`allow`, `ask`, or `deny`). When adding
+shell permissions, prefer the most specific resource pattern possible —
+`"git status *"` over `"git*"`.
 
 ### Placeholder reference
 
