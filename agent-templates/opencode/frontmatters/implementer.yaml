@@ -1,87 +1,246 @@
 description: "{{AGENT_DESCRIPTION}}"
 mode: all
-permission:
-  "*": deny
-  code: allow
-  edit: ask
-  external_directory: ask
-  write: ask
-  glob: allow
-  grep: allow
-  read: allow
-  bash:
-    "*": ask
-    "awk *": allow
-    "bash -n *": allow
-    "cat *": allow
-    "cat *>*": ask
-    "date *": allow
-    "diff *": allow
-    "echo *": allow
-    "echo *>*": ask
-    "find *-name*": allow
-    "find *-type*": allow
-    "find * -exec *": deny
-    "git status *": allow
-    "git log*": allow
-    "git diff *": allow
-    "git show *": allow
-    "git branch *": allow
-    "grep *": allow
-    "head *": allow
-    "jq *": allow
-    "ls *": allow
-    "mkdir *": allow
-    "pwd": allow
-    "sort *": allow
-    "tail *": allow
-    "tr *": allow
-    "uniq *": allow
-    "wc *": allow
-    "which *": allow
-    "git push *": deny
-    "git pull *": deny
-    "sed -i *": ask
-    "xargs *": ask
-    "pip *": allow
-    "python *": allow
-    "python --version": allow
-    "python3 --version": allow
-    "pytest *": allow
-    "python -m pytest *": allow
-    "python3 -m pytest *": allow
-    "python -m unittest *": allow
-    "python3 -m unittest *": allow
-    "mypy *": allow
-    "python -m mypy *": allow
-    "python3 -m mypy *": allow
-    "python -m flake8 *": allow
-    "python3 -m flake8 *": allow
-    "python -m pylint *": allow
-    "python3 -m pylint *": allow
-    "python -m black *": allow
-    "python3 -m black *": allow
-    "python -m isort *": allow
-    "python3 -m isort *": allow
-    "ruff *": allow
-    "python -m ruff *": allow
-    "python3 -m ruff *": allow
-    "node --version": allow
-    "npm install *": allow
-    "npm test *": allow
-    "npm run *": allow
-    "npx jest *": allow
-    "npx eslint *": allow
-    "npx prettier *": allow
-    "tsc *": allow
-    "docker ps *": allow
-    "docker logs *": allow
-    "docker inspect *": allow
-    "rg *": allow
-  task:
-    "*": deny
-    "{{THEME}}-researcher": allow
-  skill:
-    "*": ask
-    code-implementation: allow
-    python-quality-gates: allow
+permissions:
+  - action: "*"
+    resource: "*"
+    effect: deny
+  - action: execute
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: ask
+  - action: external_directory
+    resource: "*"
+    effect: ask
+  - action: edit
+    resource: "*"
+    effect: ask
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: shell
+    resource: "awk *"
+    effect: allow
+  - action: shell
+    resource: "bash -n *"
+    effect: allow
+  - action: shell
+    resource: "cat *"
+    effect: allow
+  - action: shell
+    resource: "cat *>*"
+    effect: ask
+  - action: shell
+    resource: "date *"
+    effect: allow
+  - action: shell
+    resource: "diff *"
+    effect: allow
+  - action: shell
+    resource: "echo *"
+    effect: allow
+  - action: shell
+    resource: "echo *>*"
+    effect: ask
+  - action: shell
+    resource: "find *-name*"
+    effect: allow
+  - action: shell
+    resource: "find *-type*"
+    effect: allow
+  - action: shell
+    resource: "find * -exec *"
+    effect: deny
+  - action: shell
+    resource: "git status *"
+    effect: allow
+  - action: shell
+    resource: "git log*"
+    effect: allow
+  - action: shell
+    resource: "git diff *"
+    effect: allow
+  - action: shell
+    resource: "git show *"
+    effect: allow
+  - action: shell
+    resource: "git branch *"
+    effect: allow
+  - action: shell
+    resource: "grep *"
+    effect: allow
+  - action: shell
+    resource: "head *"
+    effect: allow
+  - action: shell
+    resource: "jq *"
+    effect: allow
+  - action: shell
+    resource: "ls *"
+    effect: allow
+  - action: shell
+    resource: "mkdir *"
+    effect: allow
+  - action: shell
+    resource: "pwd"
+    effect: allow
+  - action: shell
+    resource: "sort *"
+    effect: allow
+  - action: shell
+    resource: "tail *"
+    effect: allow
+  - action: shell
+    resource: "tr *"
+    effect: allow
+  - action: shell
+    resource: "uniq *"
+    effect: allow
+  - action: shell
+    resource: "wc *"
+    effect: allow
+  - action: shell
+    resource: "which *"
+    effect: allow
+  - action: shell
+    resource: "git push *"
+    effect: deny
+  - action: shell
+    resource: "git pull *"
+    effect: deny
+  - action: shell
+    resource: "sed -i *"
+    effect: ask
+  - action: shell
+    resource: "xargs *"
+    effect: ask
+  - action: shell
+    resource: "pip *"
+    effect: allow
+  - action: shell
+    resource: "python *"
+    effect: allow
+  - action: shell
+    resource: "python --version"
+    effect: allow
+  - action: shell
+    resource: "python3 --version"
+    effect: allow
+  - action: shell
+    resource: "pytest *"
+    effect: allow
+  - action: shell
+    resource: "python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "python -m unittest *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m unittest *"
+    effect: allow
+  - action: shell
+    resource: "mypy *"
+    effect: allow
+  - action: shell
+    resource: "python -m mypy *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m mypy *"
+    effect: allow
+  - action: shell
+    resource: "python -m flake8 *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m flake8 *"
+    effect: allow
+  - action: shell
+    resource: "python -m pylint *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m pylint *"
+    effect: allow
+  - action: shell
+    resource: "python -m black *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m black *"
+    effect: allow
+  - action: shell
+    resource: "python -m isort *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m isort *"
+    effect: allow
+  - action: shell
+    resource: "ruff *"
+    effect: allow
+  - action: shell
+    resource: "python -m ruff *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m ruff *"
+    effect: allow
+  - action: shell
+    resource: "node --version"
+    effect: allow
+  - action: shell
+    resource: "npm install *"
+    effect: allow
+  - action: shell
+    resource: "npm test *"
+    effect: allow
+  - action: shell
+    resource: "npm run *"
+    effect: allow
+  - action: shell
+    resource: "npx jest *"
+    effect: allow
+  - action: shell
+    resource: "npx eslint *"
+    effect: allow
+  - action: shell
+    resource: "npx prettier *"
+    effect: allow
+  - action: shell
+    resource: "tsc *"
+    effect: allow
+  - action: shell
+    resource: "docker ps *"
+    effect: allow
+  - action: shell
+    resource: "docker logs *"
+    effect: allow
+  - action: shell
+    resource: "docker inspect *"
+    effect: allow
+  - action: shell
+    resource: "rg *"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "{{THEME}}-researcher"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: ask
+  - action: skill
+    resource: code-implementation
+    effect: allow
+  - action: skill
+    resource: python-quality-gates
+    effect: allow
