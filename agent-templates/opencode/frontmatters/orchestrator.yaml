@@ -131,6 +131,12 @@ permissions:
     resource: "git rev-parse *"
     effect: allow
   - action: shell
+    resource: "git fetch *"
+    effect: allow
+  - action: shell
+    resource: "git rev-list *"
+    effect: allow
+  - action: shell
     resource: "grep *"
     effect: allow
   - action: shell
