@@ -442,6 +442,9 @@ if target_available opencode; then
                 sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
                     -e "s|{{THEME}}|${theme}|g" \
                     "$frontmatter_template"
+                # The template may lack a trailing newline; guarantee the
+                # closing delimiter starts on its own line.
+                printf '\n'
                 echo "---"
                 echo ""
                 echo "<!-- persona-agents:${theme}-${profession}:${persona_file_path} -->"
