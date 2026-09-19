@@ -34,7 +34,7 @@ jobs:
           echo "Linting shell scripts..."
           shellcheck install.sh
 
-      # Make sure install.sh and update.sh are executable
+      # Make sure install.sh is executable
       - name: Check script permissions
         run: |
           for f in install.sh; do

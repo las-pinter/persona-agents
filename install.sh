@@ -225,20 +225,6 @@ copy_if_missing() {
     echo "  created: $dest"
 }
 
-# Check if generation is needed for a given output directory.
-# Returns 0 (needs gen) if force is set or the directory is empty/missing.
-# Returns 1 (skip) if the directory has content and force is not set.
-needs_generation() {
-    local dir="$1"
-    if [[ "$FORCE" == true ]]; then
-        return 0
-    fi
-    if [[ -d "$dir" ]] && [[ -n "$(find "$dir" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null)" ]]; then
-        return 1
-    fi
-    return 0
-}
-
 # Install a shell alias into a rc file, skipping if already present.
 install_alias() {
     local name="$1" cmd="$2" rc="$3"
