@@ -82,6 +82,13 @@ The installer builds the plugin automatically: `npm install && npm run build`
 produces `dist/plugin-bundled.js`, which is copied into the OpenCode plugins
 directory.
 
+A second read-only plugin ships alongside it: `plugins/permission-auditor.js`
+(installed to `~/.config/opencode/plugins/permission-auditor.js`). It appends
+every permission evaluation, ask prompt, and user reply to
+`~/.local/share/opencode/permission-audit.jsonl` (one JSON object per line)
+without ever modifying a permission decision.
+It requires `@opencode/plugin` in the opencode config dir (`~/.config/opencode/node_modules/@opencode/plugin`).
+
 ## Repository Structure
 
 ```
@@ -155,6 +162,8 @@ persona-agents/
 │   ├── index.js                       # Compiled entry point
 │   ├── index.d.ts                     # Type declarations
 │   └── ...                            # Other compiled files, source maps
+├── plugins/
+│   └── permission-auditor.js          # Read-only permission audit logger
 ├── node_modules/                      # npm dependencies (gitignored)
 ├── settings/
 │   ├── kiro-cli.json.example          # Example Kiro CLI config

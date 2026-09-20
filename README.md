@@ -64,6 +64,7 @@ persona-agents/
 ├── skills/{profession}/       # Skill documents by profession (15 total)
 ├── src/                        # TypeScript plugin source
 ├── dist/                       # Compiled plugin output
+├── plugins/                    # Standalone OpenCode plugins (permission-auditor.js)
 ├── settings/                   # Example config files
 ├── install.sh                  # The installer
 └── ...config files             # package.json, tsconfig.json, etc.

@@ -493,6 +493,14 @@ if target_available opencode; then
             fi
         fi
     fi
+
+    # -- Install permission-auditor plugin (read-only, auto-discovered) --
+    copy_file "$REPO_DIR/plugins/permission-auditor.js" "$PLUGINS_DIR/permission-auditor.js"
+    # permission-auditor imports @opencode/plugin from the opencode config
+    # dir's node_modules at runtime; warn (not fail) when it's absent.
+    if [[ ! -d "$OPENCODE_DEST/node_modules/@opencode/plugin" ]]; then
+        echo "  WARNING: @opencode/plugin not found in $OPENCODE_DEST/node_modules — permission-auditor will not load" >&2
+    fi
 fi
 
 # ---------------------------------------------------------------------------
