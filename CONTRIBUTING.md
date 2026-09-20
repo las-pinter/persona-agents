@@ -68,7 +68,8 @@ a **stub comment** that the persona-agents plugin replaces at runtime.
 Example:
 `<!-- persona-agents:goblin-orchestrator:bossnik-chief.md -->`
 
-The plugin (TypeScript source in `src/`, compiled to `dist/plugin-bundled.js`):
+The plugin (`plugins/persona-agents.js`, self-contained plain JS — installed
+as-is with no build step):
 
 - Lives at `~/.config/opencode/plugins/persona-agents.js` after installation
 - Registers the OpenCode v2 `ctx.session.hook("context", ...)` hook (the
@@ -78,16 +79,17 @@ The plugin (TypeScript source in `src/`, compiled to `dist/plugin-bundled.js`):
   `profession.md + persona.md` content from disk (`loadSinglePrompt`)
 - Replaces the stub fully — no marker remains
 
-The installer builds the plugin automatically: `npm install && npm run build`
-produces `dist/plugin-bundled.js`, which is copied into the OpenCode plugins
-directory.
+The installer copies the plugin directly — no build step:
+`plugins/persona-agents.js` → `~/.config/opencode/plugins/persona-agents.js`.
+It uses only Node built-ins, so it loads via auto-discovery with no
+`node_modules` or package installation.
 
 A second read-only plugin ships alongside it: `plugins/permission-auditor.js`
 (installed to `~/.config/opencode/plugins/permission-auditor.js`). It appends
 every permission evaluation, ask prompt, and user reply to
 `~/.local/share/opencode/permission-audit.jsonl` (one JSON object per line)
 without ever modifying a permission decision.
-It requires `@opencode/plugin` in the opencode config dir (`~/.config/opencode/node_modules/@opencode/plugin`).
+It is fully self-contained (only Node built-ins), so it needs no `@opencode/plugin` or `node_modules` in the OpenCode config directory.
 
 ## Repository Structure
 
@@ -152,26 +154,15 @@ persona-agents/
 │   │   ├── task-decomposition/SKILL.md
 │   │   ├── risk-and-dependency-identification/SKILL.md
 │   │   └── plan-output-template/SKILL.md
-├── src/                               # TypeScript plugin source
-│   ├── index.ts                       # Plugin entry point — exports `server`
-│   ├── system-transform.ts            # system.transform hook implementation
-│   ├── agent-registry.ts              # Stub parsing + on-demand prompt loading
-│   └── types.ts                       # AgentIdentity, Logger interfaces
-├── dist/                              # Compiled plugin output
-│   ├── plugin-bundled.js              # Self-contained bundle for OpenCode
-│   ├── index.js                       # Compiled entry point
-│   ├── index.d.ts                     # Type declarations
-│   └── ...                            # Other compiled files, source maps
-├── plugins/
+├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
+│   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
 │   └── permission-auditor.js          # Read-only permission audit logger
-├── node_modules/                      # npm dependencies (gitignored)
 ├── settings/
 │   ├── kiro-cli.json.example          # Example Kiro CLI config
 │   └── mcp.json.example               # Example MCP server config
-├── install.sh                         # The installer — generates agents + builds plugin
-├── package.json                       # Node.js package definition
+├── install.sh                         # The installer — generates agents + installs plugins
+├── package.json                       # Package definition (type: module — no build, no deps)
 ├── package-lock.json                  # Dependency lockfile
-├── tsconfig.json                      # TypeScript configuration (rootDir: src, outDir: dist)
 ├── .editorconfig                      # Editor formatting rules
 ├── .github/
 │   └── workflows/
@@ -218,7 +209,7 @@ agents.json  ────── reads ──┐
 install.sh → generates stub .md files with <!-- persona-agents:... --> comment
 
 AT RUNTIME:
-  plugin (src/index.ts) → system.transform hook → parseAgentFromStubComment()
+  plugin (plugins/persona-agents.js) → "context" hook → parseAgentFromStubComment()
   → loadSinglePrompt(configRoot, identity) → profession.md + persona.md
   → inject into system prompt
 ```
@@ -252,19 +243,12 @@ AT RUNTIME:
     # Check for jq (required for agent generation)
     which jq
 
-    # Check for Node.js and npm (required for the OpenCode plugin)
+    # Check for Node.js (required for the OpenCode plugins)
     node --version
-    npm --version
    ```
 
-3. Install Node.js dependencies and build the plugin:
-
-   ```bash
-   npm install
-   npm run build
-   ```
-
-   This compiles TypeScript and produces `dist/plugin-bundled.js`.
+3. No build step — the OpenCode plugins (`plugins/*.js`) are plain Node.js
+   using only built-ins and are copied as-is by `install.sh`.
 
 4. (Optional) Make a test directory to inspect generated output without
    touching your real config:
@@ -288,7 +272,7 @@ cyberpunk crew, a fantasy guild, a team of kitchen appliances). Each theme
 needs one persona file per profession.
 
 > **Note:** The OpenCode plugin is fully data-driven — adding a new theme
-> requires **no TypeScript changes**. Just add to `agents.json` and create
+> requires **no plugin code changes**. Just add to `agents.json` and create
 > persona files as described below. The stub comment format
 > (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`) is parsed
 > dynamically at runtime, so new themes work automatically.
@@ -354,7 +338,7 @@ patterns, and tool permissions. Adding a new profession (e.g., `architect`,
 `scrum-master`, `devops`) makes it available to all existing themes.
 
 > **Note:** The OpenCode plugin is fully data-driven — adding a new profession
-> requires **no TypeScript code changes**. You only need a template + a
+> requires **no plugin code changes**. You only need a template + a
 > `profession.md` file + an `agents.json` entry. The stub comment format
 > (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`) contains the
 > profession name in the agent name portion, parsed dynamically at runtime.
@@ -605,13 +589,13 @@ persona.md` content.
 - `<!-- persona-agents:goblin-orchestrator:bossnik-chief.md -->`
 - `<!-- persona-agents:wh40kOrk-planner:sparkgutz-bigmek.md -->`
 
-**Parsing rules** (implemented in `src/agent-registry.ts`):
+**Parsing rules** (implemented in `plugins/persona-agents.js`):
 
 1. Extract content between `<!--` and `-->`
 2. Strip `persona-agents:` prefix
 3. Split on the **last** `:` — right side is `personaFile`, left side is
    agent name
-4. Split agent name on the **last** `-` — right side is `profession`,
+4. Split agent name on the **first** `-` — right side is `profession`,
    left side is `theme`
 
 ### Permission mapping (Kiro → OpenCode)
@@ -711,20 +695,14 @@ bash -n install.sh
 
 This checks for bash syntax errors without executing anything.
 
-### TypeScript compilation
+### Plugin syntax check
 
-Verify the plugin compiles without errors:
-
-```bash
-npm run build
-# or for type-checking only (no emit):
-npx tsc --noEmit
-```
-
-Check that the plugin bundle exists:
+Verify each plugin is valid JavaScript — there is no build step, so the
+syntax check IS the compile check:
 
 ```bash
-ls -la dist/plugin-bundled.js
+node --check plugins/persona-agents.js
+node --check plugins/permission-auditor.js
 ```
 
 ### Dry-run preview
@@ -781,7 +759,7 @@ After running, verify:
 - **Stub comments present and correctly formatted**:
   `grep '<!-- persona-agents:' ~/.config/opencode/agents/*.md` — every agent
   file should have exactly one stub comment.
-- **Plugin bundle exists**: `ls ~/.config/opencode/plugins/persona-agents.js`
+- **Persona-agents plugin installed**: `ls ~/.config/opencode/plugins/persona-agents.js`
 - **Persona files copied**: `ls ~/.kiro/personas/{theme}/` matches
   `ls personas/{theme}/`.
 - **Skill files copied**: `find ~/.kiro/skills/ -name SKILL.md` matches the
@@ -809,7 +787,7 @@ After running, verify:
 
    ```bash
    bash -n install.sh
-   npm run build
+   node --check plugins/persona-agents.js
    ./install.sh --dry-run --force
    ```
 
@@ -846,8 +824,8 @@ After running, verify:
 Before submitting, check:
 
 - [ ] `bash -n install.sh` passes
-- [ ] `npm run build` (or `npx tsc --noEmit`) compiles without errors
-- [ ] Plugin bundle is generated (`dist/plugin-bundled.js` exists)
+- [ ] `node --check plugins/persona-agents.js` parses (plugin syntax)
+- [ ] Persona-agents plugin is installed (`~/.config/opencode/plugins/persona-agents.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
 - [ ] All 56 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output

@@ -358,16 +358,6 @@ fi
 
 if target_available opencode; then
 
-    # -- Build persona-agents plugin --
-    echo ""
-    echo "Building persona-agents plugin..."
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would build plugin in $REPO_DIR"
-    else
-        (cd "$REPO_DIR" && npm install --silent && npm run build)
-        echo "  plugin built at $REPO_DIR/dist/index.js"
-    fi
-
     # -- Copy personas, professions, skills to OpenCode config folder --
     echo ""
     echo "Installing OpenCode resource files to $OPENCODE_DEST ..."
@@ -466,41 +456,12 @@ if target_available opencode; then
         fi
     fi
 
-    # -- Register persona-agents plugin via auto-discovery --
-    echo ""
-    echo "Registering persona-agents plugin for auto-discovery..."
+    # -- Install persona-agents plugin (self-contained, auto-discovered) --
     PLUGINS_DIR="$OPENCODE_DEST/plugins"
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would create $PLUGINS_DIR and install bundled plugin"
-    else
-        mkdir -p "$PLUGINS_DIR"
-        PLUGIN_BUNDLE="$REPO_DIR/dist/plugin-bundled.js"
-        PLUGIN_DEST="$PLUGINS_DIR/persona-agents.js"
-        if [[ -f "$PLUGIN_BUNDLE" ]]; then
-            # Copy the bundled self-contained plugin to auto-discovery directory.
-            # The plugin resolves resource paths (agents.json, personas/, professions/)
-            # relative to its own location (configRoot/plugins/ → configRoot/).
-            cp "$PLUGIN_BUNDLE" "$PLUGIN_DEST"
-            echo "  installed: $PLUGIN_BUNDLE → $PLUGIN_DEST"
-        else
-            echo "  WARNING: bundled plugin not found at $PLUGIN_BUNDLE — trying dist/index.js as fallback" >&2
-            PLUGIN_SRC="$REPO_DIR/dist/index.js"
-            if [[ -f "$PLUGIN_SRC" ]]; then
-                cp "$PLUGIN_SRC" "$PLUGIN_DEST"
-                echo "  installed (fallback): $PLUGIN_SRC → $PLUGIN_DEST"
-            else
-                echo "  WARNING: plugin not built — skipping registration" >&2
-            fi
-        fi
-    fi
+    copy_file "$REPO_DIR/plugins/persona-agents.js" "$PLUGINS_DIR/persona-agents.js"
 
-    # -- Install permission-auditor plugin (read-only, auto-discovered) --
+    # -- Install permission-auditor plugin (self-contained, auto-discovered) --
     copy_file "$REPO_DIR/plugins/permission-auditor.js" "$PLUGINS_DIR/permission-auditor.js"
-    # permission-auditor imports @opencode/plugin from the opencode config
-    # dir's node_modules at runtime; warn (not fail) when it's absent.
-    if [[ ! -d "$OPENCODE_DEST/node_modules/@opencode/plugin" ]]; then
-        echo "  WARNING: @opencode/plugin not found in $OPENCODE_DEST/node_modules — permission-auditor will not load" >&2
-    fi
 fi
 
 # ---------------------------------------------------------------------------

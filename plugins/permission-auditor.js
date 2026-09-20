@@ -1,7 +1,7 @@
 // permission-auditor — read-only OpenCode v2 plugin: logs every permission
 // evaluation, ask prompt, and user reply to a JSONL file for template tuning.
-// Installed via auto-discovery (~/.config/opencode/plugins/), no build step.
-import { Plugin } from '@opencode/plugin';
+// Self-contained (only Node built-ins), so it loads from auto-discovery
+// (~/.config/opencode/plugins/) with no node_modules, package.json, or build step.
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -20,7 +20,9 @@ function log(record) {
   }
 }
 
-export default Plugin.define({
+// Plugin.define(...) is a pure identity helper (returns its argument) for type
+// checking only — the v2 runtime just needs a default-export object with id/setup.
+export default {
   id: 'permission-auditor',
 
   async setup(ctx) {
@@ -51,4 +53,4 @@ export default Plugin.define({
       // Best-effort stream ended.
     }
   },
-});
+};

@@ -27,12 +27,12 @@ you build.
 ## Prerequisites
 
 - **`jq`** — for agent generation
-- **Node.js** (v18+) and **npm** — for the OpenCode plugin
+- **Node.js** (v18+) — for the OpenCode plugins (plain JS, no build step)
 
 **Ubuntu/Debian:** `sudo apt-get install jq`
 **macOS:** `brew install jq`
 
-Node.js and npm are available from [nodejs.org](https://nodejs.org/).
+Node.js is available from [nodejs.org](https://nodejs.org/).
 
 ## Install
 
@@ -62,12 +62,10 @@ persona-agents/
 ├── personas/{theme}/           # Character personality files
 ├── professions/                # Role behavior definitions (7: merged implementer)
 ├── skills/{profession}/       # Skill documents by profession (15 total)
-├── src/                        # TypeScript plugin source
-├── dist/                       # Compiled plugin output
-├── plugins/                    # Standalone OpenCode plugins (permission-auditor.js)
+├── plugins/                    # Self-contained OpenCode plugins (persona-agents.js, permission-auditor.js)
 ├── settings/                   # Example config files
 ├── install.sh                  # The installer
-└── ...config files             # package.json, tsconfig.json, etc.
+└── ...config files             # package.json, etc.
 ```
 
 > **Counts:** 8 themes × 7 professions = **56 agents**. Skills: 15 total
