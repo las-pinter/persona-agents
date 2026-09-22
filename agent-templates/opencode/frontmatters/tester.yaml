@@ -140,9 +140,6 @@ permissions:
     resource: "pip *"
     effect: allow
   - action: shell
-    resource: "python *"
-    effect: allow
-  - action: shell
     resource: "python --version"
     effect: allow
   - action: shell
