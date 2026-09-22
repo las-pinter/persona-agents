@@ -98,6 +98,15 @@ permissions:
     resource: "pytest *"
     effect: allow
   - action: shell
+    resource: "python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "*/.venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
     resource: "ruff *"
     effect: allow
   - action: shell

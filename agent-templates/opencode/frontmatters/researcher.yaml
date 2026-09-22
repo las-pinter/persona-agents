@@ -119,6 +119,9 @@ permissions:
     resource: "PYTHONDONTWRITEBYTECODE=1 python -m pytest *"
     effect: allow
   - action: shell
+    resource: "*/.venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
     resource: "sort *"
     effect: allow
   - action: shell
