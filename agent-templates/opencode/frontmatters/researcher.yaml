@@ -107,6 +107,18 @@ permissions:
     resource: "pwd"
     effect: allow
   - action: shell
+    resource: "python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "python3 -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest *"
+    effect: allow
+  - action: shell
+    resource: "PYTHONDONTWRITEBYTECODE=1 python -m pytest *"
+    effect: allow
+  - action: shell
     resource: "sort *"
     effect: allow
   - action: shell
