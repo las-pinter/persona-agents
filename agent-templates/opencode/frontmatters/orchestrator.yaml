@@ -68,9 +68,6 @@ permissions:
     resource: "bash -n *"
     effect: allow
   - action: shell
-    resource: "bash *"
-    effect: allow
-  - action: shell
     resource: "bash -c *"
     effect: ask
   - action: shell
@@ -116,13 +113,46 @@ permissions:
     resource: "git branch *"
     effect: allow
   - action: shell
-    resource: "git -C *"
+    resource: "git -C * branch --show-current *"
+    effect: allow
+  - action: shell
+    resource: "git -C * branch -a *"
+    effect: allow
+  - action: shell
+    resource: "git -C * check-ignore *"
+    effect: allow
+  - action: shell
+    resource: "git -C * diff *"
+    effect: allow
+  - action: shell
+    resource: "git -C * grep *"
+    effect: allow
+  - action: shell
+    resource: "git -C * log *"
+    effect: allow
+  - action: shell
+    resource: "git -C * ls-files *"
+    effect: allow
+  - action: shell
+    resource: "git -C * reflog *"
+    effect: allow
+  - action: shell
+    resource: "git -C * show *"
+    effect: allow
+  - action: shell
+    resource: "git -C * status *"
     effect: allow
   - action: shell
     resource: "git -C * push *"
     effect: deny
   - action: shell
     resource: "git -C * pull *"
+    effect: deny
+  - action: shell
+    resource: "git -C * push"
+    effect: deny
+  - action: shell
+    resource: "git -C * pull"
     effect: deny
   - action: shell
     resource: "git commit *"

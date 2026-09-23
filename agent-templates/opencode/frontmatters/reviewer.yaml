@@ -6,7 +6,7 @@ permissions:
     effect: deny
   - action: execute
     resource: "*"
-    effect: allow
+    effect: ask
   - action: external_directory
     resource: "*"
     effect: ask
