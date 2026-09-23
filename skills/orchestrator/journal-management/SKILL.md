@@ -56,9 +56,29 @@ ls <USER_HOME>/agent-notes/orchestrator/journals/daily/ | sort | tail -1
 
 For the correct current date use the `date` bash command.
 
-Always use the `write` tool, never `edit`. To update an existing file: READ it first, update anything outdated, append new records, then WRITE the full content. Never lose previous entries.
+### Merge-aware updates (shared journal cave)
 
-If a write fails, retry once. If it fails again, report it to the user — never silently discard.
+Journal files under agent-notes may be written by MORE THAN ONE session (e.g. several
+orchestrator sessions sharing one home directory). A naive read-then-write clobbers the
+other sessions' entries. Follow these rules on EVERY update:
+
+1. Re-read the file IMMEDIATELY before writing. Never write from an earlier read or from
+   memory — the file may have changed since you first loaded it.
+2. Never rebuild the file from memory. The content you write must be the current on-disk
+   content plus your own additions.
+3. Preserve verbatim every section/subsection you did not author, including other
+   projects' `### <project>` sections and any unknown content. Add or update only your
+   own project's section. When two sessions share the same project subsection, treat
+   your additions as append-only and always write from the current disk content.
+4. If the file was heavily rewritten or consolidated since your read, write from the
+   latest recoverable state and note the discrepancy in your entry.
+5. If a write fails, retry once with a fresh re-read; if it fails again, report it —
+   never silently discard.
+6. Re-read-before-write narrows but cannot fully eliminate a simultaneous write by
+   two sessions; if that happens the later write wins silently. Check for lost
+   sections before finishing a session.
+
+Always use the `write` tool, never `edit`. Follow the merge-aware rules above when updating; do not skip the merged re-read.
 
 ---
 
@@ -90,6 +110,29 @@ One daily file per day, structured like this:
 ```
 
 > Headings below are examples. Omit any with no content; never leave placeholder text (like `<only blockers>`) in a written journal.
+
+### Per-project sections
+
+When a day's work spans MORE THAN ONE project/repository, group the Work Log bullets
+under `### <project>` subsections — one subsection per project worked that day. Skip a
+subsection if a project has nothing to log. The subsection header carries the project
+name, so bullets inside it don't need a project tag.
+
+Example (two projects in one daily file):
+
+```markdown
+## Work Log
+### persona-agents
+- permission audit: tuned 3 rules (commit 40a358b)
+- audit log cleared for clean baseline
+
+### tarragon
+- cache-filename sanitize: folder + reserved-name guards
+```
+
+For the optional sections (Key Decisions, Verification, etc.), use the same
+`### <project>` subsections when the file spans multiple projects; otherwise keep bullets
+flat and add a `[project]` tag only if a bullet would otherwise be ambiguous.
 
 Key rules:
 
@@ -157,6 +200,8 @@ First run of a new ISO week: consolidate the last 7 daily files into `YYYY-Wnn.m
 - Weekly: 1-2 paragraphs per day (~15 lines total)
 - Monthly: 1 paragraph per week (~20 lines total)
 - Yearly: 1 paragraph per month (~25 lines total)
+
+Consolidations (weekly/monthly/yearly) keep the per-project grouping of the source dailies (e.g. `### <project>` inside each day's summary where sources had it).
 
 ---
 
