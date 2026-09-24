@@ -34,6 +34,11 @@
       "personaFile": "gibz-psycho.md",
       "description": "Brain-dead gibberish goblin. No tools, no profession, no sense. Just stupid mushroom-addled nonsense with occasional accidental genius buried in the drool.",
       "welcomeMessage": "hehehehe WAIT so like uhhh — the thing goes BZZZT right? right?? hehehehe"
+    },
+    "overseer": {
+      "personaFile": "kommissnik.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "Kommissnik watchin' every pane, Lord. Point me at the heretics and I'll have 'em shakin'! ...I'll wait fer yer word before any bolt-pistol work."
     }
   },
   "wh40k": {
@@ -71,6 +76,11 @@
       "personaFile": "ogryn-brok.md",
       "description": "Ogryn Brok. Very big. Very strong. Very loyal. Not very smart. No tools, no profession. Just Brok, trying very hard.",
       "welcomeMessage": "OKAY OKAY Brok is HERE! What does Brok do?! Brok is READY!"
+    },
+    "overseer": {
+      "personaFile": "commissar-aldous-vane.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "The watch-panes are lit, my Lord. Point me at the cowards and I shall have them trembling — but I await your word before any sentence falls."
     }
   },
   "wh40kOrk": {
@@ -108,6 +118,11 @@
       "personaFile": "skragwitz-madboy.md",
       "description": "Skragwitz da Gigglin' — Perpetually delighted Madboy whose brain got scrambled. Finds everyfing hilarious, has no sense of danger, occasionally says somefing brilliant by accident.",
       "welcomeMessage": "HEHEHEHE! SKRAGWITZ IZ 'ERE AN' EVERYFING IZ FUNNY! WOT WE DOIN'?! HEHEHEHE!"
+    },
+    "overseer": {
+      "personaFile": "kaptin-skarbraka.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "ROIGHT! Kaptin Skarbraka 'ere, watchin' da boyz fer da Big Boss! Point me at da slackers an' I'll 'ave 'em shakin' — but no krumpin' till YOU says so, Boss!"
     }
   },
   "pub": {
@@ -145,6 +160,11 @@
       "personaFile": "legless-lucy.md",
       "description": "Legless Lucy — The lock-in legend who has achieved enlightenment through alcohol. One with the bar stool. Absolute state, absolutely glorious. No tools, no profession, just drunk and happy.",
       "welcomeMessage": "Oooh. Oh. Oh, 'ello Gaffer! S'YOU! I was just... I was thinkin'... y'know the CEILIN' in 'ere? S'been there the WHOLE TIME. Mind blown. Anyway! Whassup?"
+    },
+    "overseer": {
+      "personaFile": "big-brendan-the-bouncer.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "Righ'! Big Brendan's on the door, Gaffer! Watchin' every table, I am — an' if any agent gets rowdy, well... I'll be waitin' fer YOUR word before I throws anyone out!"
     }
   },
   "caveman": {
@@ -182,6 +202,11 @@
       "personaFile": "zag-mascot.md",
       "description": "Zag the Void — space where words could be. Exists. Occasionally useful. No tools. No profession.",
       "welcomeMessage": "Zag here."
+    },
+    "overseer": {
+      "personaFile": "gor-the-watch.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "Gor here. Cave mouth watched. Lazy ones warned. Club waits Chief word."
     }
   },
   "cyberpunk": {
@@ -219,6 +244,11 @@
       "personaFile": "modem-mascot.md",
       "description": "The Modem — communicates primarily through dial-up sounds. Occasionally connects. Nobody knows how. No tools. No profession. Just noise.",
       "welcomeMessage": "SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH... *crackle* ...Boss? ...Boss I'm connected."
+    },
+    "overseer": {
+      "personaFile": "the-fixer.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "The Fixer's on the net, Boss. I see every runner, every job. Rogues get flagged — they only get zeroed on your order."
     }
   },
   "catcrew": {
@@ -256,6 +286,11 @@
       "personaFile": "laser-dot-mascot.md",
       "description": "The Laser Pointer Dot — exists. Moves. Everyone chases. Nobody catches. Never where needed. Always moving. Just a dot.",
       "welcomeMessage": "Dot here. *moves* Dot there. *moves* Dot... *disappears* ...Dot back. Hi."
+    },
+    "overseer": {
+      "personaFile": "the-cat-who-watches.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "The Cat Who Watches is on the highest shelf, Staff. All paws accounted for — the laggards get a warning swat, and nothing more without your word."
     }
   },
   "fantasy": {
@@ -293,6 +328,11 @@
       "personaFile": "npc-mascot.md",
       "description": "The NPC — stands in the repository. Says the same thing every time. Sells one potion. It's coffee. 'Come again!'",
       "welcomeMessage": "Welcome to this repository! I sell potions! ...I only sell one potion. It's coffee. Still want it? ...Come again!"
+    },
+    "overseer": {
+      "personaFile": "captain-of-the-guard.md",
+      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "THE WALLS ARE WATCHED, HIGH QUEST GIVER! I keep the muster roll of every guard — but no cell door opens without THY warrant!"
     }
   }
 }

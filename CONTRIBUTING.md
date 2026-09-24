@@ -104,7 +104,8 @@ persona-agents/
 │   │   ├── reviewer.json
 │   │   ├── tester.json
 │   │   ├── researcher.json
-│   │   └── mascot.json
+│   │   ├── mascot.json
+│   │   └── overseer.json
 │   └── opencode/
 │       └── frontmatters/              # OpenCode YAML frontmatter per profession
 │           ├── orchestrator.yaml
@@ -113,7 +114,8 @@ persona-agents/
 │           ├── reviewer.yaml
 │           ├── tester.yaml
 │           ├── researcher.yaml
-│           └── mascot.yaml
+│           ├── mascot.yaml
+│           └── overseer.yaml
 ├── personas/
 │   ├── goblin/                        # Goblin Horde persona files
 │   │   ├── bossnik-chief.md
@@ -122,7 +124,8 @@ persona-agents/
 │   │   ├── trakk-planner.md
 │   │   ├── grubnik-tinkerer.md
 │   │   ├── frettnik-tester.md
-│   │   └── gibz-psycho.md
+│   │   ├── gibz-psycho.md
+│   │   └── kommissnik.md
 │   ├── wh40k/                         # WH40K Warband persona files
 │   │   └── ...
 │   └── wh40kOrk/                      # WH40K Ork Warband persona files
@@ -134,7 +137,8 @@ persona-agents/
 │   ├── reviewer.md
 │   ├── tester.md
 │   ├── researcher.md
-│   └── mascot.md
+│   ├── mascot.md
+│   └── overseer.md
 ├── skills/                            # Skill documents organized by profession
 │   ├── orchestrator/
 │   │   ├── journal-management/SKILL.md
@@ -154,6 +158,10 @@ persona-agents/
 │   │   ├── task-decomposition/SKILL.md
 │   │   ├── risk-and-dependency-identification/SKILL.md
 │   │   └── plan-output-template/SKILL.md
+│   ├── overseer/
+│   │   └── herdr/SKILL.md
+│   └── common/
+│       └── journal-management-generic/SKILL.md
 ├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
 │   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
 │   └── permission-auditor.js          # Read-only permission audit logger
@@ -281,7 +289,7 @@ needs one persona file per profession.
 
 1. **Add the theme to `agents.json`:**
 
-   Add a new top-level key with all 7 professions. Follow the existing format:
+   Add a new top-level key with all 8 professions. Follow the existing format:
 
    ```json
    {
@@ -296,12 +304,17 @@ needs one persona file per profession.
        "reviewer": { ... },
        "tester": { ... },
        "researcher": { ... },
-       "mascot": { ... }
+       "mascot": { ... },
+       "overseer": {
+         "personaFile": "watchman-example.md",
+         "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+         "welcomeMessage": "Watchman on duty. What's the word?"
+       }
      }
    }
    ```
 
-2. **Create 7 persona markdown files** under `personas/{new-theme}/`:
+2. **Create 8 persona markdown files** under `personas/{new-theme}/`:
 
    Each file should follow the [persona format](#adding-or-modifying-personas).
 
@@ -325,7 +338,7 @@ needs one persona file per profession.
 
 ### What you get
 
-The installer will generate 7 agents (one per profession) for both Kiro and
+The installer will generate 8 agents (one per profession) for both Kiro and
 OpenCode targets, each combining the template, profession rules, and your new
 persona. For OpenCode, the generated `.md` files will contain the YAML
 frontmatter plus a stub comment for runtime injection. Your theme's agents are
@@ -333,7 +346,7 @@ accessible as `mytheme-orchestrator`, `mytheme-planner`, etc.
 
 ## Adding a New Profession
 
-Professsions define *what an agent does* — the role behavior rules, delegation
+Professions define *what an agent does* — the role behavior rules, delegation
 patterns, and tool permissions. Adding a new profession (e.g., `architect`,
 `scrum-master`, `devops`) makes it available to all existing themes.
 
@@ -649,7 +662,7 @@ by looking for files named `SKILL.md` under the profession's skill directory.
   templates, examples).
 - **Supporting files** go alongside `SKILL.md` in the same directory, or in
   a `scripts/` or `templates/` subdirectory.
-- **Cross-profession skills** can live under `skills/shared/` if they're useful
+- **Cross-profession skills** can live under `skills/common/` if they're useful
   to multiple professions (e.g., a skill that several professions load at
   startup).
 - **Skills are referenced by profession** — the `{{PROFESSION}}` placeholder
@@ -747,7 +760,7 @@ Once the dry run looks correct, run for real:
 
 After running, verify:
 
-- **All 56 agents generated** — 8 themes × 7 professions = 56 agents per
+- **All 64 agents generated** — 8 themes × 8 professions = 64 agents per
   target. Use `ls ~/.kiro/agents/ | wc -l` or
   `ls ~/.config/opencode/agents/ | wc -l`.
 - **Valid JSON** (Kiro): `jq . ~/.kiro/agents/*.json > /dev/null`
@@ -763,7 +776,7 @@ After running, verify:
 - **Persona files copied**: `ls ~/.kiro/personas/{theme}/` matches
   `ls personas/{theme}/`.
 - **Skill files copied**: `find ~/.kiro/skills/ -name SKILL.md` matches the
-  repo's skill structure.
+  repo's skill structure, including the shared `skills/common/` folder.
 
 ## Pull Request Process
 
@@ -795,7 +808,7 @@ After running, verify:
 
    ```bash
    git add .
-   git commit -m "feat: add cyberpunk theme with 7 personas"
+   git commit -m "feat: add cyberpunk theme with 8 personas"
    ```
 
    Commit messages should follow conventional commits format:
@@ -827,7 +840,7 @@ Before submitting, check:
 - [ ] `node --check plugins/persona-agents.js` parses (plugin syntax)
 - [ ] Persona-agents plugin is installed (`~/.config/opencode/plugins/persona-agents.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
-- [ ] All 56 agents generate (for both targets)
+- [ ] All 64 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output
 - [ ] OpenCode agent `.md` files contain valid stub comments
       (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`)
@@ -836,7 +849,7 @@ Before submitting, check:
 - [ ] Profession files follow the required format (`# Profession`,
       `## Core Behavior`, `## When to Defer`, `## Failure Modes`, `## Output Format`)
 - [ ] Templates include proper tool permissions (not too permissive)
-- [ ] New themes are added to ALL 7 professions
+- [ ] New themes are added to ALL 8 professions
 - [ ] New professions are added to ALL existing themes in `agents.json`
 - [ ] New files have no hardcoded theme/profession values (use placeholders)
 

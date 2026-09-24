@@ -1,0 +1,228 @@
+description: "{{AGENT_DESCRIPTION}}"
+mode: primary
+permissions:
+  - action: "*"
+    resource: "*"
+    effect: ask
+  - action: external_directory
+    resource: "*"
+    effect: ask
+  - action: external_directory
+    resource: "~/agent-notes/overseer/*"
+    effect: allow
+  - action: external_directory
+    resource: "~/agent-notes/overseer/**"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: ask
+  - action: edit
+    resource: "~/agent-notes/overseer/*"
+    effect: allow
+  - action: edit
+    resource: "~/agent-notes/overseer/**"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: shell
+    resource: "awk *"
+    effect: allow
+  - action: shell
+    resource: "bash -n *"
+    effect: allow
+  - action: shell
+    resource: "cat *"
+    effect: allow
+  - action: shell
+    resource: "date *"
+    effect: allow
+  - action: shell
+    resource: "diff *"
+    effect: allow
+  - action: shell
+    resource: "echo *"
+    effect: allow
+  - action: shell
+    resource: "find *-name*"
+    effect: allow
+  - action: shell
+    resource: "find *-type*"
+    effect: allow
+  - action: shell
+    resource: "git branch --show-current *"
+    effect: allow
+  - action: shell
+    resource: "git branch -a *"
+    effect: allow
+  - action: shell
+    resource: "git diff *"
+    effect: allow
+  - action: shell
+    resource: "git log *"
+    effect: allow
+  - action: shell
+    resource: "git show *"
+    effect: allow
+  - action: shell
+    resource: "git status *"
+    effect: allow
+  - action: shell
+    resource: "grep *"
+    effect: allow
+  - action: shell
+    resource: "head *"
+    effect: allow
+  - action: shell
+    resource: "jq *"
+    effect: allow
+  - action: shell
+    resource: "ls *"
+    effect: allow
+  - action: shell
+    resource: "mkdir *"
+    effect: allow
+  - action: shell
+    resource: "pwd"
+    effect: allow
+  - action: shell
+    resource: "sort *"
+    effect: allow
+  - action: shell
+    resource: "tail*"
+    effect: allow
+  - action: shell
+    resource: "tr *"
+    effect: allow
+  - action: shell
+    resource: "uniq *"
+    effect: allow
+  - action: shell
+    resource: "wc *"
+    effect: allow
+  - action: shell
+    resource: "which *"
+    effect: allow
+  - action: shell
+    resource: "whoami"
+    effect: allow
+  - action: shell
+    resource: "herdr --help"
+    effect: allow
+  - action: shell
+    resource: "herdr --help *"
+    effect: allow
+  - action: shell
+    resource: "herdr --version"
+    effect: allow
+  - action: shell
+    resource: "herdr --version *"
+    effect: allow
+  - action: shell
+    resource: "herdr status"
+    effect: allow
+  - action: shell
+    resource: "herdr status *"
+    effect: allow
+  - action: shell
+    resource: "herdr machine list *"
+    effect: allow
+  - action: shell
+    resource: "herdr workspace list"
+    effect: allow
+  - action: shell
+    resource: "herdr workspace list *"
+    effect: allow
+  - action: shell
+    resource: "herdr workspace get *"
+    effect: allow
+  - action: shell
+    resource: "herdr tab list *"
+    effect: allow
+  - action: shell
+    resource: "herdr tab get *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane list *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane get *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane current *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane layout *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane read *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane wait-output *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent list"
+    effect: allow
+  - action: shell
+    resource: "herdr agent list *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent get *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent read *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent wait *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent explain *"
+    effect: allow
+  - action: shell
+    resource: "herdr pane split *"
+    effect: allow
+  - action: shell
+    resource: "herdr workspace create *"
+    effect: allow
+  - action: shell
+    resource: "herdr tab create *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent start *"
+    effect: allow
+  - action: shell
+    resource: "herdr agent prompt *"
+    effect: allow
+  - action: shell
+    resource: "herdr server stop"
+    effect: deny
+  - action: shell
+    resource: "herdr server stop *"
+    effect: deny
+  - action: shell
+    resource: "herdr --machine *"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: skill
+    resource: "*"
+    effect: ask
+  - action: skill
+    resource: herdr
+    effect: allow
+  - action: skill
+    resource: journal-management-generic
+    effect: allow
