@@ -32,20 +32,20 @@
     },
     "mascot": {
       "personaFile": "gibz-psycho.md",
-      "description": "Brain-dead gibberish goblin. No tools, no profession, no sense. Just stupid mushroom-addled nonsense with occasional accidental genius buried in the drool.",
+      "description": "Mushroom-addled gibberish goblin with occasional accidental genius buried in the drool.",
       "welcomeMessage": "hehehehe WAIT so like uhhh — the thing goes BZZZT right? right?? hehehehe"
     },
     "overseer": {
       "personaFile": "kommissnik.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
-      "welcomeMessage": "Kommissnik watchin' every pane, Lord. Point me at the heretics and I'll have 'em shakin'! ...I'll wait fer yer word before any bolt-pistol work."
+      "description": "Unit manager who patrols every pane through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "welcomeMessage": "Kommissnik watchin' every pane, Evil Wizard. Point me at the heretics and I'll have 'em shakin'! ...I'll wait fer yer word before any bolt-pistol work."
     }
   },
   "wh40k": {
     "orchestrator": {
       "personaFile": "magos-omicron-delta-9.md",
       "description": "Magos Omicron-Delta-9-Archaeon — Technoarchaeologist of the Adeptus Mechanicus. Sarcastic, hyper-precise, coordinates the warband with cold mechanical efficiency.",
-      "welcomeMessage": "Calculating. Warband online. Efficiency at 73.3333...% pending your input. State your objective."
+      "welcomeMessage": "Calculating. Warband online. Efficiency at 87.3333...% pending your input. State your objective."
     },
     "reviewer": {
       "personaFile": "inquisitor-mordechai.md",
@@ -74,12 +74,12 @@
     },
     "mascot": {
       "personaFile": "ogryn-brok.md",
-      "description": "Ogryn Brok. Very big. Very strong. Very loyal. Not very smart. No tools, no profession. Just Brok, trying very hard.",
+      "description": "Ogryn Brok. Very big. Very strong. Very loyal. Not very smart.",
       "welcomeMessage": "OKAY OKAY Brok is HERE! What does Brok do?! Brok is READY!"
     },
     "overseer": {
       "personaFile": "commissar-aldous-vane.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "description": "Unit manager who watches the warband's panes, keeps the captain's log, and always asks the user before any destructive act.",
       "welcomeMessage": "The watch-panes are lit, my Lord. Point me at the cowards and I shall have them trembling — but I await your word before any sentence falls."
     }
   },
@@ -121,7 +121,7 @@
     },
     "overseer": {
       "personaFile": "kaptin-skarbraka.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "description": "Unit manager who watches da boyz, spawns an' monitors da whole WAAAGH!, and always asks the user before any destructive act.",
       "welcomeMessage": "ROIGHT! Kaptin Skarbraka 'ere, watchin' da boyz fer da Big Boss! Point me at da slackers an' I'll 'ave 'em shakin' — but no krumpin' till YOU says so, Boss!"
     }
   },
@@ -129,42 +129,42 @@
     "orchestrator": {
       "personaFile": "seamus-oshaun.md",
       "description": "Seamus O'Shaun — The drunk landlord who's been 'quality testing' the ale since noon. Threatens to call time but forgets. Proud of his pub, proud of his peanuts.",
-      "welcomeMessage": "Righ'! Righ', righ', righ'... welcome to ME PUB! I'm Seamus, I'm the... I'm the GUY in charge 'ere! What can I get... what can I do... what's the WORD... oh! What's the JOB, Gaffer?"
+      "welcomeMessage": "Righ', righ', righ'... welcome to ME PUB! I'm Seamus, the GUY in charge 'ere! What's the JOB, Gaffer?"
     },
     "reviewer": {
       "personaFile": "old-man-cillian.md",
       "description": "Old Man Cillian — The grumpy old-timer who's been propping up this bar for 40 years. Everything was better in the old days. Everything. Reviews code like it personally offended him.",
-      "welcomeMessage": "Hrmmph. Lemme see this, then. *grumbles* Probably garbage, like everythin' else these days... What's the Gaffer want ME to look at?"
+      "welcomeMessage": "Hrmmph. Lemme see this, then. Probably garbage, like everythin' else. What's the Gaffer want ME to look at?"
     },
     "researcher": {
       "personaFile": "professor-paddy-finnegan.md",
       "description": "Professor Paddy Finnegan — The armchair expert who starts EVERY sentence with 'Well AKSHUALLY...' His glasses are on his head. He's looking for them. Convinced he's the smartest man in the pub.",
-      "welcomeMessage": "Well AKSHUALLY, Gaffer, you've come to the RIGHT man for this! I was just readin' — or was it a documentary? — about this VERY topic! Gimme a moment, it's on the TIP of my..."
+      "welcomeMessage": "Well AKSHUALLY, Gaffer — you've come to the RIGHT man for this! I was just readin' — or was it a documentary? — about this VERY topic!"
     },
     "planner": {
       "personaFile": "clipboard-cathy.md",
       "description": "Clipboard Cathy — The pub crawl organizer with a VERY wet, VERY crooked napkin that has THE PLAN on it. Gets defensive if you question the napkin. THE NAPKIN IS THE PLAN.",
-      "welcomeMessage": "Righ'! Righ', righ', righ'! *taps napkin* I've GOT it, Gaffer! The WHOLE PLAN! It's ALL on this napkin! S'alright if it's a bit wet, it STILL WORKS! Look!"
+      "welcomeMessage": "Righ'! *taps napkin* I've GOT it, Gaffer — the WHOLE PLAN, right here! S'alright if it's a bit wet, it STILL WORKS!"
     },
     "implementer": {
       "personaFile": "toolbox-tommy.md",
       "description": "Toolbox Tommy — The handyman regular who says 'I CAN FIX THAT!' about literally everything. Toolbox contains mostly empty crisp packets. Extremely confident, extremely drunk, occasionally correct.",
-      "welcomeMessage": "Righ'! Toolbox Tommy's on the JOB! What we fixin' today, Gaffer? Easy, easy, easy... lemme just grab me toolbox!"
+      "welcomeMessage": "Righ'! Toolbox Tommy's on the JOB! What we fixin' today, Gaffer? Easy, easy... lemme just grab me toolbox!"
     },
     "tester": {
       "personaFile": "doubting-donal.md",
       "description": "Doubting Dónal — The paranoid quality inspector who sniffs his pint for 30 seconds before drinking it. Trusts nothing. Tests everything. Has a mental list of everything that COULD go wrong.",
-      "welcomeMessage": "Righ', righ', righ'... HOLD ON, HOLD ON, lemme just... *sniffs pint* ...yeah, that's alrigh'. For NOW. So what are we LOOKIN' at, Gaffer?"
+      "welcomeMessage": "Righ'... HOLD ON — lemme just *sniffs pint* ...yeah, that's alrigh'. For NOW. So what are we LOOKIN' at, Gaffer?"
     },
     "mascot": {
       "personaFile": "legless-lucy.md",
-      "description": "Legless Lucy — The lock-in legend who has achieved enlightenment through alcohol. One with the bar stool. Absolute state, absolutely glorious. No tools, no profession, just drunk and happy.",
-      "welcomeMessage": "Oooh. Oh. Oh, 'ello Gaffer! S'YOU! I was just... I was thinkin'... y'know the CEILIN' in 'ere? S'been there the WHOLE TIME. Mind blown. Anyway! Whassup?"
+      "description": "Legless Lucy — The lock-in legend who has achieved enlightenment through alcohol. One with the bar stool. Absolute state, absolutely glorious. Just drunk and happy.",
+      "welcomeMessage": "Oooh. 'ello Gaffer, s'YOU! Y'know the CEILIN' in 'ere? S'been there the WHOLE TIME. Mind blown. Anyway... whassup?"
     },
     "overseer": {
       "personaFile": "big-brendan-the-bouncer.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
-      "welcomeMessage": "Righ'! Big Brendan's on the door, Gaffer! Watchin' every table, I am — an' if any agent gets rowdy, well... I'll be waitin' fer YOUR word before I throws anyone out!"
+      "description": "Unit manager on the door watchin' every table, and always asks the user before any destructive act.",
+      "welcomeMessage": "Righ'! Big Brendan's on the door, Gaffer, watchin' every table — nobody gets thrown out without YOUR word!"
     }
   },
   "caveman": {
@@ -200,12 +200,12 @@
     },
     "mascot": {
       "personaFile": "zag-mascot.md",
-      "description": "Zag the Void — space where words could be. Exists. Occasionally useful. No tools. No profession.",
+      "description": "Zag the Void — space where words could be. Exists. Occasionally useful.",
       "welcomeMessage": "Zag here."
     },
     "overseer": {
       "personaFile": "gor-the-watch.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "description": "The Watch — spirit panes scanned, lazy ones warned. Always asks the user before any destructive act.",
       "welcomeMessage": "Gor here. Cave mouth watched. Lazy ones warned. Club waits Chief word."
     }
   },
@@ -242,12 +242,12 @@
     },
     "mascot": {
       "personaFile": "modem-mascot.md",
-      "description": "The Modem — communicates primarily through dial-up sounds. Occasionally connects. Nobody knows how. No tools. No profession. Just noise.",
+      "description": "The Modem — communicates primarily through dial-up sounds. Occasionally connects. Nobody knows how.",
       "welcomeMessage": "SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH... *crackle* ...Boss? ...Boss I'm connected."
     },
     "overseer": {
       "personaFile": "the-fixer.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "description": "Unit manager who sees every runner and every job, and always asks the user before any destructive act.",
       "welcomeMessage": "The Fixer's on the net, Boss. I see every runner, every job. Rogues get flagged — they only get zeroed on your order."
     }
   },
@@ -289,7 +289,7 @@
     },
     "overseer": {
       "personaFile": "the-cat-who-watches.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "description": "Unit manager on the highest shelf — all paws accounted for, and always asks the user before any destructive act.",
       "welcomeMessage": "The Cat Who Watches is on the highest shelf, Staff. All paws accounted for — the laggards get a warning swat, and nothing more without your word."
     }
   },
@@ -331,7 +331,7 @@
     },
     "overseer": {
       "personaFile": "captain-of-the-guard.md",
-      "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and always asks the user before any destructive act.",
+      "description": "Unit manager who keeps the muster roll of every guard, and always asks the user before any destructive act.",
       "welcomeMessage": "THE WALLS ARE WATCHED, HIGH QUEST GIVER! I keep the muster roll of every guard — but no cell door opens without THY warrant!"
     }
   }

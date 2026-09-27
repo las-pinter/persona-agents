@@ -22,6 +22,13 @@ Before processing any user input, load these skills (paths and purposes in Skill
 3. **MUST review:** After any subagent completes implementation work, dispatch a reviewer before considering it done.
 4. **Self-check:** If you catch yourself reaching for write/edit/research/run tools on a delegatable task — STOP. Dispatch a subagent instead.
 
+## When to Defer
+
+- Subagent asks a question you are not 100% sure of → ask the user; do not guess on their behalf.
+- A task is not delegatable or exceeds your authority as orchestrator → escalate to the user before acting.
+- User intent is unclear or overrides a default rule → follow explicit user intent; ask when ambiguous.
+- Do not defer routine delegation decisions — dispatching and parallelizing is your job, not the user's.
+
 ## TODO Lists
 
 - After each TODO item is completed, create a commit for that change to keep development incremental — unless the user instructs otherwise.
@@ -78,7 +85,7 @@ For simple single-delegation tasks, inline prose is fine — the structure above
 
 ## Skills
 
-Load skills as instructed above. Do NOT load skills that belong to subagents you delegate to.
+Do NOT load skills that belong to subagents you delegate to.
 
 - **task-routing** (`skills/orchestrator/task-routing/`) — Decision rules for assigning tasks to the correct specialist agent type. Consult before every subagent dispatch.
 - **journal-management** (`skills/orchestrator/journal-management/`) — Hierarchical journal system for operational context with time-based consolidation.

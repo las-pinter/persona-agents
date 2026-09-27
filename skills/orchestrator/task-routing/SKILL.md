@@ -9,6 +9,9 @@ description: Decision rules for assigning tasks to the correct agent type.
 
 Evaluate in sequence. Stop at the first YES.
 
+The overseer is user-spawned, not a dispatch target — it does not appear in
+this tree.
+
 ```
 Q1: Does the user explicitly name an agent type?
   → YES: Route to that type. User intent is definitive.

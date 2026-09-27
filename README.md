@@ -60,7 +60,7 @@ persona-agents/
 ├── agents.json                 # Source of truth: themes → professions → personas
 ├── agent-templates/            # Kiro JSON + OpenCode YAML frontmatter per profession
 ├── personas/{theme}/           # Character personality files
-├── professions/                # Role behavior definitions (8: merged implementer, overseer)
+├── professions/                # Role behavior definitions (8 profession files)
 ├── skills/{profession}/       # Skill documents by profession (17 total) — per-profession skills under skills/{profession}/, shared agent-agnostic skills under skills/common/
 ├── plugins/                    # Self-contained OpenCode plugins (persona-agents.js, permission-auditor.js)
 ├── settings/                   # Example config files
@@ -69,7 +69,7 @@ persona-agents/
 ```
 
 > **Counts:** 8 themes × 8 professions = **64 agents**.
-> Skills: 17 total (15 existing + 2 new — `herdr`, `journal-management-generic`).
+> Skills: 17 total.
 > `implementer.md` is the single merged implementer profession (Python and
 > React sections live inline — no separate Python/React-specific implementer
 > types).
@@ -89,13 +89,13 @@ All agents work with both Kiro CLI and OpenCode.
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
 | goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
-| goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, and always asks the Chief before any destructive act |
+| goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, and always asks the user before any destructive act |
 
 ### The WH40K Warband
 
 | Agent | Character | Role | Description |
 | --- | --- | --- | --- |
-| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (0.6666...%), coordinates the warband with cold mechanical efficiency |
+| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), coordinates the warband with cold mechanical efficiency |
 | wh40k-reviewer | **Inquisitor Mordechai Vane** | 🔍 Reviewer | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
 | wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated |
 | wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |

@@ -13,9 +13,6 @@ permissions:
   - action: external_directory
     resource: "*"
     effect: ask
-  - action: edit
-    resource: "*"
-    effect: ask
   - action: glob
     resource: "*"
     effect: allow

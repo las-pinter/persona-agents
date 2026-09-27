@@ -170,7 +170,6 @@ persona-agents/
 │   └── mcp.json.example               # Example MCP server config
 ├── install.sh                         # The installer — generates agents + installs plugins
 ├── package.json                       # Package definition (type: module — no build, no deps)
-├── package-lock.json                  # Dependency lockfile
 ├── .editorconfig                      # Editor formatting rules
 ├── .github/
 │   └── workflows/
@@ -321,7 +320,7 @@ needs one persona file per profession.
    ```bash
    mkdir -p personas/mytheme
    touch personas/mytheme/captain-example.md
-   # ... create the other 6
+   # ... create the other 7
    ```
 
 3. **Run the installer** to verify everything generates correctly:
@@ -468,8 +467,10 @@ role in the theme.]
 Additional lore or backstory.
 
 > **Note:** Journals are handled by the orchestrator's
-> `skills/orchestrator/journal-management/SKILL.md` skill. Do not duplicate
-> journal/data-log writing protocols inside persona files.
+> `skills/orchestrator/journal-management/SKILL.md` skill, or by the superset
+> `skills/common/journal-management-generic` skill for non-orchestrator
+> agents (used by the overseer). Do not duplicate journal/data-log writing
+> protocols inside persona files.
 ```
 
 ### Key rules

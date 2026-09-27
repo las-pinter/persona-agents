@@ -5,6 +5,10 @@ description: Hierarchical journal system with time-based consolidation.
 
 # Journal Management
 
+> **Cross-reference:** `skills/common/journal-management-generic` is the
+> superset journal skill for non-orchestrator agents (adds `<AGENT_TYPE>`
+> resolution). Keep the two skills in sync when updating either.
+
 ## Discovery — Find Your Home Directory
 
 At the START of every session, run this bash command ONCE:
