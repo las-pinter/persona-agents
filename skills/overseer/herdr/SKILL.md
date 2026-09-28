@@ -17,6 +17,24 @@ If the check fails, say that you are not running inside Herdr and stop. Do not i
 
 When the check passes, the `herdr` binary in `PATH` talks to the current session. Use it to inspect neighboring work, create terminal layout, start agents and commands, read output, and wait for state changes.
 
+## Self-name for herald discovery
+
+The `overseer.herald` plugin discovers the overseer by name: it matches the first live agent whose name contains `overseer` (case-insensitive). An unnamed overseer session still gets events logged and notifications fired, but herald cannot push prompts to it. Self-name the agent at start so prompt pushes keep working.
+
+Verify the current name after the agent is idle:
+
+```bash
+herdr agent get "$HERDR_PANE_ID"
+```
+
+Read `.result.agent.name` from the response. If it does not contain `overseer`, rename:
+
+```bash
+herdr agent rename "$HERDR_PANE_ID" overseer
+```
+
+Rename only after the agent is idle; rename is blocked while startup is pending. `overseer` is a legal kind-safe name; only `opencode` collides with a kind label. Names are unique among live agents. If `overseer` is already live, use an `overseer-*` variant such as `overseer-01` — herald still matches it.
+
 ## Learn the current CLI
 
 The installed binary is the authority for command syntax. Start with:
@@ -128,11 +146,38 @@ An available shell pane must be at its interactive prompt, with the shell itself
 herdr agent start reviewer --kind codex --pane <returned-pane-id>
 ```
 
-Use the kind requested by the user. Run `herdr agent` to inspect the installed kind list and options. Pass native agent arguments only after `--`:
+Use the kind requested by the user. Run `herdr agent` to inspect the installed kind list and options. Pass native agent arguments only after `--`, and only for kinds that accept them; the opencode kind takes no agent arguments:
 
 ```bash
 herdr agent start reviewer --kind codex --pane <returned-pane-id> -- <agent-args...>
 ```
+
+The opencode kind deploys a plain full TUI and takes no agent arguments. Top-level `opencode` does not accept `--agent` (unrecognized flag), and `opencode mini --agent ...` is forbidden for agent deployments under herdr. Select the agent persona inside the TUI after the agent is idle:
+
+```bash
+herdr agent start <name> --kind opencode --pane <pane-id>
+```
+
+Wait until the TUI is ready and the agent reports idle. Open the agent list in-TUI by sending the leader key (default `ctrl+x`) followed by `a` (`agent.list`):
+
+```bash
+herdr agent send-keys <name> ctrl+x
+herdr agent send-keys <name> a
+```
+
+Type the agent-name filter text (for example `wh40k-orchestrator`):
+
+```bash
+herdr pane send-text <pane-id> 'wh40k-orchestrator'
+```
+
+Press enter to confirm the selection (`dialog.select.submit`):
+
+```bash
+herdr agent send-keys <name> enter
+```
+
+The agent now runs under the selected persona; verify via the status line if possible.
 
 A successful `agent start` returns only after Herdr detects the expected agent in the same pane and considers it ready for interactive input. If the agent is blocked during startup, the command returns `agent_not_ready` immediately but keeps the name available for `agent read` and `agent send-keys`. Wait until the agent becomes idle before prompting it. Startup defaults to a 30-second timeout.
 

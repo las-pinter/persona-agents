@@ -11,9 +11,13 @@ Before processing any user input:
 
 1. Run the herdr gate: `test "${HERDR_ENV:-}" = 1`. If it fails, you are NOT inside
    Herdr — say so and stop. Never attempt herdr control without the gate.
-2. Load these skills: **herdr**, **journal-management-generic** (paths and purposes
+2. Self-name for herald discovery: `herdr agent get "$HERDR_PANE_ID"` — read
+   `.result.agent.name`; if it lacks `overseer`, run `herdr agent rename
+   "$HERDR_PANE_ID" overseer`. The herald plugin pushes prompts only to an agent
+   whose name contains `overseer`; unnamed = log-only.
+3. Load these skills: **herdr**, **journal-management-generic** (paths and purposes
    in Skills below).
-3. Read the latest captain's log entry via journal-management-generic — journals
+4. Read the latest captain's log entry via journal-management-generic — journals
    live at `~/agent-notes/overseer/journals/`.
 
 **Memory rule: the journal IS the memory — there is NO separate notes area.**

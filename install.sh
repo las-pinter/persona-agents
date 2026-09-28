@@ -515,15 +515,16 @@ if target_available opencode; then
     echo ""
     echo "Installing opencode aliases ..."
 
+    # top-level opencode rejects --agent in V2; persona chosen in-TUI
     OPENCODE_ALIAS_ENTRIES=(
-        "opencode-goblin:opencode --agent goblin-orchestrator"
-        "opencode-wh40k:opencode --agent wh40k-orchestrator"
-        "opencode-wh40kOrk:opencode --agent wh40kOrk-orchestrator"
-        "opencode-pub:opencode --agent pub-orchestrator"
-        "opencode-caveman:opencode --agent caveman-orchestrator"
-        "opencode-cyberpunk:opencode --agent cyberpunk-orchestrator"
-        "opencode-catcrew:opencode --agent catcrew-orchestrator"
-        "opencode-fantasy:opencode --agent fantasy-orchestrator"
+        "opencode-goblin:opencode"
+        "opencode-wh40k:opencode"
+        "opencode-wh40kOrk:opencode"
+        "opencode-pub:opencode"
+        "opencode-caveman:opencode"
+        "opencode-cyberpunk:opencode"
+        "opencode-catcrew:opencode"
+        "opencode-fantasy:opencode"
     )
 
     install_opencode_aliases() {
@@ -548,6 +549,32 @@ if target_available opencode; then
             echo "  warning: ~/.bashrc may not source ~/.bash_aliases — check your shell config" >&2
         fi
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# herdr plugin (overseer-herald)
+# ---------------------------------------------------------------------------
+
+if command -v herdr &>/dev/null; then
+    echo ""
+    echo "Installing overseer-herald herdr plugin ..."
+
+    # Copy to a stable location outside the repo/worktree — linked repo paths
+    # must not be load-bearing: a prune once broke a worktree link.
+    HERDR_PLUGIN_DIR="$HOME/.local/share/herdr/plugins/overseer-herald"
+    for f in herdr-plugin.toml herald.sh README.md; do
+        copy_file "$REPO_DIR/plugins/herdr/overseer-herald/$f" "$HERDR_PLUGIN_DIR/$f"
+    done
+
+    # herdr plugin link is an idempotent upsert that re-points stale entries on
+    # every run; plugin files refresh only with --force.
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  (dry-run) would run: herdr plugin link \"$HERDR_PLUGIN_DIR\""
+    else
+        herdr plugin link "$HERDR_PLUGIN_DIR" || echo "WARNING: herdr plugin link failed — inspect herdr manually (herdr plugin list)" >&2
+    fi
+else
+    echo "WARNING: herdr not found — skipping herdr plugin install (install herdr, then re-run install.sh)" >&2
 fi
 
 # ---------------------------------------------------------------------------

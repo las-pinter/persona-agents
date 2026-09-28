@@ -47,11 +47,14 @@ contains `overseer` (case-insensitive). It records that agent's `name` and
 
 ## Linking
 
-The plugin is linked after review by the Overseer:
+This repo's `install.sh` installs the plugin automatically: it copies the
+plugin to a stable location (`~/.local/share/herdr/plugins/overseer-herald`)
+and registers it with `herdr plugin link`, enabled by default.
 
-```
-herdr plugin link <path-to-plugins/herdr/overseer-herald>
-```
+Do not link from a live repo or worktree path — stale links break when a
+worktree is pruned; install.sh re-points them on every run. A manual dev link
+is possible, but the next install re-points it. Plugin files refresh only with
+--force; the registry re-point happens on every run.
 
 ## State directory
 
