@@ -233,6 +233,9 @@ permissions:
     resource: "*"
     effect: ask
   - action: skill
+    resource: journal-management-generic
+    effect: deny
+  - action: skill
     resource: code-implementation
     effect: allow
   - action: skill

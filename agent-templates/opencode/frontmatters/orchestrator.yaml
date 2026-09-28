@@ -247,3 +247,6 @@ permissions:
   - action: skill
     resource: project-notes
     effect: allow
+  - action: skill
+    resource: journal-management-generic
+    effect: deny

@@ -4,3 +4,6 @@ permissions:
   - action: "*"
     resource: "*"
     effect: deny
+  - action: skill
+    resource: journal-management-generic
+    effect: deny

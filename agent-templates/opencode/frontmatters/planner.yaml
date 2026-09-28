@@ -149,6 +149,9 @@ permissions:
     resource: "*"
     effect: ask
   - action: skill
+    resource: journal-management-generic
+    effect: deny
+  - action: skill
     resource: plan-output-template
     effect: allow
   - action: skill
