@@ -22,6 +22,12 @@ permissions:
   - action: external_directory
     resource: "~/agent-notes/researcher/**"
     effect: allow
+  - action: external_directory
+    resource: "~/agent-notes/orchestrator/projects/*"
+    effect: allow
+  - action: external_directory
+    resource: "~/agent-notes/orchestrator/projects/**"
+    effect: allow
   - action: glob
     resource: "*"
     effect: allow
@@ -80,6 +86,18 @@ permissions:
     resource: "git branch *"
     effect: allow
   - action: shell
+    resource: "git rev-parse *"
+    effect: allow
+  - action: shell
+    resource: "git tag -l *"
+    effect: allow
+  - action: shell
+    resource: "git tag --list *"
+    effect: allow
+  - action: shell
+    resource: "git grep *"
+    effect: allow
+  - action: shell
     resource: "git fetch *"
     effect: allow
   - action: shell
@@ -122,6 +140,9 @@ permissions:
     resource: "*/.venv/bin/python -m pytest *"
     effect: allow
   - action: shell
+    resource: ".venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
     resource: "sort *"
     effect: allow
   - action: shell
@@ -141,6 +162,39 @@ permissions:
     effect: allow
   - action: shell
     resource: "xxd *"
+    effect: allow
+  - action: shell
+    resource: "rg *"
+    effect: allow
+  - action: shell
+    resource: "npm root *"
+    effect: allow
+  - action: shell
+    resource: "npm prefix *"
+    effect: allow
+  - action: shell
+    resource: "command -v *"
+    effect: allow
+  - action: shell
+    resource: "ps *"
+    effect: allow
+  - action: shell
+    resource: "systemctl --user list-units *"
+    effect: allow
+  - action: shell
+    resource: "/home/dev/.local/bin/herdr --help *"
+    effect: allow
+  - action: shell
+    resource: "/home/dev/.local/bin/herdr * --help *"
+    effect: allow
+  - action: shell
+    resource: "/home/dev/.local/bin/herdr --version *"
+    effect: allow
+  - action: shell
+    resource: "/home/dev/.local/bin/herdr api schema *"
+    effect: allow
+  - action: shell
+    resource: "herdr plugin config-dir *"
     effect: allow
   - action: shell
     resource: "git push *"
@@ -177,6 +231,9 @@ permissions:
     effect: ask
   - action: skill
     resource: journal-management-generic
+    effect: deny
+  - action: skill
+    resource: journal-management
     effect: deny
   - action: skill
     resource: source-selection

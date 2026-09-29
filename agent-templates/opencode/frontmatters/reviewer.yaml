@@ -56,6 +56,9 @@ permissions:
     resource: "find *-type*"
     effect: allow
   - action: shell
+    resource: "find *-iname*"
+    effect: allow
+  - action: shell
     resource: "git status *"
     effect: allow
   - action: shell
@@ -69,6 +72,9 @@ permissions:
     effect: allow
   - action: shell
     resource: "git branch *"
+    effect: allow
+  - action: shell
+    resource: "git rev-parse *"
     effect: allow
   - action: shell
     resource: "grep*"
@@ -105,6 +111,12 @@ permissions:
     effect: allow
   - action: shell
     resource: "*/.venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: ".venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: ".venv/bin/pre-commit *"
     effect: allow
   - action: shell
     resource: "ruff *"
@@ -164,5 +176,11 @@ permissions:
     resource: journal-management-generic
     effect: deny
   - action: skill
+    resource: journal-management
+    effect: deny
+  - action: skill
     resource: code-review-checklist
+    effect: allow
+  - action: skill
+    resource: opencode
     effect: allow

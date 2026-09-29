@@ -53,6 +53,12 @@ permissions:
     resource: "echo *>*"
     effect: ask
   - action: shell
+    resource: "printf *"
+    effect: allow
+  - action: shell
+    resource: "printf *>*"
+    effect: ask
+  - action: shell
     resource: "find *-name*"
     effect: allow
   - action: shell
@@ -72,6 +78,9 @@ permissions:
     effect: allow
   - action: shell
     resource: "git branch *"
+    effect: allow
+  - action: shell
+    resource: "git rev-parse *"
     effect: allow
   - action: shell
     resource: "grep *"
@@ -116,6 +125,21 @@ permissions:
     resource: "xxd *"
     effect: allow
   - action: shell
+    resource: "seq *"
+    effect: allow
+  - action: shell
+    resource: "mktemp *"
+    effect: allow
+  - action: shell
+    resource: "test *"
+    effect: allow
+  - action: shell
+    resource: "command -v *"
+    effect: allow
+  - action: shell
+    resource: "sha256sum *"
+    effect: allow
+  - action: shell
     resource: "git push *"
     effect: deny
   - action: shell
@@ -153,6 +177,12 @@ permissions:
     effect: allow
   - action: shell
     resource: "*/.venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: ".venv/bin/python -m pytest *"
+    effect: allow
+  - action: shell
+    resource: ".venv/bin/pre-commit *"
     effect: allow
   - action: shell
     resource: "python -m unittest *"
@@ -249,6 +279,9 @@ permissions:
     effect: ask
   - action: skill
     resource: journal-management-generic
+    effect: deny
+  - action: skill
+    resource: journal-management
     effect: deny
   - action: skill
     resource: regression-identification
