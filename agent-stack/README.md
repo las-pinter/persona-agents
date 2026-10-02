@@ -17,23 +17,19 @@ One extension, one entry: `extension.ts`. Internally modular:
 
 ```bash
 # development: local path, no copy (the repo stays the source of truth)
-pi install /home/dev/persona-agents
+pi install ~/persona-agents
 
-# distribution: git source — PIN a release tag. Unpinned git clones the repo's
-# DEFAULT branch (here: main, no pi work yet), so a bare install is empty:
-pi install git:github.com/las-pinter/persona-agents@v0.2.0
+# distribution — PIN the newest release tag (current package version: 2.2.0;
+# unpinned git clones the default branch, so pinning matters):
+pi install git:github.com/las-pinter/persona-agents@<newest-release-tag>
 ```
 
-Pick the **newest release tag** (see the GitHub Releases/tags page;
-`package.json` `version` tracks it) and bump it on releases — don't hardcode
-one version. A git install only works once the maintainers have pushed the
-matching commit and tag; `@dev` works for early adopters once the branch is
-pushed. Any pushed tag, branch, or commit ref works — pin with
-`pi install git:…@<ref>`. After a new tag, update an existing clone with
-`pi update --extensions`. `pi list` shows configured packages and their
-`installedPath`; `pi remove <source>` uninstalls. Install only **one** source
-per package — a local path and a git clone of the same repo both register the
-extension, and pi reports the duplicate tools/commands/flags as conflicts.
+Check the GitHub Releases/tags page for the **newest tag** and bump on
+releases — don't hardcode one version. Manage the package with `pi list` /
+`pi remove <source>`, reconcile a clone after a new tag with
+`pi update --extensions`, and install only **one** source per package (a local
+path and a git clone of the same repo both register the extension, which pi
+reports as duplicate-tools/commands/flags conflicts).
 
 ## Agent files
 

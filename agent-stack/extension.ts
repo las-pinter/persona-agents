@@ -8,7 +8,7 @@
  *   - default agent/persona applied to the main session via before_agent_start
  *
  * Install:
- *   pi install /home/dev/persona-agents                        (development)
+ *   pi install ~/persona-agents                                (development)
  *   pi install git:github.com/las-pinter/persona-agents@<ref>  (distribution — PIN a
  *     release tag; unpinned git clones the repo's default branch, no pi work)
  */

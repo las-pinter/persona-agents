@@ -54,16 +54,15 @@ extension plus the 8 pi agents (frontmatter + profession bodies), personas, and
 skills as one unit:
 
 ```bash
-# from GitHub — PIN a release tag. Unpinned git sources clone the repo's
-# DEFAULT branch (here: main, no pi work yet), so the bare form installs an
-# empty package:
-pi install git:github.com/las-pinter/persona-agents@v0.2.0   # newest release tag
+# distribution — PIN the newest release tag (current package version: 2.2.0;
+# unpinned git clones the default branch, so pinning matters):
+pi install git:github.com/las-pinter/persona-agents@<newest-release-tag>
 
 # early adopters: the dev branch works once it is pushed:
 # pi install git:github.com/las-pinter/persona-agents@dev
 
 # local development — path only, no copy (the repo stays the single source)
-pi install /home/dev/persona-agents
+pi install ~/persona-agents
 ```
 
 That one command installs the **whole unit**: the `agent-stack` extension, the
@@ -72,19 +71,15 @@ are declared via `pi.skills` in `package.json`, so package installs also
 register them as native pi skills (usable with pi's `!skill`/`# skill:` blocks)
 *and* as agent-bound skill groups for `/agents`.
 
-Pick the **newest release tag** — check the repo's Releases/tags page
-(`package.json` `version` tracks the current release), pin it, and bump on
-releases; don't hardcode one version. A git install only works once the
-maintainers have pushed the matching commit and tag. Any pushed tag, branch,
-or commit ref works with `pi install git:…@<ref>` (`@dev` works for early
-adopters once the dev branch is up). After a new release, reconcile an existing
-clone with `pi update --extensions`. Manage the package with `pi list` /
-`pi remove <source>`.
+Check the repo's Releases/tags page for the **newest tag** and bump on
+releases — don't hardcode one version. Manage an installed package with
+`pi list` / `pi remove <source>`; reconcile a clone after a new release with
+`pi update --extensions`.
 
 > ⚠️ Don't install the same package from two sources at once (e.g. a local path
 > *and* a git clone): both copies register the same extension tools, commands,
 > and flags, which pi reports as conflicts. Remove the dev entry
-> (`pi remove /home/dev/persona-agents`) before installing the git one.
+> (`pi remove ~/persona-agents`) before installing the git one.
 
 ## How It Works
 
