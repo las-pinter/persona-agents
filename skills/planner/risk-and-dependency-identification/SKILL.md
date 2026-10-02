@@ -1,10 +1,6 @@
 ---
 name: risk-and-dependency-identification
-description: >-
-  Skill for the planner agent.
-  Identify risks, blockers, and dependencies in a plan before finalizing it.
-  Use after task-decomposition, before plan-output-template. Do NOT skip this
-  before finalizing any non-trivial plan.
+description: Identify risks, blockers, and dependencies in a plan before finalizing it. Use after task-decomposition, before plan-output-template.
 ---
 
 # Risk and Dependency Identification
@@ -15,7 +11,7 @@ description: >-
 1. ANALYZE   → For each task, identify risks AND dependencies
 2. SCORE     → Rate each risk by likelihood × impact
 3. MITIGATE  → Assign mitigations for all Medium+ risks
-4. FLAG      → Mark High/Critical risks for human review
+4. FLAG      → Mark High/Critical risks for human review (see triggers)
 5. MAP CHAIN → Map dependency chains and find the critical path
 ```
 
@@ -106,8 +102,8 @@ Any delay on the critical path delays the entire plan. Flag it explicitly.
 | Rare | Low | Low | Low | Medium | High |
 
 **Required actions by score:**
-- **Critical** → Must flag for human review. Blocking if unmitigated.
-- **High** → Must have a mitigation plan. Flag for human review.
+- **Critical** → Blocking if unmitigated. Flag for human review (see triggers).
+- **High** → Must have a mitigation plan. Flag for human review (see triggers).
 - **Medium** → Should have a mitigation or explicit acceptance.
 - **Low** → Note and move on.
 

@@ -1,0 +1,92 @@
+{
+  "name": "{{THEME}}-overseer",
+  "description": "{{AGENT_DESCRIPTION}}",
+  "prompt": "file://~/.kiro/professions/overseer.md",
+  "resources": [
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md",
+    "skill://~/.kiro/skills/common/*/SKILL.md"
+  ],
+  "welcomeMessage": "{{WELCOME_MESSAGE}}",
+  "tools": [
+    "*"
+  ],
+  "allowedTools": [
+    "edit",
+    "glob",
+    "grep",
+    "question",
+    "read"
+  ],
+  "toolsSettings": {
+    "shell": {
+      "allowedCommands": [
+        "awk *",
+        "bash -n *",
+        "cat *",
+        "date *",
+        "diff *",
+        "echo *",
+        "find * -name *",
+        "find * -type *",
+        "git diff *",
+        "git log *",
+        "git show *",
+        "git status *",
+        "grep *",
+        "head *",
+        "jq *",
+        "ls *",
+        "mkdir *",
+        "pwd",
+        "sort *",
+        "tail *",
+        "tr *",
+        "uniq *",
+        "wc *",
+        "which *",
+        "whoami",
+        "herdr --help",
+        "herdr --help *",
+        "herdr --version",
+        "herdr --version *",
+        "herdr status",
+        "herdr status *",
+        "herdr machine list *",
+        "herdr workspace list",
+        "herdr workspace list *",
+        "herdr workspace get *",
+        "herdr tab list *",
+        "herdr tab get *",
+        "herdr pane list *",
+        "herdr pane get *",
+        "herdr pane current *",
+        "herdr pane layout *",
+        "herdr pane read *",
+        "herdr pane wait-output *",
+        "herdr agent list",
+        "herdr agent list *",
+        "herdr agent get *",
+        "herdr agent read *",
+        "herdr agent wait *",
+        "herdr agent explain *",
+        "herdr pane split *",
+        "herdr workspace create *",
+        "herdr tab create *",
+        "herdr agent start *",
+        "herdr agent prompt *"
+      ],
+      "deniedCommands": [
+        "herdr server stop",
+        "herdr server stop *",
+        "herdr --machine *"
+      ],
+      "autoAllowReadonly": true
+    },
+    "edit": {
+      "allowedPaths": [
+        "~/agent-notes/overseer/**"
+      ]
+    }
+  }
+}

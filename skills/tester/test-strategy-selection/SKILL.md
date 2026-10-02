@@ -1,9 +1,6 @@
 ---
 name: test-strategy-selection
-description: >-
-  Skill for the tester agent.
-  Choose the right type of tests — unit, integration, contract, e2e, static —
-  based on risk, context, and ROI. Load BEFORE planning any test approach.
+description: Choose the right type of tests — unit, integration, contract, e2e, static — based on risk, context, and ROI.
 ---
 
 # Test Strategy Selection
@@ -150,8 +147,5 @@ Use as signals, not goals:
 
 ## Core Rules
 
-1. Push down — write at the lowest level that gives confidence
-2. Don't write E2E tests for things unit tests can cover
-3. Mock external deps in unit tests; use real ones in integration tests
-4. Contract tests over E2E for service boundaries — cheaper, faster, less flaky
-5. Coverage is a signal, not a goal — 100% with no assertions is worthless
+1. Mock external deps in unit tests; use real ones in integration tests.
+2. Coverage is a signal, not a goal — 100% with no assertions is worthless.

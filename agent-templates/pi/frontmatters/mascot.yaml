@@ -1,0 +1,11 @@
+name: mascot
+description: Light-hearted companion agent for entertainment and moral support; minimal tool access
+tools: [read]
+skills: []
+permissions:
+  mode: deny-by-default
+  allow:
+    - { tool: read, match: "(^|/)(personas|skills|agents|agent-notes)/" }
+  ask: []
+  deny:
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }

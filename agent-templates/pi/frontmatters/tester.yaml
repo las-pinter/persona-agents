@@ -1,0 +1,31 @@
+name: tester
+description: Designs and runs tests, isolates regressions, and flags production issues
+tools: [bash, read, edit, write, find, ls, grep, subagent]
+skills: ["tester/*"]
+permissions:
+  mode: deny-by-default
+  allow:
+    - { tool: read, match: "." }
+    - { tool: find, match: "." }
+    - { tool: ls, match: "." }
+    - { tool: grep, match: "." }
+    - { tool: edit, match: "." }
+    - { tool: write, match: "." }
+    - { tool: subagent, match: "." }
+    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|printf|awk|cut|seq|sleep|sha256sum|which|command -v|jq|mktemp|test|bash -n|mkdir)\\b" }
+    - { tool: bash, match: "^find\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|fetch|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
+    - { tool: bash, match: "^(pip\\b|pytest\\b|mypy\\b|ruff\\b|node\\s+--version|npm\\s+(install|test|run)|npx\\s+(jest|eslint|prettier)|tsc\\b|docker\\s+(ps|logs|inspect))\\b" }
+    - { tool: bash, match: "^(python|python3)( -m (pytest|unittest|mypy|flake8|pylint|black|isort|ruff))?\\b" }
+    - { tool: bash, match: "^(\\.venv/bin/(python -m pytest|pre-commit))\\b" }
+    - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
+  ask: []
+  deny:
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
+    - { tool: bash, match: "^find\\b.*-exec\\b" }
+    - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
+    - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
+    - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }

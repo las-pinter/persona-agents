@@ -1,13 +1,25 @@
 ---
 name: source-selection
-description: >-
-  Skill for the researcher agent.
-  Decision rules for choosing between Context7, DeepWiki, and Exa based on
-  query type. Load BEFORE every research action — do NOT guess which source to
-  use without consulting this skill.
+description: Decision rules for choosing between Context7, DeepWiki, and Exa based on query type.
 ---
 
 # Source Selection
+
+## Step 0: Pre-research — Check Existing Notes First
+
+Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
+
+1. Glob `<USER_HOME>/agent-notes/researcher/studies/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
+2. Decide based on what exists:
+   - Prior study fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.
+   - Prior study partially covers it → state the gap and extend that existing study.
+   - Nothing relevant exists → proceed to Step 1 and do new research.
+3. After writing any new study:
+   - Use `YYYY-MM-DD-study-description.md` naming; check existing filenames first to avoid near-duplicates.
+   - List prior studies it builds on under a `Related study:` line.
+   - Append `date + filename + short topic` to `<USER_HOME>/agent-notes/researcher/index.md` (create it if missing).
+
+---
 
 ## Step 1: Classify the Query
 
@@ -114,12 +126,4 @@ Use date filters for current topics: `after:2025` or `after:2026`.
 Report: "Unable to find satisfactory results — here's what was tried"
 ```
 
----
-
-## Key Rules
-
-1. Classify before you search — a 2-second classification saves a wasted query.
-2. Always resolve Context7 library IDs before querying.
-3. Use date filters on Exa for current or fast-moving topics.
-4. Prefer Context7 over web search for library-specific questions — faster and more accurate.
-5. Note which sources you used in your output.
+Note which sources you used in your output.

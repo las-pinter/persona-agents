@@ -1,0 +1,27 @@
+name: planner
+description: Turns requirements into clear, actionable, sequenced plans
+# pi planner cannot spawn subagents: the `subagent` tool is not in this loadout, so
+# there is no spawn allow (unlike the opencode template, which allows
+# {{THEME}}-researcher spawns). This is a deliberate capability regression.
+tools: [bash, read, edit, write, find, ls, grep]
+skills: ["planner/*", "common/*"]
+permissions:
+  mode: deny-by-default
+  allow:
+    - { tool: read, match: "." }
+    - { tool: find, match: "." }
+    - { tool: ls, match: "." }
+    - { tool: grep, match: "." }
+    - { tool: write, match: "(^|/)agent-notes/planner/" }
+    - { tool: edit, match: "(^|/)agent-notes/planner/" }
+    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|pwd|date|echo|diff|mkdir|which|command -v|jq|bash -n)\\b" }
+    - { tool: bash, match: "^find\\b" }
+  ask:
+    - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
+    - { tool: bash, match: "\\bsudo\\b" }
+  deny:
+    - { tool: bash, match: "^find\\b.*-exec\\b" }
+    - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
+    - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }

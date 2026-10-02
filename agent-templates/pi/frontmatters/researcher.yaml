@@ -1,0 +1,30 @@
+name: researcher
+description: Read-only investigation specialist that searches, reads, samples, and summarizes code and environment state
+tools: [bash, read, edit, write, find, ls, grep]
+skills: ["researcher/*"]
+permissions:
+  mode: deny-by-default
+  allow:
+    - { tool: read, match: "." }
+    - { tool: find, match: "." }
+    - { tool: ls, match: "." }
+    - { tool: grep, match: "." }
+    - { tool: edit, match: "(^|/)agent-notes/(researcher|orchestrator)/" }
+    - { tool: write, match: "(^|/)agent-notes/researcher/" }
+    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|awk|cut|seq|ps|which|command -v|jq|bash -n|mkdir|sleep)\\b" }
+    - { tool: bash, match: "^find\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|fetch|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
+    - { tool: bash, match: "^(npm\\s+(root|prefix)|python3?\\s+-m\\s+pytest|PYTHONDONTWRITEBYTECODE=1 python3?\\s+-m\\s+pytest|(\\.venv/bin/)?python -m pytest)\\b" }
+    - { tool: bash, match: "^(?:/home/dev/\\.local/bin/)?herdr\\s+(--help|--version|api\\s+schema|plugin\\s+config-dir)\\b" }
+    - { tool: bash, match: "^systemctl\\s+--user\\s+list-units\\b" }
+    - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
+  ask: []
+  deny:
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
+    - { tool: bash, match: "^find\\b.*-exec\\b" }
+    - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
+    - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
+    - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }

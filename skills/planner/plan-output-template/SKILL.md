@@ -1,13 +1,20 @@
 ---
 name: plan-output-template
-description: >-
-  Skill for the planner agent.
-  Standard template for producing a final plan ready to hand off to a developer.
-  Provides plan type templates, quality gates, and validation scripts.
-  Do NOT hand off raw, unvalidated plans — always run plan-validate.sh first.
+description: Standard template for producing a final plan ready for developer handoff.
 ---
 
 # Plan Output Template
+
+## Shared Skeleton
+
+All plan types follow the same skeleton. Each task has:
+
+- **Dependencies:** None / Task X
+- **Acceptance:** a verifiable condition (not "works correctly")
+- **Details:** implementation notes
+- **Complexity:** small / medium / large
+
+Every plan ends with **Risks & Blockers** (at least one, or explicit "None identified") and **Open Questions** (`- [ ] <question> — owner: <name>`).
 
 ## Plan Types
 
@@ -26,19 +33,11 @@ What problem does this feature solve? Why does it matter? (2-3 sentences)
 **Acceptance:** <verifiable condition>
 **Details:** <implementation notes>
 
-### Task 2: <Name> (<complexity>)
-**Dependencies:** Task 1
-**Acceptance:** <verifiable condition>
-**Details:** <implementation notes>
-
 ## Risks & Blockers
 
 | Risk | Type | Score | Impact | Mitigation |
 |------|------|-------|--------|------------|
 | ... | internal/external/implicit | Likely × Major = High | high/med/low | ... |
-
-## Open Questions
-- [ ] <question> — owner: <name>
 ```
 
 ### Bugfix Plan
@@ -68,12 +67,6 @@ What's broken? How do we reproduce it? What's the expected behavior?
 **Dependencies:** Task 2
 **Acceptance:** Test covers the bug scenario; all tests pass in CI
 **Details:** <test strategy>
-
-## Risks & Blockers
-- <anything that could complicate the fix>
-
-## Open Questions
-- [ ] <question> — owner: <name>
 ```
 
 ### Refactor Plan
@@ -98,12 +91,6 @@ What must NOT change? How will we verify behavior is preserved?
 **Dependencies:** Task 1
 **Acceptance:** All existing tests pass; new coverage added where needed
 **Details:** <test changes needed>
-
-## Risks & Blockers
-- <anything that could introduce regressions>
-
-## Open Questions
-- [ ] <question> — owner: <name>
 ```
 
 ### Integration Plan
@@ -139,9 +126,6 @@ What system are we integrating with? What does success look like?
 
 ## Risks & Blockers
 - <external API changes, rate limits, auth changes>
-
-## Open Questions
-- [ ] <question> — owner: <name>
 ```
 
 ### Multi-Phase Plan
@@ -176,9 +160,6 @@ What's the overall goal? Why multiple phases?
 
 ## Cross-Phase Risks
 - <risks that span multiple phases>
-
-## Open Questions
-- [ ] <question> — owner: <name>
 ```
 
 ---

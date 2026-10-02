@@ -31,11 +31,11 @@
         "cat *",
         "date *",
         "diff *",
+        "echo *",
         "find * -name *",
         "find * -type *",
-        "git branch *",
         "git diff *",
-        "git log *",
+        "git log*",
         "git show *",
         "git status *",
         "grep *",
@@ -65,11 +65,6 @@
       ],
       "trustedAgents": [
         "{{THEME}}-researcher"
-      ]
-    },
-    "write": {
-      "allowedPaths": [
-        "~/agent-notes/planner/**"
       ]
     }
   }

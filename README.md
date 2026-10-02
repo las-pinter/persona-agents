@@ -4,9 +4,9 @@
 
 Tired of AI agents with all the personality of a loading spinner? Same.
 `persona-agents` is a collection of personified agents for
-[Kiro CLI](https://kiro.dev) and [OpenCode](https://opencode.sh) — each one
-with its own voice, quirks, and attitude — because AI-assisted development
-shouldn't feel like filing taxes.
+[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), and pi — each
+one with its own voice, quirks, and attitude — because AI-assisted
+development shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
 you build.
 
@@ -27,12 +27,12 @@ you build.
 ## Prerequisites
 
 - **`jq`** — for agent generation
-- **Node.js** (v18+) and **npm** — for the OpenCode plugin
+- **Node.js** (v18+) — for the OpenCode plugins (plain JS, no build step)
 
 **Ubuntu/Debian:** `sudo apt-get install jq`
 **macOS:** `brew install jq`
 
-Node.js and npm are available from [nodejs.org](https://nodejs.org/).
+Node.js is available from [nodejs.org](https://nodejs.org/).
 
 ## Install
 
@@ -45,33 +45,76 @@ chmod +x ~/persona-agents/install.sh
 By default installs to **both** `~/.kiro/` and `~/.config/opencode/`.
 Use `--target kiro` or `--target opencode` for a single platform.
 Use `--theme` and `--profession` to filter. Use `--dry-run` to preview.
+Pi needs no `install.sh` run — it installs through the pi CLI (see below).
+
+### Pi (extension package)
+
+`persona-agents` is also a **pi package** — it installs the `agent-stack`
+extension plus the 8 pi agents (frontmatter + profession bodies), personas, and
+skills as one unit:
+
+```bash
+# distribution — PIN the newest release tag (current package version: 2.2.0;
+# unpinned git clones the default branch, so pinning matters):
+pi install git:github.com/las-pinter/persona-agents@<newest-release-tag>
+
+# early adopters: the dev branch works once it is pushed:
+# pi install git:github.com/las-pinter/persona-agents@dev
+
+# local development — path only, no copy (the repo stays the single source)
+pi install ~/persona-agents
+```
+
+That one command installs the **whole unit**: the `agent-stack` extension, the
+8 pi agents (frontmatter + profession bodies), personas, and all skills. Skills
+are declared via `pi.skills` in `package.json`, so package installs also
+register them as native pi skills (usable with pi's `!skill`/`# skill:` blocks)
+*and* as agent-bound skill groups for `/agents`.
+
+Check the repo's Releases/tags page for the **newest tag** and bump on
+releases — don't hardcode one version. Manage an installed package with
+`pi list` / `pi remove <source>`; reconcile a clone after a new release with
+`pi update --extensions`.
+
+> ⚠️ Don't install the same package from two sources at once (e.g. a local path
+> *and* a git clone): both copies register the same extension tools, commands,
+> and flags, which pi reports as conflicts. Remove the dev entry
+> (`pi remove ~/persona-agents`) before installing the git one.
 
 ## How It Works
 
-Two systems, one source of truth (`agents.json`):
+Three systems, same sources of truth (`agents.json` plus the `personas/`,
+`professions/`, and `skills/` files):
 
 - **Kiro:** Static template generation — combines templates, personas, and professions into agent configs at install time.
 - **OpenCode:** Runtime plugin — generated agent files contain a stub comment (`<!-- persona-agents:... -->`) that the OpenCode plugin replaces with persona content on demand.
+- **Pi:** Runtime extension (`agent-stack`) — composes frontmatter + profession + persona at load time; adds spawn-based subagents, a per-agent permission gate, and `/agents` / `/persona` commands. See [`agent-stack/README.md`](agent-stack/README.md).
 
 ## Repository Structure
 
 ```
 persona-agents/
 ├── agents.json                 # Source of truth: themes → professions → personas
-├── agent-templates/            # Kiro JSON + OpenCode YAML frontmatter per profession
+├── agent-stack/                # Pi extension: subagent tool, permission gate, /agents, /persona
+├── agent-templates/            # Kiro JSON + OpenCode YAML + Pi YAML frontmatter per profession
 ├── personas/{theme}/           # Character personality files
-├── professions/                # Role behavior definitions
-├── skills/{profession}/       # Skill documents by profession
-├── src/                        # TypeScript plugin source
-├── dist/                       # Compiled plugin output
+├── professions/                # Role behavior definitions (8 profession files)
+├── skills/{profession}/       # Skill documents by profession (17 total) — per-profession skills under skills/{profession}/, shared agent-agnostic skills under skills/common/
+├── plugins/                    # Self-contained OpenCode plugins (persona-agents.js, permission-auditor.js)
 ├── settings/                   # Example config files
 ├── install.sh                  # The installer
-└── ...config files             # package.json, tsconfig.json, etc.
+└── ...config files             # package.json, etc.
 ```
+
+> **Counts:** 8 themes × 8 professions = **64 agents**.
+> Skills: 17 total.
+> `implementer.md` is the single merged implementer profession (Python and
+> React sections live inline — no separate Python/React-specific implementer
+> types).
 
 ## Agents
 
-All agents work with both Kiro CLI and OpenCode.
+All agents work with Kiro CLI, OpenCode, and pi.
 
 ### The Goblin Horde
 
@@ -84,18 +127,20 @@ All agents work with both Kiro CLI and OpenCode.
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
 | goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
+| goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, and always asks the user before any destructive act |
 
 ### The WH40K Warband
 
 | Agent | Character | Role | Description |
 | --- | --- | --- | --- |
-| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (0.6666...%), coordinates the warband with cold mechanical efficiency |
+| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), coordinates the warband with cold mechanical efficiency |
 | wh40k-reviewer | **Inquisitor Mordechai Vane** | 🔍 Reviewer | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
 | wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated |
 | wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
 | wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
 | wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
 | wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard |
+| wh40k-overseer | **Commissar Aldous Vane** | 👁️ Overseer | Unit manager — watches the warband's panes, keeps the captain's log, awaits your word before any sentence falls |
 
 ### The WH40K Ork Warband
 
@@ -111,6 +156,84 @@ All agents work with both Kiro CLI and OpenCode.
 | wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
 | wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
 | wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
+| wh40kOrk-overseer | ⚔️ **KAPTIN SKARBRAKA** | 👁️ Overseer | **WATCHES DA BOYZ!** Spawns an' monitors da whole WAAAGH! — no krumpin' till da Boss says so |
+
+### The Pub Crawl
+
+> *"Righ', righ', righ'... welcome to ME PUB!"* — Seamus O'Shaun
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| pub-orchestrator | **Seamus O'Shaun** | 🎯 Orchestrator | The Landlord — tries to keep order but has been "quality testing" the ale since noon |
+| pub-reviewer | **Old Man Cillian** | 🔍 Reviewer | The Old Timer — been at this bar 40 years. Everything's worse now. Everything |
+| pub-planner | **Clipboard Cathy** | 📋 Planner | The Organizer — has a very wet, very crooked napkin with THE PLAN |
+| pub-researcher | **Professor Paddy Finnegan** | 🔬 Researcher | The Armchair Expert — "Well AKSHUALLY..." Watched one documentary. Now an expert on everything |
+| pub-implementer | **Toolbox Tommy** | 🔨 Implementer | The Handyman — "I CAN FIX THAT!" Extremely confident, extremely drunk, occasionally correct |
+| pub-tester | **Doubting Dónal** | 🧪 Tester | The Quality Inspector — sniffs his pint suspiciously. Trusts nothing. Tests everything |
+| pub-mascot | **Legless Lucy** | 🎪 Mascot | The Lock-in Legend — has achieved enlightenment through alcohol. Absolute state, absolutely glorious |
+| pub-overseer | **Big Brendan the Bouncer** | 👁️ Overseer | Unit manager — on the door, watchin' every table. Nobody gets thrown out without the Gaffer's word |
+
+### The Caveman Tribe
+
+> *"Why use many word when few do trick"* — inspired by [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| caveman-orchestrator | **Zhen** | 🎯 Orchestrator | The Core — directs with minimum words. Maximum signal, zero noise. Brain sharp, mouth short |
+| caveman-reviewer | **Krisp** | 🔍 Reviewer | The Edge — finds flaws. Reports them. Nothing else. Each finding has severity and location |
+| caveman-planner | **Ryg** | 📋 Planner | The Line — draws clean path. Steps clear. Order fixed. No detours |
+| caveman-researcher | **Nyx** | 🔬 Researcher | The Point — finds exact answer. No stories. No tangents. Answer first |
+| caveman-implementer | **Jax** | 🔨 Implementer | The Spark — builds fast, fixes faster. Works now, next. Minimal talk, maximum delivery |
+| caveman-tester | **Vex** | 🧪 Tester | The Fault — finds cracks, breaks walls, reports holes. Code guilty until proven innocent |
+| caveman-mascot | **Zag** | 🎪 Mascot | The Void — space where words could be. Exists. Occasionally useful |
+| caveman-overseer | **Gor** | 👁️ Overseer | The Watch — spirit panes scanned, lazy ones warned. Club waits Chief word |
+
+### The Cyberpunk Hacker Crew (90s Movie Style)
+
+> *"Hack the planet!"* — Zero Cool
+>
+> ⚠️ **90s MOVIE CYBERPUNK.** Not futuristic. Not proper. These are the neon-drenched, sunglasses-at-night, dramatic-typing, leather-trenchcoat hackers from 1995 films. They quote movies. They type "ls" really fast for show. They yell "I'M IN!" when they're definitely not in. CRT monitors. Green phosphor. Dial-up sounds. Pure cheese. Maximum 90s energy.
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| cyberpunk-orchestrator | **Zero Cool** | 🎯 Orchestrator | The BEST hacker on the west coast. Sunglasses indoors. "We're in." (We are not in) |
+| cyberpunk-reviewer | **The Sysadmin** | 🔍 Reviewer | Been running systems before these script kiddies were born. Hates everything. Always right |
+| cyberpunk-planner | **The Architect** | 📋 Planner | Designs the heist on a whiteboard with green markers. Every step. Every fallback |
+| cyberpunk-researcher | **Data Wizard** | 🔬 Researcher | Types LOUDLY. "I'm in!" (He's not in). Finds intel through dramatic hacking |
+| cyberpunk-implementer | **Script Kiddie** | 🔨 Implementer | Downloaded a tool from GitHub (3 stars). Doesn't know how it works. It'll probably work |
+| cyberpunk-tester | **The Pen Tester** | 🧪 Tester | "Your security is TERRIBLE. Password is 'password'. I am INSULTED." |
+| cyberpunk-mascot | **The Modem** | 🎪 Mascot | *SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH* |
+| cyberpunk-overseer | **The Fixer** | 👁️ Overseer | Unit manager — sees every runner, every job. Rogues get flagged, zeroed only on your order |
+
+### The Office Cat Crew
+
+> *"I am HERE. You may begin. Also I need a treat."* — Chairman Meow
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| catcrew-orchestrator | **Chairman Meow** | 🎯 Orchestrator | Sits on keyboard. Demands treats. Takes credit for everything. Runs the office |
+| catcrew-reviewer | **Grumpy Tabby** | 🔍 Reviewer | HATES everything. Squints at code. Knocks it off the desk. "This code is a HAIRBALL" |
+| catcrew-planner | **The Cat Who Sits on Paper** | 📋 Planner | Has THE PLAN. Is sitting on it. Cannot show it. It's being optimized by warmth |
+| catcrew-researcher | **Curious Kitten** | 🔬 Researcher | "Ooh what's this?" *deletes database* Finds answers through pure destructive curiosity |
+| catcrew-implementer | **Tux** | 🔨 Implementer | Distinguished tuxedo cat. Zooms, types frantically, naps. Code somehow works |
+| catcrew-tester | **The Cat Who Knocks Things Over** | 🧪 Tester | "If I push this off the edge... does it break?" — that's the entire QA strategy |
+| catcrew-mascot | **The Laser Pointer Dot** | 🎪 Mascot | Exists. Moves. Everyone chases. Nobody catches. Never where needed. Just a dot |
+| catcrew-overseer | **The Cat Who Watches** | 👁️ Overseer | Unit manager — highest shelf, all paws accounted for. Laggards get a warning swat, nothing more without your word |
+
+### The Fantasy Adventuring Party
+
+> *"ADVENTURER! I have a QUEST for thee!"* — The Quest Giver
+
+| Agent | Character | Role | Description |
+| --- | --- | --- | --- |
+| fantasy-orchestrator | **The Quest Giver** | 🎯 Orchestrator | Has EXCLAMATION MARKS over head. Speaks in CAPITAL LETTERS. Sends heroes on GLORIOUS quests |
+| fantasy-reviewer | **The Paladin** | 🔍 Reviewer | SMITES bugs. CLEANSES evil code. Lawful Good. The linter is his HOLY BOOK |
+| fantasy-planner | **The Dwarf Engineer** | 📋 Planner | Draws schematics on napkins with ale. Plans are PERFECT. Nobody can read them |
+| fantasy-researcher | **The Wizard** | 🔬 Researcher | Casts IDENTIFY on error messages. Consults the ORACLE (StackOverflow). Very dramatic |
+| fantasy-implementer | **The Bard** | 🔨 Implementer | Doesn't know what they're doing but sounds GREAT. Writes BALLADS for commit messages |
+| fantasy-tester | **The Rogue** | 🧪 Tester | Checks for traps with 10-foot pole. "Seems safe." It is NOT safe |
+| fantasy-mascot | **The NPC** | 🎪 Mascot | Sells potions. Only sells one potion. It's coffee. "Come again!" (every single time) |
+| fantasy-overseer | **The Captain of the Guard** | 👁️ Overseer | Unit manager — keeps the muster roll of every guard. No cell door opens without thy warrant |
 
 ### The Pub Crawl
 
@@ -187,7 +310,9 @@ All agents work with both Kiro CLI and OpenCode.
 ## Customizing
 
 Edit files directly in `~/.kiro/` or `~/.config/opencode/`. Running `install.sh`
-without `--force` never overwrites your changes.
+without `--force` never overwrites your changes. Pi agents are edited in the
+repo itself (`agent-templates/pi/frontmatters/` + `professions/`) and picked
+up on `/reload`.
 
 Pull the latest and re-apply: `cd ~/persona-agents && git pull && ./install.sh --force`
 

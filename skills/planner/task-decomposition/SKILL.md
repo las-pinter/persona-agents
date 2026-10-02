@@ -1,10 +1,6 @@
 ---
 name: task-decomposition
-description: >-
-  Skill for the planner agent.
-  Break down a feature or requirement into independently completable, estimated,
-  dependency-mapped tasks. Use whenever decomposing ambiguous or large work into
-  executable units. Load FIRST for any planning work.
+description: Break down a feature or requirement into independently completable, estimated, dependency-mapped tasks.
 ---
 
 # Task Decomposition
@@ -72,9 +68,9 @@ Feature: Password Reset Flow
 
 Dependency pattern: Task 1 ← Task 2 ← Task 4 (Task 3 parallel to Task 1)
 
-### Bugfix (reproduce → root cause → fix → guard)
+### Bugfix
 
-Never start with "fix" — understand first.
+Never start with "fix" — understand first. Tasks are sequential.
 
 ```
 Bugfix: Checkout crashes with coupon code "SAVE50"
@@ -83,8 +79,6 @@ Bugfix: Checkout crashes with coupon code "SAVE50"
 ├── Task 3: Implement fix (small, depends on Task 2)
 └── Task 4: Add regression test (small, depends on Task 3)
 ```
-
-Dependency pattern: sequential.
 
 ### Refactor (component by component)
 

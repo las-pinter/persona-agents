@@ -11,28 +11,40 @@
     "@context7",
     "@deepwiki",
     "@exa",
+    "edit",
+    "external_directory",
     "glob",
     "grep",
     "read",
     "shell",
+    "skill",
     "web_search"
   ],
   "allowedTools": [
+    "@context7",
+    "@deepwiki",
+    "@exa",
+    "edit",
+    "external_directory",
     "glob",
     "grep",
     "read",
-    "web_search",
-    "@context7",
-    "@deepwiki",
-    "@exa"
+    "web_search"
   ],
   "toolsSettings": {
+    "edit": {
+      "allowedPaths": ["~/agent-notes/researcher/**"]
+    },
+    "external_directory": {
+      "allowedPaths": ["~/agent-notes/researcher/**"]
+    },
     "shell": {
       "allowedCommands": [
         "awk *",
         "cat *",
         "date *",
         "diff *",
+        "echo *",
         "find * -name *",
         "find * -type *",
         "git branch *",

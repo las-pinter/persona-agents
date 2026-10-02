@@ -225,20 +225,6 @@ copy_if_missing() {
     echo "  created: $dest"
 }
 
-# Check if generation is needed for a given output directory.
-# Returns 0 (needs gen) if force is set or the directory is empty/missing.
-# Returns 1 (skip) if the directory has content and force is not set.
-needs_generation() {
-    local dir="$1"
-    if [[ "$FORCE" == true ]]; then
-        return 0
-    fi
-    if [[ -d "$dir" ]] && [[ -n "$(find "$dir" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null)" ]]; then
-        return 1
-    fi
-    return 0
-}
-
 # Install a shell alias into a rc file, skipping if already present.
 install_alias() {
     local name="$1" cmd="$2" rc="$3"
@@ -372,16 +358,6 @@ fi
 
 if target_available opencode; then
 
-    # -- Build persona-agents plugin --
-    echo ""
-    echo "Building persona-agents plugin..."
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would build plugin in $REPO_DIR"
-    else
-        (cd "$REPO_DIR" && npm install --silent && npm run build)
-        echo "  plugin built at $REPO_DIR/dist/index.js"
-    fi
-
     # -- Copy personas, professions, skills to OpenCode config folder --
     echo ""
     echo "Installing OpenCode resource files to $OPENCODE_DEST ..."
@@ -442,6 +418,9 @@ if target_available opencode; then
                 sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
                     -e "s|{{THEME}}|${theme}|g" \
                     "$frontmatter_template"
+                # The template may lack a trailing newline; guarantee the
+                # closing delimiter starts on its own line.
+                printf '\n'
                 echo "---"
                 echo ""
                 echo "<!-- persona-agents:${theme}-${profession}:${persona_file_path} -->"
@@ -477,33 +456,12 @@ if target_available opencode; then
         fi
     fi
 
-    # -- Register persona-agents plugin via auto-discovery --
-    echo ""
-    echo "Registering persona-agents plugin for auto-discovery..."
+    # -- Install persona-agents plugin (self-contained, auto-discovered) --
     PLUGINS_DIR="$OPENCODE_DEST/plugins"
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would create $PLUGINS_DIR and install bundled plugin"
-    else
-        mkdir -p "$PLUGINS_DIR"
-        PLUGIN_BUNDLE="$REPO_DIR/dist/plugin-bundled.js"
-        PLUGIN_DEST="$PLUGINS_DIR/persona-agents.js"
-        if [[ -f "$PLUGIN_BUNDLE" ]]; then
-            # Copy the bundled self-contained plugin to auto-discovery directory.
-            # The plugin resolves resource paths (agents.json, personas/, professions/)
-            # relative to its own location (configRoot/plugins/ → configRoot/).
-            cp "$PLUGIN_BUNDLE" "$PLUGIN_DEST"
-            echo "  installed: $PLUGIN_BUNDLE → $PLUGIN_DEST"
-        else
-            echo "  WARNING: bundled plugin not found at $PLUGIN_BUNDLE — trying dist/index.js as fallback" >&2
-            PLUGIN_SRC="$REPO_DIR/dist/index.js"
-            if [[ -f "$PLUGIN_SRC" ]]; then
-                cp "$PLUGIN_SRC" "$PLUGIN_DEST"
-                echo "  installed (fallback): $PLUGIN_SRC → $PLUGIN_DEST"
-            else
-                echo "  WARNING: plugin not built — skipping registration" >&2
-            fi
-        fi
-    fi
+    copy_file "$REPO_DIR/plugins/persona-agents.js" "$PLUGINS_DIR/persona-agents.js"
+
+    # -- Install permission-auditor plugin (self-contained, auto-discovered) --
+    copy_file "$REPO_DIR/plugins/permission-auditor.js" "$PLUGINS_DIR/permission-auditor.js"
 fi
 
 # ---------------------------------------------------------------------------
@@ -557,15 +515,16 @@ if target_available opencode; then
     echo ""
     echo "Installing opencode aliases ..."
 
+    # top-level opencode rejects --agent in V2; persona chosen in-TUI
     OPENCODE_ALIAS_ENTRIES=(
-        "opencode-goblin:opencode --agent goblin-orchestrator"
-        "opencode-wh40k:opencode --agent wh40k-orchestrator"
-        "opencode-wh40kOrk:opencode --agent wh40kOrk-orchestrator"
-        "opencode-pub:opencode --agent pub-orchestrator"
-        "opencode-caveman:opencode --agent caveman-orchestrator"
-        "opencode-cyberpunk:opencode --agent cyberpunk-orchestrator"
-        "opencode-catcrew:opencode --agent catcrew-orchestrator"
-        "opencode-fantasy:opencode --agent fantasy-orchestrator"
+        "opencode-goblin:opencode"
+        "opencode-wh40k:opencode"
+        "opencode-wh40kOrk:opencode"
+        "opencode-pub:opencode"
+        "opencode-caveman:opencode"
+        "opencode-cyberpunk:opencode"
+        "opencode-catcrew:opencode"
+        "opencode-fantasy:opencode"
     )
 
     install_opencode_aliases() {
@@ -590,6 +549,32 @@ if target_available opencode; then
             echo "  warning: ~/.bashrc may not source ~/.bash_aliases — check your shell config" >&2
         fi
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# herdr plugin (overseer-herald)
+# ---------------------------------------------------------------------------
+
+if command -v herdr &>/dev/null; then
+    echo ""
+    echo "Installing overseer-herald herdr plugin ..."
+
+    # Copy to a stable location outside the repo/worktree — linked repo paths
+    # must not be load-bearing: a prune once broke a worktree link.
+    HERDR_PLUGIN_DIR="$HOME/.local/share/herdr/plugins/overseer-herald"
+    for f in herdr-plugin.toml herald.sh README.md; do
+        copy_file "$REPO_DIR/plugins/herdr/overseer-herald/$f" "$HERDR_PLUGIN_DIR/$f"
+    done
+
+    # herdr plugin link is an idempotent upsert that re-points stale entries on
+    # every run; plugin files refresh only with --force.
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  (dry-run) would run: herdr plugin link \"$HERDR_PLUGIN_DIR\""
+    else
+        herdr plugin link "$HERDR_PLUGIN_DIR" || echo "WARNING: herdr plugin link failed — inspect herdr manually (herdr plugin list)" >&2
+    fi
+else
+    echo "WARNING: herdr not found — skipping herdr plugin install (install herdr, then re-run install.sh)" >&2
 fi
 
 # ---------------------------------------------------------------------------
