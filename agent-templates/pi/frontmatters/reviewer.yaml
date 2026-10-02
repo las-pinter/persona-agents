@@ -1,0 +1,26 @@
+name: reviewer
+description: Senior code reviewer for quality, security, and maintainability; read-only analysis
+tools: [bash, read, find, ls, grep]
+skills: ["reviewer/*"]
+permissions:
+  mode: deny-by-default
+  allow:
+    - { tool: read, match: "." }
+    - { tool: find, match: "." }
+    - { tool: ls, match: "." }
+    - { tool: grep, match: "." }
+    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|awk|cut|seq|which|command -v|jq|bash -n|mkdir)\\b" }
+    - { tool: bash, match: "^find\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|fetch|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
+    - { tool: bash, match: "^(pytest\\b|mypy\\b|ruff\\b|npm\\s+test|tsc\\b|docker\\s+(ps|logs|inspect)|python3?\\s+-m\\s+(pytest|mypy)|(\\.venv/bin/)?python -m pytest)\\b" }
+    - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
+  ask: []
+  deny:
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
+    - { tool: bash, match: "^find\\b.*-exec\\b" }
+    - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
+    - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
+    - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }

@@ -4,9 +4,9 @@
 
 Tired of AI agents with all the personality of a loading spinner? Same.
 `persona-agents` is a collection of personified agents for
-[Kiro CLI](https://kiro.dev) and [OpenCode](https://opencode.sh) — each one
-with its own voice, quirks, and attitude — because AI-assisted development
-shouldn't feel like filing taxes.
+[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), and pi — each
+one with its own voice, quirks, and attitude — because AI-assisted
+development shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
 you build.
 
@@ -45,20 +45,63 @@ chmod +x ~/persona-agents/install.sh
 By default installs to **both** `~/.kiro/` and `~/.config/opencode/`.
 Use `--target kiro` or `--target opencode` for a single platform.
 Use `--theme` and `--profession` to filter. Use `--dry-run` to preview.
+Pi needs no `install.sh` run — it installs through the pi CLI (see below).
+
+### Pi (extension package)
+
+`persona-agents` is also a **pi package** — it installs the `agent-stack`
+extension plus the 8 pi agents (frontmatter + profession bodies), personas, and
+skills as one unit:
+
+```bash
+# from GitHub — PIN a release tag. Unpinned git sources clone the repo's
+# DEFAULT branch (here: main, no pi work yet), so the bare form installs an
+# empty package:
+pi install git:github.com/las-pinter/persona-agents@v0.2.0   # newest release tag
+
+# early adopters: the dev branch works once it is pushed:
+# pi install git:github.com/las-pinter/persona-agents@dev
+
+# local development — path only, no copy (the repo stays the single source)
+pi install /home/dev/persona-agents
+```
+
+That one command installs the **whole unit**: the `agent-stack` extension, the
+8 pi agents (frontmatter + profession bodies), personas, and all skills. Skills
+are declared via `pi.skills` in `package.json`, so package installs also
+register them as native pi skills (usable with pi's `!skill`/`# skill:` blocks)
+*and* as agent-bound skill groups for `/agents`.
+
+Pick the **newest release tag** — check the repo's Releases/tags page
+(`package.json` `version` tracks the current release), pin it, and bump on
+releases; don't hardcode one version. A git install only works once the
+maintainers have pushed the matching commit and tag. Any pushed tag, branch,
+or commit ref works with `pi install git:…@<ref>` (`@dev` works for early
+adopters once the dev branch is up). After a new release, reconcile an existing
+clone with `pi update --extensions`. Manage the package with `pi list` /
+`pi remove <source>`.
+
+> ⚠️ Don't install the same package from two sources at once (e.g. a local path
+> *and* a git clone): both copies register the same extension tools, commands,
+> and flags, which pi reports as conflicts. Remove the dev entry
+> (`pi remove /home/dev/persona-agents`) before installing the git one.
 
 ## How It Works
 
-Two systems, one source of truth (`agents.json`):
+Three systems, same sources of truth (`agents.json` plus the `personas/`,
+`professions/`, and `skills/` files):
 
 - **Kiro:** Static template generation — combines templates, personas, and professions into agent configs at install time.
 - **OpenCode:** Runtime plugin — generated agent files contain a stub comment (`<!-- persona-agents:... -->`) that the OpenCode plugin replaces with persona content on demand.
+- **Pi:** Runtime extension (`agent-stack`) — composes frontmatter + profession + persona at load time; adds spawn-based subagents, a per-agent permission gate, and `/agents` / `/persona` commands. See [`agent-stack/README.md`](agent-stack/README.md).
 
 ## Repository Structure
 
 ```
 persona-agents/
 ├── agents.json                 # Source of truth: themes → professions → personas
-├── agent-templates/            # Kiro JSON + OpenCode YAML frontmatter per profession
+├── agent-stack/                # Pi extension: subagent tool, permission gate, /agents, /persona
+├── agent-templates/            # Kiro JSON + OpenCode YAML + Pi YAML frontmatter per profession
 ├── personas/{theme}/           # Character personality files
 ├── professions/                # Role behavior definitions (8 profession files)
 ├── skills/{profession}/       # Skill documents by profession (17 total) — per-profession skills under skills/{profession}/, shared agent-agnostic skills under skills/common/
@@ -76,7 +119,7 @@ persona-agents/
 
 ## Agents
 
-All agents work with both Kiro CLI and OpenCode.
+All agents work with Kiro CLI, OpenCode, and pi.
 
 ### The Goblin Horde
 
@@ -200,7 +243,9 @@ All agents work with both Kiro CLI and OpenCode.
 ## Customizing
 
 Edit files directly in `~/.kiro/` or `~/.config/opencode/`. Running `install.sh`
-without `--force` never overwrites your changes.
+without `--force` never overwrites your changes. Pi agents are edited in the
+repo itself (`agent-templates/pi/frontmatters/` + `professions/`) and picked
+up on `/reload`.
 
 Pull the latest and re-apply: `cd ~/persona-agents && git pull && ./install.sh --force`
 
