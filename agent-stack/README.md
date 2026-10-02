@@ -82,6 +82,7 @@ Template fields (YAML):
 |---|---|---|
 | `name` | string | required — invoked as `/agents <name>` or `agent: "name"` |
 | `description` | string | required — shown in listings |
+| `spawnable` | boolean | optional — `false` marks the agent as **not dispatchable as a subagent**: the `subagent` tool rejects it (alias or direct name) before spawning. Defaults to `true`. Use the **unquoted boolean** (`spawnable: false`); the resolver also treats a quoted `"false"` string as disabled, but the boolean is the documented form. The `orchestrator` and `overseer` templates ship `spawnable: false` |
 | `tools` | string[] | tool-name allowlist for subagent spawns (`--tools`) |
 | `model` | string | optional `provider/model` override for subagent spawns |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
@@ -111,6 +112,17 @@ An `ask` rule that the user **approves in the TUI grants that single call** — 
 manual override for calls the allow list does not cover (e.g. `sudo`/`rm -rf` in the
 orchestrator or planner templates). Deny rules always win; headless runs (subagent
 children, `-p`, `--mode json`) have no UI, so `ask` there is a hard block.
+
+The ask prompt offers **three options: Deny / Allow / Always allow (session)**. "Always
+allow (session)" grants the call *and* remembers the `agent|tool|rule` for the rest of the
+session — **in-memory only, nothing is persisted to disk** (a persistent always-allow list
+is a future decision).
+
+**Delegated commits now ask**: the orchestrator's `git add`/`git commit` moved from its
+`allow` list to its `ask` list — a commit prompts allow/deny in the main session instead
+of running silently (`git push`/`pull` stay hard-denied). Since a commit is an `ask` rule
+and ask is a hard block without a UI, **headless orchestrator runs (delegated/`-p`/
+`--mode json`) cannot commit**.
 
 Gate scope: only `bash`/`powershell` (command), `read`/`grep`/`find`/`ls`/`edit`/`write`
 (path/pattern), and other plain tools (JSON args) are probed. `mcp__…` and namespaced

@@ -337,6 +337,22 @@ async function runSingleAgent(
 		};
 	}
 
+	// Spawn allowlist: a resolved agent (direct name OR theme-profession alias)
+	// whose frontmatter sets `spawnable: false` is never dispatched — it runs as
+	// the main session only. Reject before any process is spawned.
+	if (agent.spawnable === false) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: `Agent '${agentName}' is not spawnable as a subagent (its frontmatter sets spawnable: false).`,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	const inheritsDispatchConfig = !agent.model;
 	const model = agent.model ?? dispatchDefaults.model;

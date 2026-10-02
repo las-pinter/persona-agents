@@ -12,10 +12,15 @@
  *        - "deny-by-default":       anything not allowed is blocked
  *        - "allow-unless-matched":  anything not matched runs (Pi's default)
  *
- * Ask rules (steps 2 and 4) GRANT the single call when the user approves the
- * prompt: they are a manual override for things the allow list does not cover.
+ * Ask rules (steps 2 and 4) prompt with three options:
+ *   - "Deny"                      → block this call (reason "Denied by user")
+ *   - "Allow"                     → grant THIS single call (a manual override
+ *                                    for things the allow list does not cover)
+ *   - "Always allow (session)"    → grant + remember the rule for the session
+ *                                    (agent|tool|match key, in-memory only,
+ *                                    nothing persisted to disk)
  * Deny rules (steps 1 and 3) always win; headless runs (no UI) treat ask as a
- * hard block.
+ * hard block — undefined (no prompt) never auto-allows.
  *
  * Rule shape (global file or frontmatter):
  *   { "tool": "bash", "match": "\\brm\\s+-rf\\b", "reason": "optional" }
@@ -89,6 +94,13 @@ export function installPermissionGate(
 ): void {
 	let globalRules: { deny: CompiledRule[]; ask: CompiledRule[] } | null = null;
 
+	// Session-scoped "always allow" memory, keyed by `agent|tool|ruleMatch`, created
+	// with this gate installation. In-memory only — nothing is written to disk, so
+	// an "Always allow (session)" choice never survives a restart or /reload (a
+	// persistent always-allow list is a separate decision). A key hit skips the
+	// prompt entirely on later calls.
+	const sessionAllow = new Set<string>();
+
 	const loadGlobal = () => {
 		try {
 			const cfg = JSON.parse(fs.readFileSync(configPath(), "utf-8")) as {
@@ -142,13 +154,19 @@ export function installPermissionGate(
 		for (const { tool, re, rule } of g.ask) {
 			if (tool !== "*" && tool !== toolName) continue;
 			if (re.test(probe)) {
+				const key = `${agent?.name ?? "<none>"}|${toolName}|${rule.match}`;
+				if (sessionAllow.has(key)) return undefined; // already always-allowed this session
 				if (!ctx.hasUI) {
 					return { block: true, reason: `Blocked by policy (no UI): ${rule.match}` };
 				}
 				const choice = await ctx.ui.select(
 					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
-					["Deny", "Allow"],
+					["Deny", "Allow", "Always allow (session)"],
 				);
+				if (choice === "Always allow (session)") {
+					sessionAllow.add(key); // remembered for the rest of the session
+					return undefined;
+				}
 				if (choice !== "Allow") return { block: true, reason: "Denied by user" };
 				return undefined; // user approved — allow this call
 			}
@@ -157,13 +175,19 @@ export function installPermissionGate(
 		for (const { tool, re, rule } of compile(agentPerms?.ask)) {
 			if (tool !== "*" && tool !== toolName) continue;
 			if (re.test(probe)) {
+				const key = `${agent?.name ?? "<none>"}|${toolName}|${rule.match}`;
+				if (sessionAllow.has(key)) return undefined; // already always-allowed this session
 				if (!ctx.hasUI) {
 					return { block: true, reason: `Blocked by ${agent?.name} policy (no UI): ${rule.match}` };
 				}
 				const choice = await ctx.ui.select(
 					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
-					["Deny", "Allow"],
+					["Deny", "Allow", "Always allow (session)"],
 				);
+				if (choice === "Always allow (session)") {
+					sessionAllow.add(key); // remembered for the rest of the session
+					return undefined;
+				}
 				if (choice !== "Allow") return { block: true, reason: "Denied by user" };
 				return undefined; // user approved — allow this call
 			}

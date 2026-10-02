@@ -1,5 +1,8 @@
 name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, project notes, and plans
+# Not spawnable as a subagent: orchestrator holds git commit privileges, so a
+# dispatcher must never be able to escalate by spawning one.
+spawnable: false
 tools: [bash, read, edit, write, subagent]
 skills: ["orchestrator/*"]
 permissions:
@@ -10,12 +13,15 @@ permissions:
     - { tool: edit, match: "(^|/)agent-notes/(orchestrator|planner/plans)/" }
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|planner/plans)/" }
     - { tool: subagent, match: "." }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit|status|log|diff|branch)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|branch)\\b" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|awk|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "\\bsudo\\b" }
+    # Delegated git add/commit now prompts (allow/deny) instead of running
+    # silently: committing is orchestrator-only, gated per call.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit)\\b", reason: "delegated commit by orchestrator" }
     - { tool: bash, match: "\\bgit\\s+(push|pull)\\b" }
   deny:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }

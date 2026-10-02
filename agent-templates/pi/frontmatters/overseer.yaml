@@ -1,5 +1,8 @@
 name: overseer
 description: Patrols agent status and panes via herdr, keeps the captain's log in agent-notes, and asks before destructive acts
+# Not spawnable as a subagent: overseer is a main-session monitor, and its herdr
+# access must not leak into delegated contexts.
+spawnable: false
 # pi has no fetch/webfetch tool, so the opencode template's webfetch allows for
 # herdr.dev / raw.githubusercontent.com intentionally do not exist here.
 tools: [bash, read, edit, write, find, ls, grep]

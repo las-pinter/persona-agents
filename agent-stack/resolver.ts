@@ -48,6 +48,13 @@ export interface AgentConfig {
 	resources?: string[];
 	/** Per-agent permission rules from frontmatter. */
 	permissions?: PermissionConfig;
+	/**
+	 * Whether this agent may be spawned as a subagent via the subagent tool.
+	 * Defaults to true when frontmatter omits `spawnable`. The orchestrator and
+	 * overseer templates ship `spawnable: false` — they run as the main session
+	 * only, so a dispatcher cannot escalate by spawning a commit-capable agent.
+	 */
+	spawnable?: boolean;
 	systemPrompt: string;
 	source: AgentSource;
 	filePath: string;
@@ -83,6 +90,7 @@ type AgentFrontmatter = {
 	skills?: unknown;
 	resources?: unknown;
 	permissions?: unknown;
+	spawnable?: unknown;
 };
 
 /**
@@ -180,6 +188,11 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 			skills: parseStringList(frontmatter.skills),
 			resources: parseStringList(frontmatter.resources),
 			permissions: parsePermissionConfig(frontmatter.permissions),
+			// `spawnable` must be a boolean `false` to disable spawning; the FAQ-level
+			// typo of a quoted "false" string is treated as disabled too rather than
+			// silently re-enabling spawning. Absent/undefined/any other value keeps
+			// the agent spawnable (legacy and third-party files carry no field).
+			spawnable: !(frontmatter.spawnable === false || frontmatter.spawnable === "false"),
 			systemPrompt: body,
 			source,
 			filePath,
@@ -340,6 +353,10 @@ function loadTemplateAgents(): AgentConfig[] {
 			skills: parseStringList(frontmatter.skills),
 			resources: parseStringList(frontmatter.resources),
 			permissions: parsePermissionConfig(frontmatter.permissions),
+			// Same semantics as loadAgentsFromDir: only boolean `false` (or the
+			// quoted "false" string) disables spawning; absent/anything else keeps
+			// the agent spawnable.
+			spawnable: !(frontmatter.spawnable === false || frontmatter.spawnable === "false"),
 			systemPrompt: body,
 			source: "package",
 			filePath: path.join(tplDir, entry.name),
