@@ -215,6 +215,43 @@ herdr agent read reviewer --source recent-unwrapped --lines 120
 
 If a wait fails or returns `blocked`, inspect `agent get` and `agent read` before deciding what input to send. A timeout or stalled response does not prove the prompt was never delivered; do not blindly submit it again. Use the pane surface only when raw terminal control is intentional.
 
+## Start and coordinate a pi agent
+
+Launch a pi process with the profession and persona flags:
+
+```bash
+pi --agent mascot --persona goblin/gibz-psycho
+```
+
+The `--agent` flag takes the bare profession name, for example `mascot` or `orchestrator`. It does not take a theme-prefixed name, for example `goblin-mascot`.
+
+Start the process under herdr control:
+
+```bash
+herdr agent start <name> --kind pi --pane <returned-pane-id> -- --agent mascot --persona goblin/gibz-psycho
+```
+
+Bind the pi agent with `agent start`. Herdr accepts its pane reports only when the agent is bound.
+
+Use these commands inside the session:
+
+- `/persona` switches the persona live.
+- `/agents` lists the available agents.
+
+The user settings file holds the defaults:
+
+```text
+/home/dev/.pi/agent/settings.json
+```
+
+It stores `defaultAgent` and `defaultPersona`. Example values are `orchestrator` and `goblin/bossnik-chief`.
+
+A pi process freshly started by herdr reports its state through the session file. Herdr skips screen scanning for it. The `overseer.herald` plugin fires reliably. The official pi integration lives at `/home/dev/.pi/agent/extensions/herdr-agent-state.ts`. It self-reports when `HERDR_ENV` is set. Fresh-pane reporting makes the herald push work, from watchdog to overseer.
+
+An old pi process does not report its state. Reloading an old process is not a restart. Only a fresh process counts.
+
+The opencode leader sequence does not apply to pi. In pi, `ctrl+x` copies like a clipboard action.
+
 ## Run an ordinary command in another pane
 
 Create a sibling pane with the same geometry rule, preserve the caller's working directory, and keep user focus unchanged:
