@@ -7,7 +7,7 @@ One extension, one entry: `extension.ts`. Internally modular:
 | `extension.ts` | Entry point: wires gate, commands, subagent tool, session hooks |
 | `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package (`agents/`, `personas/`) |
 | `permissions.ts` | Tool-call gate: global `permissions.json` (hard deny/ask) + active agent's frontmatter `permissions:` (deny → ask → allow → mode default) |
-| `state.ts` | Active agent/persona state; persists `defaultAgent` / `defaultPersona` in `~/.pi/agent/settings.json` |
+| `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
@@ -206,7 +206,8 @@ resolved in the order flag > settings > env. Alternatives:
 
 - Persist `"defaultAgent": "orchestrator"` and `"defaultPersona"` in
   `~/.pi/agent/settings.json` (or `PI_DEFAULT_AGENT` / `PI_DEFAULT_PERSONA` env).
-- `/agents orchestrator -persona goblin/bossnik-chief` activates immediately and persists.
+- `/agents orchestrator -persona goblin/bossnik-chief` activates for this session only
+  (in-memory); persistence is by hand-editing `~/.pi/agent/settings.json`.
 
 ## Scope
 
