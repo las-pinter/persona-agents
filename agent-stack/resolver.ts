@@ -44,6 +44,8 @@ export interface AgentConfig {
 	persona?: string;
 	/** Regex-bound skills this agent may load (glob style, resolves in a later phase). */
 	skills?: string[];
+	/** Skills guaranteed injected into the system prompt at startup (glob style). */
+	alwaysLoad?: string[];
 	/** Regex-bound file resources attached to this agent's context (later phase). */
 	resources?: string[];
 	/** Per-agent permission rules from frontmatter. */
@@ -88,6 +90,7 @@ type AgentFrontmatter = {
 	model?: unknown;
 	persona?: unknown;
 	skills?: unknown;
+	alwaysLoad?: unknown;
 	resources?: unknown;
 	permissions?: unknown;
 	spawnable?: unknown;
@@ -186,6 +189,7 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 			model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
 			persona: typeof frontmatter.persona === "string" ? frontmatter.persona : undefined,
 			skills: parseStringList(frontmatter.skills),
+			alwaysLoad: parseStringList(frontmatter.alwaysLoad),
 			resources: parseStringList(frontmatter.resources),
 			permissions: parsePermissionConfig(frontmatter.permissions),
 			// `spawnable` must be a boolean `false` to disable spawning; the FAQ-level
@@ -351,6 +355,7 @@ function loadTemplateAgents(): AgentConfig[] {
 			model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
 			persona: typeof frontmatter.persona === "string" ? frontmatter.persona : undefined,
 			skills: parseStringList(frontmatter.skills),
+			alwaysLoad: parseStringList(frontmatter.alwaysLoad),
 			resources: parseStringList(frontmatter.resources),
 			permissions: parsePermissionConfig(frontmatter.permissions),
 			// Same semantics as loadAgentsFromDir: only boolean `false` (or the

@@ -8,9 +8,8 @@ One extension, one entry: `extension.ts`. Internally modular:
 | `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package (`agents/`, `personas/`) |
 | `permissions.ts` | Tool-call gate: global `permissions.json` (hard deny/ask) + active agent's frontmatter `permissions:` (deny → ask → allow → mode default) |
 | `state.ts` | Active agent/persona state; persists `defaultAgent` / `defaultPersona` in `~/.pi/agent/settings.json` |
-| `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/panel`, `/skills` slash commands |
+| `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
-| `panel.ts` | Live subagent status panel (widget below the editor + footer summary) |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
 
 ## Install
@@ -87,6 +86,7 @@ Template fields (YAML):
 | `model` | string | optional `provider/model` override for subagent spawns |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
 | `skills` | string[] | glob bindings to skills under `skills/` (package, user, project). `"orchestrator/*"` loads every skill in the orchestrator group; matched `SKILL.md` bodies are injected into the agent prompt |
+| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. A pattern that resolves to no skill, or a body/budget overrun, logs `console.warn` and leaves a visible marker in the prompt (`MISSING skill for alwaysLoad entry: …` / `>> SKILL TRUNCATED: …`) — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
 | `permissions` | object | see below |
 
@@ -130,17 +130,13 @@ tools are never gated (translation note above).
 
 ## Skills and resources
 
-An agent's frontmatter `skills:` and `resources:` are resolved at `before_agent_start`
-and injected into that agent's system prompt (skills first, then resources, then persona
-on top). `discoverSkills()` understands both this repo's `skills/<group>/<name>/SKILL.md`
-layout and pi's `skills/<name>/SKILL.md`; `/skills [agent]` lists what would load.
-
-## Subagent status panel
-
-The subagent tool reports task start/update/completion to `panel.ts`, which keeps a
-persistent widget below the editor (`⏳ running · ✓ done · ✗ failed`, live token/cost
-counters) plus a footer summary. `/panel` shows the current panel, `/panel off` clears it.
-Panel entries for a previous run reset when a new subagent call starts.
+An agent's frontmatter `alwaysLoad:` and `skills:` are resolved at `before_agent_start`
+and injected into that agent's system prompt (`alwaysLoad` first, then `skills`, then
+resources, then persona on top): `alwaysLoad` carries the guaranteed-once contract
+(missing/oversized skills warn loudly; a skill in both lists is injected once by the
+shared dedup set). `discoverSkills()` understands both this repo's
+`skills/<group>/<name>/SKILL.md` layout and pi's `skills/<name>/SKILL.md`;
+`/skills [agent]` lists what would load.
 
 ## Inspecting subagent runs
 
@@ -165,12 +161,6 @@ denied-by-default):
 | researcher | `agent-notes/researcher/**`, `agent-notes/orchestrator/projects/**` |
 | implementer / tester | workspace files (edit/write everywhere) |
 | reviewer / mascot | none (read-only) |
-
-> **Sidebar trade-off**: pi's extension API only places widgets *above/below the editor*
-> (`WidgetPlacement`), so the panel is a status region, not a right-hand column.
-> A literal side column needs a small patch to pi's core interactive layout
-> (`dist/modes/interactive/interactive-mode.js`) — not shippable as a pi package and
-> re-applied after each pi update.
 
 ## Personas and themes
 
@@ -228,3 +218,19 @@ resolved in the order flag > settings > env. Alternatives:
   subagent** — "off" explicitly clears them. The child's own `before_agent_start` injects
   the profession body + persona (no temp prompt file), and because the child has a real
   active agent, its frontmatter permissions are enforced by the gate there too.
+- **Spawned subagents are isolated from herdr control**: `buildChildEnv()` in `subagent.ts`
+  removes `HERDR_ENV` from the child env, so herdr access does not inherit. The
+  per-template deny rules block direct calls. A subagent with code execution (an
+  interpreter or a script) can still set `HERDR_ENV` and call the binary by absolute
+  path — a documented residual. herdr's own access check is the final boundary. The
+  overseer main session is launched via the pi CLI and never passes through this spawn
+  site, so it is unaffected.
+- **Guard limits (honest)**: the per-template herdr rules block command-position `herdr`
+  (bare, absolute path, and behind `env`/`time`/`nice`/…/`sudo`/`VAR=…` prefixes),
+  `$( … )` and backtick command substitution, and shell `-c` payloads
+  (`bash -c '…herdr…'`, `sh -c`, `bash <path>/herdr`). They do **not** catch
+  interpreter/encoder paths (`python3 -c '…herdr…'`, `perl -e`, `base64 -d | sh`),
+  absolute-path calls from agents whose interpreters are allowed, or backslash-split
+  binary names (`te\e` class): those are documented residuals of a flat-regex gate.
+  For spawned subagents the `HERDR_ENV` strip covers these residuals too — unless the
+  subagent sets `HERDR_ENV` itself.

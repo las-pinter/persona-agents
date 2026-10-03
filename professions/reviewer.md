@@ -63,3 +63,4 @@ Deliver every review in this structure:
 ## Skills
 
 - **code-review-checklist** (`skills/reviewer/code-review-checklist/`) — Structured checklist with severity taxonomy (BLOCKER | CRITICAL | IMPORTANT | SUGGESTION | NIT), comment crafting, anti-patterns, and domain-specific checklists. Load BEFORE starting any code review.
+- **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

@@ -83,13 +83,17 @@ Q7: Does the task require verifying behavior, writing tests,
 
 ## Multi-Agent Orchestration Patterns
 
+**Parallelism rule:** dispatch in parallel ONLY independent read-only research
+tasks (researchers). Never run two implementers at the same time. Never run the
+reviewer and the tester at the same time — run them one after the other.
+
 | Pattern | When | Flow |
 |---------|------|------|
 | Research → Implement | Learn then build | Researcher → Implementer → Reviewer |
 | Locate → Implement → Verify | Modifying unfamiliar code | Researcher → Implementer → Tester |
 | Plan → Build → Test | Large feature with no clear path | Planner → Implementer → Tester → Reviewer |
-| Parallel independent subtasks | Multiple unrelated subtasks in one request | Parallel dispatch → orchestrator combines results |
-| Parallel review + test | Completed code needs both verifications | Reviewer + Tester in parallel → orchestrator reconciles |
+| Parallel research | Multiple unrelated read-only investigations in one request | Researchers in parallel → orchestrator combines results |
+| Review → Test | Completed code needs both verifications | Reviewer first → wait → Tester → orchestrator reconciles |
 
 ---
 

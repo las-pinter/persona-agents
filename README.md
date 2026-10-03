@@ -69,7 +69,10 @@ That one command installs the **whole unit**: the `agent-stack` extension, the
 8 pi agents (frontmatter + profession bodies), personas, and all skills. Skills
 are declared via `pi.skills` in `package.json`, so package installs also
 register them as native pi skills (usable with pi's `!skill`/`# skill:` blocks)
-*and* as agent-bound skill groups for `/agents`.
+*and* as agent-bound skill groups for `/agents`. Shared steering skills (e.g.
+`simplified-technical-english`) are declared via `alwaysLoad:` in the pi
+frontmatters — the extension guarantees them in the prompt at startup and warns
+loudly if one is missing.
 
 Check the repo's Releases/tags page for the **newest tag** and bump on
 releases — don't hardcode one version. Manage an installed package with
@@ -99,7 +102,7 @@ persona-agents/
 ├── agent-templates/            # Kiro JSON + OpenCode YAML + Pi YAML frontmatter per profession
 ├── personas/{theme}/           # Character personality files
 ├── professions/                # Role behavior definitions (8 profession files)
-├── skills/{profession}/       # Skill documents by profession (17 total) — per-profession skills under skills/{profession}/, shared agent-agnostic skills under skills/common/
+├── skills/{profession}/       # Skill documents by profession (18 total) — per-profession skills under skills/{profession}/, shared agent-agnostic skills under skills/common/
 ├── plugins/                    # Self-contained OpenCode plugins (persona-agents.js, permission-auditor.js)
 ├── settings/                   # Example config files
 ├── install.sh                  # The installer
@@ -107,7 +110,7 @@ persona-agents/
 ```
 
 > **Counts:** 8 themes × 8 professions = **64 agents**.
-> Skills: 17 total.
+> Skills: 18 total.
 > `implementer.md` is the single merged implementer profession (Python and
 > React sections live inline — no separate Python/React-specific implementer
 > types).

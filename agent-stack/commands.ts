@@ -21,7 +21,6 @@ import {
 	resolveAgentAlias,
 	resolvePersonaForAgent,
 } from "./resolver.ts";
-import { panelClear, panelDescribe } from "./panel.ts";
 import { getActiveAgent, setActiveAgent, setActivePersona, setSetting } from "./state.ts";
 
 /** Parse "/agents <name> [-persona <id|off>]" into its parts. */
@@ -158,20 +157,6 @@ export function registerCommands(pi: ExtensionAPI): void {
 				`Persona activated: ${formatPersonaId(persona)}\nTip: run /new first — in a long session earlier plain replies can outvote the persona.`,
 				"info",
 			);
-		},
-	});
-
-	pi.registerCommand("panel", {
-		description: "Show subagent status panel (usage: /panel [off|clear])",
-		handler: async (args: string, ctx) => {
-			const arg = args.trim();
-			if (arg === "off" || arg === "clear") {
-				panelClear();
-				ctx.ui?.notify?.("Subagent panel cleared.", "info");
-				return;
-			}
-			const describe = panelDescribe();
-			ctx.ui?.notify?.(describe || "No subagent activity recorded in this session.", "info");
 		},
 	});
 

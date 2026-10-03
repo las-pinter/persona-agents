@@ -103,7 +103,7 @@ frontmatter, so this repo ships bare-YAML fragments in
 at load time with the shared `professions/{profession}.md` bodies, `personas/`,
 and the `agents.json` theme ↔ profession persona mapping. The extension adds
 spawn-based subagents (the `subagent` tool), a per-agent permission gate
-(deny-by-default + regex allow lists), and `/agents` / `/persona` / `/panel` /
+(deny-by-default + regex allow lists), and `/agents` / `/persona` /
 `/skills` slash commands. Install with the pi CLI (`pi install …`, see
 README.md) — `install.sh` does not generate pi files.
 
@@ -170,15 +170,18 @@ persona-agents/
 │   ├── orchestrator/
 │   │   ├── journal-management/SKILL.md
 │   │   ├── task-routing/SKILL.md
-│   │   └── plan-tracking/SKILL.md
+│   │   ├── plan-tracking/SKILL.md
+│   │   └── project-notes/SKILL.md
 │   ├── implementer/
-│   │   └── code-implementation/SKILL.md
+│   │   ├── code-implementation/SKILL.md
+│   │   └── python-quality-gates/SKILL.md
 │   ├── reviewer/
 │   │   └── code-review-checklist/SKILL.md
 │   ├── tester/
 │   │   ├── test-case-structure/SKILL.md
 │   │   ├── test-strategy-selection/SKILL.md
-│   │   └── regression-identification/SKILL.md
+│   │   ├── regression-identification/SKILL.md
+│   │   └── production-issue-flagging/SKILL.md
 │   ├── researcher/
 │   │   └── source-selection/SKILL.md
 │   ├── planner/
@@ -188,7 +191,8 @@ persona-agents/
 │   ├── overseer/
 │   │   └── herdr/SKILL.md
 │   └── common/
-│       └── journal-management-generic/SKILL.md
+│       ├── journal-management-generic/SKILL.md
+│       └── simplified-technical-english/SKILL.md
 ├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
 │   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
 │   └── permission-auditor.js          # Read-only permission audit logger
@@ -703,7 +707,9 @@ by looking for files named `SKILL.md` under the profession's skill directory.
   a `scripts/` or `templates/` subdirectory.
 - **Cross-profession skills** can live under `skills/common/` if they're useful
   to multiple professions (e.g., a skill that several professions load at
-  startup).
+  startup). Pi agents guarantee such steering skills via `alwaysLoad:` in
+  `agent-templates/pi/frontmatters/*.yaml` — the extension injects them at
+  startup and warns loudly if a pattern resolves to no skill.
 - **Skills are referenced by profession** — the `{{PROFESSION}}` placeholder
   resolves the path. A profession's template should include
   `skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md` for Kiro.
