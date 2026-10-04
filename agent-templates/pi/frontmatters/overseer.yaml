@@ -21,11 +21,11 @@ permissions:
     - { tool: bash, match: "^find\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch(--show-current|-a|-vv)?|rev-parse|ls-remote|remote|grep)\\b" }
     - { tool: bash, match: "^(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+(?:--help|--version|status|machine\\s+list|(?:workspace|tab)\\s+(?:create|list|get)|workspace$|tab$|pane\\s+(?:list|get|current|split|read|wait-output|send-text|layout)|pane$|agent\\s+(?:list|get|rename|start|prompt|wait|read)|agent$)\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+send-keys\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+agent\\s+send-keys\\b" }
   ask:
     - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+run\\b" }
     - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+close\\b" }
-    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+send-keys\\b" }
-    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+agent\\s+send-keys\\b" }
   deny:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }

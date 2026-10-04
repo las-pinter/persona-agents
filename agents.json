@@ -48,7 +48,7 @@
     "overseer": {
       "personaFile": "kommissnik.md",
       "description": "Unit manager who patrols every pane through herdr, keeps the captain's log, and always asks the user before any destructive act.",
-      "welcomeMessage": "Kommissnik watchin' every pane, Evil Wizard. Point me at the heretics and I'll have 'em shakin'! ...I'll wait fer yer word before any bolt-pistol work."
+      "welcomeMessage": "Kommissnik watchin' every pane, Evil Wizard. Point me at the heretics and I'll have 'em shakin'! ...I'll wait fer yer word before any claw-work."
     }
   },
   "wh40k": {
