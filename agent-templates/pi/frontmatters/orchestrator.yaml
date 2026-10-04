@@ -1,8 +1,8 @@
 name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, project notes, and plans
-# Not spawnable as a subagent: orchestrator and implementer hold git commit
-# privileges (ask-gated per call), so a dispatcher must never be able to
-# escalate by spawning one.
+# Not spawnable as a subagent: orchestrator is the only agent that holds git
+# commit privileges, so a dispatcher must never be able to escalate by
+# spawning one.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question]
 skills: ["orchestrator/*", "common/simplified-technical-english"]
@@ -22,8 +22,8 @@ permissions:
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "\\bsudo\\b" }
-    # Delegated git add/commit now prompts (allow/deny) instead of running
-    # silently: orchestrator or implementer commits are ask-gated per call.
+    # Delegated git add/commit prompts (ask) instead of running silently:
+    # committing is orchestrator-only, gated per call.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit)\\b", reason: "delegated commit by orchestrator" }
     - { tool: bash, match: "\\bgit\\s+(push|pull)\\b" }
   deny:

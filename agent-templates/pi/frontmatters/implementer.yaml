@@ -1,5 +1,5 @@
 name: implementer
-description: "Implements code changes end to end: edits files, runs builds and tests, commits small verified increments"
+description: "Implements code changes end to end: edits files, runs builds and tests"
 tools: [bash, read, edit, write, find, ls, grep, subagent]
 skills: ["implementer/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
@@ -20,10 +20,10 @@ permissions:
     - { tool: bash, match: "^(python|python3)( -m (pytest|unittest|mypy|flake8|pylint|black|isort|ruff))?\\b" }
     - { tool: bash, match: "^(\\.venv/bin/(python -m pytest|pre-commit))\\b" }
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
-  ask:
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit)\\b", reason: "local git add/commit prompts the wizard" }
+  ask: []
   deny:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit)\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }

@@ -4,7 +4,7 @@
 
 Tired of AI agents with all the personality of a loading spinner? Same.
 `persona-agents` is a collection of personified agents for
-[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), and pi — each
+[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), and [pi](https://pi.dev) — each
 one with its own voice, quirks, and attitude — because AI-assisted
 development shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
