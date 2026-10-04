@@ -49,71 +49,24 @@ Pi needs no `install.sh` run — it installs through the pi CLI (see below).
 
 ### Pi (extension package)
 
-`persona-agents` is also a **pi package** — it installs the `agent-stack`
-extension plus the 8 pi agents (frontmatter + profession bodies), personas, and
-skills as one unit:
+`persona-agents` is also a **pi package**. One command installs the whole unit:
+the `agent-stack` extension, the 8 pi agents, the personas, and the skills.
 
 ```bash
-# distribution — PIN the newest release tag (current package version: 2.2.0;
-# unpinned git clones the default branch, so pinning matters):
+# from git — pin the newest release tag
 pi install git:github.com/las-pinter/persona-agents@<newest-release-tag>
 
-# early adopters: the dev branch works once it is pushed:
-# pi install git:github.com/las-pinter/persona-agents@dev
-
-# local development — path only, no copy (the repo stays the single source)
+# local development — path only, no copy
 pi install ~/persona-agents
 ```
 
-That one command installs the **whole unit**: the `agent-stack` extension, the
-8 pi agents (frontmatter + profession bodies), personas, and all skills. Skills
-are declared via `pi.skills` in `package.json`, so package installs also
-register them as native pi skills (usable with pi's `!skill`/`# skill:` blocks)
-*and* as agent-bound skill groups for `/agents`. Shared steering skills (e.g.
-`simplified-technical-english`) are declared via `alwaysLoad:` in the pi
-frontmatters — the extension guarantees them in the prompt at startup and warns
-loudly if one is missing.
+Check the repo's Releases/tags page for the newest tag. Manage an installed
+package with `pi list` / `pi remove <source>`.
 
-Check the repo's Releases/tags page for the **newest tag** and bump on
-releases — don't hardcode one version. Manage an installed package with
-`pi list` / `pi remove <source>`; reconcile a clone after a new release with
-`pi update --extensions`.
-
-> ⚠️ Don't install the same package from two sources at once (e.g. a local path
-> *and* a git clone): both copies register the same extension tools, commands,
-> and flags, which pi reports as conflicts. Remove the dev entry
-> (`pi remove ~/persona-agents`) before installing the git one.
-
-## How It Works
-
-Three systems, same sources of truth (`agents.json` plus the `personas/`,
-`professions/`, and `skills/` files):
-
-- **Kiro:** Static template generation — combines templates, personas, and professions into agent configs at install time.
-- **OpenCode:** Runtime plugin — generated agent files contain a stub comment (`<!-- persona-agents:... -->`) that the OpenCode plugin replaces with persona content on demand.
-- **Pi:** Runtime extension (`agent-stack`) — composes frontmatter + profession + persona at load time; adds spawn-based subagents, a per-agent permission gate, and `/agents` / `/persona` commands. See [`agent-stack/README.md`](agent-stack/README.md).
-
-## Repository Structure
-
-```
-persona-agents/
-├── agents.json                 # Source of truth: themes → professions → personas
-├── agent-stack/                # Pi extension: subagent tool, permission gate, /agents, /persona
-├── agent-templates/            # Kiro JSON + OpenCode YAML + Pi YAML frontmatter per profession
-├── personas/{theme}/           # Character personality files
-├── professions/                # Role behavior definitions (8 profession files)
-├── skills/{profession}/       # Skill documents by profession (18 total) — per-profession skills under skills/{profession}/, shared agent-agnostic skills under skills/common/
-├── plugins/                    # Self-contained OpenCode plugins (persona-agents.js, permission-auditor.js)
-├── settings/                   # Example config files
-├── install.sh                  # The installer
-└── ...config files             # package.json, etc.
-```
-
-> **Counts:** 8 themes × 8 professions = **64 agents**.
-> Skills: 18 total.
-> `implementer.md` is the single merged implementer profession (Python and
-> React sections live inline — no separate Python/React-specific implementer
-> types).
+> ⚠️ Don't install the same package from two sources at once: both copies
+> register the same extension tools, commands, and flags, which pi reports as
+> conflicts. Remove the dev entry (`pi remove ~/persona-agents`) before
+> installing the git one.
 
 ## Agents
 
