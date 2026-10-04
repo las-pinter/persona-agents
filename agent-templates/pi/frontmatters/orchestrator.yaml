@@ -21,6 +21,7 @@ permissions:
     - { tool: bash, match: "^find\\b" }
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rm\\s+[^-\\s;|&*?\\[\\]{}'\"$`!#][^\\s;|&*?\\[\\]{}'\"$`]*$", reason: "deleting a named file prompts the wizard" }
     - { tool: bash, match: "\\bsudo\\b" }
     # Delegated git add/commit prompts (ask) instead of running silently:
     # committing is orchestrator-only, gated per call.
