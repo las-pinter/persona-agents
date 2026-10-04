@@ -36,7 +36,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
-import { reportAgentState } from "./herdr-state.ts";
 
 interface CompiledRule {
 	tool: string;
@@ -160,12 +159,10 @@ export function installPermissionGate(
 				if (!ctx.hasUI) {
 					return { block: true, reason: `Blocked by policy (no UI): ${rule.match}` };
 				}
-				reportAgentState("blocked");
 				const choice = await ctx.ui.select(
 					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
 					["Deny", "Allow", "Always allow (session)"],
 				);
-				reportAgentState("working");
 				if (choice === "Always allow (session)") {
 					sessionAllow.add(key); // remembered for the rest of the session
 					return undefined;
@@ -183,12 +180,10 @@ export function installPermissionGate(
 				if (!ctx.hasUI) {
 					return { block: true, reason: `Blocked by ${agent?.name} policy (no UI): ${rule.match}` };
 				}
-				reportAgentState("blocked");
 				const choice = await ctx.ui.select(
 					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
 					["Deny", "Allow", "Always allow (session)"],
 				);
-				reportAgentState("working");
 				if (choice === "Always allow (session)") {
 					sessionAllow.add(key); // remembered for the rest of the session
 					return undefined;

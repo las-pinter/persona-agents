@@ -14,11 +14,7 @@
  */
 
 import * as fs from "node:fs";
-import {
-	getAgentDir,
-	type ExtensionAPI,
-	type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
 
 function debugLog(...parts: unknown[]): void {
@@ -49,25 +45,7 @@ import {
 	resolveResources,
 } from "./resolver.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
-import { setAgentSessionRef } from "./herdr-state.ts";
 import registerSubagentTool from "./subagent.ts";
-
-// Give herdr the pane's session ref (the session jsonl path) at session start
-// and before each agent run — mirrors the official pi integration, which
-// refreshes at session_start and agent_start. Silent: capture must never
-// disturb the hooks. getSessionFile (path) wins; getSessionId (ULID) falls
-// back. "blocked"/"working" reports from the permission gate carry the ref
-// through the module-level sessionRef in herdr-state.ts.
-const captureAgentSessionRef = (ctx: ExtensionContext): void => {
-	try {
-		const sm = ctx.sessionManager;
-		const ref = sm?.getSessionFile?.() ?? sm?.getSessionId?.();
-		debugLog("herdr: session ref", ref ?? "none");
-		setAgentSessionRef(ref);
-	} catch {
-		/* ignore */
-	}
-};
 
 export default function (pi: ExtensionAPI): void {
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
@@ -155,14 +133,12 @@ export default function (pi: ExtensionAPI): void {
 
 	pi.on("session_start", (_event, ctx) => {
 		debugLog("session_start cwd=", ctx.cwd);
-		captureAgentSessionRef(ctx);
 		applyDefaults(ctx.cwd);
 		syncStatus(ctx);
 	});
 
 	// 5. Inject agent + persona prompts ahead of every agent run.
 	pi.on("before_agent_start", async (event, ctx) => {
-		captureAgentSessionRef(ctx);
 		const agent = getActiveAgent();
 		const persona = getActivePersona();
 		debugLog(
