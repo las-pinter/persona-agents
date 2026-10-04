@@ -8,10 +8,7 @@ When a new version is released:
 
 1. Bump the version in `package.json`, line 3 (`"version"`). This file is the
    source of truth for the package version.
-2. Bump the same version in `agent-stack/README.md`, in the install comment
-   that names the current package version inside the distribution install
-   block.
-3. Create a git tag v<new-version>. Pi installs resolve by tag,
+2. Create a git tag v<new-version>. Pi installs resolve by tag,
    so a release without the tag does not install.
 
 Files that carry a version number but do NOT track the package release:
@@ -26,8 +23,8 @@ No other file carries the package version number.
 
 Rules:
 
-- The root `README.md` must never contain a version number. A release must
-  never need a README edit.
+- No `README.md` in this repository may contain a version number. A release
+  must never need a README edit.
 
 ## Commit rule
 

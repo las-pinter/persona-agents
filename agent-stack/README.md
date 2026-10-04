@@ -18,8 +18,8 @@ One extension, one entry: `extension.ts`. Internally modular:
 # development: local path, no copy (the repo stays the source of truth)
 pi install ~/persona-agents
 
-# distribution — PIN the newest release tag (current package version: 2.2.0;
-# unpinned git clones the default branch, so pinning matters):
+# distribution — PIN the newest release tag (unpinned git clones the default
+# branch, so pinning matters):
 pi install git:github.com/las-pinter/persona-agents@<newest-release-tag>
 ```
 
