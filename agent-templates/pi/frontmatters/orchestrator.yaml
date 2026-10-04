@@ -3,8 +3,9 @@ description: Coordinates work by delegating to subagents; routes tasks, manages 
 # Not spawnable as a subagent: orchestrator holds git commit privileges, so a
 # dispatcher must never be able to escalate by spawning one.
 spawnable: false
-tools: [bash, read, edit, write, subagent]
-skills: ["orchestrator/*"]
+tools: [bash, read, edit, write, subagent, ask_user_question]
+skills: ["orchestrator/*", "common/simplified-technical-english"]
+alwaysLoad: ["orchestrator/journal-management", "orchestrator/project-notes", "common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
@@ -13,6 +14,7 @@ permissions:
     - { tool: edit, match: "(^|/)agent-notes/(orchestrator|planner/plans)/" }
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|planner/plans)/" }
     - { tool: subagent, match: "." }
+    - { tool: ask_user_question, match: "." }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|branch)\\b" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|awk|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
@@ -31,3 +33,7 @@ permissions:
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
     - { tool: bash, match: "\\bmkfs|\\bdd\\b.*\\bof=/dev/" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }

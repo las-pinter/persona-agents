@@ -5,8 +5,9 @@ description: Patrols agent status and panes via herdr, keeps the captain's log i
 spawnable: false
 # pi has no fetch/webfetch tool, so the opencode template's webfetch allows for
 # herdr.dev / raw.githubusercontent.com intentionally do not exist here.
-tools: [bash, read, edit, write, find, ls, grep]
-skills: ["overseer/*", "common/*"]
+tools: [bash, read, edit, write, find, ls, grep, ask_user_question]
+skills: ["overseer/*", "common/journal-management-generic", "common/simplified-technical-english"]
+alwaysLoad: ["common/journal-management-generic", "common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
@@ -16,11 +17,16 @@ permissions:
     - { tool: grep, match: "." }
     - { tool: edit, match: "(^|/)agent-notes/overseer/" }
     - { tool: write, match: "(^|/)agent-notes/overseer/" }
-    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|diff|echo|awk|cut|sleep|whoami|which|command -v|jq|bash -n|mkdir)\\b" }
+    - { tool: ask_user_question, match: "." }
+    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|diff|echo|printf|awk|cut|sleep|whoami|which|command -v|jq|bash -n|mkdir|test)\\b" }
     - { tool: bash, match: "^find\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch(--show-current|-a|-vv)?|rev-parse|ls-remote|remote|grep)\\b" }
-    - { tool: bash, match: "^(?:/home/dev/\\.local/bin/)?herdr\\s+(--help|--version|status|machine\\s+list|workspace\\s+(list|get)|tab\\s+(list|get)|pane\\s+(list|get|current))\\b" }
-  ask: []
+    - { tool: bash, match: "^(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+(?:--help|--version|status|machine\\s+list|(?:workspace|tab)\\s+(?:create|list|get)|workspace$|tab$|pane\\s+(?:list|get|current|split|read|wait-output|send-text|layout)|pane$|agent\\s+(?:list|get|rename|start|prompt|wait|read)|agent$)\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+send-keys\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+agent\\s+send-keys\\b" }
+  ask:
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+run\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+close\\b" }
   deny:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }
@@ -30,3 +36,7 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
     - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
+    - { tool: bash, match: "herdr\\b(?:[^;\"'|&]|(?:\"[^\"]*\"|'[^']*'))*(?:&&|\\|\\||[;&|]|\\r?\\n)[\\s\\S]*?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
+    - { tool: bash, match: "herdr\\b[^;\"']*(?:\\bserver\\b|\\bplugin\\b|--machine\\b)(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }

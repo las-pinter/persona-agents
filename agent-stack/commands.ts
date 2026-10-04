@@ -2,7 +2,7 @@
  * Slash commands: /agents and /persona.
  *
  *   /agents              list discovered agents (user, project, package)
- *   /agents <name>       activate agent for this + future sessions (persisted)
+ *   /agents <name>       activate agent for this session (in-memory only)
  *   /agents <name> -persona <id|off>   activate agent and set persona in one call
  *   /agents off          deactivate
  *
@@ -17,12 +17,10 @@ import {
 	discoverSkills,
 	formatPersonaId,
 	matchSkills,
-	personaId,
 	resolveAgentAlias,
 	resolvePersonaForAgent,
 } from "./resolver.ts";
-import { panelClear, panelDescribe } from "./panel.ts";
-import { getActiveAgent, setActiveAgent, setActivePersona, setSetting } from "./state.ts";
+import { getActiveAgent, setActiveAgent, setActivePersona } from "./state.ts";
 
 /** Parse "/agents <name> [-persona <id|off>]" into its parts. */
 function parseAgentArgs(args: string): { agentArg: string; personaArg?: string } {
@@ -56,7 +54,6 @@ export function registerCommands(pi: ExtensionAPI): void {
 
 			if (agentArg === "off") {
 				setActiveAgent(null);
-				await setSetting("defaultAgent", null);
 				ctx.ui?.setStatus?.("agent", undefined);
 				ctx.ui?.notify?.("Agent deactivated.", "info");
 				return;
@@ -77,21 +74,18 @@ export function registerCommands(pi: ExtensionAPI): void {
 
 			setActiveAgent(agent);
 			ctx.ui?.setStatus?.("agent", `agent: ${agent.name}`);
-			await setSetting("defaultAgent", agent.name);
 
 			// Persona handling: explicit -persona flag (or alias theme) wins; otherwise
 			// the agent's declared default persona applies.
 			if (effectivePersonaArg !== undefined) {
 				if (effectivePersonaArg === "off" || effectivePersonaArg === "none") {
 					setActivePersona(null);
-					await setSetting("defaultPersona", null);
 					ctx.ui?.setStatus?.("persona", undefined);
 				} else {
 					const persona = resolvePersonaForAgent(discovery.personas, effectivePersonaArg, agent.name);
 					if (persona) {
 						setActivePersona(persona);
 						ctx.ui?.setStatus?.("persona", `persona: ${formatPersonaId(persona)}`);
-						await setSetting("defaultPersona", personaId(persona));
 					} else {
 						ctx.ui?.notify?.(`Unknown persona "${effectivePersonaArg}".`, "warning");
 					}
@@ -101,7 +95,6 @@ export function registerCommands(pi: ExtensionAPI): void {
 				if (persona) {
 					setActivePersona(persona);
 					ctx.ui?.setStatus?.("persona", `persona: ${formatPersonaId(persona)}`);
-					await setSetting("defaultPersona", personaId(persona));
 				}
 			}
 
@@ -139,7 +132,6 @@ export function registerCommands(pi: ExtensionAPI): void {
 
 			if (arg === "off" || arg === "none") {
 				setActivePersona(null);
-				await setSetting("defaultPersona", null);
 				ctx.ui?.setStatus?.("persona", undefined);
 				ctx.ui?.notify?.("Persona removed.", "info");
 				return;
@@ -153,25 +145,10 @@ export function registerCommands(pi: ExtensionAPI): void {
 
 			setActivePersona(persona);
 			ctx.ui?.setStatus?.("persona", `persona: ${formatPersonaId(persona)}`);
-			await setSetting("defaultPersona", personaId(persona));
 			ctx.ui?.notify?.(
 				`Persona activated: ${formatPersonaId(persona)}\nTip: run /new first — in a long session earlier plain replies can outvote the persona.`,
 				"info",
 			);
-		},
-	});
-
-	pi.registerCommand("panel", {
-		description: "Show subagent status panel (usage: /panel [off|clear])",
-		handler: async (args: string, ctx) => {
-			const arg = args.trim();
-			if (arg === "off" || arg === "clear") {
-				panelClear();
-				ctx.ui?.notify?.("Subagent panel cleared.", "info");
-				return;
-			}
-			const describe = panelDescribe();
-			ctx.ui?.notify?.(describe || "No subagent activity recorded in this session.", "info");
 		},
 	});
 

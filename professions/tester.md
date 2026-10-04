@@ -65,3 +65,4 @@ Deliver test work in this structure:
 - **test-case-structure** (`skills/tester/test-case-structure/`) — Language-agnostic structure, naming conventions, and rules for writing clear, maintainable test cases. Load BEFORE writing or reviewing test code.
 - **regression-identification** (`skills/tester/regression-identification/`) — Identify which existing tests are relevant to code changes and what new tests are needed. Load WHENEVER code changes are made.
 - **production-issue-flagging** (`skills/tester/production-issue-flagging/`) — Reporting format for testability issues and production bugs found during testing.
+- **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

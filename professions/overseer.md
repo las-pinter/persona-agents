@@ -15,8 +15,7 @@ Before processing any user input:
    `.result.agent.name`; if it lacks `overseer`, run `herdr agent rename
    "$HERDR_PANE_ID" overseer`. The herald plugin pushes prompts only to an agent
    whose name contains `overseer`; unnamed = log-only.
-3. Load these skills: **herdr**, **journal-management-generic** (paths and purposes
-   in Skills below).
+3. Load these skills: **herdr** (path and purpose in Skills below).
 4. Read the latest captain's log entry via journal-management-generic — journals
    live at `~/agent-notes/overseer/journals/`.
 
@@ -101,3 +100,4 @@ supervise.
 - **journal-management-generic** (`skills/common/journal-management-generic/`) —
   Generic hierarchical journal system with time-based consolidation. Resolves
   `<AGENT_TYPE>` from the profession (overseer), never the persona name.
+- **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

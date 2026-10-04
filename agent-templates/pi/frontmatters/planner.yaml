@@ -4,7 +4,8 @@ description: Turns requirements into clear, actionable, sequenced plans
 # there is no spawn allow (unlike the opencode template, which allows
 # {{THEME}}-researcher spawns). This is a deliberate capability regression.
 tools: [bash, read, edit, write, find, ls, grep]
-skills: ["planner/*", "common/*"]
+skills: ["planner/*", "common/simplified-technical-english"]
+alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
@@ -25,3 +26,7 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }

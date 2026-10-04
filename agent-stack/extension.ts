@@ -35,7 +35,6 @@ const SKILL_BODY_CAP_BYTES = 12 * 1024;
 
 import { registerCommands } from "./commands.ts";
 import { registerInspectorCommands } from "./inspector.ts";
-import { panelClear } from "./panel.ts";
 import { installPermissionGate } from "./permissions.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import {
@@ -138,13 +137,6 @@ export default function (pi: ExtensionAPI): void {
 		syncStatus(ctx);
 	});
 
-	// Clear the subagent panel + footer when the session tears down (quit,
-	// reload, or a session switch), so a stale panel never leaks into the next
-	// session. Idempotent: no-op when nothing was rendered.
-	pi.on("session_shutdown", () => {
-		panelClear();
-	});
-
 	// 5. Inject agent + persona prompts ahead of every agent run.
 	pi.on("before_agent_start", async (event, ctx) => {
 		const agent = getActiveAgent();
@@ -165,12 +157,46 @@ export default function (pi: ExtensionAPI): void {
 		if (agent) {
 			extra += `\n\n${agent.systemPrompt}`;
 
+			// Shared dedup: a skill in both lists is injected once (alwaysLoad wins).
+			const seen = new Set<string>();
+			const discoveredSkills = discoverSkills(ctx.cwd);
+
+			// P3: bind the agent's `alwaysLoad:` globs. Mandatory skills warn
+			// loudly when missing or oversized — never drop a steering skill silently.
+			const mandatory = matchSkills(agent.alwaysLoad ?? [], discoveredSkills);
+			if (agent.alwaysLoad && agent.alwaysLoad.length > 0) {
+				let mandatoryBudget = SKILL_INJECTION_BUDGET_BYTES;
+				for (const s of mandatory) {
+					const id = s.group ? `${s.group}/${s.name}` : s.name;
+					if (seen.has(id)) continue;
+					seen.add(id);
+					let body = s.body;
+					if (body.length > SKILL_BODY_CAP_BYTES) {
+						console.warn(`agent-stack: mandatory skill ${id} exceeds the ${SKILL_BODY_CAP_BYTES} byte body cap; truncated`);
+						body = `${body.slice(0, SKILL_BODY_CAP_BYTES)}\n>> SKILL TRUNCATED: ${id}`;
+					}
+					if (mandatoryBudget - body.length < 0) {
+						console.warn(`agent-stack: mandatory skill ${id} would exceed the ${SKILL_INJECTION_BUDGET_BYTES} byte budget; body omitted`);
+						extra += `\n\n## Mandatory skill: ${id}\n>> SKILL TRUNCATED: ${id}`;
+						continue;
+					}
+					mandatoryBudget -= body.length;
+					extra += `\n\n## Mandatory skill: ${id}\n${body}`;
+				}
+				for (const pattern of agent.alwaysLoad) {
+					if (matchSkills([pattern], discoveredSkills).length === 0) {
+						console.warn(`agent-stack: alwaysLoad entry resolves to no skill: ${pattern}`);
+						extra += `\n\nMISSING skill for alwaysLoad entry: ${pattern}`;
+					}
+				}
+				debugLog("alwaysLoad injected:", Array.from(seen).join(","));
+			}
+
 			// P3: bind the agent's `skills:` globs (package + user + project).
-			const skills = matchSkills(agent.skills, discoverSkills(ctx.cwd));
+			const skills = matchSkills(agent.skills, discoveredSkills);
 			if (skills.length > 0) {
 				extra += `\n\n## Agent skills for "${agent.name}"`;
 				let budget = SKILL_INJECTION_BUDGET_BYTES;
-				const seen = new Set<string>();
 				for (const s of skills) {
 					const id = s.group ? `${s.group}/${s.name}` : s.name;
 					if (seen.has(id)) continue;

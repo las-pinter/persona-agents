@@ -39,7 +39,6 @@ import {
 } from "./resolver.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { archiveRun, type InspectTask } from "./inspector.ts";
-import { bindPanelUi, panelFinish, panelResetRunning, panelStart, panelUpdate, type PanelUi } from "./panel.ts";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -298,6 +297,12 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	return { command: "pi", args };
 }
 
+function buildChildEnv(): NodeJS.ProcessEnv {
+	const env: NodeJS.ProcessEnv = { ...process.env };
+	delete env.HERDR_ENV;
+	return env;
+}
+
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 interface DispatchDefaults {
@@ -311,7 +316,6 @@ async function runSingleAgent(
 	agents: AgentConfig[],
 	resolveTarget: ((requestedName: string) => { agent: AgentConfig; theme?: string } | null) | undefined,
 	resolveSpawnPersona: (agentName: string) => PersonaConfig | null,
-	panelKey: string,
 	agentName: string,
 	task: string,
 	cwd: string | undefined,
@@ -381,22 +385,7 @@ async function runSingleAgent(
 		step,
 	};
 
-	panelStart({
-		key: panelKey,
-		agent: agentName,
-		mode: "single",
-		status: "running",
-		preview: task.length > 80 ? `${task.slice(0, 80)}…` : task,
-		model,
-	});
-
 	const emitUpdate = () => {
-		panelUpdate(panelKey, {
-			inputTokens: currentResult.usage.input,
-			outputTokens: currentResult.usage.output,
-			cost: currentResult.usage.cost,
-			preview: task.length > 80 ? `${task.slice(0, 80)}…` : task,
-		});
 		if (onUpdate) {
 			onUpdate({
 				content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
@@ -417,6 +406,7 @@ async function runSingleAgent(
 				cwd: cwd ?? defaultCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
+				env: buildChildEnv(),
 			});
 			let buffer = "";
 
@@ -488,16 +478,6 @@ async function runSingleAgent(
 		});
 
 		currentResult.exitCode = exitCode;
-		panelFinish(
-			panelKey,
-			wasAborted || exitCode !== 0 || currentResult.stopReason === "error" ? "failed" : "done",
-			{
-				inputTokens: currentResult.usage.input,
-				outputTokens: currentResult.usage.output,
-				cost: currentResult.usage.cost,
-				error: currentResult.errorMessage,
-			},
-		);
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {
@@ -548,8 +528,6 @@ export default function (pi: ExtensionAPI) {
 		parameters: SubagentParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
-			if (ctx.hasUI) bindPanelUi(ctx.ui as PanelUi);
-			panelResetRunning();
 			const agentScope: AgentScope = params.agentScope ?? "user";
 			// Resolve discovered agents/personas up front: later initializers below
 			// (callerTheme, resolveTarget, resolveSpawnPersona) close over them.
@@ -683,7 +661,6 @@ export default function (pi: ExtensionAPI) {
 						agents,
 						resolveTarget,
 						resolveSpawnPersona,
-						`chain-${i + 1}-${step.agent}`,
 						step.agent,
 						taskWithContext,
 						step.cwd,
@@ -760,7 +737,6 @@ export default function (pi: ExtensionAPI) {
 						agents,
 						resolveTarget,
 						resolveSpawnPersona,
-						`parallel-${index}-${t.agent}`,
 						t.agent,
 						t.task,
 						t.cwd,
@@ -807,7 +783,6 @@ export default function (pi: ExtensionAPI) {
 					agents,
 					resolveTarget,
 					resolveSpawnPersona,
-					`single-${params.agent}`,
 					params.agent,
 					params.task,
 					params.cwd,

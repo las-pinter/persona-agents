@@ -66,3 +66,4 @@ Write research results as studies to `<USER_HOME>/agent-notes/researcher/studies
 ## Skills
 
 - **source-selection** (`skills/researcher/source-selection/`) — Decision rules for choosing between Context7, DeepWiki, and Exa based on query type.
+- **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

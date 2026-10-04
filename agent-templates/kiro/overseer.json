@@ -5,7 +5,8 @@
   "resources": [
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
     "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md",
-    "skill://~/.kiro/skills/common/*/SKILL.md"
+    "skill://~/.kiro/skills/common/journal-management-generic/SKILL.md",
+    "skill://~/.kiro/skills/common/simplified-technical-english/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [

@@ -4,7 +4,8 @@
   "prompt": "file://~/.kiro/professions/implementer.md",
   "resources": [
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
-    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md",
+    "skill://~/.kiro/skills/common/simplified-technical-english/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [

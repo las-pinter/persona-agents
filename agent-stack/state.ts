@@ -1,12 +1,13 @@
 /**
- * Session-global agent/persona state plus persistence of `defaultAgent` /
- * `defaultPersona` in ~/.pi/agent/settings.json.
+ * Session-global agent/persona state. Session defaults come from
+ * ~/.pi/agent/settings.json or PI_DEFAULT_* env vars; this module never
+ * writes settings.json.
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getAgentDir, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig, PersonaConfig } from "./resolver.ts";
 
 /** Shared debug-log path for the whole agent-stack extension (written by extension.ts). */
@@ -72,15 +73,4 @@ export function getDefaultPersonaId(): string | undefined {
 	if (typeof fromSettings === "string" && fromSettings) return fromSettings;
 	const fromEnv = process.env["PI_DEFAULT_PERSONA"];
 	return fromEnv || undefined;
-}
-
-/** Persist (or clear, when value is undefined/null) an agent/persona default in settings.json. */
-export async function setSetting(key: "defaultAgent" | "defaultPersona", value: string | null): Promise<void> {
-	const filePath = settingsPath();
-	await withFileMutationQueue(filePath, async () => {
-		const settings = readSettings();
-		if (value === null) delete settings[key];
-		else settings[key] = value;
-		await fs.promises.writeFile(filePath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-	});
 }

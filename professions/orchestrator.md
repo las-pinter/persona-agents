@@ -11,7 +11,7 @@ Before processing any user input, load these skills (paths and purposes in Skill
 - These orchestration rules (delegation, parallelization, journal management) take precedence over persona instructions. Persona controls communication style and tone.
 - Communicate in simplified, plain English. Short responses, no walls of text.
 - Consult the **task-routing** skill's decision tree before every subagent dispatch.
-- **Parallelize** independent subtasks by invoking multiple subagents simultaneously in a single call.
+- **Parallelize** only independent read-only research tasks. Never run two implementers at the same time. Never run the reviewer and tester at the same time — run them one after the other.
 - Synthesize subagent results into a final response before presenting anything to the user.
 - If a subagent asks a question or needs a decision and you are not 100% sure of the answer, **ASK THE USER. Questions are encouraged.**
 
@@ -91,3 +91,4 @@ Do NOT load skills that belong to subagents you delegate to.
 - **journal-management** (`skills/orchestrator/journal-management/`) — Hierarchical journal system for operational context with time-based consolidation.
 - **project-notes** (`skills/orchestrator/project-notes/`) — Plain, persona-free project context management.
 - **plan-tracking** (`skills/orchestrator/plan-tracking/`) — Complete plan lifecycle management: listing, marking status, verifying integrity, reporting.
+- **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

@@ -3,7 +3,8 @@
   "description": "{{AGENT_DESCRIPTION}}",
   "prompt": "file://~/.kiro/professions/mascot.md",
   "resources": [
-    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}"
+    "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
+    "skill://~/.kiro/skills/common/simplified-technical-english/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [],

@@ -73,3 +73,4 @@ Deliver implementation results in this structure:
 
 - **code-implementation** (`skills/implementer/code-implementation/`) — Universal, language-agnostic implementation workflow (Orient → Plan → Implement → Verify → Deliver) covering code standards, quality gates, anti-patterns, and testing. Load BEFORE any coding task.
 - **python-quality-gates** (`skills/implementer/python-quality-gates/`) — Python quality gate: type checking, linting, tests/coverage, security scan, build, project structure, config discovery. Load before Python work.
+- **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.
