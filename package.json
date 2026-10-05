@@ -1,6 +1,6 @@
 {
   "name": "persona-agents",
-  "version": "2.2.0",
+  "version": "2.2.2",
   "description": "Pi package: agent orchestration with per-agent frontmatter permissions, personas, and subagents",
   "private": true,
   "type": "module",

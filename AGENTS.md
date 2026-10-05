@@ -6,10 +6,8 @@ Rules for agents working in this repository.
 
 When a new version is released:
 
-1. Bump the version in `package.json`, line 3 (`"version"`). This file is the
-   source of truth for the package version.
-2. Create a git tag v<new-version>. Pi installs resolve by tag,
-   so a release without the tag does not install.
+Bump the version in `package.json`, line 3 (`"version"`). This file is the
+source of truth for the package version.
 
 Files that carry a version number but do NOT track the package release:
 
@@ -28,4 +26,4 @@ Rules:
 
 ## Commit rule
 
-Every agent commit message must start with the prefix `ai-`.
+Every agent commit message must start with the prefix `ai:`.
