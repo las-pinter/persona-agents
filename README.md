@@ -63,6 +63,10 @@ Full install steps live in [agent-stack/README.md](agent-stack/README.md).
 
 All agents work with Kiro CLI, OpenCode, and pi.
 
+![Themed agents answering the same prompt](docs/demo/personas.gif)
+
+One real captured run: four themes' orchestrator personas answer the same prompt. Model output varies between runs.
+
 ### The Goblin Horde
 
 | Agent | Character | Role | Description |
