@@ -13,7 +13,6 @@ permission:
   read: allow
   bash:
     "*": ask
-    "awk *": allow
     "bash -n *": allow
     "cat *": allow
     "cat *>*": ask

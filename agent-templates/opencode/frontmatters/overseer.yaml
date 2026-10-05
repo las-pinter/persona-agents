@@ -38,9 +38,6 @@ permissions:
     resource: "*"
     effect: ask
   - action: shell
-    resource: "awk *"
-    effect: allow
-  - action: shell
     resource: "bash -n *"
     effect: allow
   - action: shell

@@ -28,7 +28,6 @@
   "toolsSettings": {
     "shell": {
       "allowedCommands": [
-        "awk *",
         "bash -n *",
         "cat *",
         "date *",

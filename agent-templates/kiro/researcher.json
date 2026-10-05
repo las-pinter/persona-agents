@@ -41,7 +41,6 @@
     },
     "shell": {
       "allowedCommands": [
-        "awk *",
         "cat *",
         "date *",
         "diff *",
