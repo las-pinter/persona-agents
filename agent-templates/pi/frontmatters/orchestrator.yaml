@@ -17,7 +17,7 @@ permissions:
     - { tool: subagent, match: "." }
     - { tool: ask_user_question, match: "." }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|branch)\\b" }
-    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|awk|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
+    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
