@@ -41,9 +41,6 @@ permissions:
     resource: "*"
     effect: ask
   - action: shell
-    resource: "awk *"
-    effect: allow
-  - action: shell
     resource: "cat *"
     effect: allow
   - action: shell
