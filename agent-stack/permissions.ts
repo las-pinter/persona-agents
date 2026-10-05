@@ -159,10 +159,17 @@ export function installPermissionGate(
 				if (!ctx.hasUI) {
 					return { block: true, reason: `Blocked by policy (no UI): ${rule.match}` };
 				}
-				const choice = await ctx.ui.select(
-					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
-					["Deny", "Allow", "Always allow (session)"],
-				);
+				// The herdr courier clears only on active:false, so every prompt outcome must emit it.
+				pi.events.emit("herdr:blocked", { active: true, label: rule.reason ?? rule.match });
+				let choice: string | undefined;
+				try {
+					choice = await ctx.ui.select(
+						`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
+						["Deny", "Allow", "Always allow (session)"],
+					);
+				} finally {
+					pi.events.emit("herdr:blocked", { active: false });
+				}
 				if (choice === "Always allow (session)") {
 					sessionAllow.add(key); // remembered for the rest of the session
 					return undefined;
@@ -180,10 +187,17 @@ export function installPermissionGate(
 				if (!ctx.hasUI) {
 					return { block: true, reason: `Blocked by ${agent?.name} policy (no UI): ${rule.match}` };
 				}
-				const choice = await ctx.ui.select(
-					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
-					["Deny", "Allow", "Always allow (session)"],
-				);
+				// The herdr courier clears only on active:false, so every prompt outcome must emit it.
+				pi.events.emit("herdr:blocked", { active: true, label: rule.reason ?? rule.match });
+				let choice: string | undefined;
+				try {
+					choice = await ctx.ui.select(
+						`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}\n\nAllow?`,
+						["Deny", "Allow", "Always allow (session)"],
+					);
+				} finally {
+					pi.events.emit("herdr:blocked", { active: false });
+				}
 				if (choice === "Always allow (session)") {
 					sessionAllow.add(key); // remembered for the rest of the session
 					return undefined;

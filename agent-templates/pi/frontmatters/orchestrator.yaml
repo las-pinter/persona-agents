@@ -1,7 +1,8 @@
 name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, project notes, and plans
-# Not spawnable as a subagent: orchestrator holds git commit privileges, so a
-# dispatcher must never be able to escalate by spawning one.
+# Not spawnable as a subagent: orchestrator is the only agent that holds git
+# commit privileges, so a dispatcher must never be able to escalate by
+# spawning one.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question]
 skills: ["orchestrator/*", "common/simplified-technical-english"]
@@ -20,9 +21,10 @@ permissions:
     - { tool: bash, match: "^find\\b" }
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rm\\s+[^-\\s;|&*?\\[\\]{}'\"$`!#][^\\s;|&*?\\[\\]{}'\"$`]*$", reason: "deleting a named file prompts the wizard" }
     - { tool: bash, match: "\\bsudo\\b" }
-    # Delegated git add/commit now prompts (allow/deny) instead of running
-    # silently: committing is orchestrator-only, gated per call.
+    # Delegated git add/commit prompts (ask) instead of running silently:
+    # committing is orchestrator-only, gated per call.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit)\\b", reason: "delegated commit by orchestrator" }
     - { tool: bash, match: "\\bgit\\s+(push|pull)\\b" }
   deny:
@@ -33,6 +35,7 @@ permissions:
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
     - { tool: bash, match: "\\bmkfs|\\bdd\\b.*\\bof=/dev/" }
+    - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
     - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
