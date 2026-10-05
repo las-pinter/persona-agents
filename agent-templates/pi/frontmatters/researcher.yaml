@@ -15,6 +15,7 @@ permissions:
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|awk|cut|seq|ps|which|command -v|jq|bash -n|mkdir|sleep)\\b" }
     - { tool: bash, match: "^find\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|fetch|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+blame\\b" }
     - { tool: bash, match: "^(npm\\s+(root|prefix)|python3?\\s+-m\\s+pytest|PYTHONDONTWRITEBYTECODE=1 python3?\\s+-m\\s+pytest|(\\.venv/bin/)?python -m pytest)\\b" }
     - { tool: bash, match: "^systemctl\\s+--user\\s+list-units\\b" }
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
