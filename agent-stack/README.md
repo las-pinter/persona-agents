@@ -7,6 +7,7 @@ One extension, one entry: `extension.ts`. Internally modular:
 | `extension.ts` | Entry point: wires gate, commands, subagent tool, session hooks |
 | `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package (`agents/`, `personas/`) |
 | `permissions.ts` | Tool-call gate: global `permissions.json` (hard deny/ask) + active agent's frontmatter `permissions:` (deny → ask → allow → mode default) |
+| `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |
 | `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
@@ -65,6 +66,23 @@ The pi templates were translated from `agent-templates/opencode/frontmatters`
   (inherent flat-regex limitation; full hardening deferred).
 - The `cd X && …` / `git -C X …` forms (pi permits the first token only) are
   folded into the git regexes so delegates don't get stuck on command prefixes.
+  A leading `cd X` before any separator folds the segment to `cd X && …`, so a
+  `cd X || sudo true` line is rewritten to `cd X && sudo true` for allow
+  matching. The fold is lossy for allow only: the raw pre-fold segments stay in
+  the deny and ask probes, so an anchored deny such as `^sudo\b` still blocks
+  `cd X || sudo true`.
+- Compound commands are enforced per segment: `echo hi && id`, `a; b`, and pipe
+  chains are split on unquoted control operators and **every** segment must be
+  allowed. The `cd X && …` fold above is what keeps the git regexes valid. A
+  disallowed segment blocks the whole command. Heredocs (`<<`, `<<<`), ANSI-C
+  quoting (`$'...'`), unbalanced quotes, and dangling operators fail closed. See
+  `agent-stack/command-segments.ts`.
+  `$(...)`/backtick/process-substitution inner commands are added as their own
+  segments, so `echo $(id)` blocks. Arithmetic bodies are recursed into too:
+  `echo $(( $(id) + 0 ))` still blocks, and single quotes do not hide the
+  substitution there (`echo $(( '$(id)' ))` blocks too) — bash treats the
+  arithmetic body as an expansion context. The whole command is still tested
+  against deny rules, so compound denies such as `curl … | sh` keep working.
 - opencode `skill` rules become `skills:` binding patterns per profession.
   opencode research actions (`websearch`, `context7`, `deepwiki`, `exa`) are
   MCP/extension tools — out of scope for the regex gate, so they are not listed:
@@ -108,15 +126,24 @@ permissions:
 Order: global `permissions.json` deny → agent deny → global ask → agent ask → agent allow
 → mode default.
 
-An `ask` rule that the user **approves in the TUI grants that single call** — it is a
-manual override for calls the allow list does not cover (e.g. `sudo`/`rm -rf` in the
-orchestrator or planner templates). Deny rules always win; headless runs (subagent
-children, `-p`, `--mode json`) have no UI, so `ask` there is a hard block.
+An `ask` rule is a manual override for calls the allow list does not cover (e.g.
+`sudo`/`rm -rf` in the orchestrator or planner templates). Deny rules always win;
+headless runs (subagent children, `-p`, `--mode json`) have no UI, so `ask` there is a
+hard block.
 
-The ask prompt offers **three options: Deny / Allow / Always allow (session)**. "Always
-allow (session)" grants the call *and* remembers the `agent|tool|rule` for the rest of the
-session — **in-memory only, nothing is persisted to disk** (a persistent always-allow list
-is a future decision).
+An `ask` approval is per call or per segment, never global. The ask prompt offers
+**four options: Deny / Allow once (whole command) / Allow once (this segment only) /
+Always allow (session)**. "Allow once (whole command)" grants exactly that single call.
+"This segment only" and "Always allow (session)" both approve exactly the matching
+segment of a compound command and then re-evaluate the remaining segments — they never
+grant a different segment (an unallowed remaining segment blocks the whole command).
+"Always allow (session)" also remembers the `agent|tool|rule` for the rest of the
+session — **in-memory only, nothing is persisted to disk** (a persistent always-allow
+list is a future decision). The whole-command ask probe runs FIRST on the first
+evaluation pass, before the per-segment asks, so a rule whose pattern spans a separator
+is always shown once — even when a per-segment ask would match first or a
+session-allowed segment exists. A "this segment only" choice on that probe approves no
+real segment and fails closed.
 
 **Delegated commits now ask**: the orchestrator's `git add`/`git commit` moved from its
 `allow` list to its `ask` list — a commit prompts allow/deny in the main session instead
