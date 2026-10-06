@@ -10,7 +10,8 @@
     "skills": ["./skills/**/SKILL.md"]
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:permissions": "node --experimental-strip-types --test agent-stack/command-segments.test.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
