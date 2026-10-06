@@ -53,6 +53,11 @@
         "which *"
       ],
       "deniedCommands": [
+        "*eval*",
+        "bash -c *",
+        "sh -c *",
+        "dash -c *",
+        "zsh -c *",
         "bash -n *;*",
         "bash -n *>*",
         "find * -exec *",

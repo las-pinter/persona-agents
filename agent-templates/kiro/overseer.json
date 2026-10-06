@@ -77,6 +77,11 @@
         "herdr agent prompt *"
       ],
       "deniedCommands": [
+        "*eval*",
+        "bash -c *",
+        "sh -c *",
+        "dash -c *",
+        "zsh -c *",
         "herdr server stop",
         "herdr server stop *",
         "herdr --machine *"

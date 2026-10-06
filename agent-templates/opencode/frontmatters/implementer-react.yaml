@@ -53,6 +53,11 @@ permission:
     "docker logs *": allow
     "docker inspect *": allow
     "rq *": allow
+    "*eval*": deny
+    "bash -c *": deny
+    "sh -c *": deny
+    "dash -c *": deny
+    "zsh -c *": deny
   task:
     "*": deny
     "{{THEME}}-researcher": allow
