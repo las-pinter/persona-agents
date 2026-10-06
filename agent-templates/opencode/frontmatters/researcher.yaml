@@ -235,3 +235,18 @@ permissions:
   - action: skill
     resource: source-selection
     effect: allow
+  - action: shell
+    resource: "*eval*"
+    effect: deny
+  - action: shell
+    resource: "bash -c *"
+    effect: deny
+  - action: shell
+    resource: "sh -c *"
+    effect: deny
+  - action: shell
+    resource: "dash -c *"
+    effect: deny
+  - action: shell
+    resource: "zsh -c *"
+    effect: deny

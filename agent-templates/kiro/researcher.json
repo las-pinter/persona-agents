@@ -65,6 +65,11 @@
         "which *"
       ],
       "deniedCommands": [
+        "*eval*",
+        "bash -c *",
+        "sh -c *",
+        "dash -c *",
+        "zsh -c *",
         "find * -exec *",
         "git pull *",
         "git push *"

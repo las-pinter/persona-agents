@@ -9,4 +9,6 @@ permissions:
     - { tool: read, match: "(^|/)(personas|skills|agents|agent-notes)/" }
   ask: []
   deny:
+    - { tool: bash, match: "^eval\\b" }
+    - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }

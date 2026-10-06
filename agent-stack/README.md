@@ -126,6 +126,20 @@ permissions:
 Order: global `permissions.json` deny → agent deny → global ask → agent ask → agent allow
 → mode default.
 
+Deny patterns differ between the stacks:
+
+- pi: the deny fields are **regex**. The engine compiles a pattern
+  case-insensitively and unanchored, so the shell-string rules use a
+  start-of-segment anchor: `^eval\b` and
+  `^(?:/bin/)?(?:bash|sh|dash|zsh)\s+-c\b`. The engine splits compound commands
+  and tests every segment and the raw pre-fold segments. Therefore
+  `cd /x && eval y` still hits the `eval y` segment.
+- opencode and kiro: the deny fields are **globs** (anchored). They match the
+  exact prefix forms `bash -c *`, `sh -c *`, `dash -c *`, `zsh -c *`, and
+  `*eval*`. A glob cannot express a word boundary or flexible whitespace. A
+  command that misses these globs falls to the default of the stack (ask). It
+  does not become a silent allow.
+
 An `ask` rule is a manual override for calls the allow list does not cover (e.g.
 `sudo`/`rm -rf` in the orchestrator or planner templates). Deny rules always win;
 headless runs (subagent children, `-p`, `--mode json`) have no UI, so `ask` there is a
