@@ -1,14 +1,15 @@
 name: planner
 description: Turns requirements into clear, actionable, sequenced plans
-# pi planner cannot spawn subagents: the `subagent` tool is not in this loadout, so
-# there is no spawn allow (unlike the opencode template, which allows
-# {{THEME}}-researcher spawns). This is a deliberate capability regression.
-tools: [bash, read, edit, write, find, ls, grep]
+# The pi planner can spawn subagents: `subagent` is in this loadout and allowed
+# below. The depth cap (agent-stack/depth.ts) stops a level-2 agent from
+# spawning further subagents.
+tools: [bash, read, edit, write, find, ls, grep, subagent]
 skills: ["planner/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
+    - { tool: subagent, match: "." }
     - { tool: read, match: "." }
     - { tool: find, match: "." }
     - { tool: ls, match: "." }

@@ -39,6 +39,15 @@ import {
 } from "./resolver.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { archiveRun, type InspectTask } from "./inspector.ts";
+import {
+	ENV_AGENT_DEPTH,
+	ENV_PARENT_RUN_ID,
+	ENV_RUN_ID,
+	canSpawn,
+	newRunId,
+	parseDepth,
+	planSpawn,
+} from "./depth.ts";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -46,6 +55,9 @@ const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
+
+/** This process's nesting depth, read once at module load. Absent env means level 0. */
+const myDepth = parseDepth(process.env[ENV_AGENT_DEPTH]);
 
 /** Byte-safe truncation of the chain `{previous}` output so a giant prior step
  * cannot blow up the next spawn's prompt. Preserves behavior for normal sizes. */
@@ -297,9 +309,16 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	return { command: "pi", args };
 }
 
-function buildChildEnv(): NodeJS.ProcessEnv {
+/** Build the child environment. Env is a carrier for depth and run identity;
+ * the parent `--tools` strip is the real control. */
+function buildChildEnv(childDepthValue: number, childRunId: string, parentRunId: string | null): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env };
 	delete env.HERDR_ENV;
+	env[ENV_AGENT_DEPTH] = String(childDepthValue);
+	env[ENV_RUN_ID] = childRunId;
+	// Overwrite any inherited parent id: this child's parent is THIS process.
+	if (parentRunId) env[ENV_PARENT_RUN_ID] = parentRunId;
+	else delete env[ENV_PARENT_RUN_ID];
 	return env;
 }
 
@@ -341,6 +360,21 @@ async function runSingleAgent(
 		};
 	}
 
+	// Depth cap: refuse before any process starts. Env is the carrier; this
+	// self-guard is the defense-in-depth backstop for a stale template.
+	if (!canSpawn(myDepth)) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: "Depth cap reached (level 2): subagents cannot spawn further subagents.",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
 	// Spawn allowlist: a resolved agent (direct name OR theme-profession alias)
 	// whose frontmatter sets `spawnable: false` is never dispatched — it runs as
 	// the main session only. Reject before any process is spawned.
@@ -364,7 +398,17 @@ async function runSingleAgent(
 	if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
 		args.push("--thinking", dispatchDefaults.thinkingLevel);
 	}
-	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	// Strip `subagent` from the child's locked tool set when it would sit at the
+	// cap. pi locks tools at process start, so this is the real control. An
+	// absent `--tools` re-enables pi defaults, so a stripped-to-empty list must
+	// pass `--no-tools` instead of falling back to defaults.
+	const requestedTools = agent.tools ?? [];
+	const spawnPlan = planSpawn(myDepth, requestedTools);
+	if (requestedTools.length > 0 && spawnPlan.tools.length > 0) {
+		args.push("--tools", spawnPlan.tools.join(","));
+	} else if (requestedTools.length > 0) {
+		args.push("--no-tools");
+	}
 
 	// The child must activate EXACTLY this agent + persona; otherwise the child's
 	// own applyDefaults would pull in global defaultAgent/defaultPersona and
@@ -384,6 +428,10 @@ async function runSingleAgent(
 		model,
 		step,
 	};
+
+	/** Run identity carried to the child via env. Parent id comes from our env. */
+	const childRunId = newRunId();
+	const parentRunId = process.env[ENV_RUN_ID] ?? null;
 
 	const emitUpdate = () => {
 		if (onUpdate) {
@@ -406,7 +454,7 @@ async function runSingleAgent(
 				cwd: cwd ?? defaultCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
-				env: buildChildEnv(),
+				env: buildChildEnv(spawnPlan.childDepth, childRunId, parentRunId),
 			});
 			let buffer = "";
 
