@@ -143,6 +143,8 @@ import {
 } from "./resolver.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
 import registerSubagentTool from "./subagent.ts";
+import { registerTodoTool } from "./todo-tool.ts";
+import { disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 
 export default function (pi: ExtensionAPI): void {
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
@@ -156,6 +158,22 @@ export default function (pi: ExtensionAPI): void {
 
 	// 3. Orchestrator tool (spawn-based subagents, isolated contexts).
 	registerSubagentTool(pi);
+
+	// 3b. Todo tool (session-entry state, feeds the TODOS sidebar panel).
+	// Guarded: a registration failure must never break the extension.
+	try {
+		registerTodoTool(pi);
+	} catch (error) {
+		debugLog("todo tool registration failed:", error instanceof Error ? error.message : String(error));
+	}
+
+	// 3c. Sidebar glue: compositor, data, commands, and lifecycle.
+	// Guarded: a registration failure must never break the extension.
+	try {
+		registerTreeUi(pi);
+	} catch (error) {
+		debugLog("tree ui registration failed:", error instanceof Error ? error.message : String(error));
+	}
 
 	// 4. Apply configured defaults when a session starts.
 	// CLI flags: `pi --agent orchestrator --persona goblin/bossnik-chief`.
@@ -237,6 +255,11 @@ export default function (pi: ExtensionAPI): void {
 
 	pi.on("session_shutdown", () => {
 		shutdownTreeRoot();
+		try {
+			disposeTreeSidebar();
+		} catch (error) {
+			debugLog("tree sidebar dispose failed:", error instanceof Error ? error.message : String(error));
+		}
 	});
 
 	// 5. Inject agent + persona prompts ahead of every agent run.

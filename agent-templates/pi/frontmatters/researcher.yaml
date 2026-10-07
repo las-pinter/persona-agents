@@ -1,11 +1,13 @@
 name: researcher
 description: Read-only investigation specialist that searches, reads, samples, and summarizes code and environment state
-tools: [bash, read, edit, write, find, ls, grep]
+tools: [bash, read, edit, write, find, ls, grep, todo]
 skills: ["researcher/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
+    # The todo tool tracks work in session entries only; no shell or filesystem surface.
+    - { tool: todo, match: "." }
     - { tool: read, match: "." }
     - { tool: find, match: "." }
     - { tool: ls, match: "." }

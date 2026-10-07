@@ -1,11 +1,13 @@
 name: implementer
 description: "Implements code changes end to end: edits files, runs builds and tests"
-tools: [bash, read, edit, write, find, ls, grep, subagent]
+tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
 skills: ["implementer/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
+    # The todo tool tracks work in session entries only; no shell or filesystem surface.
+    - { tool: todo, match: "." }
     - { tool: read, match: "." }
     - { tool: find, match: "." }
     - { tool: ls, match: "." }

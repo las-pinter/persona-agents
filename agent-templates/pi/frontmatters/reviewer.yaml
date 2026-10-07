@@ -1,11 +1,13 @@
 name: reviewer
 description: Senior code reviewer for quality, security, and maintainability; read-only analysis
-tools: [bash, read, find, ls, grep]
+tools: [bash, read, find, ls, grep, todo]
 skills: ["reviewer/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
+    # The todo tool tracks work in session entries only; no shell or filesystem surface.
+    - { tool: todo, match: "." }
     - { tool: read, match: "." }
     - { tool: find, match: "." }
     - { tool: ls, match: "." }

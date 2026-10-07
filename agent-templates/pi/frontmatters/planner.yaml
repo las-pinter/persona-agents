@@ -3,12 +3,14 @@ description: Turns requirements into clear, actionable, sequenced plans
 # The pi planner can spawn subagents: `subagent` is in this loadout and allowed
 # below. The depth cap (agent-stack/depth.ts) stops a level-2 agent from
 # spawning further subagents.
-tools: [bash, read, edit, write, find, ls, grep, subagent]
+tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
 skills: ["planner/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
+    # The todo tool tracks work in session entries only; no shell or filesystem surface.
+    - { tool: todo, match: "." }
     - { tool: subagent, match: "." }
     - { tool: read, match: "." }
     - { tool: find, match: "." }

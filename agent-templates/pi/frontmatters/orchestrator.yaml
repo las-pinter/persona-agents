@@ -4,12 +4,14 @@ description: Coordinates work by delegating to subagents; routes tasks, manages 
 # commit privileges, so a dispatcher must never be able to escalate by
 # spawning one.
 spawnable: false
-tools: [bash, read, edit, write, subagent, ask_user_question]
+tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/simplified-technical-english"]
 alwaysLoad: ["orchestrator/journal-management", "orchestrator/project-notes", "common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:
+    # The todo tool tracks work in session entries only; no shell or filesystem surface.
+    - { tool: todo, match: "." }
     - { tool: read, match: "(^|/)(agent-notes|skills|personas|agents)/" }
     - { tool: read, match: "SKILL\\.md$" }
     - { tool: edit, match: "(^|/)agent-notes/(orchestrator|planner/plans)/" }
