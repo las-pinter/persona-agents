@@ -74,6 +74,19 @@ export function planSpawn(myDepth: number, tools: string[]): SpawnPlan {
 	};
 }
 
+/**
+ * The argv fragment for a child's locked tool set.
+ *
+ * An empty request means "no override". A non-empty request that strips to
+ * empty passes `--no-tools`; an absent `--tools` would re-enable pi defaults.
+ */
+export function childToolArgs(requestedTools: string[], myDepth: number): string[] {
+	if (requestedTools.length === 0) return [];
+	const tools = stripSpawnTool(requestedTools, myDepth);
+	if (tools.length === 0) return ["--no-tools"];
+	return ["--tools", tools.join(",")];
+}
+
 let runCounter = 0;
 
 /** A unique run id for one spawned agent process. */

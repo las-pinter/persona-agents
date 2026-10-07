@@ -14,6 +14,7 @@ import {
 	MAX_AGENT_DEPTH,
 	canSpawn,
 	childDepth,
+	childToolArgs,
 	depthEnv,
 	parseDepth,
 	planSpawn,
@@ -96,6 +97,25 @@ test("planSpawn permits at depth 1 and strips subagent for the child", () => {
 	assert.equal(plan.allowed, true);
 	assert.equal(plan.childDepth, 2);
 	assert.deepEqual(plan.tools, ["read"]);
+});
+
+// --- child tool argv ---------------------------------------------------------
+
+test("childToolArgs passes no override for an empty request", () => {
+	assert.deepEqual(childToolArgs([], 0), []);
+});
+
+test("childToolArgs passes --tools for a kept list", () => {
+	assert.deepEqual(childToolArgs(["read"], 0), ["--tools", "read"]);
+});
+
+test("childToolArgs keeps subagent below the cap", () => {
+	assert.deepEqual(childToolArgs(["subagent"], 0), ["--tools", "subagent"]);
+});
+
+test("childToolArgs passes --no-tools when the strip empties the list", () => {
+	// myDepth 1 -> childDepth 2 -> at the cap -> subagent is stripped.
+	assert.deepEqual(childToolArgs(["subagent"], 1), ["--no-tools"]);
 });
 
 // --- env fragment ------------------------------------------------------------

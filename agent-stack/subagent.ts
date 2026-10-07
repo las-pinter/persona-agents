@@ -43,11 +43,14 @@ import {
 	ENV_AGENT_DEPTH,
 	ENV_PARENT_RUN_ID,
 	ENV_RUN_ID,
+	ENV_TREE_LOG,
 	canSpawn,
+	childToolArgs,
 	newRunId,
 	parseDepth,
 	planSpawn,
 } from "./depth.ts";
+import { type RunEvent, appendEvent } from "./tree-log.ts";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -258,6 +261,29 @@ function truncateParallelOutput(output: string): string {
 	return `${truncated}\n\n[Output truncated: ${byteLength - Buffer.byteLength(truncated, "utf8")} bytes omitted. Full output preserved in tool details.]`;
 }
 
+/** Tree-event text caps. The log writer also enforces a hard 4 KiB line cap. */
+const TREE_TASK_PREVIEW_BYTES = 1000;
+const TREE_OUTPUT_PREVIEW_BYTES = 2048;
+/** One `update` event per run per second. */
+const TREE_UPDATE_INTERVAL_MS = 1000;
+
+/** Byte-safe UTF-8 truncation for tree-event text fields. */
+function truncateUtf8(value: string, maxBytes: number): string {
+	if (Buffer.byteLength(value, "utf8") <= maxBytes) return value;
+	let truncated = value.slice(0, maxBytes);
+	while (truncated.length > 0 && Buffer.byteLength(truncated, "utf8") > maxBytes) {
+		truncated = truncated.slice(0, -1);
+	}
+	return truncated;
+}
+
+/** Append one tree event when the shared log is enabled. Best-effort. */
+function appendTreeEvent(event: RunEvent): void {
+	const logPath = process.env[ENV_TREE_LOG];
+	if (!logPath) return;
+	appendEvent(logPath, event);
+}
+
 type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
 
 function getDisplayItems(messages: Message[]): DisplayItem[] {
@@ -398,24 +424,20 @@ async function runSingleAgent(
 	if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
 		args.push("--thinking", dispatchDefaults.thinkingLevel);
 	}
-	// Strip `subagent` from the child's locked tool set when it would sit at the
-	// cap. pi locks tools at process start, so this is the real control. An
-	// absent `--tools` re-enables pi defaults, so a stripped-to-empty list must
-	// pass `--no-tools` instead of falling back to defaults.
+	// Keep the `subagent` strip in the pure `childToolArgs` helper. pi locks
+	// tools at process start, so this is the real control. An absent `--tools`
+	// re-enables pi defaults, so a stripped-to-empty list passes `--no-tools`.
 	const requestedTools = agent.tools ?? [];
 	const spawnPlan = planSpawn(myDepth, requestedTools);
-	if (requestedTools.length > 0 && spawnPlan.tools.length > 0) {
-		args.push("--tools", spawnPlan.tools.join(","));
-	} else if (requestedTools.length > 0) {
-		args.push("--no-tools");
-	}
+	args.push(...childToolArgs(requestedTools, myDepth));
 
 	// The child must activate EXACTLY this agent + persona; otherwise the child's
 	// own applyDefaults would pull in global defaultAgent/defaultPersona and
 	// override the caller's theme choice.
 	args.push("--agent", agent.name);
 	const persona = resolveSpawnPersona(agent.name);
-	args.push("--persona", persona ? formatPersonaId(persona) : "off");
+	const personaId = persona ? formatPersonaId(persona) : null;
+	args.push("--persona", personaId ?? "off");
 
 	const currentResult: SingleResult = {
 		agent: agentName,
@@ -433,6 +455,49 @@ async function runSingleAgent(
 	const childRunId = newRunId();
 	const parentRunId = process.env[ENV_RUN_ID] ?? null;
 
+	// The parent writes this run's records. Append the start before the spawn so
+	// the tree shows the child the moment it exists.
+	let lastTreeUpdateAt = Date.now();
+	const taskBytes = Buffer.byteLength(task, "utf8");
+	let bytesOut = 0;
+	appendTreeEvent({
+		v: 1,
+		type: "start",
+		runId: childRunId,
+		parentRunId,
+		depth: spawnPlan.childDepth,
+		agent: agent.name,
+		persona: personaId,
+		status: "running",
+		at: new Date().toISOString(),
+		task: truncateUtf8(task, TREE_TASK_PREVIEW_BYTES),
+	});
+
+	const emitTreeUpdate = () => {
+		const now = Date.now();
+		if (now - lastTreeUpdateAt < TREE_UPDATE_INTERVAL_MS) return;
+		lastTreeUpdateAt = now;
+		appendTreeEvent({
+			v: 1,
+			type: "update",
+			runId: childRunId,
+			parentRunId,
+			depth: spawnPlan.childDepth,
+			agent: agent.name,
+			persona: personaId,
+			status: "running",
+			at: new Date().toISOString(),
+			bytesIn: taskBytes,
+			bytesOut,
+			usage: {
+				input: currentResult.usage.input,
+				output: currentResult.usage.output,
+				cost: currentResult.usage.cost,
+				turns: currentResult.usage.turns,
+			},
+		});
+	};
+
 	const emitUpdate = () => {
 		if (onUpdate) {
 			onUpdate({
@@ -449,13 +514,26 @@ async function runSingleAgent(
 		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
-			const invocation = getPiInvocation(args);
-			const proc = spawn(invocation.command, invocation.args, {
-				cwd: cwd ?? defaultCwd,
-				shell: false,
-				stdio: ["ignore", "pipe", "pipe"],
-				env: buildChildEnv(spawnPlan.childDepth, childRunId, parentRunId),
-			});
+			const spawnChild = () => {
+				const invocation = getPiInvocation(args);
+				return spawn(invocation.command, invocation.args, {
+					cwd: cwd ?? defaultCwd,
+					shell: false,
+					stdio: ["ignore", "pipe", "pipe"],
+					env: buildChildEnv(spawnPlan.childDepth, childRunId, parentRunId),
+				});
+			};
+			let proc: ReturnType<typeof spawnChild>;
+			try {
+				proc = spawnChild();
+			} catch (error) {
+				// A synchronous spawn throw (bad options or args) must still close the
+				// run, or the tree's `start` node stays `running` for five minutes.
+				// Resolve here and let the normal post-await `end` emission run.
+				currentResult.errorMessage = error instanceof Error ? error.message : String(error);
+				resolve(1);
+				return;
+			}
 			let buffer = "";
 
 			const processLine = (line: string) => {
@@ -487,12 +565,14 @@ async function runSingleAgent(
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
 					}
 					emitUpdate();
+					emitTreeUpdate();
 				}
 				// Note: tool results arrive as message_end with role "toolResult" (handled
 				// above); pi emits no separate "tool_result_end" event.
 			};
 
 			proc.stdout.on("data", (data) => {
+				bytesOut += data.length;
 				buffer += data.toString();
 				const lines = buffer.split("\n");
 				buffer = lines.pop() || "";
@@ -526,6 +606,28 @@ async function runSingleAgent(
 		});
 
 		currentResult.exitCode = exitCode;
+		appendTreeEvent({
+			v: 1,
+			type: "end",
+			runId: childRunId,
+			parentRunId,
+			depth: spawnPlan.childDepth,
+			agent: agent.name,
+			persona: personaId,
+			status: isFailedResult(currentResult) ? "failed" : "done",
+			at: new Date().toISOString(),
+			bytesIn: taskBytes,
+			bytesOut,
+			usage: {
+				input: currentResult.usage.input,
+				output: currentResult.usage.output,
+				cost: currentResult.usage.cost,
+				turns: currentResult.usage.turns,
+			},
+			exitCode,
+			error: currentResult.errorMessage ?? null,
+			outputPreview: truncateUtf8(getResultOutput(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
+		});
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {

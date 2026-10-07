@@ -16,6 +16,8 @@
 import * as fs from "node:fs";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
+import { ENV_RUN_ID, ENV_TREE_LOG, newRunId } from "./depth.ts";
+import { MAX_LOG_BYTES, appendEvent, compactLog, createRootLogPath, readEvents } from "./tree-log.ts";
 
 function debugLog(...parts: unknown[]): void {
 	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
@@ -29,6 +31,100 @@ function debugLog(...parts: unknown[]): void {
 
 const MODULE_LOAD_ID = `${process.pid}-${Math.random().toString(36).slice(2, 7)}`;
 
+/** Tree-log identity for this process. Set once at `session_start`. */
+let rootRunId: string | null = null;
+let isRootProcess = false;
+let createdRootLog: string | null = null;
+
+/**
+ * Set up the shared tree log for the root process. A child already carries
+ * `PI_AGENT_RUN_ID` from its parent, so it must not create a root identity.
+ */
+function initTreeRoot(): void {
+	try {
+		if (rootRunId) return;
+		const inheritedRunId = process.env[ENV_RUN_ID];
+		const inheritedLog = process.env[ENV_TREE_LOG];
+		if (inheritedRunId) {
+			// Child process: the parent writes this run's records.
+			rootRunId = inheritedRunId;
+			return;
+		}
+
+		isRootProcess = true;
+		const logPath = inheritedLog ?? createRootLogPath();
+		if (!inheritedLog) createdRootLog = logPath;
+		process.env[ENV_TREE_LOG] = logPath;
+		rootRunId = newRunId();
+		process.env[ENV_RUN_ID] = rootRunId;
+
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "start",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status: "running",
+			at: new Date().toISOString(),
+		});
+		compactIfNeeded(logPath, rootRunId);
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
+/** Compact the log over `MAX_LOG_BYTES`, keeping live runs and the root. */
+function compactIfNeeded(logPath: string, keepRunId: string): void {
+	try {
+		if (fs.statSync(logPath).size <= MAX_LOG_BYTES) return;
+		const events = readEvents(logPath);
+		const ended = new Set(events.filter((event) => event.type === "end").map((event) => event.runId));
+		const live = new Set(events.filter((event) => !ended.has(event.runId)).map((event) => event.runId));
+		live.add(keepRunId);
+		compactLog(logPath, live);
+	} catch {
+		// A missing file means there is nothing to compact.
+	}
+}
+
+/** Append the root end record, then remove the log only when we created it. */
+function shutdownTreeRoot(): void {
+	try {
+		if (!isRootProcess || !rootRunId) return;
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "end",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status: "done",
+			at: new Date().toISOString(),
+			exitCode: 0,
+		});
+
+		if (createdRootLog) {
+			try {
+				fs.unlinkSync(createdRootLog);
+			} catch {
+				// The log may already be gone.
+			}
+		}
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
 // Tunable budgets, not yet settings-backed.
 const SKILL_INJECTION_BUDGET_BYTES = 24 * 1024;
 const SKILL_BODY_CAP_BYTES = 12 * 1024;
@@ -40,6 +136,7 @@ import { getActiveAgent, getActivePersona } from "./state.ts";
 import {
 	discoverAgents,
 	discoverSkills,
+	formatPersonaId,
 	matchSkills,
 	resolvePersonaForAgent,
 	resolveResources,
@@ -134,7 +231,12 @@ export default function (pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => {
 		debugLog("session_start cwd=", ctx.cwd);
 		applyDefaults(ctx.cwd);
+		initTreeRoot();
 		syncStatus(ctx);
+	});
+
+	pi.on("session_shutdown", () => {
+		shutdownTreeRoot();
 	});
 
 	// 5. Inject agent + persona prompts ahead of every agent run.
