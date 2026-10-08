@@ -12,6 +12,14 @@ One extension, one entry: `extension.ts`. Internally modular:
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
+| `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent `--tools` strip, run-id allocation |
+| `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
+| `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
+| `sidebar-render.ts` | Pure five-panel renderers (AGENTS, SESSION, WORKSPACE, MCP, TODOS) |
+| `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
+| `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
+| `tree-ui.ts` | Sidebar glue: binds compositor, data, commands, and lifecycle; reads the git branch |
+| `todo-tool.ts` | `todo` tool: session-entry state, registration, and the `persona-agents/todos/v1` event |
 
 ## Install
 
@@ -187,6 +195,83 @@ Every completed subagent tool run is archived (bounded to the last 12).
 - `/inspect [last|N]` — open a run in a **full-screen overlay** (like opencode's dedicated
   agent views): task list, per-task tool calls, final output, usage, and errors.
   Keys: `↑/↓` + `PgUp/PgDn` scroll · `Tab`/`←/→` switch task · `q`/`Esc` close.
+
+## Nested subagents and the live sidebar
+
+The extension caps agent nesting at 3 levels: 0 (the root), 1, and 2. A level-2
+agent cannot spawn.
+
+The primary control is the parent `--tools` strip. When a child would be at the
+cap, the parent removes `subagent` from the child's `--tools` list. pi locks the
+tool set at process start, so the child never receives the tool.
+`PI_AGENT_DEPTH` carries the depth, and the child self-guard refuses a stale
+spawn.
+
+The cap is NOT a security boundary. All pi processes have the same OS privilege.
+A child with an allowed interpreter can run `pi -ne …` with a forged
+`PI_AGENT_DEPTH`. That bypasses every in-process guard. Only OS isolation — a
+separate user, a container, or a sandbox — is a true boundary. OS isolation is
+OUT OF SCOPE for this feature. The `--tools` strip stops the normal path only.
+
+The sidebar owns the right column. It paints FIVE panels:
+
+1. AGENTS — the live agent tree.
+2. SESSION — model, thinking level, context use, cost, and tokens per second.
+3. WORKSPACE — cwd, git branch, and the changed-file count.
+4. MCP — configured servers and an inferred connection dot.
+5. TODOS — the `todo` tool's list.
+
+The tree is the only cross-process panel. Every other panel shows the root
+process's data. `pi.events` is process-local, so a child's session, MCP, and todo
+data is not visible to the root sidebar.
+
+The tree comes from a shared append-only NDJSON log. The root creates the log in
+`os.tmpdir()`, unique per root. The root compacts the log when it grows past the
+cap. Each spawned process appends the records of its own children.
+
+MCP fidelity is reduced. The built-in `pi.getMcpServers()` returns config only,
+with no live connection state. The panel infers `connected` from the tool names
+in `getAllTools()` (`mcp__<server>__<tool>`).
+
+### The `todo` tool
+
+pi has no built-in todo tool, so the extension ships one. Actions: `list`,
+`add` (text), `toggle` (id), `remove` (id), `clear`. State lives in session
+entries, with an in-memory cache. Each change publishes the
+`persona-agents/todos/v1` event for the TODOS panel.
+
+These agents may call `todo`: orchestrator, planner, implementer, tester,
+researcher, reviewer. Mascot and overseer are excluded. Each allowed agent lists
+`todo` in `tools:` and has a `{ tool: todo, match: "." }` allow rule.
+
+### Commands
+
+- `/sidebar [on|off]` — show or hide the right column. A bare `/sidebar` toggles.
+- `/agents-tree` — open the live tree overlay. Up/down selects a node.
+- `/agent-inspect [runId|last]` — open one node's detail.
+
+The sidebar has no keyboard focus, so node details use these overlays.
+
+### Turn `pi-sidebar-tui` off
+
+The extension ships its own compositor. Turn the third-party `pi-sidebar-tui`
+package OFF, or the two sidebars collide. Do not edit the operator's settings
+from this repo. Use one of these operator steps:
+
+1. Run `/sidebar-tui off` in pi. This persists to
+   `~/.pi/agent/sidebar-tui.json`.
+2. Remove `"npm:pi-sidebar-tui"` from the `packages` array in
+   `~/.pi/agent/settings.json`.
+
+`pi-sidebar-tui` is a package, not a built-in. `pi config` does not list it under
+Built-in.
+
+### Clean room
+
+The compositor is a clean-room re-implementation of the technique: narrow
+`terminal.columns`, wrap `tui.doRender`, and paint a right column. No upstream
+code was copied. The upstream package declares the MIT license, but its npm
+tarball ships no `LICENSE` file.
 
 ## Editable agent-notes zones
 

@@ -5,7 +5,9 @@
  *   npm run test:permissions -- agent-stack/tree-log.test.ts
  *
  * Covers the plan's Task 19 tree-log cases: round-trip append/read, malformed
- * line skipping, byte-cap truncation, a missing file, and root path uniqueness.
+ * line skipping, byte-cap truncation, a missing file, root path uniqueness,
+ * the capped read tail, compaction, lone update/end handling, concurrent roots,
+ * and interleaved appends to one shared log path.
  */
 
 import { test, after } from "node:test";
@@ -164,4 +166,54 @@ test("a lone update and a lone end do not throw and the model handles them", () 
 	const roots = assembleTree(events, Date.now(), 60_000);
 	assert.equal(findNode(roots, "lonely-update")?.status, "running");
 	assert.equal(findNode(roots, "lonely-end")?.status, "done");
+});
+
+test("two independent logs give two independent trees (concurrent roots)", () => {
+	const pathA = logPath();
+	const pathB = logPath();
+
+	appendEvent(pathA, makeEvent({ runId: "root-a", type: "start" }));
+	appendEvent(pathA, makeEvent({ runId: "root-a", type: "end", status: "done" }));
+	appendEvent(pathB, makeEvent({ runId: "root-b", type: "start", agent: "planner" }));
+	appendEvent(pathB, makeEvent({ runId: "root-b", type: "end", status: "done" }));
+
+	const treeA = assembleTree(readEvents(pathA), Date.now(), 60_000);
+	const treeB = assembleTree(readEvents(pathB), Date.now(), 60_000);
+
+	assert.equal(treeA.length, 1);
+	assert.equal(treeB.length, 1);
+	assert.equal(treeA[0]?.runId, "root-a");
+	assert.equal(treeB[0]?.runId, "root-b");
+	assert.equal(findNode(treeA, "root-b"), undefined);
+	assert.equal(findNode(treeB, "root-a"), undefined);
+
+	// No record leaks across the two files.
+	assert.equal(readEvents(pathA).some((event) => event.runId === "root-b"), false);
+	assert.equal(readEvents(pathB).some((event) => event.runId === "root-a"), false);
+});
+
+test("interleaved appends from two writers to one log keep every record", () => {
+	const path = logPath();
+	const perWriter = 200;
+
+	// Two logical writers share one O_APPEND log, so their lines interleave.
+	for (let index = 0; index < perWriter; index++) {
+		appendEvent(path, makeEvent({ runId: "writer-a", type: "update" }));
+		appendEvent(path, makeEvent({ runId: "writer-b", type: "update" }));
+	}
+
+	const events = readEvents(path, perWriter * 2);
+	assert.equal(events.length, perWriter * 2, "every appended record must survive");
+
+	let seenA = 0;
+	let seenB = 0;
+	for (const event of events) {
+		assert.ok(event.runId === "writer-a" || event.runId === "writer-b");
+		// Each line is whole: the run id and event type are never split.
+		assert.equal(event.type, "update", "no corrupted or partial line");
+		if (event.runId === "writer-a") seenA += 1;
+		else seenB += 1;
+	}
+	assert.equal(seenA, perWriter);
+	assert.equal(seenB, perWriter);
 });

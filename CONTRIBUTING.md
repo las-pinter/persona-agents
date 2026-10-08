@@ -102,9 +102,11 @@ frontmatter, so this repo ships bare-YAML fragments in
 `agent-templates/pi/frontmatters/{profession}.yaml` that the resolver composes
 at load time with the shared `professions/{profession}.md` bodies, `personas/`,
 and the `agents.json` theme ↔ profession persona mapping. The extension adds
-spawn-based subagents (the `subagent` tool), a per-agent permission gate
-(deny-by-default + regex allow lists), and `/agents` / `/persona` /
-`/skills` slash commands. Install with the pi CLI (`pi install …`, see
+spawn-based subagents (the `subagent` tool) with a 3-level nesting cap, a
+per-agent permission gate (deny-by-default + regex allow lists), a `todo` tool
+that feeds the TODOS sidebar panel, a live five-panel agent-tree sidebar, and
+the `/agents`, `/persona`, `/skills`, `/sidebar`, `/agents-tree`, and
+`/agent-inspect` slash commands. Install with the pi CLI (`pi install …`, see
 README.md) — `install.sh` does not generate pi files.
 
 ## Repository Structure
@@ -112,7 +114,17 @@ README.md) — `install.sh` does not generate pi files.
 ```
 persona-agents/
 ├── agents.json                        # Source of truth: themes → professions → personas
-├── agent-stack/                       # Pi extension: subagent tool, permission gate, /agents, /persona
+├── agent-stack/                       # Pi extension: subagent + todo tools, permission gate, sidebar
+│   ├── extension.ts                   # Entry: wires gate, commands, tools, session hooks
+│   ├── subagent.ts                    # Spawn-based subagent tool + tree logging
+│   ├── todo-tool.ts                   # `todo` tool: session-entry state + todos event
+│   ├── depth.ts                       # Nesting depth cap + parent `--tools` strip
+│   ├── tree-log.ts                    # Shared append-only NDJSON tree log
+│   ├── tree-model.ts                  # Pure tree model (links, orphans, stale)
+│   ├── sidebar-render.ts              # Pure five-panel renderers
+│   ├── sidebar-data.ts                # Snapshot collector (events + polls)
+│   ├── sidebar.ts                     # Right-column compositor + /sidebar config
+│   └── tree-ui.ts                     # Sidebar glue, overlays, lifecycle
 ├── agent-templates/
 │   ├── kiro/                          # Kiro JSON templates per profession
 │   │   ├── orchestrator.json
@@ -260,7 +272,8 @@ pi install → registers agent-stack/extension.ts + skills
 AT LOAD TIME (extension factory / session start):
   resolver (agent-stack/resolver.ts) → agent-templates/pi/frontmatters/*.yaml
   → compose with professions/*.md + personas + agents.json mapping
-  → /agents, /persona, subagent tool, per-agent permission gate
+  → /agents, /persona, subagent tool, todo tool, per-agent permission gate
+  → shared tree log → sidebar compositor (AGENTS, SESSION, WORKSPACE, MCP, TODOS)
 ```
 
 **Key design decisions:**
