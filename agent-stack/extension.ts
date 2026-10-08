@@ -16,7 +16,7 @@
 import * as fs from "node:fs";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
-import { ENV_RUN_ID, ENV_TREE_LOG, newRunId } from "./depth.ts";
+import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts";
 import { MAX_LOG_BYTES, appendEvent, compactLog, createRootLogPath, readEvents } from "./tree-log.ts";
 
 function debugLog(...parts: unknown[]): void {
@@ -37,26 +37,36 @@ let isRootProcess = false;
 let createdRootLog: string | null = null;
 
 /**
- * Set up the shared tree log for the root process. A child already carries
- * `PI_AGENT_RUN_ID` from its parent, so it must not create a root identity.
+ * Set up the shared tree log for the root process.
+ *
+ * Root vs child comes from `PI_AGENT_PARENT_RUN_ID`, not `PI_AGENT_RUN_ID`:
+ * the root sets its own run id and that id survives `/reload`.
+ *
+ * `/reload` re-runs the extension factory and fires `session_start` again, so
+ * this function must be reload-safe. The run id and the log path come from the
+ * environment of the previous life, so the log is inherited (never unlinked
+ * here) and the root `start` is re-appended. A child always has a parent id and
+ * must not create a root identity.
  */
 function initTreeRoot(): void {
 	try {
 		if (rootRunId) return;
-		const inheritedRunId = process.env[ENV_RUN_ID];
-		const inheritedLog = process.env[ENV_TREE_LOG];
-		if (inheritedRunId) {
+		if (!isRootProcessEnv(process.env)) {
 			// Child process: the parent writes this run's records.
-			rootRunId = inheritedRunId;
 			return;
 		}
 
 		isRootProcess = true;
-		const logPath = inheritedLog ?? createRootLogPath();
+		const inheritedRunId = process.env[ENV_RUN_ID];
+		const inheritedLog = process.env[ENV_TREE_LOG];
+
+		// Reuse the run id and log path from the previous life so the tree
+		// survives `/reload`. A set-but-empty env value is not valid.
+		rootRunId = inheritedRunId || newRunId();
+		process.env[ENV_RUN_ID] = rootRunId;
+		const logPath = inheritedLog || createRootLogPath();
 		if (!inheritedLog) createdRootLog = logPath;
 		process.env[ENV_TREE_LOG] = logPath;
-		rootRunId = newRunId();
-		process.env[ENV_RUN_ID] = rootRunId;
 
 		const agent = getActiveAgent();
 		const persona = getActivePersona();
@@ -91,7 +101,15 @@ function compactIfNeeded(logPath: string, keepRunId: string): void {
 	}
 }
 
-/** Append the root end record, then remove the log only when we created it. */
+/**
+ * Append the root end record, then remove the log only when this process
+ * created it. Called only for a real `quit`.
+ *
+ * After `/reload` module state is fresh: `createdRootLog` is null and the log
+ * is inherited. A later real quit cannot unlink that inherited temp log, so it
+ * leaks. This is intentional: the extension does not delete a path it cannot
+ * prove it created in this life.
+ */
 function shutdownTreeRoot(): void {
 	try {
 		if (!isRootProcess || !rootRunId) return;
@@ -258,7 +276,8 @@ export default function (pi: ExtensionAPI): void {
 		}
 	};
 
-	// Factory-time: survives /reload even though session_start does not re-fire.
+	// `/reload` re-runs the factory and `session_start` fires again, so defaults
+	// are applied twice. Both calls are idempotent.
 	applyDefaults(undefined);
 
 	/** Reflect the active agent/persona in the footer status bar. */
@@ -280,8 +299,16 @@ export default function (pi: ExtensionAPI): void {
 		syncStatus(ctx);
 	});
 
-	pi.on("session_shutdown", () => {
-		shutdownTreeRoot();
+	pi.on("session_shutdown", (event) => {
+		// Only a real process end writes the root `end`. On `/reload`, `new`,
+		// `resume`, or `fork` the process lives on and inherits the log; a stale
+		// root `end` would pin the sidebar spinner to done. A missing reason
+		// counts as a real end.
+		if (!event.reason || event.reason === "quit") {
+			shutdownTreeRoot();
+		}
+		// The sidebar teardown must run on every reason: reload replaces the
+		// runtime and the old timers and compositor must stop.
 		try {
 			disposeTreeSidebar();
 		} catch (error) {

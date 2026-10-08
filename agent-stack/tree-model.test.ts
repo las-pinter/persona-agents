@@ -153,6 +153,20 @@ test("a root end makes the idle root done", () => {
 	assert.equal(roots[0]?.status, "done");
 });
 
+test("a start after an end still folds done", () => {
+	// Current behavior: any `end` record pins the run to done, and a later
+	// `start` does not revive it. This documents the fold that made a stale root
+	// `end` fatal before the shutdown fix: a second `/reload` re-appends the
+	// root `start`, but the node stays done.
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "root", type: "end", status: "done", at: at(10) }),
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(20) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots[0]?.status, "done");
+});
+
 test("a failed end gives status failed", () => {
 	const events = [
 		makeEvent({ runId: "bad", type: "start", at: at(0) }),

@@ -11,11 +11,14 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+	ENV_PARENT_RUN_ID,
+	ENV_RUN_ID,
 	MAX_AGENT_DEPTH,
 	canSpawn,
 	childDepth,
 	childToolArgs,
 	depthEnv,
+	isRootProcessEnv,
 	parseDepth,
 	planSpawn,
 	stripSpawnTool,
@@ -124,3 +127,22 @@ test("depthEnv carries the child depth", () => {
 	assert.deepEqual(depthEnv(0), { PI_AGENT_DEPTH: "1" });
 	assert.deepEqual(depthEnv(1), { PI_AGENT_DEPTH: "2" });
 });
+
+// --- root vs child detection -------------------------------------------------
+
+test("isRootProcessEnv is true without a parent run id", () => {
+	assert.equal(isRootProcessEnv({}), true);
+});
+
+test("isRootProcessEnv is false with a parent run id", () => {
+	assert.equal(isRootProcessEnv({ [ENV_RUN_ID]: "child", [ENV_PARENT_RUN_ID]: "parent" }), false);
+});
+
+test("isRootProcessEnv is true after /reload: run id set, no parent id", () => {
+	// The root keeps its own PI_AGENT_RUN_ID across /reload, so a run id alone
+	// must not mark the process as a child.
+	assert.equal(isRootProcessEnv({ [ENV_RUN_ID]: "root" }), true);
+});
+
+// The full `initTreeRoot` reload flow needs the pi runtime, so it is verified
+// statically, not here.

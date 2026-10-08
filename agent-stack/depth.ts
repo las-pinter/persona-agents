@@ -21,6 +21,17 @@ export const ENV_PARENT_RUN_ID = "PI_AGENT_PARENT_RUN_ID";
 export const ENV_TREE_LOG = "PI_AGENT_TREE_LOG";
 
 /**
+ * True when `env` belongs to a root process.
+ *
+ * A child always receives `PI_AGENT_PARENT_RUN_ID` from `buildChildEnv`; the
+ * root never has it. Do not test `PI_AGENT_RUN_ID`: the root sets it on its
+ * own env, and it survives `/reload` when module state resets.
+ */
+export function isRootProcessEnv(env: NodeJS.ProcessEnv): boolean {
+	return !env[ENV_PARENT_RUN_ID];
+}
+
+/**
  * Parse a depth value. Absent or non-numeric input gives 0.
  * A negative value clamps to 0.
  */
