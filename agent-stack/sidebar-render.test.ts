@@ -502,14 +502,57 @@ test("a long changed list clips with a more marker", () => {
 
 test("MCP renders a configured/connected summary and server dots", () => {
 	const mcp: McpSnapshot = [
-		{ name: "context7", configured: true, connected: true },
-		{ name: "exa", configured: true, connected: false },
+		{ name: "context7", configured: true, connected: true, status: "connected" },
+		{ name: "exa", configured: true, connected: false, status: "disconnected" },
 	];
 	const lines = content(renderMcpPanel(mcp, 60, theme));
 	assert.equal(lines[0]?.trimEnd(), " MCP");
 	assert.ok(lines.includes("configured: 2, connected: 1"));
 	assert.ok(lines.some((line) => line.includes("● context7")));
 	assert.ok(lines.some((line) => line.includes("○ exa")));
+});
+
+test("MCP summary counts the status, not the connected flag", () => {
+	const mcp: McpSnapshot = [
+		{ name: "a", configured: true, connected: false, status: "connected" },
+		{ name: "b", configured: true, connected: false, status: "connected" },
+		{ name: "c", configured: true, connected: true, status: "disconnected" },
+	];
+	const lines = content(renderMcpPanel(mcp, 60, theme));
+	// Status-derived count is 2; the flag-derived count is 1.
+	assert.ok(lines.includes("configured: 3, connected: 2"));
+});
+
+test("MCP status dots use the success, error, and warning color tokens", () => {
+	const calls: string[] = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push(name);
+			return text;
+		},
+	};
+	const mcp: McpSnapshot = [
+		{ name: "a", configured: true, connected: true, status: "connected" },
+		{ name: "b", configured: true, connected: false, status: "disconnected" },
+		{ name: "c", configured: true, connected: false, status: "unknown" },
+	];
+
+	const lines = content(renderMcpPanel(mcp, 60, recording));
+
+	assert.deepEqual(calls, ["accent", "success", "error", "warning"]);
+	assert.ok(lines.some((line) => line.includes("● a")));
+	assert.ok(lines.some((line) => line.includes("○ b")));
+	assert.ok(lines.some((line) => line.includes("◐ c")));
+});
+
+test("MCP dots stay plain text when the theme has no colors", () => {
+	const mcp: McpSnapshot = [
+		{ name: "a", configured: true, connected: true, status: "connected" },
+		{ name: "b", configured: true, connected: false, status: "unknown" },
+	];
+	const lines = content(renderMcpPanel(mcp, 60, {}));
+	assert.ok(lines.some((line) => line.includes("● a")));
+	assert.ok(lines.some((line) => line.includes("◐ b")));
 });
 
 test("an empty MCP list renders (no servers)", () => {
@@ -681,7 +724,7 @@ test("every composed line fits the width", () => {
 	const snapshot = makeSnapshot({
 		tree,
 		workspace: makeWorkspace({ changed: ["a/very/long/path.ts", "b.ts"], changedCount: 2 }),
-		mcp: [{ name: "a-very-long-server-name", configured: true, connected: false }],
+		mcp: [{ name: "a-very-long-server-name", configured: true, connected: false, status: "disconnected" }],
 		todos: [{ id: "1", text: "a very long todo text that overflows", done: false }],
 	});
 	const lines = renderSidebarPanel(snapshot, 18, 40, theme, 0);
@@ -731,12 +774,12 @@ for (const width of [0, 1, 45]) {
 			renderAgentTreePanel([node], width, 5, theme, 0),
 			renderSessionPanel(makeSession(), width, theme),
 			renderWorkspacePanel(makeWorkspace(), width, theme),
-			renderMcpPanel([{ name: "context7", configured: true, connected: true }], width, theme),
+			renderMcpPanel([{ name: "context7", configured: true, connected: true, status: "connected" }], width, theme),
 			renderTodosPanel([{ id: "1", text: "do it", done: false }], width, theme),
 			renderSidebarPanel(
 				makeSnapshot({
 					tree: [node],
-					mcp: [{ name: "context7", configured: true, connected: true }],
+					mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
 					todos: [{ id: "1", text: "do it", done: false }],
 				}),
 				width,
@@ -755,7 +798,7 @@ for (const height of [0, 1, 3, 8, 15, 30]) {
 		const lines = renderSidebarPanel(
 			makeSnapshot({
 				tree: [node],
-				mcp: [{ name: "context7", configured: true, connected: true }],
+				mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
 				todos: [{ id: "1", text: "do it", done: false }],
 			}),
 			80,
@@ -771,7 +814,7 @@ test("renderSidebarPanel drops lower panels first", () => {
 	const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
 	const snapshot = makeSnapshot({
 		tree: [node],
-		mcp: [{ name: "context7", configured: true, connected: true }],
+		mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
 		todos: [{ id: "1", text: "do it", done: false }],
 	});
 	const headers = [" AGENTS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS "];
@@ -890,10 +933,20 @@ test("treeSignature changes when a workspace file stat changes", () => {
 
 test("treeSignature changes when an MCP field changes", () => {
 	const before = treeSignature(
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false }] }),
+		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false, status: "disconnected" }] }),
 	);
 	const after = treeSignature(
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: true }] }),
+		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: true, status: "connected" }] }),
+	);
+	assert.notEqual(before, after);
+});
+
+test("treeSignature changes when only an MCP status changes", () => {
+	const before = treeSignature(
+		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false, status: "unknown" }] }),
+	);
+	const after = treeSignature(
+		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false, status: "disconnected" }] }),
 	);
 	assert.notEqual(before, after);
 });

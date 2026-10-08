@@ -367,9 +367,11 @@ export class SidebarCompositor {
 			}
 
 			const lines = this.readLineList();
+			// Pad to every terminal row, so the separator spans the full height and
+			// a row with no panel line is blanked instead of left stale.
 			const formatted: string[] = [];
-			for (let i = 0; i < lines.length && i < rawRows; i++) {
-				formatted.push(formatSidebarLine(lines[i], this.width));
+			for (let i = 0; i < rawRows; i++) {
+				formatted.push(formatSidebarLine(i < lines.length ? lines[i] : "", this.width));
 			}
 
 			if (

@@ -147,6 +147,32 @@ test("paint writes only changed rows", () => {
 	compositor.dispose();
 });
 
+test("paint fills every terminal row with the separator and blanks the rest", () => {
+	const terminal = makeTerminal(100, 10);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => [" AGENTS ", "x"], 20);
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	const output = terminal.writes.join("");
+	// Width 20 => separator at column 80, sidebar content at column 81.
+	for (let row = 1; row <= 10; row++) {
+		assert.ok(output.includes(`\x1b[${row};80H│`), `separator missing on row ${row}`);
+	}
+	assert.equal(output.split("│").length - 1, 10, output);
+	// Rows with no panel line are blanked to the full column width.
+	for (let row = 3; row <= 10; row++) {
+		assert.ok(
+			output.includes(`\x1b[${row};81H${" ".repeat(20)}`),
+			`row ${row} was not blanked`,
+		);
+	}
+
+	compositor.dispose();
+});
+
 test("paint swallows a thrown getLines error", () => {
 	const terminal = makeTerminal(100, 30);
 	const tui = makeTui(terminal);

@@ -26,6 +26,7 @@ import { readEvents } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
 import type {
+	McpServerStatus,
 	SessionSnapshot,
 	SidebarSnapshot,
 	WorkspaceFileSnapshot,
@@ -455,20 +456,40 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		}
 
 		const connected = new Set<string>();
+		// True only when the MCP tool list was read successfully. A missing or
+		// throwing `getAllTools` leaves this false, so a configured server becomes
+		// `unknown` instead of a false `disconnected`.
+		let toolsReadable = false;
 		try {
 			if (typeof pi.getAllTools === "function") {
-				for (const tool of pi.getAllTools() ?? []) {
-					const match = /^mcp__(.+?)__/.exec(tool?.name ?? "");
-					if (match) connected.add(match[1]);
+				const tools = pi.getAllTools();
+				// Only an array carries tool entries. A bare string would iterate its
+				// characters and wrongly turn `unknown` into `disconnected`.
+				if (Array.isArray(tools)) {
+					for (const tool of tools) {
+						const match = /^mcp__(.+?)__/.exec(tool?.name ?? "");
+						if (match) connected.add(match[1]);
+					}
+					toolsReadable = true;
 				}
 			}
 		} catch {
-			/* no connection state is available; every server stays unconnected */
+			/* the tool list is unavailable; every configured server is unknown */
 		}
 
-		state.snapshot.mcp = [...configured]
-			.sort()
-			.map((name) => ({ name, configured: true, connected: connected.has(name) }));
+		state.snapshot.mcp = [...configured].sort().map((name) => {
+			// pi sanitizes non `[A-Za-z0-9_]` characters in a tool name to `_`, so
+			// `my-server` appears as `my_server`. Match the raw name first, then the
+			// sanitized name, so a connected server is not painted red.
+			const normalized = name.replace(/[^A-Za-z0-9_]/g, "_");
+			const isConnected = toolsReadable && (connected.has(name) || connected.has(normalized));
+			const status: McpServerStatus = !toolsReadable
+				? "unknown"
+				: isConnected
+					? "connected"
+					: "disconnected";
+			return { name, configured: true, connected: isConnected, status };
+		});
 	}
 
 	/** Apply one `persona-agents/todos/v1` payload. Bad data is ignored. */

@@ -15,22 +15,32 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createSidebarData } from "./sidebar-data.ts";
-import type { SessionSnapshot, WorkspaceFileSnapshot } from "./sidebar-render.ts";
+import type { McpSnapshot, SessionSnapshot, WorkspaceFileSnapshot } from "./sidebar-render.ts";
 
 /** A scripted response for the two git calls the collector makes. */
 interface GitScript {
 	status?: { code?: number; stdout?: string };
 	numstat?: { code?: number; stdout?: string };
+	/** Configured MCP server names reported by `getMcpServers`. */
+	mcpServers?: string[];
+	/** MCP tool names reported by `getAllTools`. */
+	tools?: string[];
+	/** A non-array `getAllTools` result, to prove it is not treated as readable. */
+	toolsNonArray?: string;
+	/** When true, `getAllTools` throws to simulate an unreadable list. */
+	toolsError?: boolean;
+	/** When true, `getAllTools` is absent to simulate an unavailable list. */
+	noGetAllTools?: boolean;
 }
 
 function execResult(code: number, stdout: string): ExecResult {
 	return { stdout, stderr: "", code, killed: false };
 }
 
-/** A fake pi whose `exec` answers the git status and numstat calls. */
+/** A fake pi whose `exec` answers the git calls and who reports MCP state. */
 function makeFakePi(script: GitScript): ExtensionAPI {
 	const noopUnsub = (): void => {};
-	const pi = {
+	const pi: Record<string, unknown> = {
 		exec: async (_command: string, args: string[]): Promise<ExecResult> => {
 			if (args[0] === "status") return execResult(script.status?.code ?? 0, script.status?.stdout ?? "");
 			if (args[0] === "diff") return execResult(script.numstat?.code ?? 0, script.numstat?.stdout ?? "");
@@ -38,9 +48,15 @@ function makeFakePi(script: GitScript): ExtensionAPI {
 		},
 		on: noopUnsub,
 		events: { on: noopUnsub, emit: () => {} },
-		getMcpServers: () => [],
-		getAllTools: () => [],
+		getMcpServers: () => (script.mcpServers ?? []).map((name) => ({ name })),
 	};
+	if (!script.noGetAllTools) {
+		pi.getAllTools = () => {
+			if (script.toolsError) throw new Error("tools-boom");
+			if (script.toolsNonArray !== undefined) return script.toolsNonArray;
+			return (script.tools ?? []).map((name) => ({ name }));
+		};
+	}
 	return pi as unknown as ExtensionAPI;
 }
 
@@ -80,6 +96,17 @@ function readSession(branch: unknown[]): SessionSnapshot {
 	try {
 		data.subscribe(makeFakeCtx(branch));
 		return data.snapshot().session;
+	} finally {
+		data.dispose();
+	}
+}
+
+/** Subscribe with an MCP script and return the server snapshot. */
+function readMcp(script: GitScript): McpSnapshot {
+	const data = createSidebarData(makeFakePi(script));
+	try {
+		data.subscribe(makeFakeCtx());
+		return data.snapshot().mcp;
 	} finally {
 		data.dispose();
 	}
@@ -228,6 +255,48 @@ test("an empty numstat keeps the status entries with zero line stats", async () 
 	});
 
 	assert.deepEqual(files, [{ path: "scratch.ts", added: 0, removed: 0, untracked: true }]);
+});
+
+// --- MCP status derivation ---------------------------------------------------
+
+test("an mcp__<server>__ tool marks the server connected", () => {
+	const mcp = readMcp({ mcpServers: ["context7"], tools: ["mcp__context7__search"] });
+	const server = mcp.find((entry) => entry.name === "context7");
+	assert.equal(server?.status, "connected");
+	assert.equal(server?.connected, true);
+});
+
+test("a readable tool list with no matching tool marks the server disconnected", () => {
+	const mcp = readMcp({ mcpServers: ["exa"], tools: ["mcp__other__search"] });
+	const server = mcp.find((entry) => entry.name === "exa");
+	assert.equal(server?.status, "disconnected");
+	assert.equal(server?.connected, false);
+});
+
+test("a hyphenated server matches its sanitized tool name and is connected", () => {
+	const mcp = readMcp({ mcpServers: ["my-server"], tools: ["mcp__my_server__search"] });
+	const server = mcp.find((entry) => entry.name === "my-server");
+	assert.equal(server?.status, "connected");
+	assert.equal(server?.connected, true);
+});
+
+test("a non-array tool list marks every server unknown", () => {
+	const mcp = readMcp({ mcpServers: ["context7", "exa"], toolsNonArray: "oops" });
+	assert.ok(mcp.length > 0);
+	assert.ok(mcp.every((entry) => entry.status === "unknown"));
+});
+
+test("an errored tool list marks the server unknown", () => {
+	const mcp = readMcp({ mcpServers: ["exa"], toolsError: true });
+	const server = mcp.find((entry) => entry.name === "exa");
+	assert.equal(server?.status, "unknown");
+	assert.equal(server?.connected, false);
+});
+
+test("an absent getAllTools marks the server unknown", () => {
+	const mcp = readMcp({ mcpServers: ["exa"], noGetAllTools: true });
+	const server = mcp.find((entry) => entry.name === "exa");
+	assert.equal(server?.status, "unknown");
 });
 
 // --- session usage sums ------------------------------------------------------

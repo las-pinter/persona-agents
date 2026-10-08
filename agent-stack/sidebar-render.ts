@@ -48,11 +48,22 @@ export interface SidebarTheme {
 	colors?: Record<string, unknown>;
 }
 
-/** One line per MCP server. `connected` is inferred, never live. */
+/**
+ * Tri-state MCP connection status.
+ * - `connected`: a tool named `mcp__<server>__*` exists.
+ * - `disconnected`: configured, and the tool list was read but has none.
+ * - `unknown`: the tool list is unavailable or errored.
+ */
+export type McpServerStatus = "connected" | "disconnected" | "unknown";
+
+/** One line per MCP server. `status` is inferred, never live. */
 export interface McpServerSnapshot {
 	name: string;
 	configured: boolean;
+	/** True only when `status` is `connected`. Kept for the summary count. */
 	connected: boolean;
+	/** Tri-state connection status. */
+	status: McpServerStatus;
 }
 
 /** MCP panel data. */
@@ -506,6 +517,25 @@ export function renderWorkspacePanel(
 	return lines.map((line) => clipLine(line, width));
 }
 
+/**
+ * The dot glyph and theme token for one MCP status. A missing or unrecognized
+ * status falls back to `unknown`, so a stale snapshot never throws.
+ */
+function mcpStatusDot(
+	status: McpServerStatus | undefined,
+	connected: boolean | undefined,
+): { glyph: string; token: string } {
+	const resolved: McpServerStatus =
+		status === "connected" || status === "disconnected" || status === "unknown"
+			? status
+			: connected === true
+				? "connected"
+				: "disconnected";
+	if (resolved === "connected") return { glyph: "●", token: "success" };
+	if (resolved === "disconnected") return { glyph: "○", token: "error" };
+	return { glyph: "◐", token: "warning" };
+}
+
 /** The MCP panel: header plus a summary line and server lines. */
 export function renderMcpPanel(
 	mcp: McpSnapshot | null | undefined,
@@ -516,7 +546,8 @@ export function renderMcpPanel(
 	// The built-in API has no live connection state; `connected` is inferred.
 	const servers = mcp ?? [];
 	const configured = servers.filter((server) => server.configured).length;
-	const connected = servers.filter((server) => server.connected).length;
+	// Derive the count from the dot's source of truth so the two cannot drift.
+	const connected = servers.filter((server) => server.status === "connected").length;
 	lines.push(`configured: ${configured}, connected: ${connected}`);
 
 	if (servers.length === 0) {
@@ -526,8 +557,8 @@ export function renderMcpPanel(
 
 	const shown = servers.slice(0, MCP_SERVERS_SHOWN);
 	for (const server of shown) {
-		const dot = server.connected ? "●" : "○";
-		lines.push(`${dot} ${server.name}`);
+		const { glyph, token } = mcpStatusDot(server.status, server.connected);
+		lines.push(`${color(theme, token, glyph)} ${server.name}`);
 	}
 	if (servers.length > shown.length) {
 		lines.push(styleDim(theme, `… +${servers.length - shown.length} more`));
@@ -653,6 +684,7 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		name: server.name,
 		configured: server.configured,
 		connected: server.connected,
+		status: server.status,
 	}));
 
 	const todos = (snapshot.todos ?? []).map((todo) => ({
