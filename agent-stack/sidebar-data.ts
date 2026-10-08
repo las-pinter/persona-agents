@@ -28,6 +28,7 @@ import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts
 import type {
 	SessionSnapshot,
 	SidebarSnapshot,
+	WorkspaceFileSnapshot,
 	WorkspaceSnapshot,
 } from "./sidebar-render.ts";
 
@@ -45,6 +46,8 @@ export const STALE_MS = 5 * 60 * 1000;
 const GIT_TIMEOUT_MS = 2000;
 /** Changed names kept in the snapshot; the renderer shows this many. */
 const CHANGED_SHOWN = 4;
+/** Per-file diff rows kept in the snapshot. Bounds the cross-timer payload. */
+const WORKSPACE_FILES_CAP = 50;
 
 /** The public handle returned by `createSidebarData`. */
 export interface SidebarData {
@@ -76,6 +79,7 @@ interface InternalState {
 	branch: string | null;
 	changed: string[];
 	changedCount: number;
+	files: WorkspaceFileSnapshot[];
 	todosNextId: number;
 	tpsSamples: TpsSample[];
 	lastOutputTokens: number;
@@ -95,12 +99,17 @@ function emptySnapshot(): SidebarSnapshot {
 		contextPercent: null,
 		cost: null,
 		tps: null,
+		tokensIn: 0,
+		tokensOut: 0,
+		turns: 0,
+		sessionStartMs: null,
 	};
 	const workspace: WorkspaceSnapshot = {
 		cwd: "",
 		branch: null,
 		changed: [],
 		changedCount: 0,
+		files: [],
 	};
 	return { cwd: "", tree: [], session, workspace, mcp: [], todos: [], tps: 0 };
 }
@@ -129,6 +138,97 @@ function readMcpJsonServers(filePath: string): string[] {
 	}
 }
 
+/** One row parsed from `git status --porcelain`. */
+interface StatusFile {
+	path: string;
+	untracked: boolean;
+}
+
+/** One row parsed from `git diff --numstat HEAD`. */
+interface DiffStat {
+	path: string;
+	added: number;
+	removed: number;
+}
+
+/**
+ * Parse `git status --porcelain` v1. The first two columns hold the status;
+ * a rename uses the destination path. A short or empty line is skipped.
+ */
+function parsePorcelain(output: string): StatusFile[] {
+	const files: StatusFile[] = [];
+	for (const line of output.split("\n")) {
+		if (line.length < 4) continue;
+		const status = line.slice(0, 2);
+		let path = line.slice(3);
+		const arrow = path.indexOf(" -> ");
+		if (arrow >= 0) path = path.slice(arrow + 4);
+		if (path.length === 0) continue;
+		files.push({ path, untracked: status === "??" });
+	}
+	return files;
+}
+
+/** Resolve a numstat rename path (`old => new` or `dir/{old => new}.ts`). */
+function normalizeNumstatPath(rawPath: string): string {
+	const path = rawPath.trim();
+	const braced = path.match(/^(.*)\{([^{}]*) => ([^{}]*)\}(.*)$/);
+	if (braced) return `${braced[1]}${braced[3]}${braced[4]}`;
+	const arrow = path.lastIndexOf(" => ");
+	if (arrow >= 0) return path.slice(arrow + 4).trim();
+	return path;
+}
+
+/** Parse `git diff --numstat`. A binary row (`-`) counts as zero lines. */
+function parseNumstat(output: string): Map<string, DiffStat> {
+	const stats = new Map<string, DiffStat>();
+	for (const line of output.split("\n")) {
+		if (line.trim().length === 0) continue;
+		const parts = line.split("\t");
+		if (parts.length < 3) continue;
+		const added = parts[0] === "-" ? 0 : Number.parseInt(parts[0], 10);
+		const removed = parts[1] === "-" ? 0 : Number.parseInt(parts[1], 10);
+		const path = normalizeNumstatPath(parts.slice(2).join("\t"));
+		if (path.length === 0) continue;
+		stats.set(path, {
+			path,
+			added: Number.isFinite(added) ? added : 0,
+			removed: Number.isFinite(removed) ? removed : 0,
+		});
+	}
+	return stats;
+}
+
+/**
+ * Merge the status rows with the numstat rows. A status row keeps its order and
+ * its untracked flag; numstat supplies added/removed lines. A numstat-only path
+ * is tracked. An untracked file has no numstat row, so it stays added/removed 0.
+ */
+function combineWorkspaceFiles(
+	statusFiles: StatusFile[],
+	diffByPath: Map<string, DiffStat>,
+): WorkspaceFileSnapshot[] {
+	const files: WorkspaceFileSnapshot[] = [];
+	const seen = new Set<string>();
+	for (const status of statusFiles) {
+		if (seen.has(status.path)) continue;
+		seen.add(status.path);
+		const diff = diffByPath.get(status.path);
+		files.push({
+			path: status.path,
+			added: diff?.added ?? 0,
+			removed: diff?.removed ?? 0,
+			untracked: status.untracked,
+		});
+	}
+	for (const [path, diff] of diffByPath) {
+		if (seen.has(path)) continue;
+		seen.add(path);
+		files.push({ path, added: diff.added, removed: diff.removed, untracked: false });
+	}
+	return files;
+}
+
 /** Build the data module. */
 export function createSidebarData(pi: ExtensionAPI): SidebarData {
 	const state: InternalState = {
@@ -136,6 +236,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		branch: null,
 		changed: [],
 		changedCount: 0,
+		files: [],
 		todosNextId: 1,
 		tpsSamples: [],
 		lastOutputTokens: 0,
@@ -178,13 +279,14 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		}
 	}
 
-	/** Push the current git branch and changed list into the workspace snapshot. */
+	/** Push the current git branch, changed list, and file stats into the workspace. */
 	function applyWorkspace(): void {
 		state.snapshot.workspace = {
 			cwd: state.snapshot.workspace.cwd,
 			branch: state.branch,
 			changed: state.changed.slice(),
 			changedCount: state.changedCount,
+			files: state.files.slice(),
 		};
 	}
 
@@ -192,26 +294,50 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 	function markGitUnavailable(): void {
 		state.changed = ["(git unavailable)"];
 		state.changedCount = 1;
+		state.files = [];
 	}
 
-	/** Sum `AssistantMessage.usage` cost over a session branch. Never throws. */
-	function sumBranchCost(ctx: ExtensionContext): number {
+	/** Sum assistant `usage` over a session branch and find the branch start. */
+	function sumBranchUsage(ctx: ExtensionContext): {
+		cost: number;
+		tokensIn: number;
+		tokensOut: number;
+		turns: number;
+		sessionStartMs: number | null;
+	} {
 		try {
 			const entries = ctx.sessionManager.getBranch();
 			let cost = 0;
+			let tokensIn = 0;
+			let tokensOut = 0;
+			let turns = 0;
+			let sessionStartMs: number | null = null;
 			for (const entry of entries) {
+				const parsed = Date.parse(entry.timestamp);
+				if (Number.isFinite(parsed) && (sessionStartMs === null || parsed < sessionStartMs)) {
+					sessionStartMs = parsed;
+				}
 				if (entry.type !== "message") continue;
 				const message = entry.message as {
 					role?: string;
-					usage?: { cost?: { total?: number } };
+					usage?: {
+						input?: number;
+						output?: number;
+						cost?: { total?: number };
+					};
 				};
 				if (message?.role !== "assistant") continue;
+				turns += 1;
 				const total = message.usage?.cost?.total;
 				if (typeof total === "number" && Number.isFinite(total)) cost += total;
+				const input = message.usage?.input;
+				if (typeof input === "number" && Number.isFinite(input)) tokensIn += input;
+				const output = message.usage?.output;
+				if (typeof output === "number" && Number.isFinite(output)) tokensOut += output;
 			}
-			return cost;
+			return { cost, tokensIn, tokensOut, turns, sessionStartMs };
 		} catch {
-			return 0;
+			return { cost: 0, tokensIn: 0, tokensOut: 0, turns: 0, sessionStartMs: null };
 		}
 	}
 
@@ -249,7 +375,12 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		session.contextTokens = usage?.tokens ?? null;
 		session.contextWindow = usage?.contextWindow ?? null;
 		session.contextPercent = usage?.percent ?? null;
-		session.cost = sumBranchCost(ctx);
+		const branchUsage = sumBranchUsage(ctx);
+		session.cost = branchUsage.cost;
+		session.tokensIn = branchUsage.tokensIn;
+		session.tokensOut = branchUsage.tokensOut;
+		session.turns = branchUsage.turns;
+		session.sessionStartMs = branchUsage.sessionStartMs;
 
 		state.snapshot.session = session;
 		const cwd = typeof ctx.cwd === "string" ? ctx.cwd : "";
@@ -270,7 +401,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
 	}
 
-	/** Poll `git status --porcelain` for the changed-file summary. */
+	/** Poll git status and diff for changed files and per-file line stats. */
 	async function refreshGit(): Promise<void> {
 		const myGeneration = generation;
 		const cwd = state.snapshot.workspace.cwd || state.snapshot.cwd;
@@ -281,27 +412,26 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			return;
 		}
 		try {
-			const result = await pi.exec("git", ["status", "--porcelain"], {
-				cwd,
-				timeout: GIT_TIMEOUT_MS,
-			});
+			const [status, numstat] = await Promise.all([
+				pi.exec("git", ["status", "--porcelain"], { cwd, timeout: GIT_TIMEOUT_MS }),
+				pi.exec("git", ["diff", "--numstat", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
+			]);
 			// dispose() bumps the generation; drop a stale write after the await.
 			if (myGeneration !== generation) return;
-			if (!result || result.code !== 0) {
+			if (!status || status.code !== 0) {
 				markGitUnavailable();
 				applyWorkspace();
 				return;
 			}
-			const names: string[] = [];
-			for (const line of String(result.stdout ?? "").split("\n")) {
-				if (line.trim().length === 0) continue;
-				let path = line.slice(3).trim();
-				const arrow = path.indexOf(" -> ");
-				if (arrow >= 0) path = path.slice(arrow + 4);
-				if (path.length > 0) names.push(path);
-			}
-			state.changedCount = names.length;
-			state.changed = names.slice(0, CHANGED_SHOWN);
+			// A numstat failure (for example a repo with no HEAD) still leaves the
+			// status list intact; only the per-file line counts are missing.
+			const statusFiles = parsePorcelain(String(status.stdout ?? ""));
+			const diffByPath =
+				numstat && numstat.code === 0 ? parseNumstat(String(numstat.stdout ?? "")) : new Map<string, DiffStat>();
+			const files = combineWorkspaceFiles(statusFiles, diffByPath);
+			state.changedCount = files.length;
+			state.changed = files.slice(0, CHANGED_SHOWN).map((file) => file.path);
+			state.files = files.slice(0, WORKSPACE_FILES_CAP);
 		} catch {
 			if (myGeneration !== generation) return;
 			markGitUnavailable();

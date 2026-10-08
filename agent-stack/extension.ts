@@ -170,6 +170,34 @@ function appendRootUpdate(status: "running" | "idle"): void {
 	}
 }
 
+/**
+ * Append one root `clear` marker at the start of a new root turn. The marker is
+ * NOT a node: it tells the tree model that finished children from the previous
+ * turn are superseded. Only the root process writes `clear`. Best-effort.
+ */
+function appendRootClear(): void {
+	try {
+		if (!isRootProcess || !rootRunId) return;
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "clear",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status: "running",
+			at: new Date().toISOString(),
+		});
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
 // Tunable budgets, not yet settings-backed.
 const SKILL_INJECTION_BUDGET_BYTES = 24 * 1024;
 const SKILL_BODY_CAP_BYTES = 12 * 1024;
@@ -319,6 +347,7 @@ export default function (pi: ExtensionAPI): void {
 	// The root node spins only during an agent run. Between runs it is idle, so
 	// the sidebar spinner stops instead of animating for the whole session.
 	pi.on("agent_start", () => {
+		appendRootClear();
 		appendRootUpdate("running");
 	});
 

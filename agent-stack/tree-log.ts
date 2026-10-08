@@ -33,7 +33,7 @@ export interface RunUsage {
 /** One tree event. One JSON line per event. */
 export interface RunEvent {
 	v: 1;
-	type: "start" | "update" | "end";
+	type: "start" | "update" | "end" | "clear";
 	runId: string;
 	parentRunId: string | null;
 	depth: number;
@@ -45,6 +45,8 @@ export interface RunEvent {
 	bytesIn?: number;
 	bytesOut?: number;
 	usage?: RunUsage;
+	/** Tool calls one run started. Absent on `start` and `clear` records. */
+	toolCount?: number;
 	exitCode?: number | null;
 	error?: string | null;
 	outputPreview?: string;

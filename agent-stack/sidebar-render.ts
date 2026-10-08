@@ -12,16 +12,25 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
 
-/** One line per session field, max. */
-export const SESSION_MAX_LINES = 5;
 /** Changed names shown inline in WORKSPACE before the `… +N more` mark. */
 export const WORKSPACE_CHANGED_SHOWN = 4;
+/** Per-file diff lines shown in WORKSPACE before the `… +N more` mark. */
+export const WORKSPACE_FILES_SHOWN = 4;
 /** Server lines shown in MCP before the `… +N more` mark. */
 export const MCP_SERVERS_SHOWN = 4;
 /** Todo lines shown in TODOS before the `… +N more` mark. */
 export const TODOS_SHOWN = 4;
 /** Output-preview lines kept in the node detail overlay. */
 export const DETAIL_PREVIEW_LINES = 20;
+/** Fixed cell count of the SESSION context fill bar. */
+export const CONTEXT_BAR_CELLS = 10;
+/** Width of the SESSION stats label column. */
+export const SESSION_LABEL_WIDTH = 12;
+/**
+ * Minimum AGENTS panel lines, header included. A short tree pads with blank
+ * lines so the panels below stay put. Clamped to the height budget.
+ */
+export const AGENTS_PAD_MIN = 4; // blank lines buy a stable footprint, so lower panels do not jump
 
 /** Status spinner. One glyph per animation frame. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -35,6 +44,8 @@ export interface SidebarTheme {
 	bold?(text: string): string;
 	dim?(text: string): string;
 	fg?(color: string, text: string): string;
+	/** Optional token inventory. A missing key means the token is unavailable. */
+	colors?: Record<string, unknown>;
 }
 
 /** One line per MCP server. `connected` is inferred, never live. */
@@ -66,6 +77,22 @@ export interface SessionSnapshot {
 	contextPercent: number | null;
 	cost: number | null;
 	tps: number | null;
+	/** Prompt tokens summed over the session's assistant messages. */
+	tokensIn: number;
+	/** Completion tokens summed over the session's assistant messages. */
+	tokensOut: number;
+	/** Assistant turns, one per assistant message. */
+	turns: number;
+	/** Epoch ms of the earliest session entry, or null when unknown. */
+	sessionStartMs: number | null;
+}
+
+/** One changed file and its diff stats. `untracked` has no `removed` lines. */
+export interface WorkspaceFileSnapshot {
+	path: string;
+	added: number;
+	removed: number;
+	untracked: boolean;
 }
 
 /** WORKSPACE panel data. */
@@ -74,6 +101,8 @@ export interface WorkspaceSnapshot {
 	branch: string | null;
 	changed: string[];
 	changedCount: number;
+	/** Per-file diff stats. Bounded to keep the snapshot small. */
+	files: WorkspaceFileSnapshot[];
 }
 
 /** Everything the sidebar paints in one frame. */
@@ -94,21 +123,44 @@ export interface PanelContext {
 	frame: number;
 }
 
-/** Apply a theme color when the duck type has `fg`. */
+/** Apply a theme color when the duck type has `fg`. Falls back to plain text. */
 function color(theme: SidebarTheme, name: string, text: string): string {
-	return typeof theme.fg === "function" ? theme.fg(name, text) : text;
+	if (typeof theme.fg !== "function") return text;
+	let colors: Record<string, unknown> | undefined;
+	try {
+		colors = theme.colors;
+	} catch {
+		colors = undefined;
+	}
+	// A theme with a token map keeps an unknown token as plain text.
+	if (colors && !(name in colors)) return text;
+	try {
+		return theme.fg(name, text);
+	} catch {
+		return text;
+	}
 }
 
 /** Bold text when the duck type has `bold`; otherwise the plain text. */
 function styleBold(theme: SidebarTheme, text: string): string {
-	return typeof theme.bold === "function" ? theme.bold(text) : text;
+	if (typeof theme.bold !== "function") return text;
+	try {
+		return theme.bold(text);
+	} catch {
+		return text;
+	}
 }
 
 /** Dim text. Falls back to the `dim` color token, then to plain text. */
 function styleDim(theme: SidebarTheme, text: string): string {
-	if (typeof theme.dim === "function") return theme.dim(text);
-	if (typeof theme.fg === "function") return theme.fg("dim", text);
-	return text;
+	if (typeof theme.dim === "function") {
+		try {
+			return theme.dim(text);
+		} catch {
+			return text;
+		}
+	}
+	return color(theme, "dim", text);
 }
 
 /** A panel header: accent-colored and bold when the theme supports it. */
@@ -145,9 +197,85 @@ export function statusIcon(status: TreeNodeStatus, frame: number): string {
 	return "?";
 }
 
-/** The glyph for one node: an orphan mark wins over the status glyph. */
-function nodeIcon(node: TreeNode, frame: number): string {
-	return node.orphan ? "?" : statusIcon(node.status, frame);
+/** The glyph for one node, colored. An orphan mark wins over the status. */
+export function statusGlyph(theme: SidebarTheme, node: TreeNode, frame: number): string {
+	if (node.orphan) return color(theme, "warning", "?");
+	switch (node.status) {
+		case "running":
+			return color(theme, "accent", statusIcon("running", frame));
+		case "done":
+			return color(theme, "success", "✓");
+		case "failed":
+			return color(theme, "error", "✗");
+		case "stale":
+			return color(theme, "warning", "⚠");
+		default:
+			return color(theme, "dim", "○");
+	}
+}
+
+/** Compact a count: `1234` gives `1.2k`, `1500000` gives `1.5M`. */
+export function formatCount(value: number): string {
+	if (!Number.isFinite(value)) return "-";
+	const abs = Math.abs(value);
+	if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+	if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+	return String(Math.round(value));
+}
+
+/** Compact a duration in ms: `65000` gives `1m05s`. A null gives `-`. */
+export function formatElapsed(ms: number | null): string {
+	if (ms === null || !Number.isFinite(ms) || ms < 0) return "-";
+	const totalSeconds = Math.floor(ms / 1000);
+	const seconds = totalSeconds % 60;
+	const minutes = Math.floor(totalSeconds / 60) % 60;
+	const hours = Math.floor(totalSeconds / 3600);
+	if (hours > 0) return `${hours}h${String(minutes).padStart(2, "0")}m`;
+	if (minutes > 0) return `${minutes}m${String(seconds).padStart(2, "0")}s`;
+	return `${seconds}s`;
+}
+
+/** The elapsed run time from `startedAt` to `endedAt`, or to `now`. */
+function nodeElapsedMs(node: TreeNode, now: number): number | null {
+	const start = Date.parse(node.startedAt);
+	if (!Number.isFinite(start)) return null;
+	const end = node.endedAt !== null ? Date.parse(node.endedAt) : now;
+	if (!Number.isFinite(end)) return null;
+	return end - start;
+}
+
+/** The node token total: input plus output. Null when usage is missing. */
+function nodeTokenTotal(node: TreeNode): number | null {
+	const usage = node.usage;
+	if (!usage) return null;
+	const input = Number.isFinite(usage.input) ? usage.input : 0;
+	const output = Number.isFinite(usage.output) ? usage.output : 0;
+	return input + output;
+}
+
+/** The compact metric block for one node line. Missing values give `-`. */
+function nodeMetrics(node: TreeNode, now: number): string {
+	const elapsed = formatElapsed(nodeElapsedMs(node, now));
+	const tokens = nodeTokenTotal(node);
+	const tokenText = tokens === null ? "-" : formatCount(tokens);
+	const turnsText = node.usage ? `${node.usage.turns}t` : "-";
+	const toolsText = `${Math.max(0, Math.floor(node.toolCount ?? 0))}⚒`;
+	return `${elapsed} ${tokenText} ${turnsText} ${toolsText}`;
+}
+
+/** A fixed-cell context bar. `█` is filled, `░` is empty. */
+export function contextBar(percent: number, cells: number = CONTEXT_BAR_CELLS): string {
+	const count = Math.max(0, Math.floor(cells));
+	const clamped = Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 0;
+	const filled = Math.round((clamped / 100) * count);
+	return "█".repeat(filled) + "░".repeat(Math.max(0, count - filled));
+}
+
+/** The threshold color token for a context percent. */
+export function contextBarColor(percent: number): string {
+	if (percent > 80) return "error";
+	if (percent >= 50) return "warning";
+	return "success";
 }
 
 /** Depth-first walk, parents before children, original sibling order. */
@@ -187,6 +315,7 @@ function renderBranch(
 	nodes: TreeNode[],
 	theme: SidebarTheme,
 	frame: number,
+	now: number,
 	ancestorPrefix: string,
 	topLevel: boolean,
 	out: string[],
@@ -194,15 +323,19 @@ function renderBranch(
 	nodes.forEach((node, index) => {
 		const isLast = index === nodes.length - 1;
 		const isRoot = topLevel;
-		const icon = color(theme, node.orphan ? "warning" : "accent", nodeIcon(node, frame));
+		const icon = statusGlyph(theme, node, frame);
 		const agent = node.agent || "unknown";
+		const metrics = nodeMetrics(node, now);
 		const task = oneLine(node.task ?? "");
 		const preview = task.length > 0 ? `  ${color(theme, "muted", task)}` : "";
-		out.push(`${connector(isRoot, isLast, ancestorPrefix)}${icon} ${agent}${preview}`);
+		out.push(
+			`${connector(isRoot, isLast, ancestorPrefix)}${icon} ${agent} ${metrics}${preview}`,
+		);
 		renderBranch(
 			node.children,
 			theme,
 			frame,
+			now,
 			childPrefix(isRoot, isLast, ancestorPrefix),
 			false,
 			out,
@@ -212,7 +345,8 @@ function renderBranch(
 
 /**
  * The tree node lines only, no header and no clip. One line per node. Branch
- * glyphs (`├─`, `└─`, `│`) show the structure; the root has no connector.
+ * glyphs (`├─`, `└─`, `│`) show the structure; the root has no connector. Each
+ * line is `<connector><glyph> <agent> <metrics>[  <task>]`.
  *
  * Returns UNCLIPPED lines; the caller must clip them to the panel width.
  */
@@ -220,15 +354,17 @@ export function renderTreeLines(
 	tree: TreeNode[],
 	theme: SidebarTheme,
 	frame: number,
+	now: number = Date.now(),
 ): string[] {
 	const out: string[] = [];
-	renderBranch(tree ?? [], theme, frame, "", true, out);
+	renderBranch(tree ?? [], theme, frame, now, "", true, out);
 	return out;
 }
 
 /**
  * The AGENTS panel: header plus one indented line per node, clipped to the
- * panel height. Zero nodes gives a single placeholder line.
+ * panel height. A short tree pads to `AGENTS_PAD_MIN` so the panels below do
+ * not jump. Zero nodes gives a single placeholder line.
  */
 export function renderAgentTreePanel(
 	tree: TreeNode[],
@@ -236,6 +372,7 @@ export function renderAgentTreePanel(
 	height: number,
 	theme: SidebarTheme,
 	frame: number,
+	now: number = Date.now(),
 ): string[] {
 	const lines: string[] = [header(theme, " AGENTS ")];
 	const budget = Math.max(0, Math.floor(height) - 1);
@@ -243,26 +380,35 @@ export function renderAgentTreePanel(
 
 	if (nodes.length === 0) {
 		if (budget >= 1) lines.push("(no active agents)");
-		return lines.map((line) => clipLine(line, width));
+	} else if (budget >= 1) {
+		const nodeLines = renderTreeLines(tree, theme, frame, now);
+		if (nodeLines.length <= budget) {
+			lines.push(...nodeLines);
+		} else {
+			const shown = Math.max(0, budget - 1);
+			lines.push(...nodeLines.slice(0, shown));
+			lines.push(styleDim(theme, `… +${nodeLines.length - shown} more`));
+		}
 	}
-	if (budget === 0) return lines.map((line) => clipLine(line, width));
 
-	const nodeLines = renderTreeLines(tree, theme, frame);
-	if (nodeLines.length <= budget) {
-		lines.push(...nodeLines);
-	} else {
-		const shown = Math.max(0, budget - 1);
-		lines.push(...nodeLines.slice(0, shown));
-		lines.push(styleDim(theme, `… +${nodeLines.length - shown} more`));
-	}
+	// padToMin: reserve a stable footprint, clamped to the height budget.
+	const min = Math.min(AGENTS_PAD_MIN, Math.max(0, Math.floor(height)));
+	while (lines.length < min) lines.push("");
+
 	return lines.map((line) => clipLine(line, width));
 }
 
-/** The SESSION panel: header plus up to five field lines. */
+/** One SESSION stats row, the label padded to a fixed column. */
+function sessionRow(label: string, value: string): string {
+	return `${label.padEnd(SESSION_LABEL_WIDTH)}${value}`;
+}
+
+/** The SESSION panel: model, a context fill bar, and a two-column stats table. */
 export function renderSessionPanel(
 	session: SessionSnapshot | null | undefined,
 	width: number,
 	theme: SidebarTheme,
+	now: number = Date.now(),
 ): string[] {
 	const lines: string[] = [header(theme, " SESSION ")];
 	const data = session ?? null;
@@ -273,34 +419,63 @@ export function renderSessionPanel(
 	const tokens = data?.contextTokens ?? null;
 	const window = data?.contextWindow ?? null;
 	if (tokens === null || window === null) {
-		lines.push("context: n/a");
+		lines.push("ctx n/a");
 	} else {
-		const percent =
-			data?.contextPercent ?? (window > 0 ? (tokens / window) * 100 : 0);
-		lines.push(`context: ${tokens}/${window} (${Math.round(percent)}%)`);
+		const percent = data?.contextPercent ?? (window > 0 ? (tokens / window) * 100 : 0);
+		const bar = color(theme, contextBarColor(percent), contextBar(percent));
+		lines.push(`ctx ${bar} ${tokens}/${window} (${Math.round(percent)}%)`);
 	}
 
+	lines.push(sessionRow("metric", "value"));
+	lines.push("─".repeat(SESSION_LABEL_WIDTH));
+	const tokenText = `${formatCount(data?.tokensIn ?? 0)}/${formatCount(data?.tokensOut ?? 0)}`;
+	lines.push(sessionRow("tokens", tokenText));
 	const cost = data?.cost ?? null;
-	lines.push(`cost: ${cost === null ? "n/a" : `$${cost.toFixed(4)}`}`);
-
+	lines.push(sessionRow("cost", cost === null ? "-" : `$${cost.toFixed(4)}`));
+	lines.push(sessionRow("turns", data?.turns == null ? "-" : String(data.turns)));
 	const tps = data?.tps ?? null;
-	lines.push(`tps: ${tps === null ? "n/a" : tps.toFixed(1)}`);
+	lines.push(sessionRow("tok/s", tps === null ? "-" : tps.toFixed(1)));
+	const start = data?.sessionStartMs ?? null;
+	lines.push(sessionRow("elapsed", start === null ? "-" : formatElapsed(now - start)));
 
-	return lines.slice(0, SESSION_MAX_LINES + 1).map((line) => clipLine(line, width));
+	return lines.map((line) => clipLine(line, width));
 }
 
-/** Basename of a path without importing `node:path`. */
-function baseName(path: string): string {
-	const trimmed = path.replace(/[/\\]+$/, "");
-	const parts = trimmed.split(/[/\\]/);
-	return parts[parts.length - 1] || path;
+/** Replace a known home prefix with `~`. */
+export function shortenHome(cwd: string, home?: string): string {
+	if (!cwd) return cwd;
+	if (home && cwd === home) return "~";
+	if (home && cwd.startsWith(`${home}/`)) return `~${cwd.slice(home.length)}`;
+	const match = /^(\/home\/[^/]+|\/Users\/[^/]+|\/root)(\/.*)?$/.exec(cwd);
+	if (match) return `~${match[2] ?? ""}`;
+	return cwd;
 }
 
-/** The WORKSPACE panel: header plus cwd, branch, and a changed-files line. */
+/** One WORKSPACE file line: status mark, clipped path, right-aligned diff. */
+function workspaceFileLine(
+	file: WorkspaceFileSnapshot,
+	width: number,
+	theme: SidebarTheme,
+): string {
+	const mark = file.untracked ? "?" : "M";
+	const left = ` ${mark} `;
+	const stat = file.untracked
+		? color(theme, "muted", "?")
+		: `${color(theme, "toolDiffAdded", `+${file.added}`)} ${color(theme, "toolDiffRemoved", `-${file.removed}`)}`;
+	const statWidth = visibleWidth(stat);
+	const leftWidth = visibleWidth(left);
+	const pathWidth = Math.max(1, width - leftWidth - statWidth - 1);
+	const path = truncateToWidth(file.path, pathWidth, "…", false);
+	const gap = Math.max(1, width - leftWidth - visibleWidth(path) - statWidth);
+	return `${left}${path}${" ".repeat(gap)}${stat}`;
+}
+
+/** The WORKSPACE panel: branch, per-file diff stats, and the shortened cwd. */
 export function renderWorkspacePanel(
 	workspace: WorkspaceSnapshot | null | undefined,
 	width: number,
 	theme: SidebarTheme,
+	home?: string,
 ): string[] {
 	const lines: string[] = [header(theme, " WORKSPACE ")];
 	if (!workspace) {
@@ -308,23 +483,27 @@ export function renderWorkspacePanel(
 		return lines.map((line) => clipLine(line, width));
 	}
 
-	lines.push(baseName(workspace.cwd));
-	lines.push(workspace.branch ?? "(not a repo)");
-
+	const files = workspace.files ?? [];
 	const changed = workspace.changed ?? [];
-	const total = Math.max(workspace.changedCount ?? 0, changed.length);
-	if (total === 0) {
-		lines.push("(clean)");
-	} else {
+	const total = Math.max(workspace.changedCount ?? 0, changed.length, files.length);
+	const branchText = workspace.branch ? `⎇ ${workspace.branch}` : "(not a repo)";
+	lines.push(total === 0 ? `${branchText} (clean)` : `${branchText} ${total} changed`);
+
+	if (files.length > 0) {
+		for (const file of files.slice(0, WORKSPACE_FILES_SHOWN)) {
+			lines.push(workspaceFileLine(file, width, theme));
+		}
+		const extra = total - Math.min(files.length, WORKSPACE_FILES_SHOWN);
+		if (extra > 0) lines.push(styleDim(theme, `… +${extra} more`));
+	} else if (changed.length > 0) {
 		const shown = changed.slice(0, WORKSPACE_CHANGED_SHOWN);
-		const extra = Math.max(0, total - shown.length);
-		let summary = `${total} changed`;
-		if (shown.length > 0) summary += `: ${shown.join(", ")}`;
-		if (extra > 0) summary += ` … +${extra} more`;
+		const extra = total - shown.length;
+		const summary = shown.join(", ") + (extra > 0 ? ` … +${extra} more` : "");
 		lines.push(summary);
 	}
 
-	return lines.slice(0, 4).map((line) => clipLine(line, width));
+	lines.push(styleDim(theme, shortenHome(workspace.cwd, home) || "~"));
+	return lines.map((line) => clipLine(line, width));
 }
 
 /** The MCP panel: header plus a summary line and server lines. */
@@ -375,7 +554,8 @@ export function renderTodosPanel(
 
 	const shown = items.slice(0, TODOS_SHOWN);
 	for (const item of shown) {
-		lines.push(`${item.done ? "✓" : "○"} ${oneLine(item.text ?? "")}`);
+		const glyph = color(theme, item.done ? "success" : "dim", item.done ? "✓" : "○");
+		lines.push(`${glyph} ${oneLine(item.text ?? "")}`);
 	}
 	if (items.length > shown.length) {
 		lines.push(styleDim(theme, `… +${items.length - shown.length} more`));
@@ -436,6 +616,7 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		agent: node.agent,
 		depth: node.depth,
 		task: node.task,
+		toolCount: node.toolCount,
 		outputPreview: node.outputPreview,
 		usage: node.usage,
 		exitCode: node.exitCode ?? null,
@@ -451,6 +632,10 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 				contextPercent: snapshot.session.contextPercent,
 				cost: snapshot.session.cost,
 				tps: snapshot.session.tps,
+				tokensIn: snapshot.session.tokensIn,
+				tokensOut: snapshot.session.tokensOut,
+				turns: snapshot.session.turns,
+				sessionStartMs: snapshot.session.sessionStartMs,
 			}
 		: null;
 
@@ -460,6 +645,7 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 				branch: snapshot.workspace.branch,
 				changed: snapshot.workspace.changed,
 				changedCount: snapshot.workspace.changedCount,
+				files: snapshot.workspace.files,
 			}
 		: null;
 
@@ -551,9 +737,10 @@ export function renderSidebarPanel(
 	if (limit <= 0) return [];
 	const ctx: PanelContext = { width, height: limit, frame };
 
+	const now = Date.now();
 	const panels: string[][] = [
-		renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame),
-		renderSessionPanel(snapshot.session, width, theme),
+		renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now),
+		renderSessionPanel(snapshot.session, width, theme, now),
 		renderWorkspacePanel(snapshot.workspace, width, theme),
 		renderMcpPanel(snapshot.mcp, width, theme),
 		renderTodosPanel(snapshot.todos, width, theme),

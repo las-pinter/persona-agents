@@ -460,6 +460,9 @@ async function runSingleAgent(
 	let lastTreeUpdateAt = Date.now();
 	const taskBytes = Buffer.byteLength(task, "utf8");
 	let bytesOut = 0;
+	// Tool calls this child started. A `tool_execution_start` carries a unique
+	// `toolCallId`, so the set counts each call exactly once.
+	const toolCallIds = new Set<string>();
 	appendTreeEvent({
 		v: 1,
 		type: "start",
@@ -489,6 +492,7 @@ async function runSingleAgent(
 			at: new Date().toISOString(),
 			bytesIn: taskBytes,
 			bytesOut,
+			toolCount: toolCallIds.size,
 			usage: {
 				input: currentResult.usage.input,
 				output: currentResult.usage.output,
@@ -543,6 +547,10 @@ async function runSingleAgent(
 					event = JSON.parse(line);
 				} catch {
 					return;
+				}
+
+				if (event.type === "tool_execution_start" && typeof event.toolCallId === "string") {
+					toolCallIds.add(event.toolCallId);
 				}
 
 				if (event.type === "message_end" && event.message) {
@@ -618,6 +626,7 @@ async function runSingleAgent(
 			at: new Date().toISOString(),
 			bytesIn: taskBytes,
 			bytesOut,
+			toolCount: toolCallIds.size,
 			usage: {
 				input: currentResult.usage.input,
 				output: currentResult.usage.output,

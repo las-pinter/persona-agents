@@ -178,6 +178,30 @@ test("a failed end gives status failed", () => {
 	assert.equal(roots[0]?.error, "boom");
 });
 
+test("a later update supplies the node tool count", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", at: at(0) }),
+		makeEvent({ runId: "root", type: "update", at: at(10), toolCount: 5 }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots[0]?.toolCount, 5);
+});
+
+test("the start tool count fills in when a later update omits it", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", at: at(0), toolCount: 7 }),
+		makeEvent({ runId: "root", type: "update", at: at(10) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots[0]?.toolCount, 7);
+});
+
+test("toolCount defaults to zero when no record carries it", () => {
+	const events = [makeEvent({ runId: "root", type: "start", at: at(0) })];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots[0]?.toolCount, 0);
+});
+
 test("a self-parent record is treated as an orphan at top level", () => {
 	const events = [
 		makeEvent({ runId: "self", type: "start", parentRunId: "self", depth: 1, at: at(0) }),
@@ -228,4 +252,69 @@ test("two independent event lists give two independent trees", () => {
 	assert.equal(rootsB[0]?.runId, "root-b");
 	assert.notEqual(rootsA[0], rootsB[0]);
 	assert.equal(findNode(rootsA, "root-b"), undefined);
+});
+
+test("a clear drops a finished non-root node but keeps the root", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "done-child", type: "start", parentRunId: "root", depth: 1, at: at(10) }),
+		makeEvent({ runId: "done-child", type: "end", parentRunId: "root", depth: 1, at: at(20), status: "done" }),
+		makeEvent({ runId: "root", type: "clear", at: at(30) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(findNode(roots, "root")?.runId, "root");
+	assert.equal(findNode(roots, "done-child"), undefined);
+});
+
+test("a clear keeps a running non-root node attached to the root", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "busy", type: "start", parentRunId: "root", depth: 1, at: at(10) }),
+		makeEvent({ runId: "root", type: "clear", at: at(30) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	const busy = findNode(roots, "busy");
+	assert.ok(busy);
+	assert.equal(busy?.status, "running");
+	assert.equal(roots[0]?.children.some((child) => child.runId === "busy"), true);
+});
+
+test("a finished node that starts after the clear survives", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "root", type: "clear", at: at(30) }),
+		makeEvent({ runId: "new-child", type: "start", parentRunId: "root", depth: 1, at: at(40) }),
+		makeEvent({ runId: "new-child", type: "end", parentRunId: "root", depth: 1, at: at(50), status: "done" }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.ok(findNode(roots, "new-child"));
+});
+
+test("a clear keeps a running grandchild and its finished ancestor branch", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "parent", type: "start", parentRunId: "root", depth: 1, at: at(10) }),
+		makeEvent({ runId: "parent", type: "end", parentRunId: "root", depth: 1, at: at(20), status: "done" }),
+		makeEvent({ runId: "deep", type: "start", parentRunId: "parent", depth: 2, at: at(25) }),
+		makeEvent({ runId: "root", type: "clear", at: at(30) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	const parent = findNode(roots, "parent");
+	assert.ok(parent, "a done ancestor of a running node stays attached");
+	assert.ok(findNode(roots, "deep"));
+});
+
+test("the newest clear wins and older cleared children stay dropped", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "old", type: "start", parentRunId: "root", depth: 1, at: at(10) }),
+		makeEvent({ runId: "old", type: "end", parentRunId: "root", depth: 1, at: at(15), status: "done" }),
+		makeEvent({ runId: "root", type: "clear", at: at(20) }),
+		makeEvent({ runId: "middle", type: "start", parentRunId: "root", depth: 1, at: at(25) }),
+		makeEvent({ runId: "middle", type: "end", parentRunId: "root", depth: 1, at: at(28), status: "done" }),
+		makeEvent({ runId: "root", type: "clear", at: at(30) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(findNode(roots, "old"), undefined);
+	assert.equal(findNode(roots, "middle"), undefined);
 });

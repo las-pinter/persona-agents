@@ -18,6 +18,13 @@ import {
 	type SidebarTheme,
 	type TodoSnapshot,
 	type WorkspaceSnapshot,
+	AGENTS_PAD_MIN,
+	CONTEXT_BAR_CELLS,
+	SESSION_LABEL_WIDTH,
+	contextBar,
+	contextBarColor,
+	formatCount,
+	formatElapsed,
 	hasRunningNode,
 	renderAgentTreePanel,
 	renderMcpPanel,
@@ -29,6 +36,8 @@ import {
 	renderWorkspacePanel,
 	selectNext,
 	selectPrev,
+	shortenHome,
+	statusGlyph,
 	statusIcon,
 	treeSignature,
 } from "./sidebar-render.ts";
@@ -53,6 +62,7 @@ function makeNode(overrides: Partial<TreeNode> & Pick<TreeNode, "runId">): TreeN
 		bytesIn: 0,
 		bytesOut: 0,
 		usage: undefined,
+		toolCount: 0,
 		exitCode: null,
 		error: null,
 		outputPreview: "",
@@ -71,6 +81,10 @@ function makeSession(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot 
 		contextPercent: null,
 		cost: 0.1234,
 		tps: 12.34,
+		tokensIn: 0,
+		tokensOut: 0,
+		turns: 0,
+		sessionStartMs: null,
 		...overrides,
 	};
 }
@@ -81,6 +95,7 @@ function makeWorkspace(overrides: Partial<WorkspaceSnapshot> = {}): WorkspaceSna
 		branch: "dev",
 		changed: [],
 		changedCount: 0,
+		files: [],
 		...overrides,
 	};
 }
@@ -120,7 +135,7 @@ test("zero nodes renders the AGENTS placeholder", () => {
 test("one done node renders one line with the check icon", () => {
 	const node = makeNode({ runId: "n1", agent: "planner", status: "done" });
 	const lines = renderAgentTreePanel([node], 40, 5, theme, 0);
-	assert.equal(lines.length, 2);
+	assert.ok(lines.length >= 2);
 	assert.ok(lines[1]?.includes("✓"));
 	assert.ok(lines[1]?.includes("planner"));
 });
@@ -221,17 +236,37 @@ test("renderNodeDetail reports a missing usage", () => {
 
 // --- SESSION -----------------------------------------------------------------
 
-test("a full session renders the five field lines", () => {
+test("a full session renders the model, context bar, and stats table", () => {
 	const lines = content(renderSessionPanel(makeSession(), 60, theme));
 	assert.equal(lines[0]?.trimEnd(), " SESSION");
 	assert.equal(lines[1], "model: test-model");
 	assert.equal(lines[2], "thinking: medium");
-	assert.equal(lines[3], "context: 1000/2000 (50%)");
-	assert.equal(lines[4], "cost: $0.1234");
-	assert.equal(lines[5], "tps: 12.3");
+	assert.equal(lines[3], "ctx " + contextBar(50) + " 1000/2000 (50%)");
+	assert.equal(lines[4], "metric".padEnd(SESSION_LABEL_WIDTH) + "value");
+	assert.equal(lines[5], "─".repeat(SESSION_LABEL_WIDTH));
+	assert.equal(lines[6], "tokens".padEnd(SESSION_LABEL_WIDTH) + "0/0");
+	assert.equal(lines[7], "cost".padEnd(SESSION_LABEL_WIDTH) + "$0.1234");
+	assert.equal(lines[8], "turns".padEnd(SESSION_LABEL_WIDTH) + "0");
+	assert.equal(lines[9], "tok/s".padEnd(SESSION_LABEL_WIDTH) + "12.3");
+	assert.equal(lines[10], "elapsed".padEnd(SESSION_LABEL_WIDTH) + "-");
 });
 
-test("a null context renders n/a and does not throw", () => {
+test("the session stats table aligns labels and clips a value", () => {
+	const lines = content(
+		renderSessionPanel(
+			makeSession({ tokensIn: 1500, tokensOut: 2300, turns: 7, cost: 0.5, tps: 9.9 }),
+			80,
+			theme,
+		),
+	);
+	assert.ok(lines.includes("tokens".padEnd(SESSION_LABEL_WIDTH) + "1.5k/2.3k"));
+	assert.ok(lines.includes("turns".padEnd(SESSION_LABEL_WIDTH) + "7"));
+	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.5000"));
+	assert.ok(lines.includes("tok/s".padEnd(SESSION_LABEL_WIDTH) + "9.9"));
+	assertFits(renderSessionPanel(makeSession(), 8, theme), 8);
+});
+
+test("a null context renders ctx n/a and does not throw", () => {
 	const lines = content(
 		renderSessionPanel(
 			makeSession({ contextTokens: null, contextWindow: null, contextPercent: null }),
@@ -239,42 +274,228 @@ test("a null context renders n/a and does not throw", () => {
 			theme,
 		),
 	);
-	assert.ok(lines.includes("context: n/a"));
+	assert.ok(lines.includes("ctx n/a"));
 });
 
 test("an entirely missing session renders n/a and does not throw", () => {
 	const lines = content(renderSessionPanel(null, 60, theme));
-	assert.ok(lines.includes("context: n/a"));
-	assert.ok(lines.includes("cost: n/a"));
+	assert.ok(lines.includes("ctx n/a"));
+	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "-"));
+});
+
+// --- context fill bar --------------------------------------------------------
+
+test("contextBar fills the fixed cell count", () => {
+	assert.equal(contextBar(0, 10), "░".repeat(10));
+	assert.equal(contextBar(100, 10), "█".repeat(10));
+	assert.equal(contextBar(50, 10), "█".repeat(5) + "░".repeat(5));
+	assert.equal(contextBar(150, 10), "█".repeat(10));
+	assert.equal(contextBar(-5, 10), "░".repeat(10));
+	assert.equal(contextBar(50, 4), "██░░");
+	assert.equal(contextBar(100).length, CONTEXT_BAR_CELLS);
+});
+
+test("contextBarColor uses the low, mid, and alarm thresholds", () => {
+	assert.equal(contextBarColor(0), "success");
+	assert.equal(contextBarColor(49), "success");
+	assert.equal(contextBarColor(50), "warning");
+	assert.equal(contextBarColor(80), "warning");
+	assert.equal(contextBarColor(81), "error");
+	assert.equal(contextBarColor(100), "error");
+});
+
+test("the session context bar clips at width 0 and 1", () => {
+	for (const width of [0, 1]) assertFits(renderSessionPanel(makeSession(), width, theme), width);
+});
+
+// --- rich agent lines --------------------------------------------------------
+
+test("a rich agent line shows name, elapsed, tokens, turns, and tools", () => {
+	const node = makeNode({
+		runId: "n1",
+		agent: "implementer",
+		status: "done",
+		startedAt: "2026-10-07T00:00:00.000Z",
+		endedAt: "2026-10-07T00:01:05.000Z",
+		usage: { input: 1000, output: 500, cost: 0.1, turns: 7 },
+		toolCount: 3,
+	});
+	const line = renderTreeLines([node], theme, 0, Date.parse("2026-10-07T00:01:05.000Z"))[0];
+	assert.ok(line?.includes("implementer"));
+	assert.ok(line?.includes("1m05s"));
+	assert.ok(line?.includes("1.5k"));
+	assert.ok(line?.includes("7t"));
+	assert.ok(line?.includes("3⚒"));
+});
+
+test("missing agent metrics render placeholders", () => {
+	const node = makeNode({
+		runId: "n1",
+		agent: "tester",
+		status: "idle",
+		startedAt: "not-a-date",
+		endedAt: null,
+	});
+	const line = renderTreeLines([node], theme, 0, 0)[0];
+	assert.ok(line?.includes("tester"));
+	assert.ok(line?.includes("- - -"));
+	assert.ok(line?.includes("0⚒"));
+});
+
+test("a rich agent line stays readable and fits width 45", () => {
+	const node = makeNode({
+		runId: "n1",
+		agent: "orchestrator",
+		startedAt: "2026-10-07T00:00:00.000Z",
+		endedAt: "2026-10-07T00:01:05.000Z",
+		usage: { input: 12000, output: 3000, cost: 0.5, turns: 12 },
+		toolCount: 42,
+		task: "a very long task preview",
+	});
+	const lines = renderAgentTreePanel(
+		[node],
+		45,
+		6,
+		theme,
+		0,
+		Date.parse("2026-10-07T00:01:05.000Z"),
+	);
+	assertFits(lines, 45);
+	assert.ok(lines[1]?.includes("orchestrator"));
+});
+
+// --- format helpers ----------------------------------------------------------
+
+test("formatCount compacts large values and rejects non-finite input", () => {
+	assert.equal(formatCount(0), "0");
+	assert.equal(formatCount(999), "999");
+	assert.equal(formatCount(1500), "1.5k");
+	assert.equal(formatCount(1_250_000), "1.3M");
+	assert.equal(formatCount(Number.NaN), "-");
+});
+
+test("formatElapsed compacts seconds, minutes, and hours", () => {
+	assert.equal(formatElapsed(0), "0s");
+	assert.equal(formatElapsed(65_000), "1m05s");
+	assert.equal(formatElapsed(3_600_000), "1h00m");
+	assert.equal(formatElapsed(null), "-");
+	assert.equal(formatElapsed(-1), "-");
+});
+
+// --- colored status glyphs ---------------------------------------------------
+
+test("status glyphs use the expected theme color tokens", () => {
+	const calls: string[] = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push(name);
+			return text;
+		},
+	};
+	statusGlyph(recording, makeNode({ runId: "r", status: "running" }), 0);
+	statusGlyph(recording, makeNode({ runId: "i", status: "idle" }), 0);
+	statusGlyph(recording, makeNode({ runId: "d", status: "done" }), 0);
+	statusGlyph(recording, makeNode({ runId: "f", status: "failed" }), 0);
+	statusGlyph(recording, makeNode({ runId: "s", status: "stale" }), 0);
+	statusGlyph(recording, makeNode({ runId: "o", status: "running", orphan: true }), 0);
+	assert.deepEqual(calls, ["accent", "dim", "success", "error", "warning", "warning"]);
+});
+
+test("the context fill bar uses the alarm color token above 80 percent", () => {
+	const calls: string[] = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push(name);
+			return text;
+		},
+	};
+	renderSessionPanel(makeSession({ contextTokens: 1900, contextWindow: 2000 }), 80, recording);
+	assert.ok(calls.includes("error"));
+});
+
+test("todo glyphs use the success and dim tokens", () => {
+	const calls: string[] = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push(name);
+			return text;
+		},
+	};
+	renderTodosPanel(
+		[
+			{ id: "1", text: "done", done: true },
+			{ id: "2", text: "open", done: false },
+		],
+		60,
+		recording,
+	);
+	assert.ok(calls.includes("success"));
+	assert.ok(calls.includes("dim"));
 });
 
 // --- WORKSPACE ---------------------------------------------------------------
 
-test("the branch renders", () => {
+test("the branch renders with a branch glyph and clean marker", () => {
 	const lines = content(renderWorkspacePanel(makeWorkspace({ branch: "dev" }), 60, theme));
 	assert.equal(lines[0]?.trimEnd(), " WORKSPACE");
-	assert.ok(lines.includes("dev"));
+	assert.ok(lines.includes("⎇ dev (clean)"));
 });
 
 test("a null branch renders (not a repo)", () => {
 	const lines = content(renderWorkspacePanel(makeWorkspace({ branch: null }), 60, theme));
-	assert.ok(lines.includes("(not a repo)"));
+	assert.ok(lines.some((line) => line.includes("(not a repo)")));
 });
 
 test("no changes renders (clean)", () => {
 	const lines = content(renderWorkspacePanel(makeWorkspace(), 60, theme));
-	assert.ok(lines.includes("(clean)"));
+	assert.ok(lines.some((line) => line.includes("(clean)")));
+});
+
+test("workspace file lines show right-aligned diff stats and untracked mark", () => {
+	const lines = content(
+		renderWorkspacePanel(
+			makeWorkspace({
+				cwd: "/home/dev/persona-agents",
+				files: [
+					{ path: "agent-stack/sidebar-render.ts", added: 12, removed: 3, untracked: false },
+					{ path: "new-file.ts", added: 0, removed: 0, untracked: true },
+				],
+				changed: ["agent-stack/sidebar-render.ts", "new-file.ts"],
+				changedCount: 2,
+			}),
+			60,
+			theme,
+		),
+	);
+	assert.ok(lines.some((line) => line.includes("+12 -3")));
+	assert.ok(lines.some((line) => line.includes("? new-file.ts")));
+	assert.ok(lines.some((line) => line.trim().endsWith("?")));
+	assert.ok(lines.includes("~/persona-agents"));
+});
+
+test("workspace shortens a home cwd to ~", () => {
+	assert.equal(shortenHome("/home/dev", "/home/dev"), "~");
+	assert.equal(shortenHome("/home/dev/x/y", "/home/dev"), "~/x/y");
+	assert.equal(shortenHome("/home/dev/x", undefined), "~/x");
+	assert.equal(shortenHome("/tmp/other"), "/tmp/other");
 });
 
 test("a long changed list clips with a more marker", () => {
-	const lines = renderWorkspacePanel(
-		makeWorkspace({ changed: ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"], changedCount: 6 }),
-		60,
-		theme,
+	const files = ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"].map((path) => ({
+		path,
+		added: 1,
+		removed: 0,
+		untracked: false,
+	}));
+	const lines = content(
+		renderWorkspacePanel(
+			makeWorkspace({ files, changed: files.map((file) => file.path), changedCount: 6 }),
+			60,
+			theme,
+		),
 	);
-	const changedLine = lines.find((line) => line.includes("changed"));
-	assert.ok(changedLine?.includes("6 changed"));
-	assert.ok(changedLine?.includes("… +2 more"));
+	assert.ok(lines.some((line) => line.includes("6 changed")));
+	assert.ok(lines.some((line) => line.includes("… +2 more")));
 });
 
 // --- MCP ---------------------------------------------------------------------
@@ -358,6 +579,40 @@ test("a theme with only fg colors headers and dims the more marker", () => {
 	assert.ok(lines[2]?.includes("<dim>"));
 });
 
+test("an empty color map keeps every color token as plain text", () => {
+	const calls: string[] = [];
+	const empty: SidebarTheme = {
+		colors: {},
+		fg: (name, text) => {
+			calls.push(name);
+			return text;
+		},
+	};
+	const node = makeNode({ runId: "n1", status: "running", task: "work" });
+
+	const lines = content(renderAgentTreePanel([node], 40, 5, empty, 0));
+
+	assert.deepEqual(calls, []);
+	assert.equal(lines[0], " AGENTS");
+});
+
+test("a token in the color map is colored while a missing token stays plain", () => {
+	const calls: string[] = [];
+	const partial: SidebarTheme = {
+		colors: { accent: true },
+		fg: (name, text) => {
+			calls.push(name);
+			return `<${name}>${text}</>`;
+		},
+	};
+	const node = makeNode({ runId: "n1", status: "running", task: "work" });
+
+	renderAgentTreePanel([node], 40, 5, partial, 0);
+
+	assert.ok(calls.includes("accent"));
+	assert.ok(!calls.includes("muted"));
+});
+
 // --- selection ---------------------------------------------------------------
 
 test("selectNext wraps from the last id to the first", () => {
@@ -396,11 +651,22 @@ test("a blank separator line appears between panels when the height allows", () 
 });
 
 test("no separator is added when it would drop a panel", () => {
-	// AGENTS (2) + SESSION (6) fit exactly at height 8; a separator would not.
-	const lines = renderSidebarPanel(makeSnapshot(), 80, 8, theme, 0);
-	assert.ok(lines.length <= 8);
+	// AGENTS pads to 4 lines; SESSION is 11. They fit exactly at height 15.
+	const lines = renderSidebarPanel(makeSnapshot(), 80, 15, theme, 0);
+	assert.ok(lines.length <= 15);
 	assert.ok(lines.some((line) => line.includes(" SESSION ")));
-	assert.ok(!lines.some((line) => line.trim() === ""));
+	assert.ok(lines.some((line) => line.includes("elapsed")), "the last SESSION row must stay");
+});
+
+test("a short tree at height 14 pads AGENTS to the minimum and drops SESSION", () => {
+	// Tradeoff: AGENTS_PAD_MIN buys a stable footprint for the lower panels,
+	// but that pad pushes SESSION out when the height is short. AGENTS pads
+	// to 4 and SESSION is 11, so 4 + 11 = 15 needs height 15; at 14 the
+	// compositor drops SESSION rather than shrink the padded AGENTS panel.
+	const root = makeNode({ runId: "root", agent: "orchestrator" });
+	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, 14, theme, 0);
+	assert.equal(lines.length, AGENTS_PAD_MIN, "AGENTS pads to the minimum footprint");
+	assert.ok(!lines.some((line) => line.includes(" SESSION ")), "SESSION is dropped at height 14");
 });
 
 test("every composed line fits the width", () => {
@@ -446,9 +712,19 @@ test("treeSignature changes when a todo changes", () => {
 	assert.notEqual(before, after);
 });
 
+test("a short tree pads the AGENTS panel to a stable footprint", () => {
+	const lines = renderAgentTreePanel([makeNode({ runId: "n1" })], 45, 20, theme, 0);
+	assert.equal(lines.length, AGENTS_PAD_MIN);
+});
+
+test("AGENTS padding never exceeds the height budget", () => {
+	const lines = renderAgentTreePanel([], 45, 2, theme, 0);
+	assert.ok(lines.length <= 2, `padded to ${lines.length} lines for height 2`);
+});
+
 // --- width and height edge cases ---------------------------------------------
 
-for (const width of [0, 1]) {
+for (const width of [0, 1, 45]) {
 	test(`every panel fits width ${width} and does not throw`, () => {
 		const node = makeNode({ runId: "n1", agent: "orchestrator" });
 		const panels = [
@@ -473,7 +749,7 @@ for (const width of [0, 1]) {
 	});
 }
 
-for (const height of [0, 1, 3]) {
+for (const height of [0, 1, 3, 8, 15, 30]) {
 	test(`renderSidebarPanel respects height ${height}`, () => {
 		const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
 		const lines = renderSidebarPanel(
@@ -572,6 +848,12 @@ test("treeSignature changes when a node usage changes", () => {
 	assert.notEqual(before, after);
 });
 
+test("treeSignature changes when a node tool count changes", () => {
+	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", toolCount: 1 })] }));
+	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", toolCount: 2 })] }));
+	assert.notEqual(before, after);
+});
+
 test("treeSignature keeps a null error distinct from an empty string", () => {
 	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", error: null })] }));
 	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", error: "" })] }));
@@ -584,9 +866,25 @@ test("treeSignature changes when a session field changes", () => {
 	assert.notEqual(before, after);
 });
 
+test("treeSignature changes when a session token total changes", () => {
+	const before = treeSignature(makeSnapshot({ session: makeSession({ tokensIn: 10, tokensOut: 20, turns: 1 }) }));
+	const after = treeSignature(makeSnapshot({ session: makeSession({ tokensIn: 10, tokensOut: 20, turns: 2 }) }));
+	assert.notEqual(before, after);
+});
+
 test("treeSignature changes when a workspace field changes", () => {
 	const before = treeSignature(makeSnapshot({ workspace: makeWorkspace({ branch: "dev" }) }));
 	const after = treeSignature(makeSnapshot({ workspace: makeWorkspace({ branch: "main" }) }));
+	assert.notEqual(before, after);
+});
+
+test("treeSignature changes when a workspace file stat changes", () => {
+	const before = treeSignature(
+		makeSnapshot({ workspace: makeWorkspace({ files: [{ path: "a.ts", added: 1, removed: 0, untracked: false }] }) }),
+	);
+	const after = treeSignature(
+		makeSnapshot({ workspace: makeWorkspace({ files: [{ path: "a.ts", added: 2, removed: 0, untracked: false }] }) }),
+	);
 	assert.notEqual(before, after);
 });
 

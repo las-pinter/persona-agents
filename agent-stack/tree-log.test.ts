@@ -225,3 +225,24 @@ test("interleaved appends from two writers to one log keep every record", () => 
 	assert.equal(seenA, perWriter);
 	assert.equal(seenB, perWriter);
 });
+
+test("a clear record round-trips", () => {
+	const path = logPath();
+	const event = makeEvent({ type: "clear", status: "running", at: new Date(5).toISOString() });
+	appendEvent(path, event);
+
+	const events = readEvents(path);
+	assert.equal(events.length, 1);
+	assert.equal(events[0]?.type, "clear");
+	assert.deepEqual(events[0], event);
+});
+
+test("a toolCount round-trips on an end record", () => {
+	const path = logPath();
+	const event = makeEvent({ type: "end", status: "done", toolCount: 7 });
+	appendEvent(path, event);
+
+	const events = readEvents(path);
+	assert.equal(events.length, 1);
+	assert.equal(events[0]?.toolCount, 7);
+});

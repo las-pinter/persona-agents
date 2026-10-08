@@ -26,6 +26,8 @@ export interface TreeNode {
 	bytesIn: number;
 	bytesOut: number;
 	usage: RunUsage | undefined;
+	/** Tool calls this run started. `0` when the log has no count. */
+	toolCount: number;
 	exitCode: number | null;
 	error: string | null;
 	outputPreview: string;
@@ -106,6 +108,7 @@ function buildNode(runId: string, records: RunEvent[], now: number, staleMs: num
 		bytesIn: latest.bytesIn ?? 0,
 		bytesOut: latest.bytesOut ?? 0,
 		usage: latest.usage ?? start?.usage,
+		toolCount: latest.toolCount ?? start?.toolCount ?? 0,
 		exitCode: end?.exitCode ?? latest.exitCode ?? null,
 		error: end?.error ?? latest.error ?? null,
 		outputPreview: end?.outputPreview ?? latest.outputPreview ?? "",
@@ -133,6 +136,32 @@ function hasParentCycle(runId: string, nodes: Map<string, TreeNode>): boolean {
 }
 
 /**
+ * True when a node is a non-root node that existed before the latest `clear`
+ * and is no longer running. Idle and terminal children from an earlier root
+ * turn are cleared; a running child and every root/top node stay.
+ */
+function isClearedByClear(node: TreeNode, clearAt: number): boolean {
+	if (node.parentRunId === null) return false;
+	if (node.status === "running") return false;
+	const started = Date.parse(node.startedAt);
+	return Number.isFinite(started) && started < clearAt;
+}
+
+/**
+ * Drop every node the newest `clear` superseded and keep the tree connected.
+ * A kept descendant keeps its ancestors, so a running grandchild does not lose
+ * its branch. The input nodes are fresh, so the child arrays are set in place.
+ */
+function pruneClearedNodes(nodes: TreeNode[], clearAt: number): TreeNode[] {
+	const kept: TreeNode[] = [];
+	for (const node of nodes) {
+		node.children = pruneClearedNodes(node.children, clearAt);
+		if (!isClearedByClear(node, clearAt) || node.children.length > 0) kept.push(node);
+	}
+	return kept;
+}
+
+/**
  * Assemble a forest from the flat event log.
  *
  * - Fold `start`/`update`/`end` by `runId`.
@@ -140,11 +169,31 @@ function hasParentCycle(runId: string, nodes: Map<string, TreeNode>): boolean {
  * - A record whose parent has no `start` is `orphan: true` and attached at top level.
  * - A `start` with no `end` older than `staleMs` gets status `stale`.
  * - The record with `parentRunId === null` is a root/top node.
+ *
+ * Clear rule (finished nodes are dropped for a new root turn). A `clear` record
+ * is NOT a node: it only marks the `at` time of the newest root turn. After the
+ * latest `clear`:
+ *
+ * 1. Drop every non-root node (any node with a parent) that is not `running`
+ *    and started before the clear. Idle and finished children from the old turn
+ *    disappear.
+ * 2. Keep every `running` node, including a child that was already running when
+ *    the clear landed.
+ * 3. Keep the root/top node (`parentRunId === null`) even when it is idle or done.
+ * 4. Keep a node whose descendant is kept, so a running grandchild keeps its
+ *    branch attached instead of turning into an orphan.
  */
 export function assembleTree(events: RunEvent[], now: number, staleMs: number): TreeNode[] {
+	// A `clear` record is a marker, never a node. Remember only the newest one.
+	let clearAt = Number.NEGATIVE_INFINITY;
 	const groups = new Map<string, RunEvent[]>();
 	for (const event of events) {
 		if (!event || typeof event.runId !== "string") continue;
+		if (event.type === "clear") {
+			const parsed = Date.parse(event.at);
+			if (Number.isFinite(parsed) && parsed > clearAt) clearAt = parsed;
+			continue;
+		}
 		const list = groups.get(event.runId);
 		if (list) list.push(event);
 		else groups.set(event.runId, [event]);
@@ -182,6 +231,7 @@ export function assembleTree(events: RunEvent[], now: number, staleMs: number): 
 
 	for (const node of nodes.values()) node.children.sort(byStartedAt);
 	roots.sort(byStartedAt);
+	if (Number.isFinite(clearAt)) return pruneClearedNodes(roots, clearAt);
 	return roots;
 }
 
