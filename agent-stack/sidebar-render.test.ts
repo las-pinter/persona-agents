@@ -20,6 +20,7 @@ import {
 	type WorkspaceSnapshot,
 	AGENTS_PAD_MIN,
 	CONTEXT_BAR_CELLS,
+	SECTION_RULE_CHAR,
 	SESSION_LABEL_WIDTH,
 	contextBar,
 	contextBarColor,
@@ -236,22 +237,44 @@ test("renderNodeDetail reports a missing usage", () => {
 
 // --- SESSION -----------------------------------------------------------------
 
-test("a full session renders the model, context bar, and stats table", () => {
+test("a full session renders the model, context bar, and aligned stats", () => {
 	const lines = content(renderSessionPanel(makeSession(), 60, theme));
 	assert.equal(lines[0]?.trimEnd(), " SESSION");
-	assert.equal(lines[1], "model: test-model");
-	assert.equal(lines[2], "thinking: medium");
-	assert.equal(lines[3], "ctx " + contextBar(50) + " 1000/2000 (50%)");
-	assert.equal(lines[4], "metric".padEnd(SESSION_LABEL_WIDTH) + "value");
-	assert.equal(lines[5], "─".repeat(SESSION_LABEL_WIDTH));
-	assert.equal(lines[6], "tokens".padEnd(SESSION_LABEL_WIDTH) + "0/0");
-	assert.equal(lines[7], "cost".padEnd(SESSION_LABEL_WIDTH) + "$0.1234");
-	assert.equal(lines[8], "turns".padEnd(SESSION_LABEL_WIDTH) + "0");
-	assert.equal(lines[9], "tok/s".padEnd(SESSION_LABEL_WIDTH) + "12.3");
-	assert.equal(lines[10], "elapsed".padEnd(SESSION_LABEL_WIDTH) + "-");
+	assert.equal(lines[1], "model".padEnd(SESSION_LABEL_WIDTH) + "test-model");
+	assert.equal(lines[2], "thinking".padEnd(SESSION_LABEL_WIDTH) + "medium");
+	assert.equal(lines[3], "ctx".padEnd(SESSION_LABEL_WIDTH) + contextBar(50) + "  50% (1.0k/2.0k)");
+	assert.equal(lines[4], "tokens".padEnd(SESSION_LABEL_WIDTH) + "0 / 0");
+	assert.equal(lines[5], "cost".padEnd(SESSION_LABEL_WIDTH) + "$0.12");
+	assert.equal(lines[6], "turns".padEnd(SESSION_LABEL_WIDTH) + "0");
+	assert.equal(lines[7], "tok/s".padEnd(SESSION_LABEL_WIDTH) + "12.3");
+	assert.equal(lines[8], "elapsed".padEnd(SESSION_LABEL_WIDTH) + "-");
 });
 
-test("the session stats table aligns labels and clips a value", () => {
+test("every SESSION value starts at the same column", () => {
+	const lines = content(
+		renderSessionPanel(
+			makeSession({ tokensIn: 1500, tokensOut: 2300, turns: 7, cost: 0.5, tps: 9.9 }),
+			60,
+			theme,
+		),
+	);
+	const rows: Array<[string, string]> = [
+		["model", "test-model"],
+		["thinking", "medium"],
+		["tokens", "1.5k / 2.3k"],
+		["cost", "$0.50"],
+		["turns", "7"],
+		["tok/s", "9.9"],
+	];
+	for (const [label, value] of rows) {
+		const line = lines.find((candidate) => candidate.startsWith(label));
+		assert.ok(line, `missing ${label} row`);
+		assert.equal(line, label.padEnd(SESSION_LABEL_WIDTH) + value);
+		assert.equal(line?.indexOf(value), SESSION_LABEL_WIDTH, `${label} value is not aligned`);
+	}
+});
+
+test("the session stats align every value in one column and clip", () => {
 	const lines = content(
 		renderSessionPanel(
 			makeSession({ tokensIn: 1500, tokensOut: 2300, turns: 7, cost: 0.5, tps: 9.9 }),
@@ -259,11 +282,17 @@ test("the session stats table aligns labels and clips a value", () => {
 			theme,
 		),
 	);
-	assert.ok(lines.includes("tokens".padEnd(SESSION_LABEL_WIDTH) + "1.5k/2.3k"));
+	assert.ok(lines.includes("tokens".padEnd(SESSION_LABEL_WIDTH) + "1.5k / 2.3k"));
 	assert.ok(lines.includes("turns".padEnd(SESSION_LABEL_WIDTH) + "7"));
-	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.5000"));
+	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.50"));
 	assert.ok(lines.includes("tok/s".padEnd(SESSION_LABEL_WIDTH) + "9.9"));
 	assertFits(renderSessionPanel(makeSession(), 8, theme), 8);
+});
+
+test("a tiny cost keeps four decimals so it does not read as zero", () => {
+	const lines = content(renderSessionPanel(makeSession({ cost: 0.0012 }), 60, theme));
+	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.0012"));
+	assert.ok(!lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.00"));
 });
 
 test("a null context renders ctx n/a and does not throw", () => {
@@ -274,12 +303,12 @@ test("a null context renders ctx n/a and does not throw", () => {
 			theme,
 		),
 	);
-	assert.ok(lines.includes("ctx n/a"));
+	assert.ok(lines.includes("ctx".padEnd(SESSION_LABEL_WIDTH) + "n/a"));
 });
 
 test("an entirely missing session renders n/a and does not throw", () => {
 	const lines = content(renderSessionPanel(null, 60, theme));
-	assert.ok(lines.includes("ctx n/a"));
+	assert.ok(lines.includes("ctx".padEnd(SESSION_LABEL_WIDTH) + "n/a"));
 	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "-"));
 });
 
@@ -687,29 +716,78 @@ test("renderSidebarPanel drops lower panels when the height is short", () => {
 	assert.ok(!lines.some((line) => line.includes(" SESSION ")));
 });
 
-test("a blank separator line appears between panels when the height allows", () => {
+test("a full-width dim rule separates panels, never above the first or below the last", () => {
 	const lines = renderSidebarPanel(makeSnapshot(), 80, 30, theme, 0);
-	assert.ok(lines.some((line) => line.trim() === ""), "expected a blank separator line");
-	assert.notEqual(lines[0]?.trim(), "");
+	const rule = SECTION_RULE_CHAR.repeat(80);
+	const ruleIndexes = lines
+		.map((line, index) => (line === rule ? index : -1))
+		.filter((index) => index >= 0);
+	// One rule per gap between the five panels.
+	assert.equal(ruleIndexes.length, 4, "expected one rule per panel gap");
+	assert.notEqual(lines[0], rule, "no rule above the first panel");
+	assert.notEqual(lines[lines.length - 1], rule, "no rule below the last panel");
+	for (const index of ruleIndexes) {
+		assert.notEqual(lines[index - 1], rule, "two rules are adjacent");
+		assert.notEqual(lines[index + 1], rule, "two rules are adjacent");
+		assert.ok((lines[index - 1]?.length ?? 0) > 0, "a rule sits right after a panel line");
+	}
 });
 
-test("no separator is added when it would drop a panel", () => {
-	// AGENTS pads to 4 lines; SESSION is 11. They fit exactly at height 15.
-	const lines = renderSidebarPanel(makeSnapshot(), 80, 15, theme, 0);
-	assert.ok(lines.length <= 15);
-	assert.ok(lines.some((line) => line.includes(" SESSION ")));
-	assert.ok(lines.some((line) => line.includes("elapsed")), "the last SESSION row must stay");
+test("the section rule is clipped at width 0 and 1 and still fits", () => {
+	const atOne = renderSidebarPanel(makeSnapshot(), 1, 30, theme, 0);
+	assertFits(atOne, 1);
+	assert.equal(
+		atOne.filter((line) => line === SECTION_RULE_CHAR).length,
+		4,
+		"four rules are drawn at width 1",
+	);
+
+	const atZero = renderSidebarPanel(makeSnapshot(), 0, 30, theme, 0);
+	assertFits(atZero, 0);
+	assert.ok(atZero.every((line) => line === ""), "every line is empty at width 0");
 });
 
-test("a short tree at height 14 pads AGENTS to the minimum and drops SESSION", () => {
-	// Tradeoff: AGENTS_PAD_MIN buys a stable footprint for the lower panels,
-	// but that pad pushes SESSION out when the height is short. AGENTS pads
-	// to 4 and SESSION is 11, so 4 + 11 = 15 needs height 15; at 14 the
-	// compositor drops SESSION rather than shrink the padded AGENTS panel.
+test("the section rule is drawn with the dim color token", () => {
+	const calls: Array<[string, string]> = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push([name, text]);
+			return text;
+		},
+	};
+	const rule = SECTION_RULE_CHAR.repeat(80);
+
+	renderSidebarPanel(makeSnapshot(), 80, 30, recording, 0);
+
+	assert.ok(
+		calls.some(([name, text]) => name === "dim" && text === rule),
+		"the section rule must use the dim token",
+	);
+});
+
+test("the section rule counts against the height budget", () => {
+	const rule = SECTION_RULE_CHAR.repeat(80);
+	// AGENTS pads to 4; SESSION is 9. One rule makes 14 lines, so SESSION
+	// fits at height 14 but is dropped at height 13 before the budget overflows.
+	const fits = renderSidebarPanel(makeSnapshot(), 80, 14, theme, 0);
+	assert.ok(fits.some((line) => line.includes(" SESSION ")), "SESSION fits at height 14");
+	assert.equal(fits.filter((line) => line === rule).length, 1, "one rule fits at height 14");
+	assert.ok(fits.length <= 14);
+
+	const short = renderSidebarPanel(makeSnapshot(), 80, 13, theme, 0);
+	assert.ok(!short.some((line) => line.includes(" SESSION ")), "SESSION drops at height 13");
+	assert.equal(short.filter((line) => line === rule).length, 0, "no rule without a second panel");
+	assert.ok(short.length <= 13);
+});
+
+test("a short tree at height 13 pads AGENTS to the minimum and drops SESSION", () => {
+	// Tradeoff: AGENTS_PAD_MIN buys a stable footprint for the lower panels.
+	// AGENTS pads to 4 and SESSION is 9, so with one rule 4 + 1 + 9 = 14 needs
+	// height 14; at 13 the compositor drops SESSION rather than shrink AGENTS.
 	const root = makeNode({ runId: "root", agent: "orchestrator" });
-	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, 14, theme, 0);
+	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, 13, theme, 0);
 	assert.equal(lines.length, AGENTS_PAD_MIN, "AGENTS pads to the minimum footprint");
-	assert.ok(!lines.some((line) => line.includes(" SESSION ")), "SESSION is dropped at height 14");
+	assert.ok(!lines.some((line) => line.includes(" SESSION ")), "SESSION is dropped at height 13");
 });
 
 test("every composed line fits the width", () => {

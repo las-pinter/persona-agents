@@ -24,8 +24,10 @@ export const TODOS_SHOWN = 4;
 export const DETAIL_PREVIEW_LINES = 20;
 /** Fixed cell count of the SESSION context fill bar. */
 export const CONTEXT_BAR_CELLS = 10;
-/** Width of the SESSION stats label column. */
-export const SESSION_LABEL_WIDTH = 12;
+/** Width of the SESSION stats label column. Fits sidebar width 45. */
+export const SESSION_LABEL_WIDTH = 11;
+/** Glyph of the dim, full-width rule drawn between two panels. */
+export const SECTION_RULE_CHAR = "─";
 /**
  * Minimum AGENTS panel lines, header included. A short tree pads with blank
  * lines so the panels below stay put. Clamped to the height budget.
@@ -177,6 +179,12 @@ function styleDim(theme: SidebarTheme, text: string): string {
 /** A panel header: accent-colored and bold when the theme supports it. */
 function header(theme: SidebarTheme, title: string): string {
 	return styleBold(theme, color(theme, "accent", title));
+}
+
+/** A dim, full-width rule drawn between two panels. Never wider than `width`. */
+function sectionRule(theme: SidebarTheme, width: number): string {
+	const cells = Math.max(0, Math.floor(width));
+	return styleDim(theme, SECTION_RULE_CHAR.repeat(cells));
 }
 
 /** Collapse all whitespace so a multi-line field stays on one line. */
@@ -414,7 +422,7 @@ function sessionRow(label: string, value: string): string {
 	return `${label.padEnd(SESSION_LABEL_WIDTH)}${value}`;
 }
 
-/** The SESSION panel: model, a context fill bar, and a two-column stats table. */
+/** The SESSION panel: an aligned label/value column for the session stats. */
 export function renderSessionPanel(
 	session: SessionSnapshot | null | undefined,
 	width: number,
@@ -424,25 +432,25 @@ export function renderSessionPanel(
 	const lines: string[] = [header(theme, " SESSION ")];
 	const data = session ?? null;
 
-	lines.push(`model: ${data?.model ?? "n/a"}`);
-	lines.push(`thinking: ${data?.thinkingLevel ?? "n/a"}`);
+	lines.push(sessionRow("model", data?.model ?? "n/a"));
+	lines.push(sessionRow("thinking", data?.thinkingLevel ?? "n/a"));
 
 	const tokens = data?.contextTokens ?? null;
 	const window = data?.contextWindow ?? null;
 	if (tokens === null || window === null) {
-		lines.push("ctx n/a");
+		lines.push(sessionRow("ctx", "n/a"));
 	} else {
 		const percent = data?.contextPercent ?? (window > 0 ? (tokens / window) * 100 : 0);
 		const bar = color(theme, contextBarColor(percent), contextBar(percent));
-		lines.push(`ctx ${bar} ${tokens}/${window} (${Math.round(percent)}%)`);
+		const counts = `${formatCount(tokens)}/${formatCount(window)}`;
+		lines.push(sessionRow("ctx", `${bar}  ${Math.round(percent)}% (${counts})`));
 	}
 
-	lines.push(sessionRow("metric", "value"));
-	lines.push("─".repeat(SESSION_LABEL_WIDTH));
-	const tokenText = `${formatCount(data?.tokensIn ?? 0)}/${formatCount(data?.tokensOut ?? 0)}`;
+	const tokenText = `${formatCount(data?.tokensIn ?? 0)} / ${formatCount(data?.tokensOut ?? 0)}`;
 	lines.push(sessionRow("tokens", tokenText));
 	const cost = data?.cost ?? null;
-	lines.push(sessionRow("cost", cost === null ? "-" : `$${cost.toFixed(4)}`));
+	const costText = cost === null ? "-" : `$${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)}`;
+	lines.push(sessionRow("cost", costText));
 	lines.push(sessionRow("turns", data?.turns == null ? "-" : String(data.turns)));
 	const tps = data?.tps ?? null;
 	lines.push(sessionRow("tok/s", tps === null ? "-" : tps.toFixed(1)));
@@ -722,29 +730,26 @@ export function selectPrev(ids: string[], current: string | null): string | null
 
 /**
  * Stack the panels in priority order. When the height is too small, lower
- * panels are dropped first; the tree keeps the top slot. A blank separator
- * line goes between panels only when it costs no panel.
+ * panels are dropped first; the tree keeps the top slot. A dim, full-width
+ * rule separates adjacent panels. Each rule counts against the height budget.
  */
-function composePanels(ctx: PanelContext, panels: string[][]): string[] {
+function composePanels(ctx: PanelContext, panels: string[][], theme: SidebarTheme): string[] {
 	const limit = Math.max(0, Math.floor(ctx.height));
 	if (limit <= 0) return [];
 
-	let total = 0;
-	for (const panel of panels) total += panel.length;
+	// Height of the first `count` panels plus one rule between each pair.
+	const stackedHeight = (count: number): number => {
+		let total = Math.max(0, count - 1);
+		for (let index = 0; index < count; index++) total += panels[index].length;
+		return total;
+	};
 
 	let count = panels.length;
-	while (count > 1 && total > limit) {
-		count -= 1;
-		total -= panels[count].length;
-	}
-
-	// Separators are a nicety: add them only when they fit without dropping a panel.
-	const separators = count - 1;
-	const useSeparators = separators > 0 && total + separators <= limit;
+	while (count > 1 && stackedHeight(count) > limit) count -= 1;
 
 	const lines: string[] = [];
 	for (let index = 0; index < count; index++) {
-		if (useSeparators && index > 0) lines.push("");
+		if (index > 0) lines.push(sectionRule(theme, ctx.width));
 		lines.push(...panels[index]);
 	}
 	if (lines.length > limit) lines.length = limit;
@@ -778,5 +783,5 @@ export function renderSidebarPanel(
 		renderTodosPanel(snapshot.todos, width, theme),
 	];
 
-	return composePanels(ctx, panels);
+	return composePanels(ctx, panels, theme);
 }
