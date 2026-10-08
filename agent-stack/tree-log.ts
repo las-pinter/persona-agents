@@ -39,7 +39,7 @@ export interface RunEvent {
 	depth: number;
 	agent: string;
 	persona: string | null;
-	status: "running" | "done" | "failed";
+	status: "idle" | "running" | "done" | "failed";
 	at: string;
 	task?: string;
 	bytesIn?: number;

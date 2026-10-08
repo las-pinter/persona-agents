@@ -91,6 +91,68 @@ test("a running start within staleMs is not stale", () => {
 	assert.equal(roots[0]?.status, "running");
 });
 
+test("an idle root stays idle past staleMs", () => {
+	const events = [makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) })];
+	const roots = assembleTree(events, T0 + 10 * 60_000, 1000);
+	assert.equal(roots[0]?.status, "idle");
+});
+
+test("a fresh running update keeps an old root from going stale", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "root", type: "update", status: "running", at: at(310_000) }),
+	];
+	const roots = assembleTree(events, T0 + 311_000, 300_000);
+	assert.equal(roots[0]?.status, "running");
+});
+
+test("an old running update with no recent record is stale", () => {
+	const events = [
+		makeEvent({ runId: "slow", type: "start", at: at(0) }),
+		makeEvent({ runId: "slow", type: "update", status: "running", at: at(10_000) }),
+	];
+	const roots = assembleTree(events, T0 + 600_000, 300_000);
+	assert.equal(roots[0]?.status, "stale");
+});
+
+test("an idle node older than staleMs stays idle", () => {
+	const events = [makeEvent({ runId: "idler", type: "start", status: "idle", at: at(0) })];
+	const roots = assembleTree(events, T0 + 600_000, 300_000);
+	assert.equal(roots[0]?.status, "idle");
+});
+
+test("a root update folds running, then a later update folds idle", () => {
+	const running = assembleTree(
+		[
+			makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+			makeEvent({ runId: "root", type: "update", status: "running", at: at(10) }),
+		],
+		T0 + 500,
+		1000,
+	);
+	assert.equal(running[0]?.status, "running");
+
+	const idleAgain = assembleTree(
+		[
+			makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+			makeEvent({ runId: "root", type: "update", status: "running", at: at(10) }),
+			makeEvent({ runId: "root", type: "update", status: "idle", at: at(20) }),
+		],
+		T0 + 10 * 60_000,
+		1000,
+	);
+	assert.equal(idleAgain[0]?.status, "idle");
+});
+
+test("a root end makes the idle root done", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", status: "idle", at: at(0) }),
+		makeEvent({ runId: "root", type: "end", status: "done", at: at(30) }),
+	];
+	const roots = assembleTree(events, T0 + 60_000, 1000);
+	assert.equal(roots[0]?.status, "done");
+});
+
 test("a failed end gives status failed", () => {
 	const events = [
 		makeEvent({ runId: "bad", type: "start", at: at(0) }),

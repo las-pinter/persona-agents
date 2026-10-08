@@ -18,6 +18,7 @@ import {
 	type SidebarTheme,
 	type TodoSnapshot,
 	type WorkspaceSnapshot,
+	hasRunningNode,
 	renderAgentTreePanel,
 	renderMcpPanel,
 	renderNodeDetail,
@@ -108,11 +109,6 @@ function content(lines: string[]): string[] {
 	return lines.map((line) => line.trimEnd());
 }
 
-/** Count the leading spaces in one line. */
-function leadingSpaces(line: string | undefined): number {
-	return /^( *)/.exec(line ?? "")?.[1]?.length ?? 0;
-}
-
 // --- AGENTS (tree) -----------------------------------------------------------
 
 test("zero nodes renders the AGENTS placeholder", () => {
@@ -135,6 +131,13 @@ test("a running node renders the spinner frame", () => {
 	assert.ok(lines[1]?.includes("⠋"));
 });
 
+test("an idle node renders the idle glyph and not the spinner", () => {
+	const node = makeNode({ runId: "n1", agent: "tester", status: "idle" });
+	const line = renderAgentTreePanel([node], 40, 5, theme, 0)[1];
+	assert.ok(line?.includes("○"));
+	assert.ok(!line?.includes("⠋"));
+});
+
 test("a failed node renders the cross icon", () => {
 	const node = makeNode({ runId: "n1", status: "failed" });
 	assert.ok(renderAgentTreePanel([node], 40, 5, theme, 0)[1]?.includes("✗"));
@@ -150,15 +153,28 @@ test("an orphan node renders the question mark", () => {
 	assert.ok(renderAgentTreePanel([node], 40, 5, theme, 0)[1]?.includes("?"));
 });
 
-test("indentation grows with depth", () => {
+test("branch connectors nest with depth and mark the last child", () => {
 	const grandchild = makeNode({ runId: "c2", parentRunId: "c1", depth: 2, agent: "researcher" });
 	const child = makeNode({ runId: "c1", parentRunId: "root", depth: 1, agent: "tester", children: [grandchild] });
 	const root = makeNode({ runId: "root", depth: 0, agent: "orchestrator", children: [child] });
 
 	const lines = renderTreeLines([root], theme, 0);
-	assert.ok(lines[0]?.startsWith("⠋"));
-	assert.ok(leadingSpaces(lines[1]) > leadingSpaces(lines[0]));
-	assert.ok(leadingSpaces(lines[2]) > leadingSpaces(lines[1]));
+	assert.ok(lines[0]?.startsWith("⠋"), "the root has no connector");
+	assert.ok(lines[1]?.startsWith("└─ "), "a single child draws the last-child glyph");
+	assert.ok(lines[2]?.startsWith("   └─ "), "a grandchild aligns under its parent");
+});
+
+test("sibling connectors mark the last child and keep the vertical spine", () => {
+	const first = makeNode({ runId: "a", parentRunId: "root", depth: 1, agent: "alpha" });
+	const grandchild = makeNode({ runId: "a1", parentRunId: "a", depth: 2, agent: "deep" });
+	first.children = [grandchild];
+	const last = makeNode({ runId: "b", parentRunId: "root", depth: 1, agent: "beta" });
+	const root = makeNode({ runId: "root", depth: 0, children: [first, last] });
+
+	const lines = renderTreeLines([root], theme, 0);
+	assert.ok(lines[1]?.startsWith("├─ "), "the first of two children gets the tee");
+	assert.ok(lines[2]?.startsWith("│  "), "a middle branch keeps the vertical spine");
+	assert.ok(lines[3]?.startsWith("└─ "), "the last child gets the corner");
 });
 
 test("the root node is the first node line", () => {
@@ -167,6 +183,13 @@ test("the root node is the first node line", () => {
 	const lines = renderTreeLines([root], theme, 0);
 	assert.ok(lines[0]?.includes("orchestrator"));
 	assert.ok(lines[1]?.includes("tester"));
+});
+
+test("a top-level orphan with depth draws no connector", () => {
+	const orphan = makeNode({ runId: "lost", parentRunId: "ghost", depth: 1, orphan: true, agent: "tester" });
+	const lines = renderTreeLines([orphan], theme, 0);
+	assert.ok(lines[0]?.startsWith("? "), "the orphan glyph starts the line");
+	assert.ok(!lines[0]?.includes("─"), "no branch glyph is drawn");
 });
 
 test("a tree taller than the budget prints a more marker", () => {
@@ -302,6 +325,39 @@ test("a long todo list clips with a more marker", () => {
 	assert.ok(lines.some((line) => line.includes("… +2 more")));
 });
 
+test("hasRunningNode is false when no node runs", () => {
+	assert.equal(hasRunningNode([]), false);
+	assert.equal(hasRunningNode([makeNode({ runId: "i", status: "idle" })]), false);
+	assert.equal(hasRunningNode([makeNode({ runId: "d", status: "done" })]), false);
+	assert.equal(hasRunningNode([makeNode({ runId: "f", status: "failed" })]), false);
+	assert.equal(hasRunningNode([makeNode({ runId: "s", status: "stale" })]), false);
+});
+
+test("hasRunningNode is true for a running node, including a descendant", () => {
+	assert.equal(hasRunningNode([makeNode({ runId: "r", status: "running" })]), true);
+	const child = makeNode({ runId: "c", status: "running", depth: 1 });
+	const root = makeNode({ runId: "root", status: "idle", children: [child] });
+	assert.equal(hasRunningNode([root]), true);
+});
+
+// --- theme fallback ----------------------------------------------------------
+
+test("a theme with no methods still renders a plain header", () => {
+	const plain: SidebarTheme = {};
+	const lines = content(renderAgentTreePanel([], 40, 5, plain, 0));
+	assert.equal(lines[0]?.trimEnd(), " AGENTS");
+});
+
+test("a theme with only fg colors headers and dims the more marker", () => {
+	const fgOnly: SidebarTheme = { fg: (name, text) => `<${name}>${text}</>` };
+	const nodes = Array.from({ length: 6 }, (_value, index) =>
+		makeNode({ runId: `n${index}`, agent: `agent${index}` }),
+	);
+	const lines = renderAgentTreePanel(nodes, 60, 3, fgOnly, 0);
+	assert.ok(lines[0]?.includes("<accent>"));
+	assert.ok(lines[2]?.includes("<dim>"));
+});
+
 // --- selection ---------------------------------------------------------------
 
 test("selectNext wraps from the last id to the first", () => {
@@ -331,6 +387,20 @@ test("renderSidebarPanel drops lower panels when the height is short", () => {
 	const lines = renderSidebarPanel(makeSnapshot(), 80, 2, theme, 0);
 	assert.ok(lines[0]?.startsWith(" AGENTS "));
 	assert.ok(!lines.some((line) => line.includes(" SESSION ")));
+});
+
+test("a blank separator line appears between panels when the height allows", () => {
+	const lines = renderSidebarPanel(makeSnapshot(), 80, 30, theme, 0);
+	assert.ok(lines.some((line) => line.trim() === ""), "expected a blank separator line");
+	assert.notEqual(lines[0]?.trim(), "");
+});
+
+test("no separator is added when it would drop a panel", () => {
+	// AGENTS (2) + SESSION (6) fit exactly at height 8; a separator would not.
+	const lines = renderSidebarPanel(makeSnapshot(), 80, 8, theme, 0);
+	assert.ok(lines.length <= 8);
+	assert.ok(lines.some((line) => line.includes(" SESSION ")));
+	assert.ok(!lines.some((line) => line.trim() === ""));
 });
 
 test("every composed line fits the width", () => {

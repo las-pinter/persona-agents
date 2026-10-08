@@ -41,6 +41,7 @@ import {
 } from "./sidebar.ts";
 import {
 	clipLine,
+	hasRunningNode,
 	renderNodeDetail,
 	renderSidebarPanel,
 	selectNext,
@@ -126,11 +127,6 @@ function getLines(): string[] {
 	}
 }
 
-/** True when at least one tree node is running. */
-function hasRunning(snapshot: SidebarSnapshot): boolean {
-	return flattenTree(snapshot.tree ?? []).some((node) => node.status === "running");
-}
-
 /** Ask pi for a render. Never throws. */
 function requestRender(): void {
 	try {
@@ -195,7 +191,7 @@ function spinnerTick(): void {
 			return;
 		}
 		const snapshot = data.snapshot();
-		if (!hasRunning(snapshot)) {
+		if (!hasRunningNode(snapshot.tree ?? [])) {
 			stopSpinner();
 			return;
 		}
@@ -255,7 +251,7 @@ function pull(): void {
 			else requestRender();
 		}
 		if (mode === "tui") {
-			if (hasRunning(snapshot)) ensureSpinner();
+			if (hasRunningNode(snapshot.tree ?? [])) ensureSpinner();
 			else stopSpinner();
 		}
 		void refreshBranch();

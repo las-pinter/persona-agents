@@ -75,6 +75,14 @@ test("append three then read three", () => {
 	);
 });
 
+test("an idle status round-trips", () => {
+	const path = logPath();
+	appendEvent(path, makeEvent({ type: "update", status: "idle" }));
+	const events = readEvents(path);
+	assert.equal(events.length, 1);
+	assert.equal(events[0]?.status, "idle");
+});
+
 test("a malformed line is skipped silently", () => {
 	const path = logPath();
 	writeFileSync(

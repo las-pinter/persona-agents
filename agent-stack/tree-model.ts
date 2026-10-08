@@ -10,7 +10,7 @@
 import type { RunEvent, RunUsage } from "./tree-log.ts";
 
 /** A node status. `stale` is derived, never stored in the log. */
-export type TreeNodeStatus = "running" | "done" | "failed" | "stale";
+export type TreeNodeStatus = "idle" | "running" | "done" | "failed" | "stale";
 
 /** One node in the agent tree. */
 export interface TreeNode {
@@ -67,14 +67,19 @@ function byStartedAt(a: TreeNode, b: TreeNode): number {
 function resolveStatus(
 	start: RunEvent | undefined,
 	end: RunEvent | undefined,
+	latest: RunEvent | undefined,
 	startedAt: string,
 	now: number,
 	staleMs: number,
 ): TreeNodeStatus {
 	if (end) return end.status === "failed" ? "failed" : "done";
+	// A non-terminal run keeps the newest advertised status. An idle run waits
+	// between agent turns, so an idle root must not age into stale.
+	if (latest?.status === "idle") return "idle";
 	if (!start) return "running";
-	const started = Date.parse(startedAt);
-	if (Number.isFinite(started) && now - started > staleMs) return "stale";
+	// The newest record sets the age: a fresh update on an old run is not stale.
+	const newest = Date.parse(latest?.at ?? startedAt);
+	if (Number.isFinite(newest) && now - newest > staleMs) return "stale";
 	return "running";
 }
 
@@ -94,7 +99,7 @@ function buildNode(runId: string, records: RunEvent[], now: number, staleMs: num
 		depth: primary.depth ?? 0,
 		agent: primary.agent ?? "unknown",
 		persona: primary.persona ?? null,
-		status: resolveStatus(start, end, startedAt, now, staleMs),
+		status: resolveStatus(start, end, latest, startedAt, now, staleMs),
 		startedAt,
 		endedAt: end?.at ?? null,
 		task: latest.task ?? start?.task ?? "",

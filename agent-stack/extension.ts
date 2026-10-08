@@ -68,7 +68,7 @@ function initTreeRoot(): void {
 			depth: 0,
 			agent: agent?.name ?? "orchestrator",
 			persona: persona ? formatPersonaId(persona) : null,
-			status: "running",
+			status: "idle",
 			at: new Date().toISOString(),
 		});
 		compactIfNeeded(logPath, rootRunId);
@@ -120,6 +120,33 @@ function shutdownTreeRoot(): void {
 				// The log may already be gone.
 			}
 		}
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
+/**
+ * Append one root status update. The root is idle between agent runs and
+ * running during one. Best-effort: never throws.
+ */
+function appendRootUpdate(status: "running" | "idle"): void {
+	try {
+		if (!isRootProcess || !rootRunId) return;
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "update",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status,
+			at: new Date().toISOString(),
+		});
 	} catch {
 		// Logging must never break a session.
 	}
@@ -260,6 +287,16 @@ export default function (pi: ExtensionAPI): void {
 		} catch (error) {
 			debugLog("tree sidebar dispose failed:", error instanceof Error ? error.message : String(error));
 		}
+	});
+
+	// The root node spins only during an agent run. Between runs it is idle, so
+	// the sidebar spinner stops instead of animating for the whole session.
+	pi.on("agent_start", () => {
+		appendRootUpdate("running");
+	});
+
+	pi.on("agent_end", () => {
+		appendRootUpdate("idle");
 	});
 
 	// 5. Inject agent + persona prompts ahead of every agent run.

@@ -28,11 +28,12 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 
 /**
  * Minimal theme duck type. Keeps the renderers free of the pi runtime, so the
- * tests need no theme object. `fg` is optional; a plain object is enough.
+ * tests need no theme object. Every method is optional: a plain object is
+ * enough, and a missing method degrades to plain text.
  */
 export interface SidebarTheme {
-	bold(text: string): string;
-	dim(text: string): string;
+	bold?(text: string): string;
+	dim?(text: string): string;
 	fg?(color: string, text: string): string;
 }
 
@@ -95,7 +96,24 @@ export interface PanelContext {
 
 /** Apply a theme color when the duck type has `fg`. */
 function color(theme: SidebarTheme, name: string, text: string): string {
-	return theme.fg ? theme.fg(name, text) : text;
+	return typeof theme.fg === "function" ? theme.fg(name, text) : text;
+}
+
+/** Bold text when the duck type has `bold`; otherwise the plain text. */
+function styleBold(theme: SidebarTheme, text: string): string {
+	return typeof theme.bold === "function" ? theme.bold(text) : text;
+}
+
+/** Dim text. Falls back to the `dim` color token, then to plain text. */
+function styleDim(theme: SidebarTheme, text: string): string {
+	if (typeof theme.dim === "function") return theme.dim(text);
+	if (typeof theme.fg === "function") return theme.fg("dim", text);
+	return text;
+}
+
+/** A panel header: accent-colored and bold when the theme supports it. */
+function header(theme: SidebarTheme, title: string): string {
+	return styleBold(theme, color(theme, "accent", title));
 }
 
 /** Collapse all whitespace so a multi-line field stays on one line. */
@@ -120,6 +138,7 @@ export function statusIcon(status: TreeNodeStatus, frame: number): string {
 		const index = ((Math.floor(frame) % len) + len) % len;
 		return SPINNER_FRAMES[index];
 	}
+	if (status === "idle") return "○";
 	if (status === "done") return "✓";
 	if (status === "failed") return "✗";
 	if (status === "stale") return "⚠";
@@ -146,9 +165,54 @@ function flatten(nodes: TreeNode[]): TreeNode[] {
 	return out;
 }
 
+/** True when at least one node in the forest is running. */
+export function hasRunningNode(tree: TreeNode[]): boolean {
+	return flatten(tree ?? []).some((node) => node.status === "running");
+}
+
+/** The branch glyph prefix for one node. A top-level node has no connector. */
+function connector(isRoot: boolean, isLast: boolean, ancestorPrefix: string): string {
+	if (isRoot) return "";
+	return `${ancestorPrefix}${isLast ? "└─ " : "├─ "}`;
+}
+
+/** The prefix for a node's children, aligned under its connector. */
+function childPrefix(isRoot: boolean, isLast: boolean, ancestorPrefix: string): string {
+	if (isRoot) return "";
+	return `${ancestorPrefix}${isLast ? "   " : "│  "}`;
+}
+
+/** Recursive branch render. Appends one unclipped line per node. */
+function renderBranch(
+	nodes: TreeNode[],
+	theme: SidebarTheme,
+	frame: number,
+	ancestorPrefix: string,
+	topLevel: boolean,
+	out: string[],
+): void {
+	nodes.forEach((node, index) => {
+		const isLast = index === nodes.length - 1;
+		const isRoot = topLevel;
+		const icon = color(theme, node.orphan ? "warning" : "accent", nodeIcon(node, frame));
+		const agent = node.agent || "unknown";
+		const task = oneLine(node.task ?? "");
+		const preview = task.length > 0 ? `  ${color(theme, "muted", task)}` : "";
+		out.push(`${connector(isRoot, isLast, ancestorPrefix)}${icon} ${agent}${preview}`);
+		renderBranch(
+			node.children,
+			theme,
+			frame,
+			childPrefix(isRoot, isLast, ancestorPrefix),
+			false,
+			out,
+		);
+	});
+}
+
 /**
- * The indented node lines only, no header and no clip. One line per node.
- * Indent grows with `node.depth`.
+ * The tree node lines only, no header and no clip. One line per node. Branch
+ * glyphs (`├─`, `└─`, `│`) show the structure; the root has no connector.
  *
  * Returns UNCLIPPED lines; the caller must clip them to the panel width.
  */
@@ -157,18 +221,9 @@ export function renderTreeLines(
 	theme: SidebarTheme,
 	frame: number,
 ): string[] {
-	const nodes = flatten(tree ?? []);
-	const lines: string[] = [];
-	for (const node of nodes) {
-		const depth = Math.max(0, node.depth);
-		const indent = "  ".repeat(depth);
-		const icon = color(theme, node.orphan ? "warning" : "accent", nodeIcon(node, frame));
-		const agent = node.agent || "unknown";
-		const task = oneLine(node.task ?? "");
-		const preview = task.length > 0 ? `  ${color(theme, "muted", task)}` : "";
-		lines.push(`${indent}${icon} ${agent}${preview}`);
-	}
-	return lines;
+	const out: string[] = [];
+	renderBranch(tree ?? [], theme, frame, "", true, out);
+	return out;
 }
 
 /**
@@ -182,7 +237,7 @@ export function renderAgentTreePanel(
 	theme: SidebarTheme,
 	frame: number,
 ): string[] {
-	const lines: string[] = [theme.bold(" AGENTS ")];
+	const lines: string[] = [header(theme, " AGENTS ")];
 	const budget = Math.max(0, Math.floor(height) - 1);
 	const nodes = flatten(tree ?? []);
 
@@ -198,7 +253,7 @@ export function renderAgentTreePanel(
 	} else {
 		const shown = Math.max(0, budget - 1);
 		lines.push(...nodeLines.slice(0, shown));
-		lines.push(theme.dim(`… +${nodeLines.length - shown} more`));
+		lines.push(styleDim(theme, `… +${nodeLines.length - shown} more`));
 	}
 	return lines.map((line) => clipLine(line, width));
 }
@@ -209,7 +264,7 @@ export function renderSessionPanel(
 	width: number,
 	theme: SidebarTheme,
 ): string[] {
-	const lines: string[] = [theme.bold(" SESSION ")];
+	const lines: string[] = [header(theme, " SESSION ")];
 	const data = session ?? null;
 
 	lines.push(`model: ${data?.model ?? "n/a"}`);
@@ -247,7 +302,7 @@ export function renderWorkspacePanel(
 	width: number,
 	theme: SidebarTheme,
 ): string[] {
-	const lines: string[] = [theme.bold(" WORKSPACE ")];
+	const lines: string[] = [header(theme, " WORKSPACE ")];
 	if (!workspace) {
 		lines.push("(not a repo)");
 		return lines.map((line) => clipLine(line, width));
@@ -278,7 +333,7 @@ export function renderMcpPanel(
 	width: number,
 	theme: SidebarTheme,
 ): string[] {
-	const lines: string[] = [theme.bold(" MCP ")];
+	const lines: string[] = [header(theme, " MCP ")];
 	// The built-in API has no live connection state; `connected` is inferred.
 	const servers = mcp ?? [];
 	const configured = servers.filter((server) => server.configured).length;
@@ -296,7 +351,7 @@ export function renderMcpPanel(
 		lines.push(`${dot} ${server.name}`);
 	}
 	if (servers.length > shown.length) {
-		lines.push(theme.dim(`… +${servers.length - shown.length} more`));
+		lines.push(styleDim(theme, `… +${servers.length - shown.length} more`));
 	}
 	return lines.map((line) => clipLine(line, width));
 }
@@ -307,7 +362,7 @@ export function renderTodosPanel(
 	width: number,
 	theme: SidebarTheme,
 ): string[] {
-	const lines: string[] = [theme.bold(" TODOS ")];
+	const lines: string[] = [header(theme, " TODOS ")];
 	const items = todos ?? [];
 
 	if (items.length === 0) {
@@ -323,7 +378,7 @@ export function renderTodosPanel(
 		lines.push(`${item.done ? "✓" : "○"} ${oneLine(item.text ?? "")}`);
 	}
 	if (items.length > shown.length) {
-		lines.push(theme.dim(`… +${items.length - shown.length} more`));
+		lines.push(styleDim(theme, `… +${items.length - shown.length} more`));
 	}
 	return lines.map((line) => clipLine(line, width));
 }
@@ -335,7 +390,7 @@ export function renderNodeDetail(
 	theme: SidebarTheme,
 ): string[] {
 	const lines: string[] = [];
-	lines.push(theme.bold(` AGENT ${node.agent || "unknown"} `));
+	lines.push(header(theme, ` AGENT ${node.agent || "unknown"} `));
 	lines.push(`run: ${node.runId}`);
 	lines.push(`status: ${node.status}${node.orphan ? " (orphan)" : ""}`);
 	if (node.task) lines.push(`task: ${oneLine(node.task)}`);
@@ -357,7 +412,7 @@ export function renderNodeDetail(
 		const shown = previewLines.slice(0, DETAIL_PREVIEW_LINES);
 		for (const line of shown) lines.push(line);
 		if (previewLines.length > shown.length) {
-			lines.push(theme.dim(`… +${previewLines.length - shown.length} more`));
+			lines.push(styleDim(theme, `… +${previewLines.length - shown.length} more`));
 		}
 	}
 
@@ -449,7 +504,8 @@ export function selectPrev(ids: string[], current: string | null): string | null
 
 /**
  * Stack the panels in priority order. When the height is too small, lower
- * panels are dropped first; the tree keeps the top slot.
+ * panels are dropped first; the tree keeps the top slot. A blank separator
+ * line goes between panels only when it costs no panel.
  */
 function composePanels(ctx: PanelContext, panels: string[][]): string[] {
 	const limit = Math.max(0, Math.floor(ctx.height));
@@ -464,8 +520,16 @@ function composePanels(ctx: PanelContext, panels: string[][]): string[] {
 		total -= panels[count].length;
 	}
 
-	let lines = panels.slice(0, count).flat();
-	if (total > limit) lines = lines.slice(0, limit);
+	// Separators are a nicety: add them only when they fit without dropping a panel.
+	const separators = count - 1;
+	const useSeparators = separators > 0 && total + separators <= limit;
+
+	const lines: string[] = [];
+	for (let index = 0; index < count; index++) {
+		if (useSeparators && index > 0) lines.push("");
+		lines.push(...panels[index]);
+	}
+	if (lines.length > limit) lines.length = limit;
 	return lines.map((line) => clipLine(line, ctx.width));
 }
 
