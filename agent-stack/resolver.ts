@@ -718,6 +718,37 @@ export function matchSkills(patterns: string[] | undefined, skills: SkillRef[]):
 	return out;
 }
 
+/**
+ * Absolute real path to a skill's `scripts/` directory, or null when the skill
+ * ships none. The realpath defeats a symlinked `scripts/` escaping the skill.
+ */
+export function skillScriptsDir(skill: SkillRef): string | null {
+	const dir = path.join(path.dirname(skill.path), "scripts");
+	try {
+		if (!fs.statSync(dir).isDirectory()) return null;
+		return fs.realpathSync(dir);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Real `scripts/` directories for the given skills, deduped. This is the
+ * allow-list the gate uses: a script may run only when it lives inside one of
+ * these directories.
+ */
+export function skillScriptsDirs(skills: SkillRef[]): string[] {
+	const dirs: string[] = [];
+	const seen = new Set<string>();
+	for (const skill of skills) {
+		const dir = skillScriptsDir(skill);
+		if (!dir || seen.has(dir)) continue;
+		seen.add(dir);
+		dirs.push(dir);
+	}
+	return dirs;
+}
+
 // ---------------------------------------------------------------------------
 // Resources (file globs attached to the agent context)
 // ---------------------------------------------------------------------------

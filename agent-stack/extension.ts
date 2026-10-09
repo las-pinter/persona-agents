@@ -213,6 +213,7 @@ import {
 	matchSkills,
 	resolvePersonaForAgent,
 	resolveResources,
+	skillScriptsDir,
 } from "./resolver.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
 import registerSubagentTool from "./subagent.ts";
@@ -399,7 +400,8 @@ export default function (pi: ExtensionAPI): void {
 						continue;
 					}
 					mandatoryBudget -= body.length;
-					extra += `\n\n## Mandatory skill: ${id}\n${body}`;
+					const scriptsDir = skillScriptsDir(s);
+					extra += `\n\n## Mandatory skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
 				}
 				for (const pattern of agent.alwaysLoad) {
 					if (matchSkills([pattern], discoveredSkills).length === 0) {
@@ -422,7 +424,8 @@ export default function (pi: ExtensionAPI): void {
 					const body = s.body.length > SKILL_BODY_CAP_BYTES ? `${s.body.slice(0, SKILL_BODY_CAP_BYTES)}\n<!-- (truncated) -->` : s.body;
 					budget -= body.length;
 					if (budget < 0) break;
-					extra += `\n\n### Skill: ${id}\n${body}`;
+					const scriptsDir = skillScriptsDir(s);
+					extra += `\n\n### Skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
 				}
 				debugLog("skills injected:", Array.from(seen).join(","));
 			}

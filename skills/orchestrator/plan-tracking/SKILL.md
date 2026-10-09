@@ -34,32 +34,36 @@ description: Plan lifecycle management — track, verify, and report on plans fr
 
 ## Scripts
 
+> **Invocation.** Your skill context shows a `Scripts:` directory. Run each
+> script by its absolute path. Example: `bash <Scripts>/plan-list.sh`. Do not
+> use the bare name; the name is not on `PATH`.
+
 ### plan-list.sh — List Plans by Status
 
 ```
-plan-list.sh                    # All plans grouped by status
-plan-list.sh --status active    # Only active plans
-plan-list.sh --status done
-plan-list.sh --status blocked
-plan-list.sh --status abandoned
-plan-list.sh --format detailed  # Show descriptions and metadata
+bash <Scripts>/plan-list.sh                    # All plans grouped by status
+bash <Scripts>/plan-list.sh --status active    # Only active plans
+bash <Scripts>/plan-list.sh --status done
+bash <Scripts>/plan-list.sh --status blocked
+bash <Scripts>/plan-list.sh --status abandoned
+bash <Scripts>/plan-list.sh --format detailed  # Show descriptions and metadata
 ```
 
 ### plan-mark.sh — Transition Plan Status
 
 ```bash
 # Mark done
-plan-mark.sh <plan.md> --status done \
+bash <Scripts>/plan-mark.sh <plan.md> --status done \
   --commits "abc1234 - Fixed the thing | def5678 - Added tests" \
   --by "Agent Name" \
   --results "What was accomplished"
 
 # Mark blocked
-plan-mark.sh <plan.md> --status blocked \
+bash <Scripts>/plan-mark.sh <plan.md> --status blocked \
   --reason "Waiting on API credentials from third party"
 
 # Mark abandoned
-plan-mark.sh <plan.md> --status abandoned \
+bash <Scripts>/plan-mark.sh <plan.md> --status abandoned \
   --reason "Requirements changed, superseded by new plan"
 ```
 
@@ -68,21 +72,21 @@ Always prefer this script over manual renaming — it ensures consistent metadat
 ### plan-verify.sh — Check Plan Integrity
 
 ```
-plan-verify.sh              # Check all plans
-plan-verify.sh <plan.md>    # Check one plan
-plan-verify.sh --fix        # Auto-fix common issues
+bash <Scripts>/plan-verify.sh              # Check all plans
+bash <Scripts>/plan-verify.sh <plan.md>    # Check one plan
+bash <Scripts>/plan-verify.sh --fix        # Auto-fix common issues
 ```
 
 Checks: file exists, has markdown heading, date prefix present, status suffix consistent, commit references exist in git history.
 
-Run `plan-verify.sh --fix` periodically to catch and repair issues.
+Run `bash <Scripts>/plan-verify.sh --fix` periodically to catch and repair issues.
 
 ### plan-report.sh — Generate Status Report
 
 ```
-plan-report.sh                     # Full report to stdout
-plan-report.sh --output report.md  # Write to file
-plan-report.sh --journal           # Journal-friendly format (paste into daily journal)
+bash <Scripts>/plan-report.sh                     # Full report to stdout
+bash <Scripts>/plan-report.sh --output report.md  # Write to file
+bash <Scripts>/plan-report.sh --journal           # Journal-friendly format (paste into daily journal)
 ```
 
 ---

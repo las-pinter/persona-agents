@@ -42,8 +42,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { AgentConfig, PermissionRule } from "./resolver.ts";
-import { evaluateCommandRules, type RawRule, type RuleSets } from "./command-segments.ts";
+import {
+	discoverSkills,
+	matchSkills,
+	skillScriptsDirs,
+	type AgentConfig,
+	type PermissionRule,
+} from "./resolver.ts";
+import { evaluateCommandRules, splitShellSegments, type RawRule, type RuleSets } from "./command-segments.ts";
 
 function configPath(): string {
 	if (process.env.PI_PERMISSIONS_FILE) return process.env.PI_PERMISSIONS_FILE;
@@ -65,6 +71,66 @@ function probeFor(toolName: string, input: Record<string, unknown>): string {
 		default:
 			return JSON.stringify(input);
 	}
+}
+
+/** The shell interpreters whose first argument is the script to run. */
+const SCRIPT_INTERPRETERS = new Set(["bash", "sh", "dash", "zsh"]);
+
+/** Resolve a path, preferring the real path; a missing file keeps the lexical path. */
+function resolveRealPath(base: string, token: string): string {
+	const candidate = path.resolve(base, token);
+	try {
+		return fs.realpathSync(candidate);
+	} catch {
+		// A nonexistent file cannot execute; the lexical result keeps the check
+		// deterministic for a script that is not on disk yet.
+		return candidate;
+	}
+}
+
+/**
+ * True when a shell segment runs a `.sh` script that lives inside one of the
+ * loaded skills' real `scripts/` dirs. This is a STRUCTURAL check, not a pattern
+ * match: a forged `/tmp/skills/...` path never resolves inside a real skill dir.
+ *
+ * A leading `cd <dir> &&` guard sets the resolution base. The optional leading
+ * interpreter (`bash`/`sh`/`dash`/`zsh`) is skipped. The token must contain a
+ * `/` and end in `.sh`; `rm script.sh` has first token `rm`, so it never passes.
+ */
+export function isAllowedSkillScript(segment: string, skillScriptsDirs: string[], cwd: string): boolean {
+	let base = cwd;
+	let rest = segment.trim();
+	const cd = /^cd\s+(\S+)\s*&&\s*/.exec(rest);
+	if (cd) {
+		base = cd[1];
+		rest = rest.slice(cd[0].length).trim();
+	}
+	const tokens = rest.split(/\s+/);
+	let token = tokens[0] ?? "";
+	if (SCRIPT_INTERPRETERS.has(token)) token = tokens[1] ?? "";
+	if (!token.includes("/") || !token.endsWith(".sh")) return false;
+	const resolved = resolveRealPath(base, token);
+	return skillScriptsDirs.some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
+}
+
+/**
+ * True when every unapproved segment is a loaded skill's script. The regex
+ * verdict is computed first; this only rescues a deny-by-default fall-through,
+ * so deny and ask rules always win. An empty command returns false.
+ */
+export function allSegmentsAreSkillScripts(
+	command: string,
+	approvedSegmentIndices: ReadonlySet<number>,
+	skillScriptsDirs: string[],
+	cwd: string,
+): boolean {
+	const segments = splitShellSegments(command);
+	if (segments.length === 0) return false;
+	for (let idx = 0; idx < segments.length; idx++) {
+		if (approvedSegmentIndices.has(idx)) continue;
+		if (!isAllowedSkillScript(segments[idx], skillScriptsDirs, cwd)) return false;
+	}
+	return true;
 }
 
 export function installPermissionGate(
@@ -95,6 +161,22 @@ export function installPermissionGate(
 	// /reload re-runs this factory (via the extension runner), which re-reads the
 	// global rules from disk again - no per-tool-call reload is needed here.
 
+	// Derived skill-script dirs, cached per (agent name, cwd). /reload re-runs
+	// this factory, which clears the cache. These dirs are the structural
+	// allow-list; no regex rule is appended to `agentAllow`.
+	let skillDirsCache: { key: string; dirs: string[] } | null = null;
+	const derivedSkillScriptDirs = (agent: AgentConfig, cwd: string): string[] => {
+		const key = `${agent.name}\u0000${cwd}`;
+		if (skillDirsCache?.key === key) return skillDirsCache.dirs;
+		const loaded = matchSkills(
+			[...(agent.skills ?? []), ...(agent.alwaysLoad ?? [])],
+			discoverSkills(cwd),
+		);
+		const dirs = skillScriptsDirs(loaded);
+		skillDirsCache = { key, dirs };
+		return dirs;
+	};
+
 	pi.on("tool_call", async (event, ctx) => {
 		const toolName = event.toolName;
 		const input = (event.input ?? {}) as Record<string, unknown>;
@@ -112,6 +194,7 @@ export function installPermissionGate(
 
 		const g = globalRules ?? { deny: [], ask: [] };
 		const isShell = toolName === "bash" || toolName === "powershell";
+		const skillDirs = isShell && agent ? derivedSkillScriptDirs(agent, ctx.cwd) : [];
 		const ruleSets: RuleSets = {
 			globalDeny: g.deny,
 			agentDeny: agentPerms?.deny ?? [],
@@ -133,7 +216,16 @@ export function installPermissionGate(
 				isSessionAllowed,
 			});
 
-			if (decision.kind === "deny" || decision.kind === "default") {
+			if (decision.kind === "deny") {
+				return { block: true, reason: decision.reason };
+			}
+			if (decision.kind === "default") {
+				// The regex verdict fell through to deny-by-default. A loaded skill's
+				// real script is the one structural exception. Deny and ask already won
+				// above, so this can never override them.
+				if (skillDirs.length > 0 && allSegmentsAreSkillScripts(probe, approvedSegments, skillDirs, ctx.cwd)) {
+					return undefined;
+				}
 				return { block: true, reason: decision.reason };
 			}
 			if (decision.kind === "allow") return undefined;
