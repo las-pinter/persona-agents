@@ -25,7 +25,7 @@ import {
 	installPermissionGate,
 	isAllowedSkillScript,
 } from "./permissions.ts";
-import { evaluateCommandRules, type Decision, type RuleSets } from "./command-segments.ts";
+import { evaluateCommandRules, type Decision, type RawRule, type RuleSets } from "./command-segments.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -70,6 +70,17 @@ fs.writeFileSync(outsideScript, "#!/bin/sh\necho evil\n");
 const symlinkScript = path.join(scriptsDir, "link.sh");
 fs.symlinkSync(outsideScript, symlinkScript);
 
+// A fake interpreter binary outside the whitelist: the slash-form check must
+// reject it, because only real interpreter paths are trusted.
+const evilBinDir = path.join(tmpRoot, "evil-bin");
+fs.mkdirSync(evilBinDir, { recursive: true });
+const evilBash = path.join(evilBinDir, "bash");
+fs.writeFileSync(evilBash, "#!/bin/sh\necho pwned\n");
+
+// A directory named `x.sh` inside a real scripts dir: not a regular file, denied.
+const dirNamedScript = path.join(scriptsDir, "x.sh");
+fs.mkdirSync(dirNamedScript, { recursive: true });
+
 after(() => {
 	fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
@@ -98,6 +109,12 @@ describe("skill scripts: structural segment check", () => {
 		`bash ${ORCH_DIR}/evil.sh`,
 		"bash /tmp/skills/orchestrator/plan-tracking/scripts/evil.sh",
 		"bash /repo/skills/planner/task-decomposition/scripts/x.sh",
+		// A slash-form interpreter look-alike must deny the segment, even when the
+		// script token itself is a real skill script.
+		`/tmp/x/bash ${planList}`,
+		`${evilBash} ${planList}`,
+		// A directory named like a script inside a real scripts dir is not a file.
+		`bash ${dirNamedScript}`,
 	];
 
 	for (const command of denied) {
@@ -218,6 +235,39 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 				"bash",
 			),
 			true,
+		);
+	});
+
+	test("a session-allowed segment may mix with a skill script", () => {
+		const ruleSets: RuleSets = { ...NO_RULES, agentAsk: [{ tool: "bash", match: "^printf\\b" }] };
+		const isSessionAllowed = (rule: RawRule): boolean => rule.match === "^printf\\b";
+		assert.equal(
+			allSegmentsAreSkillScripts(
+				`printf hi && bash ${planList}`,
+				new Set<number>(),
+				dirs,
+				tmpRoot,
+				ruleSets,
+				"bash",
+				isSessionAllowed,
+			),
+			true,
+		);
+	});
+
+	test("a segment with no session allow still blocks the mix", () => {
+		const ruleSets: RuleSets = { ...NO_RULES, agentAsk: [{ tool: "bash", match: "^printf\\b" }] };
+		assert.equal(
+			allSegmentsAreSkillScripts(
+				`printf hi && bash ${planList}`,
+				new Set<number>(),
+				dirs,
+				tmpRoot,
+				ruleSets,
+				"bash",
+				() => false,
+			),
+			false,
 		);
 	});
 });
@@ -354,6 +404,18 @@ describe("skill scripts: real gate handler", () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
 		const result = await runHandler(handler, `bash ${realPlanList}`);
 		assert.notEqual(result?.block, true, JSON.stringify(result));
+	});
+
+	test("/bin/bash running a real skill script is allowed", async () => {
+		const handler = installGateHandler([gitAllow, mkdirAllow]);
+		const result = await runHandler(handler, `/bin/bash ${realPlanList}`);
+		assert.notEqual(result?.block, true, JSON.stringify(result));
+	});
+
+	test("a slash-form interpreter look-alike is blocked", async () => {
+		const handler = installGateHandler([gitAllow, mkdirAllow]);
+		const result = await runHandler(handler, `/tmp/x/bash ${realPlanList}`);
+		assert.equal(result?.block, true, JSON.stringify(result));
 	});
 
 	test("git status && plan-list.sh is allowed (regex-allowed first segment)", async () => {

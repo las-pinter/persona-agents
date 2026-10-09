@@ -700,14 +700,28 @@ export function unallowedSegments(
 	ruleSets: RuleSets,
 	toolName: string,
 	approvedSegmentIndices: ReadonlySet<number> = new Set(),
+	isSessionAllowed?: (rule: RawRule) => boolean,
 ): { segments: string[]; indices: number[] } {
 	const parsed: ShellParse = isShell
 		? parseShellCommand(command)
 		: { segments: [command], rawSegments: [command], unsupported: null };
 	const allowed = compile(ruleSets.agentAllow);
+	// Session-allowed segments count as approved, exactly as in evaluateCommandRules.
+	const approved = new Set<number>(approvedSegmentIndices);
+	if (isSessionAllowed) {
+		const sessionAskRules = [...compile(ruleSets.globalAsk), ...compile(ruleSets.agentAsk)];
+		for (let idx = 0; idx < parsed.segments.length; idx++) {
+			if (approved.has(idx)) continue;
+			const segment = parsed.segments[idx];
+			const sessionApproved = sessionAskRules.some(
+				(r) => (r.tool === "*" || r.tool === toolName) && r.re.test(segment) && isSessionAllowed(r.rule),
+			);
+			if (sessionApproved) approved.add(idx);
+		}
+	}
 	const indices: number[] = [];
 	for (let idx = 0; idx < parsed.segments.length; idx++) {
-		if (approvedSegmentIndices.has(idx)) continue;
+		if (approved.has(idx)) continue;
 		if (firstMatch(allowed, toolName, [parsed.segments[idx]])) continue;
 		indices.push(idx);
 	}
