@@ -5,7 +5,7 @@
  *   npm run test:permissions
  *
  * Covers the splitter edge-case table and the decision core, including the
- * "this segment only" ask shape.
+ * "Always allow" segment-approval shape.
  */
 
 import { test } from "node:test";
@@ -108,6 +108,55 @@ test("folds a leading cd guard into the next segment", () => {
 test("recurses into command substitution", () => {
 	assert.deepEqual(splitShellSegments("echo $(date)"), ["echo $(date)", "date"]);
 	assert.deepEqual(splitShellSegments("diff <(echo a) <(id)"), ["diff <(echo a) <(id)", "echo a", "id"]);
+});
+
+test("keeps the folded cd guard as one segment at offset 0", () => {
+	const parsed = parseShellCommand("cd /repo && git status");
+	assert.equal(parsed.segments[0], "cd /repo && git status");
+	assert.equal(parsed.segmentStarts[0], 0);
+});
+
+test("keeps the nested substitution offset in the original command", () => {
+	const parsed = parseShellCommand("echo $(echo $(id))");
+	const idIndex = parsed.segments.indexOf("id");
+	assert.equal(idIndex, 2);
+	assert.equal(parsed.segmentStarts[idIndex], 14);
+});
+
+test("keeps a substitution offset after a folded cd guard", () => {
+	const command = "cd /repo && echo $(id)";
+	const parsed = parseShellCommand(command);
+	assert.deepEqual(parsed.segments, ["cd /repo && echo $(id)", "id"]);
+	const idIndex = parsed.segments.indexOf("id");
+	assert.equal(parsed.segmentStarts[idIndex], command.indexOf("id"));
+	assert.equal(command.slice(parsed.segmentStarts[idIndex], parsed.segmentStarts[idIndex] + 2), "id");
+});
+
+test("literal segment starts slice back to the segment", () => {
+	const commands = [
+		"git status && git",
+		"echo $(echo $(id))",
+		"echo `id` && git",
+		"diff <(echo a) <(id)",
+		"echo $(( $(id) + 0 ))",
+		'echo "a $(id)" && git',
+		"echo a\\ b && git",
+		"  git status  &&  git  ",
+		"foo | bar | foo",
+	];
+	for (const command of commands) {
+		const parsed = parseShellCommand(command);
+		assert.equal(parsed.unsupported, null, `unexpected unsupported: ${command}`);
+		for (let i = 0; i < parsed.segments.length; i++) {
+			const start = parsed.segmentStarts[i];
+			const segment = parsed.segments[i];
+			assert.equal(
+				command.slice(start, start + segment.length),
+				segment,
+				`segment ${i} of ${JSON.stringify(command)} does not slice from start ${start}`,
+			);
+		}
+	}
 });
 
 test("recurses into arithmetic for command substitution", () => {
@@ -258,6 +307,61 @@ test("denies file-writing redirects but allows fd redirects", () => {
 	assert.equal(evaluateCmd("echo hi 2>&1", implementerRules).kind, "allow");
 });
 
+test("a global deny reason never embeds the rule regex", () => {
+	const regex = "^git\\s+push\\b";
+	const rules: RuleSets = { ...plannerRules, globalDeny: [{ tool: "bash", match: regex }] };
+	const decision = evaluateCmd("git push", rules);
+	assert.equal(decision.kind, "deny");
+	if (decision.kind !== "deny") return;
+	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
+	assert.match(decision.reason, /Denied by global policy/);
+});
+
+test("an agent deny reason never embeds the rule regex", () => {
+	const regex = "^git\\s+push\\b";
+	const rules: RuleSets = { ...plannerRules, agentDeny: [{ tool: "bash", match: regex }] };
+	const decision = evaluateCmd("git push", rules);
+	assert.equal(decision.kind, "deny");
+	if (decision.kind !== "deny") return;
+	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
+	assert.match(decision.reason, /Denied by test-agent policy/);
+});
+
+test("a deny reason uses the human reason when it differs from the regex", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentDeny: [{ tool: "bash", match: "^git\\s+push\\b", reason: "pushing is gated" }],
+	};
+	const decision = evaluateCmd("git push", rules);
+	assert.equal(decision.kind, "deny");
+	if (decision.kind !== "deny") return;
+	assert.equal(decision.reason, "pushing is gated");
+});
+
+test("a deny reason ignores a reason equal to the regex", () => {
+	const regex = "^git\\s+push\\b";
+	const rules: RuleSets = {
+		...plannerRules,
+		agentDeny: [{ tool: "bash", match: regex, reason: regex }],
+	};
+	const decision = evaluateCmd("git push", rules);
+	assert.equal(decision.kind, "deny");
+	if (decision.kind !== "deny") return;
+	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
+});
+
+test("a deny reason ignores a whitespace-padded reason equal to the regex", () => {
+	const regex = "^git\\s+push\\b";
+	const rules: RuleSets = {
+		...plannerRules,
+		agentDeny: [{ tool: "bash", match: regex, reason: `  ${regex}  ` }],
+	};
+	const decision = evaluateCmd("git push", rules);
+	assert.equal(decision.kind, "deny");
+	if (decision.kind !== "deny") return;
+	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
+});
+
 test("does not split non-shell tools", () => {
 	const decision = evaluateCommandRules(
 		"echo a && b",
@@ -280,6 +384,34 @@ test("ask reports the matching segment and rule", () => {
 	assert.equal(decision.segmentIndex, 1);
 	assert.equal(decision.rule.match, "\\bsudo\\b");
 	assert.equal(decision.source, "agent");
+});
+
+test("ask reports the real start offset of the matched segment", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentAsk: [{ tool: "bash", match: "^git$" }],
+		agentAllow: [{ tool: "bash", match: "^git\\b" }],
+	};
+	const decision = evaluateCmd("git status && git", rules);
+	assert.equal(decision.kind, "ask");
+	if (decision.kind !== "ask") return;
+	assert.equal(decision.segment, "git");
+	assert.equal(decision.segmentIndex, 1);
+	assert.equal(decision.segmentStart, 14);
+});
+
+test("ask reports the real offset for a repeated segment after an approved one", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentAsk: [{ tool: "bash", match: "^foo$" }],
+		agentAllow: [{ tool: "bash", match: "^(foo|bar)$" }],
+	};
+	const decision = evaluateCmd("foo && bar && foo", rules, "deny-by-default", new Set([0]));
+	assert.equal(decision.kind, "ask");
+	if (decision.kind !== "ask") return;
+	assert.equal(decision.segment, "foo");
+	assert.equal(decision.segmentIndex, 2);
+	assert.equal(decision.segmentStart, 14);
 });
 
 test("segment-only approval covers exactly the approved segment", () => {
@@ -357,14 +489,14 @@ test("spanning ask is shown before a per-segment ask on the first pass", () => {
 	assert.equal(decision.segmentIndex, -1);
 });
 
-test("a segment-only choice on the whole-command probe approves no segment", () => {
+test("an approved -1 (spanning) marks no real segment", () => {
 	const spanOnly: RuleSets = {
 		...plannerRules,
 		agentAsk: [{ tool: "bash", match: "foo\\s*&&\\s*bar" }],
 		agentAllow: [{ tool: "bash", match: "^bar\\b" }],
 	};
-	// segmentIndex -1 approves no real segment, so the unallowed `foo` still
-	// fails closed instead of looping on the spanning ask.
+	// -1 approves no real segment, so the unallowed `foo` still fails closed
+	// instead of looping on the spanning ask.
 	const after = evaluateCmd("foo && bar", spanOnly, "deny-by-default", new Set([-1]));
 	assert.equal(after.kind, "default");
 });

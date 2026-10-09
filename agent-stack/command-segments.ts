@@ -32,6 +32,8 @@ export type Decision =
 			segment: string;
 			/** Index of `segment` in the parsed segment list (stable per call). */
 			segmentIndex: number;
+			/** Real start offset of `segment` in the command, or -1 for a span. */
+			segmentStart: number;
 			/** Which rule set produced the ask. */
 			source: "global" | "agent";
 	  }
@@ -42,6 +44,8 @@ export interface ShellParse {
 	segments: string[];
 	/** Segments before the leading-`cd` fold. Deny/ask probes test both lists. */
 	rawSegments: string[];
+	/** Original start offset of each entry in `segments`, or -1 when unknown. */
+	segmentStarts: number[];
 	unsupported: string | null;
 }
 
@@ -57,7 +61,7 @@ export type PermissionMode = "deny-by-default" | "allow-unless-matched";
 
 export interface EvaluateOptions {
 	/**
-	 * Segment indices the user approved with "Allow once (this segment only)".
+	 * Segment indices the user approved with "Always allow" on a segment.
 	 * Session-allowed segments are folded in here too. Approved segments skip the
 	 * ask and allow checks, but never the deny checks.
 	 */
@@ -213,6 +217,13 @@ function readArithmetic(text: string, dollarIdx: number): [string, number] {
 	return [text.slice(dollarIdx + 2), text.length];
 }
 
+/** An inner command found by `extractSubstitutions`, with its start offset. */
+interface Substitution {
+	text: string;
+	/** Offset of `text` inside the input to `extractSubstitutions`. */
+	offset: number;
+}
+
 /**
  * Collect the inner commands of `$(...)`, backticks, and `<(...)`/`>(...)`.
  * `$((...))` arithmetic bodies are recursed into: bash runs command
@@ -223,8 +234,8 @@ function readArithmetic(text: string, dollarIdx: number): [string, number] {
  * treats quotes as part of the expansion context, so `'$(id)'` still runs `id`
  * there; the arithmetic recursion passes `false`.
  */
-function extractSubstitutions(text: string, skipSingleQuotes = true): string[] {
-	const out: string[] = [];
+function extractSubstitutions(text: string, skipSingleQuotes = true): Substitution[] {
+	const out: Substitution[] = [];
 	let i = 0;
 	while (i < text.length) {
 		const c = text[i];
@@ -247,18 +258,20 @@ function extractSubstitutions(text: string, skipSingleQuotes = true): string[] {
 				if (d === "$" && text[i + 1] === "(") {
 					if (text[i + 2] === "(") {
 						const [arith, j] = readArithmetic(text, i);
-						out.push(...extractSubstitutions(arith, false));
+						for (const sub of extractSubstitutions(arith, false)) {
+							out.push({ text: sub.text, offset: i + 2 + sub.offset });
+						}
 						i = j;
 						continue;
 					}
 					const [inner, j] = readBalancedParens(text, i + 1);
-					out.push(inner);
+					out.push({ text: inner, offset: i + 2 });
 					i = j;
 					continue;
 				}
 				if (d === "`") {
 					const [inner, j] = readBackticks(text, i);
-					out.push(inner);
+					out.push({ text: inner, offset: i + 1 });
 					i = j;
 					continue;
 				}
@@ -270,24 +283,26 @@ function extractSubstitutions(text: string, skipSingleQuotes = true): string[] {
 		if (c === "$" && text[i + 1] === "(") {
 			if (text[i + 2] === "(") {
 				const [arith, j] = readArithmetic(text, i);
-				out.push(...extractSubstitutions(arith, false));
+				for (const sub of extractSubstitutions(arith, false)) {
+					out.push({ text: sub.text, offset: i + 2 + sub.offset });
+				}
 				i = j;
 				continue;
 			}
 			const [inner, j] = readBalancedParens(text, i + 1);
-			out.push(inner);
+			out.push({ text: inner, offset: i + 2 });
 			i = j;
 			continue;
 		}
 		if (c === "`") {
 			const [inner, j] = readBackticks(text, i);
-			out.push(inner);
+			out.push({ text: inner, offset: i + 1 });
 			i = j;
 			continue;
 		}
 		if ((c === "<" || c === ">") && text[i + 1] === "(") {
 			const [inner, j] = readBalancedParens(text, i + 1);
-			out.push(inner);
+			out.push({ text: inner, offset: i + 2 });
 			i = j;
 			continue;
 		}
@@ -300,23 +315,36 @@ function extractSubstitutions(text: string, skipSingleQuotes = true): string[] {
  * Fold a leading `cd <one-token>` guard into the next segment, so the git allow
  * regexes (which already encode the optional `cd X &&` prefix) keep working.
  */
-function foldLeadingCdGuards(segments: string[]): string[] {
+function foldLeadingCdGuards(
+	segments: string[],
+	starts: number[],
+): { segments: string[]; starts: number[] } {
 	const out: string[] = [];
+	const outStarts: number[] = [];
 	let pending: string | null = null;
-	for (const seg of segments) {
+	let pendingStart = -1;
+	for (let k = 0; k < segments.length; k++) {
+		const seg = segments[k];
 		if (/^cd\s+\S+$/.test(seg)) {
 			pending = pending ? `${pending} && ${seg}` : seg;
+			if (pendingStart < 0) pendingStart = starts[k];
 			continue;
 		}
 		if (pending) {
 			out.push(`${pending} && ${seg}`);
+			outStarts.push(pendingStart);
 			pending = null;
+			pendingStart = -1;
 		} else {
 			out.push(seg);
+			outStarts.push(starts[k]);
 		}
 	}
-	if (pending) out.push(pending);
-	return out;
+	if (pending) {
+		out.push(pending);
+		outStarts.push(pendingStart);
+	}
+	return { segments: out, starts: outStarts };
 }
 
 /**
@@ -327,11 +355,13 @@ function foldLeadingCdGuards(segments: string[]): string[] {
  */
 export function parseShellCommand(command: string, depth = 0): ShellParse {
 	if (depth > MAX_DEPTH) {
-		return { segments: [command], rawSegments: [command], unsupported: "recursion-limit" };
+		return { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: "recursion-limit" };
 	}
 
 	const segments: string[] = [];
+	const starts: number[] = [];
 	let buf = "";
+	let segStart = -1;
 	let quote: "none" | "single" | "double" = "none";
 	let escaped = false;
 	let unsupported: string | null = null;
@@ -340,18 +370,31 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 	let i = 0;
 	const n = command.length;
 
+	// Record the original index of the first significant char of a segment.
+	const note = (origIndex: number, ch: string): void => {
+		if (segStart < 0 && !isSpace(ch)) segStart = origIndex;
+	};
+
 	const pushBuf = (): void => {
 		const s = buf.trim();
-		if (s !== "") segments.push(s);
+		if (s !== "") {
+			segments.push(s);
+			starts.push(segStart);
+		}
 		buf = "";
+		segStart = -1;
 	};
 
 	while (i < n) {
 		const c = command[i];
 
 		if (escaped) {
-			if (c === "\n") buf += " ";
-			else buf += "\\" + c;
+			if (c === "\n") {
+				buf += " ";
+			} else {
+				note(i - 1, "\\");
+				buf += "\\" + c;
+			}
 			escaped = false;
 			expectOperand = false;
 			i++;
@@ -365,6 +408,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 		}
 
 		if (quote === "single") {
+			note(i, c);
 			buf += c;
 			if (c === "'") quote = "none";
 			expectOperand = false;
@@ -373,6 +417,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 		}
 
 		if (quote === "double") {
+			note(i, c);
 			buf += c;
 			if (c === '"') quote = "none";
 			expectOperand = false;
@@ -383,12 +428,14 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 		// Not inside a quote.
 		if (c === "$" && command[i + 1] === "'") {
 			unsupported = "ansi-c";
+			note(i, c);
 			buf += c;
 			expectOperand = false;
 			i++;
 			continue;
 		}
 		if (c === "$") {
+			note(i, c);
 			buf += c;
 			expectOperand = false;
 			i++;
@@ -396,6 +443,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 		}
 		if (c === "'") {
 			quote = "single";
+			note(i, c);
 			buf += c;
 			expectOperand = false;
 			i++;
@@ -403,6 +451,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 		}
 		if (c === '"') {
 			quote = "double";
+			note(i, c);
 			buf += c;
 			expectOperand = false;
 			i++;
@@ -411,6 +460,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 
 		if (c === "<" && command[i + 1] === "<") {
 			unsupported = "heredoc";
+			note(i, c);
 			buf += c;
 			expectOperand = false;
 			i++;
@@ -456,6 +506,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 			}
 			// fd redirects: `2>&1`, `>&2`, `&>file` are not separators.
 			if (command[i + 1] === ">" || buf.replace(/\s+$/, "").endsWith(">")) {
+				note(i, c);
 				buf += c;
 				expectOperand = false;
 				i++;
@@ -468,6 +519,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 			continue;
 		}
 
+		note(i, c);
 		buf += c;
 		if (!isSpace(c)) expectOperand = false;
 		i++;
@@ -477,24 +529,37 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 	if (expectOperand) malformed = true;
 
 	if (quote !== "none" && unsupported === null) unsupported = "unbalanced-quote";
-	if (malformed) return { segments: [command], rawSegments: [command], unsupported: "dangling-operator" };
+	if (malformed) {
+		return { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: "dangling-operator" };
+	}
 
 	let result = segments;
+	let resultStarts = starts;
 
 	// Recurse into executed sub-commands (`$(...)`, backticks, process subs).
-	const subs: string[] = [];
-	for (const s of result) subs.push(...extractSubstitutions(s));
+	const subs: { text: string; baseOffset: number }[] = [];
+	for (let k = 0; k < result.length; k++) {
+		for (const sub of extractSubstitutions(result[k])) {
+			subs.push({ text: sub.text, baseOffset: starts[k] + sub.offset });
+		}
+	}
 	if (subs.length > 0) {
 		const extra: string[] = [];
+		const extraStarts: number[] = [];
 		for (const sub of subs) {
-			const parsed = parseShellCommand(sub, depth + 1);
-			extra.push(...parsed.segments);
+			const parsed = parseShellCommand(sub.text, depth + 1);
+			for (let j = 0; j < parsed.segments.length; j++) {
+				extra.push(parsed.segments[j]);
+				extraStarts.push(sub.baseOffset + parsed.segmentStarts[j]);
+			}
 			if (parsed.unsupported) unsupported = parsed.unsupported;
 		}
 		result = [...result, ...extra];
+		resultStarts = [...resultStarts, ...extraStarts];
 	}
 
-	return { segments: foldLeadingCdGuards(result), rawSegments: result, unsupported };
+	const folded = foldLeadingCdGuards(result, resultStarts);
+	return { segments: folded.segments, rawSegments: result, segmentStarts: folded.starts, unsupported };
 }
 
 /** Thin test wrapper: the segments of a command, ignoring fail-closed markers. */
@@ -554,6 +619,7 @@ function findAsk(
 	rules: CompiledRule[],
 	toolName: string,
 	segments: string[],
+	segmentStarts: number[],
 	approved: ReadonlySet<number>,
 	source: "global" | "agent",
 ): AskDecision | null {
@@ -563,16 +629,34 @@ function findAsk(
 		for (const r of rules) {
 			if (r.tool !== "*" && r.tool !== toolName) continue;
 			if (!r.re.test(segment)) continue;
-			return { kind: "ask", rule: r.rule, segment, segmentIndex: idx, source };
+			return {
+				kind: "ask",
+				rule: r.rule,
+				segment,
+				segmentIndex: idx,
+				segmentStart: segmentStarts[idx],
+				source,
+			};
 		}
 	}
 	return null;
 }
 
 /**
+ * Human deny reason. It never contains the rule regex. The fallback label names
+ * the tool and the rule source. A rule's `reason` is used only when it exists
+ * and differs from the regex.
+ */
+function denyReason(rule: RawRule, toolName: string, scope: string): string {
+	const reason = rule.reason?.trim();
+	if (reason && reason !== rule.match) return reason;
+	return `Denied by ${scope} policy: ${toolName}`;
+}
+
+/**
  * Pure decision over a command. No prompting: an `ask` result is returned for
- * the caller to resolve. `approvedSegmentIndices` carries the user's
- * "this segment only" choices across prompt rounds.
+ * the caller to resolve. `approvedSegmentIndices` carries the user's segment
+ * "Always allow" choices across prompt rounds.
  */
 export function evaluateCommandRules(
 	command: string,
@@ -585,7 +669,7 @@ export function evaluateCommandRules(
 ): Decision {
 	const parsed: ShellParse = isShell
 		? parseShellCommand(command)
-		: { segments: [command], rawSegments: [command], unsupported: null };
+		: { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: null };
 	const segments = parsed.segments;
 	const rawSegments = parsed.rawSegments;
 
@@ -601,17 +685,14 @@ export function evaluateCommandRules(
 
 	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, probes);
 	if (globalDeny) {
-		return { kind: "deny", reason: globalDeny.rule.reason ?? `Denied by global policy: ${globalDeny.rule.match}` };
+		return { kind: "deny", reason: denyReason(globalDeny.rule, toolName, "global") };
 	}
 	const agentDeny = firstMatch(compile(ruleSets.agentDeny), toolName, probes);
 	if (agentDeny) {
-		return {
-			kind: "deny",
-			reason: agentDeny.rule.reason ?? `Denied by ${agentName ?? "agent"} policy: ${agentDeny.rule.match}`,
-		};
+		return { kind: "deny", reason: denyReason(agentDeny.rule, toolName, agentName ?? "agent") };
 	}
 
-	// "Approved" carries both "this segment only" choices and session-allowed
+	// "Approved" carries both segment "Always allow" choices and session-allowed
 	// segments. A session-allow marks exactly its matching segment, never the
 	// whole command, so every other segment is still checked below.
 	const approved = new Set<number>(options.approvedSegmentIndices ?? []);
@@ -642,19 +723,33 @@ export function evaluateCommandRules(
 		const wholeProbes = unique([command, ...segments, ...rawSegments]);
 		const globalWhole = firstSpanningMatch(compile(ruleSets.globalAsk), toolName, wholeProbes, segments);
 		if (globalWhole && !(isSessionAllowed?.(globalWhole.rule) ?? false)) {
-			return { kind: "ask", rule: globalWhole.rule, segment: globalWhole.probe, segmentIndex: -1, source: "global" };
+			return {
+				kind: "ask",
+				rule: globalWhole.rule,
+				segment: globalWhole.probe,
+				segmentIndex: -1,
+				segmentStart: -1,
+				source: "global",
+			};
 		}
 		const agentWhole = firstSpanningMatch(compile(ruleSets.agentAsk), toolName, wholeProbes, segments);
 		if (agentWhole && !(isSessionAllowed?.(agentWhole.rule) ?? false)) {
-			return { kind: "ask", rule: agentWhole.rule, segment: agentWhole.probe, segmentIndex: -1, source: "agent" };
+			return {
+				kind: "ask",
+				rule: agentWhole.rule,
+				segment: agentWhole.probe,
+				segmentIndex: -1,
+				segmentStart: -1,
+				source: "agent",
+			};
 		}
 	}
 
 	// Ask tests each unapproved segment (global rules first, then agent rules).
-	const globalAsk = findAsk(compile(ruleSets.globalAsk), toolName, segments, approved, "global");
+	const globalAsk = findAsk(compile(ruleSets.globalAsk), toolName, segments, parsed.segmentStarts, approved, "global");
 	if (globalAsk) return globalAsk;
 
-	const agentAsk = findAsk(compile(ruleSets.agentAsk), toolName, segments, approved, "agent");
+	const agentAsk = findAsk(compile(ruleSets.agentAsk), toolName, segments, parsed.segmentStarts, approved, "agent");
 	if (agentAsk) return agentAsk;
 
 	// Allow: deny-by-default requires every unapproved segment to match a rule.
@@ -704,7 +799,7 @@ export function unallowedSegments(
 ): { segments: string[]; indices: number[] } {
 	const parsed: ShellParse = isShell
 		? parseShellCommand(command)
-		: { segments: [command], rawSegments: [command], unsupported: null };
+		: { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: null };
 	const allowed = compile(ruleSets.agentAllow);
 	// Session-allowed segments count as approved, exactly as in evaluateCommandRules.
 	const approved = new Set<number>(approvedSegmentIndices);

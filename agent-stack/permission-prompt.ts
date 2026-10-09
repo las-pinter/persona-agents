@@ -5,20 +5,18 @@
  * and the option list. `renderPermissionPrompt()` owns the pi wiring — a
  * pi-tui panel in TUI mode, a plain `ctx.ui.select` fallback otherwise.
  *
- * The model never carries the rule's raw regex. It shows the rule's human
- * `reason` as "Why:" so a person can decide. The four bash decisions and their
- * meaning are unchanged from the previous prompt.
+ * Every prompt kind shows the same three choices: Deny, Allow once, and Always
+ * allow this rule (session). The model never carries the rule's raw regex. It
+ * shows the rule's human `reason` as "Why:". The full command is the target;
+ * the panel highlights the blocked segment inside it when the parsed segment
+ * is a literal slice of the command.
  */
 
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 
 /** The gate decisions. The names are stable; the labels are display text. */
-export type PermissionChoice =
-	| "deny"
-	| "allow-once-whole"
-	| "allow-once-segment"
-	| "always-allow";
+export type PermissionChoice = "deny" | "allow-once" | "always-allow";
 
 /** A selectable option: display label plus the decision it maps to. */
 export interface PromptOption {
@@ -36,13 +34,11 @@ export interface PromptInput {
 	probe: string;
 	/** The segment that matched the ask rule, or the whole command. */
 	segment: string;
-	/** 0-based index of `segment`, or -1 for a whole-command span match. */
-	segmentIndex: number;
-	/** Number of parsed segments in `probe`. */
-	segmentCount: number;
+	/** Real start offset of `segment` in `probe`, or -1 when unknown/spanning. */
+	segmentStart: number;
 	/** The rule's human reason. Never the regex. */
 	reason?: string;
-	/** True when `segmentIndex === -1` (the rule spans the whole command). */
+	/** True when the rule spans the whole command (no single segment matches). */
 	isSpanning: boolean;
 }
 
@@ -55,9 +51,9 @@ export interface PromptModel {
 	target: string;
 	/** Plain-language detail lines. */
 	lines: string[];
-	/** Index into `lines` of the line to highlight, or -1. */
-	highlightIndex: number;
-	/** The text an "always allow" choice remembers. */
+	/** The blocked slice of `target`, or null when there is no literal slice. */
+	highlight: { start: number; end: number } | null;
+	/** Human reason for the Why line. */
 	remember: string;
 	/** Decisions in display order. */
 	options: PromptOption[];
@@ -76,6 +72,33 @@ function rememberText(reason: string | undefined): string {
 }
 
 /**
+ * The rule's human reason, or undefined when it is empty or equals the regex.
+ * A reason equal to the regex is not human text, so it is dropped.
+ */
+export function humanReason(reason: string | undefined, match: string | undefined): string | undefined {
+	const trimmed = reason?.trim();
+	return trimmed && trimmed.length > 0 && trimmed !== match ? trimmed : undefined;
+}
+
+/**
+ * Stable courier label for the herdr event and the headless block reason. It is
+ * built from the tool name and the rule source, plus the rule's human reason
+ * when that reason exists and differs from the regex. The regex never appears.
+ */
+export function herdrBlockedLabel(
+	toolName: string,
+	source: "global" | "agent",
+	agentName: string | null,
+	reason?: string,
+	match?: string,
+): string {
+	const who = source === "global" ? "global policy" : `${agentName ?? "agent"} policy`;
+	const base = `Permission required: ${toolName} (${who})`;
+	const human = humanReason(reason, match);
+	return human ? `${base}: ${human}` : base;
+}
+
+/**
  * Build the permission panel model. Pure. The regex is never an input, so it
  * can never appear in the model.
  */
@@ -84,53 +107,35 @@ export function buildPromptModel(input: PromptInput): PromptModel {
 	const remember = rememberText(input.reason);
 	const why = `Why: ${remember}`;
 	const lines: string[] = [];
-	let highlightIndex = -1;
+	let highlight: { start: number; end: number } | null = null;
 	let kind: PromptKind;
-	let options: PromptOption[];
 
 	if (!isShell) {
 		kind = "target";
 		lines.push(why);
-		options = [
-			{ label: "Deny", decision: "deny" },
-			{ label: "Allow once", decision: "allow-once-whole" },
-			{
-				label: `Always allow this in this session: ${remember}`,
-				decision: "always-allow",
-			},
-		];
 	} else if (input.isSpanning) {
 		kind = "shell-spanning";
 		lines.push("This rule spans the whole command (no single part matches).");
 		lines.push(why);
-		lines.push(`Always allow remembers: ${remember} (session)`);
-		options = [
-			{ label: "Deny", decision: "deny" },
-			{ label: "Allow this command once", decision: "allow-once-whole" },
-			{ label: "Allow this rule once (no single part)", decision: "allow-once-segment" },
-			{
-				label: `Always allow this rule (this session): ${remember}`,
-				decision: "always-allow",
-			},
-		];
 	} else {
 		kind = "shell-segment";
-		const total = input.segmentCount > 0 ? input.segmentCount : 1;
-		const position = input.segmentIndex >= 0 ? input.segmentIndex + 1 : 1;
-		highlightIndex = lines.length;
-		lines.push(`Blocked part (${position} of ${total}): ${input.segment}`);
-		lines.push(why);
-		lines.push(`Always allow remembers: ${remember} (session)`);
-		options = [
-			{ label: "Deny", decision: "deny" },
-			{ label: "Allow this command once", decision: "allow-once-whole" },
-			{ label: "Allow only the blocked part once", decision: "allow-once-segment" },
-			{
-				label: `Always allow the blocked part (this session): ${remember}`,
-				decision: "always-allow",
-			},
-		];
+		const start = input.segmentStart;
+		if (start >= 0 && input.probe.slice(start, start + input.segment.length) === input.segment) {
+			highlight = { start, end: start + input.segment.length };
+			lines.push(why);
+		} else {
+			// The core folds and normalizes the segment, so the slice can miss.
+			lines.push(`Blocked part: ${input.segment}`);
+			lines.push(why);
+		}
 	}
+
+	// One shared list: every kind offers the same three choices.
+	const options: PromptOption[] = [
+		{ label: "Deny", decision: "deny" },
+		{ label: "Allow once", decision: "allow-once" },
+		{ label: "Always allow this rule (session)", decision: "always-allow" },
+	];
 
 	return {
 		title: "Permission required",
@@ -138,7 +143,7 @@ export function buildPromptModel(input: PromptInput): PromptModel {
 		kind,
 		target: input.probe,
 		lines,
-		highlightIndex,
+		highlight,
 		remember,
 		options,
 	};
@@ -146,8 +151,23 @@ export function buildPromptModel(input: PromptInput): PromptModel {
 
 /** Plain multi-line title for the `ctx.ui.select` fallback. */
 export function plainPromptTitle(model: PromptModel): string {
+	// No color in the fallback, so bracket the blocked part instead.
+	const marked = model.highlight
+		? model.target.slice(0, model.highlight.start) +
+			"[" + model.target.slice(model.highlight.start, model.highlight.end) + "]" +
+			model.target.slice(model.highlight.end)
+		: model.target;
 	const detail = model.lines.map((line) => `  ${line}`).join("\n");
-	return `⚠️ ${model.title} (${model.toolName})\n\n  ${model.target}\n${detail}\n\nAllow?`;
+	return `⚠️ ${model.title} (${model.toolName})\n\n  ${marked}\n${detail}\n\nAllow?`;
+}
+
+/** Style the target and mark the blocked slice in the warning color. */
+export function highlightCommand(model: PromptModel, theme: Theme): string {
+	if (!model.highlight) return theme.fg("text", model.target);
+	const { start, end } = model.highlight;
+	return theme.fg("text", model.target.slice(0, start)) +
+		theme.fg("warning", theme.bold(model.target.slice(start, end))) +
+		theme.fg("text", model.target.slice(end));
 }
 
 type TuiModule = typeof import("@earendil-works/pi-tui");
@@ -160,7 +180,7 @@ function fitLine(text: string, width: number, mod: TuiModule): string {
 }
 
 /** Build the bordered panel lines for the current width and selection. */
-function renderPanel(
+export function renderPanel(
 	model: PromptModel,
 	width: number,
 	theme: Theme,
@@ -171,11 +191,11 @@ function renderPanel(
 	const inner = Math.max(1, total - 4);
 
 	// Content in reading order: target, detail lines, options, hint.
-	const content: { text: string; color: "text" | "muted" | "warning" | "accent" | "dim" }[] = [
-		{ text: model.target, color: "text" },
+	const content: { text: string; color: "text" | "muted" | "warning" | "accent" | "dim" | null }[] = [
+		{ text: highlightCommand(model, theme), color: null },
 	];
-	model.lines.forEach((line, index) => {
-		content.push({ text: line, color: index === model.highlightIndex ? "warning" : "muted" });
+	model.lines.forEach((line) => {
+		content.push({ text: line, color: "muted" });
 	});
 	content.push({ text: "", color: "text" });
 	model.options.forEach((option, index) => {
@@ -188,7 +208,7 @@ function renderPanel(
 	const body: string[] = [];
 	for (const entry of content) {
 		for (const wrapped of mod.wrapTextWithAnsi(entry.text, inner)) {
-			body.push(theme.fg(entry.color, wrapped));
+			body.push(entry.color === null ? wrapped : theme.fg(entry.color, wrapped));
 		}
 	}
 

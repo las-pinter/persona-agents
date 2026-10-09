@@ -13,22 +13,16 @@
  *        - "allow-unless-matched":  anything not matched runs (Pi's default)
  *
  * Ask rules (steps 2 and 4) prompt with plain-language options
- * (`permission-prompt.ts`). Shell tools with segments get four decisions:
- *   - Deny                    → block this call (reason "Denied by user")
- *   - Allow this command once → grant THIS single call
- *   - Allow only the blocked part once
- *                             → approve only the matching segment of a
- *                               compound command, then re-evaluate the
- *                               remaining segments
- *   - Always allow the blocked part (this session)
- *                             → approve only the matching segment,
- *                               then remember the rule for the
- *                               session (agent|tool|match key,
- *                               in-memory only, nothing persisted
- *                               to disk)
- * Other tools have one target and a simpler list (Deny / Allow once /
- * Always allow this in this session). The prompt shows the rule's human
- * `reason`, never the raw regex.
+ * (`permission-prompt.ts`). Every tool shows the same three choices:
+ *   - Deny                             → block this call ("Denied by user")
+ *   - Allow once                       → grant THIS single call
+ *   - Always allow this rule (session) → remember the rule for the session
+ *                                        (agent|tool|match key, in-memory
+ *                                        only, nothing persisted to disk)
+ * A shell segment also approves the matching segment and re-evaluates the
+ * remaining segments. A spanning rule runs the whole call once and approves no
+ * segment. The prompt shows the full command, highlights the blocked part, and
+ * shows the rule's human `reason`, never the raw regex.
  *
  * Compound shell commands are split into segments by `command-segments.ts`;
  * every segment must pass. See that module for the parse/decision core.
@@ -57,13 +51,14 @@ import {
 } from "./resolver.ts";
 import {
 	evaluateCommandRules,
-	splitShellSegments,
 	unallowedSegments,
 	type RawRule,
 	type RuleSets,
 } from "./command-segments.ts";
 import {
 	buildPromptModel,
+	herdrBlockedLabel,
+	humanReason,
 	renderPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
@@ -287,10 +282,10 @@ export function installPermissionGate(
 		const sessionKey = (match: string): string => `${agent?.name ?? "<none>"}|${toolName}|${match}`;
 		const isSessionAllowed = (rule: RawRule): boolean => sessionAllow.has(sessionKey(rule.match));
 
-		// User-approved segments ("Allow once, this segment only") for THIS call.
+		// User-approved segments ("Always allow" on a segment) for THIS call.
 		const approvedSegments = new Set<number>();
 
-		// Resolve asks round by round: each "segment only" choice approves exactly
+		// Resolve asks round by round: a segment "Always allow" approves exactly
 		// one segment, then the remaining segments are re-evaluated.
 		for (;;) {
 			const decision = evaluateCommandRules(probe, isShell, ruleSets, mode, toolName, agent?.name ?? null, {
@@ -329,28 +324,27 @@ export function installPermissionGate(
 			const key = sessionKey(rule.match);
 
 			if (!ctx.hasUI) {
+				// Fail closed. The label is stable and never the rule regex.
 				return {
 					block: true,
-					reason:
-						decision.source === "global"
-							? `Blocked by policy (no UI): ${rule.match}`
-							: `Blocked by ${agent?.name} policy (no UI): ${rule.match}`,
+					reason: herdrBlockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
 				};
 			}
 
 			// The rule's regex is never shown; the prompt uses the human reason.
-			const segmentCount = isShell ? splitShellSegments(probe).length : 1;
 			const promptModel = buildPromptModel({
 				toolName,
 				probe,
 				segment: decision.segment,
-				segmentIndex: decision.segmentIndex,
-				segmentCount,
-				reason: rule.reason,
+				segmentStart: decision.segmentStart,
+				reason: humanReason(rule.reason, rule.match),
 				isSpanning: decision.segmentIndex === -1,
 			});
 			// The herdr courier clears only on active:false, so every prompt outcome must emit it.
-			pi.events.emit("herdr:blocked", { active: true, label: rule.reason ?? rule.match });
+			pi.events.emit("herdr:blocked", {
+				active: true,
+				label: herdrBlockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
+			});
 			let choice: PermissionChoice;
 			try {
 				choice = await renderPermissionPrompt(ctx, promptModel);
@@ -360,16 +354,15 @@ export function installPermissionGate(
 
 			if (choice === "always-allow") {
 				sessionAllow.add(key); // remembered for the rest of the session
-				// Approve only this segment, then keep evaluating the rest.
-				approvedSegments.add(decision.segmentIndex);
-				continue;
+				if (isShell && decision.segmentIndex >= 0) {
+					// Approve the matched segment, then re-evaluate the rest.
+					approvedSegments.add(decision.segmentIndex);
+					continue;
+				}
+				return undefined; // spanning or target — run the call now
 			}
-			if (choice === "allow-once-segment") {
-				approvedSegments.add(decision.segmentIndex);
-				continue; // re-evaluate the remaining segments
-			}
-			if (choice === "allow-once-whole") {
-				return undefined; // user approved — allow this call
+			if (choice === "allow-once") {
+				return undefined; // user approved — allow this call once
 			}
 			return { block: true, reason: "Denied by user" };
 		}
