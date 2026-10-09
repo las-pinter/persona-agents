@@ -12,17 +12,23 @@
  *        - "deny-by-default":       anything not allowed is blocked
  *        - "allow-unless-matched":  anything not matched runs (Pi's default)
  *
- * Ask rules (steps 2 and 4) prompt with four options:
- *   - "Deny"                            → block this call (reason "Denied by user")
- *   - "Allow once (whole command)"       → grant THIS single call
- *   - "Allow once (this segment only)"   → approve only the matching segment of a
- *                                          compound command, then re-evaluate the
- *                                          remaining segments
- *   - "Always allow (session)"           → approve only the matching segment,
- *                                          then remember the rule for the
- *                                          session (agent|tool|match key,
- *                                          in-memory only, nothing persisted
- *                                          to disk)
+ * Ask rules (steps 2 and 4) prompt with plain-language options
+ * (`permission-prompt.ts`). Shell tools with segments get four decisions:
+ *   - Deny                    → block this call (reason "Denied by user")
+ *   - Allow this command once → grant THIS single call
+ *   - Allow only the blocked part once
+ *                             → approve only the matching segment of a
+ *                               compound command, then re-evaluate the
+ *                               remaining segments
+ *   - Always allow the blocked part (this session)
+ *                             → approve only the matching segment,
+ *                               then remember the rule for the
+ *                               session (agent|tool|match key,
+ *                               in-memory only, nothing persisted
+ *                               to disk)
+ * Other tools have one target and a simpler list (Deny / Allow once /
+ * Always allow this in this session). The prompt shows the rule's human
+ * `reason`, never the raw regex.
  *
  * Compound shell commands are split into segments by `command-segments.ts`;
  * every segment must pass. See that module for the parse/decision core.
@@ -49,7 +55,18 @@ import {
 	type AgentConfig,
 	type PermissionRule,
 } from "./resolver.ts";
-import { evaluateCommandRules, unallowedSegments, type RawRule, type RuleSets } from "./command-segments.ts";
+import {
+	evaluateCommandRules,
+	splitShellSegments,
+	unallowedSegments,
+	type RawRule,
+	type RuleSets,
+} from "./command-segments.ts";
+import {
+	buildPromptModel,
+	renderPermissionPrompt,
+	type PermissionChoice,
+} from "./permission-prompt.ts";
 
 function configPath(): string {
 	if (process.env.PI_PERMISSIONS_FILE) return process.env.PI_PERMISSIONS_FILE;
@@ -321,36 +338,37 @@ export function installPermissionGate(
 				};
 			}
 
-			const segmentLine =
-				decision.segment === probe ? "" : `\n\nMatching segment:\n  ${decision.segment}`;
+			// The rule's regex is never shown; the prompt uses the human reason.
+			const segmentCount = isShell ? splitShellSegments(probe).length : 1;
+			const promptModel = buildPromptModel({
+				toolName,
+				probe,
+				segment: decision.segment,
+				segmentIndex: decision.segmentIndex,
+				segmentCount,
+				reason: rule.reason,
+				isSpanning: decision.segmentIndex === -1,
+			});
 			// The herdr courier clears only on active:false, so every prompt outcome must emit it.
 			pi.events.emit("herdr:blocked", { active: true, label: rule.reason ?? rule.match });
-			let choice: string | undefined;
+			let choice: PermissionChoice;
 			try {
-				choice = await ctx.ui.select(
-					`⚠️ Permission required (${toolName} matches "${rule.match}")\n\n  ${probe}${segmentLine}\n\nAllow?`,
-					[
-						"Deny",
-						"Allow once (whole command)",
-						"Allow once (this segment only)",
-						"Always allow (session)",
-					],
-				);
+				choice = await renderPermissionPrompt(ctx, promptModel);
 			} finally {
 				pi.events.emit("herdr:blocked", { active: false });
 			}
 
-			if (choice === "Always allow (session)") {
+			if (choice === "always-allow") {
 				sessionAllow.add(key); // remembered for the rest of the session
 				// Approve only this segment, then keep evaluating the rest.
 				approvedSegments.add(decision.segmentIndex);
 				continue;
 			}
-			if (choice === "Allow once (this segment only)") {
+			if (choice === "allow-once-segment") {
 				approvedSegments.add(decision.segmentIndex);
 				continue; // re-evaluate the remaining segments
 			}
-			if (choice === "Allow once (whole command)") {
+			if (choice === "allow-once-whole") {
 				return undefined; // user approved — allow this call
 			}
 			return { block: true, reason: "Denied by user" };

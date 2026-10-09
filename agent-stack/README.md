@@ -154,19 +154,24 @@ An `ask` rule is a manual override for calls the allow list does not cover (e.g.
 headless runs (subagent children, `-p`, `--mode json`) have no UI, so `ask` there is a
 hard block.
 
-An `ask` approval is per call or per segment, never global. The ask prompt offers
-**four options: Deny / Allow once (whole command) / Allow once (this segment only) /
-Always allow (session)**. "Allow once (whole command)" grants exactly that single call.
-"This segment only" and "Always allow (session)" both approve exactly the matching
-segment of a compound command and then re-evaluate the remaining segments — they never
-grant a different segment (an unallowed remaining segment blocks the whole command).
-"Always allow (session)" also remembers the `agent|tool|rule` for the rest of the
-session — **in-memory only, nothing is persisted to disk** (a persistent always-allow
-list is a future decision). The whole-command ask probe runs FIRST on the first
+An `ask` approval is per call or per segment, never global. The ask prompt is a
+highlighted panel in TUI mode and a plain selector otherwise. It shows the rule's human
+`reason` as "Why:" and never the raw regex. For `bash`/`powershell` it names the
+blocked part with its index and total and offers **four options: Deny / Allow this
+command once / Allow only the blocked part once / Always allow the blocked part (this
+session)**. "Allow this command once" grants exactly that single call. "Allow only the
+blocked part once" and "Always allow the blocked part (this session)" both approve
+exactly the matching segment of a compound command and then re-evaluate the remaining
+segments — they never grant a different segment (an unallowed remaining segment blocks
+the whole command). "Always allow the blocked part (this session)" also remembers the
+`agent|tool|rule` for the rest of the session — **in-memory only, nothing is persisted
+to disk** (a persistent always-allow list is a future decision). Tools without segments
+(`read`/`grep`/`write`/`edit`) show the target and a simpler list: **Deny / Allow once /
+Always allow this in this session**. The whole-command ask probe runs FIRST on the first
 evaluation pass, before the per-segment asks, so a rule whose pattern spans a separator
 is always shown once — even when a per-segment ask would match first or a
-session-allowed segment exists. A "this segment only" choice on that probe approves no
-real segment and fails closed.
+session-allowed segment exists. The panel notes that the rule spans the whole command; a
+"blocked part" choice on that probe approves no real segment and fails closed.
 
 **Git writes now ask**: the orchestrator's `git add`, `git commit`, `git push`,
 `git pull`, and every `gh pr` command moved to its `ask` list — each one prompts
