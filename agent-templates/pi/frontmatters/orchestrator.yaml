@@ -1,8 +1,8 @@
 name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, project notes, and plans
-# Not spawnable as a subagent: orchestrator is the only agent that holds git
-# commit privileges, so a dispatcher must never be able to escalate by
-# spawning one.
+# Not spawnable as a subagent: the orchestrator is the only agent that holds
+# gated git write rights (add/commit/push/pull) and `gh pr` rights, all gated
+# by a user prompt, so a dispatcher must never escalate them by spawning one.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/simplified-technical-english"]
@@ -18,21 +18,26 @@ permissions:
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|planner/plans)/" }
     - { tool: subagent, match: "." }
     - { tool: ask_user_question, match: "." }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|branch)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch)\\b" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rm\\s+[^-\\s;|&*?\\[\\]{}'\"$`!#][^\\s;|&*?\\[\\]{}'\"$`]*$", reason: "deleting a named file prompts the wizard" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rm\\s+[^-\\s;|&*?\\[\\]{}'\"$`!#][^\\s;|&*?\\[\\]{}'\"$`]*$", reason: "deleting a named file prompts the user" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+reset\\s+--soft\\b", reason: "history squash requires user approval" }
     - { tool: bash, match: "\\bsudo\\b" }
     # Delegated git add/commit prompts (ask) instead of running silently:
     # committing is orchestrator-only, gated per call.
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(add|commit)\\b", reason: "delegated commit by orchestrator" }
-    - { tool: bash, match: "\\bgit\\s+(push|pull)\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(add|commit)\\b", reason: "orchestrator commit requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(push|pull)\\b", reason: "orchestrator push/pull requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b", reason: "pull request operations require user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+branch\\b[^\\n]*\\s(?:-[a-zA-Z]*[fDmMdcC]\\b|--(?:delete|delet|dele|del|de|d|force|forc|for|move|mov|mo|copy|cop)\\b)", reason: "destructive branch operation requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+reflog\\s+(?:expire|delete|drop)\\b", reason: "reflog rewrite requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+fetch\\b[^\\n]*:", reason: "fetch refspec requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+remote\\s+(?:add|remove|rm|rename|set-url|set-branches|set-head|prune)\\b", reason: "remote config change requires user approval" }
   deny:
     - { tool: bash, match: "^eval\\b" }
     - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }

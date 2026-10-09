@@ -60,7 +60,8 @@ The pi templates were translated from `agent-templates/opencode/frontmatters`
   variants, the python/jest/tsc toolchain, the read-only viewers).
 - opencode's default `ask` for core actions (e.g. `edit` for implementer/tester)
   becomes `allow`: headless subagents block on confirm prompts, so their raison
-  d'être would be unusable. `deny` lists keep the hard blocks (push/pull,
+  d'être would be unusable. `deny` lists keep the hard blocks (push/pull for
+  non-orchestrators,
   `find -exec/-execdir/-delete/-ok/-okdir/-fls/-fprint(0|f)`, `curl|sh`,
   `xargs → rm|sh|bash|zsh|mv|cp` (first non-option token after xargs options),
   `rm -r/-f/-rf/-fr`, `sudo`, mkfs/dd).
@@ -167,11 +168,14 @@ is always shown once — even when a per-segment ask would match first or a
 session-allowed segment exists. A "this segment only" choice on that probe approves no
 real segment and fails closed.
 
-**Delegated commits now ask**: the orchestrator's `git add`/`git commit` moved from its
-`allow` list to its `ask` list — a commit prompts allow/deny in the main session instead
-of running silently (`git push`/`pull` stay hard-denied). Since a commit is an `ask` rule
-and ask is a hard block without a UI, **headless orchestrator runs (delegated/`-p`/
-`--mode json`) cannot commit**.
+**Git writes now ask**: the orchestrator's `git add`, `git commit`, `git push`,
+`git pull`, and every `gh pr` command moved to its `ask` list — each one prompts
+allow/deny in the main session instead of running silently. The implementer gets a
+hard DENY for the same commands. It may only SUGGEST a commit. Since a write is an
+`ask` rule and ask is a hard block without a UI, **headless orchestrator runs
+(delegated/`-p`/`--mode json`) cannot commit**. The global file
+`~/.pi/agent/permissions.json` is live and unversioned; it carries a global ask for
+push/pull and `gh pr` as a safety net.
 
 Gate scope: only `bash`/`powershell` (command), `read`/`grep`/`find`/`ls`/`edit`/`write`
 (path/pattern), and other plain tools (JSON args) are probed. `mcp__…` and namespaced

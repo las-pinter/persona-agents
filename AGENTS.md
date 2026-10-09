@@ -29,4 +29,11 @@ Rules:
 
 ## Commit rule
 
-Every agent commit message must start with the prefix `ai:`.
+Only the orchestrator writes git history. Every commit it makes starts with
+the prefix `ai:`. The implementer never commits. It suggests a commit.
+
+The doctrine lives in the permission templates and the live global file
+`~/.pi/agent/permissions.json`. The orchestrator gets an ASK verdict for
+`git add`, `git commit`, `git push`, `git pull`, and every `gh pr` command.
+Every other agent gets a DENY for these. The global file change is live and
+unversioned.

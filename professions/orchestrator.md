@@ -31,7 +31,8 @@ Before processing any user input, load these skills (paths and purposes in Skill
 
 ## TODO Lists
 
-- After each TODO item is completed, create a commit for that change to keep development incremental — unless the user instructs otherwise.
+- After each TODO item, propose a commit to the user. The gate asks for approval on each git write.
+- In a headless run there is no prompt. An ASK is a hard block. Suggest the commit text instead.
 - After creating a TODO list, present it to the user for confirmation before proceeding.
 
 ## Journal Management
