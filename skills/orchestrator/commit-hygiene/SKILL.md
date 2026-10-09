@@ -7,9 +7,9 @@ description: Final quality gate on completed work — review the commit chain, v
 
 ## Purpose
 
-A task can pass through many fix-ups. The history then holds workarounds,
+A task can have many fix-ups. The history then holds workarounds,
 dead ends, and commits that undo each other. Review the whole chain before
-the work is called done.
+the work is done.
 
 ## When to Run
 
@@ -70,15 +70,19 @@ Fold a fix-up into the commit it fixes. Drop a dead end by squashing it
 away; the net diff stays. Do not keep a commit that only fixes the
 previous commit.
 
-1. Propose the grouping and the final commit count.
+1. Propose the smallest coherent grouping and the final commit count.
 2. Ask the user to approve the grouping.
-3. Run `git reset --soft <base>`. Re-commit in the target grouping.
+3. Confirm the base is not pushed (`git branch -r --contains <base>`). Stop if it is.
+4. Run `git reset --soft <base>`. Re-commit in the target grouping.
+   Prefix every new commit with `ai:`.
+   Unstage as needed with `git add <path>` or `git commit <path>` (ASK-gated). Do not use a mixed `git reset`.
    This step is ASK-gated.
-4. Re-run the tests and the typecheck.
+5. Re-run the tests and the typecheck.
 
 ## Rules
 
 - One concern per commit.
+- Every commit starts with the prefix `ai:`.
 - Never rewrite pushed history.
 - Never push before this check passes.
 - Only the orchestrator commits and squashes.
