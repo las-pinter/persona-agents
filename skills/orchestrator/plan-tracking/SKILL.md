@@ -175,6 +175,6 @@ Blocked plans append:
 
 1. **Implementer** completes the work
 2. **Reviewer** confirms the work
-3. **Orchestrator** runs `plan-verify.sh`
-4. **Orchestrator** runs `plan-mark.sh --status done`
+3. **Orchestrator** runs `bash <Scripts>/plan-verify.sh`
+4. **Orchestrator** runs `bash <Scripts>/plan-mark.sh --status done`
 5. **Orchestrator** references the completed plan in the daily journal

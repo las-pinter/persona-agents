@@ -686,3 +686,30 @@ export function evaluateCommandRules(
 	// allow-unless-matched: Pi's default, unchanged.
 	return { kind: "allow" };
 }
+
+/**
+ * The parsed segments that reach deny-by-default: neither approved by the
+ * caller nor matched by an agent allow rule. On a deny-by-default fall-through
+ * these are exactly the segments that need the structural skill-script check.
+ * `segments` is the cd-folded list, so an index lines up with the indices in
+ * `evaluateCommandRules`.
+ */
+export function unallowedSegments(
+	command: string,
+	isShell: boolean,
+	ruleSets: RuleSets,
+	toolName: string,
+	approvedSegmentIndices: ReadonlySet<number> = new Set(),
+): { segments: string[]; indices: number[] } {
+	const parsed: ShellParse = isShell
+		? parseShellCommand(command)
+		: { segments: [command], rawSegments: [command], unsupported: null };
+	const allowed = compile(ruleSets.agentAllow);
+	const indices: number[] = [];
+	for (let idx = 0; idx < parsed.segments.length; idx++) {
+		if (approvedSegmentIndices.has(idx)) continue;
+		if (firstMatch(allowed, toolName, [parsed.segments[idx]])) continue;
+		indices.push(idx);
+	}
+	return { segments: parsed.segments, indices };
+}

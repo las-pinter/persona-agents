@@ -49,7 +49,7 @@ import {
 	type AgentConfig,
 	type PermissionRule,
 } from "./resolver.ts";
-import { evaluateCommandRules, splitShellSegments, type RawRule, type RuleSets } from "./command-segments.ts";
+import { evaluateCommandRules, unallowedSegments, type RawRule, type RuleSets } from "./command-segments.ts";
 
 function configPath(): string {
 	if (process.env.PI_PERMISSIONS_FILE) return process.env.PI_PERMISSIONS_FILE;
@@ -76,16 +76,26 @@ function probeFor(toolName: string, input: Record<string, unknown>): string {
 /** The shell interpreters whose first argument is the script to run. */
 const SCRIPT_INTERPRETERS = new Set(["bash", "sh", "dash", "zsh"]);
 
-/** Resolve a path, preferring the real path; a missing file keeps the lexical path. */
-function resolveRealPath(base: string, token: string): string {
-	const candidate = path.resolve(base, token);
+/**
+ * A plain path token. It allows only path characters, so a backslash, `$`,
+ * quote, space, or any other shell metacharacter denies the segment. Bash
+ * strips those before it opens the file, so a token that keeps them is forged.
+ */
+const PLAIN_PATH_RE = /^[A-Za-z0-9._/-]+$/;
+
+/**
+ * True only when `candidate` resolves (through symlinks) to a real file inside
+ * one of the allow-listed script dirs. A path that does not resolve is denied:
+ * fail closed, because an expanded or escaped form cannot be trusted.
+ */
+function resolvesInsideScriptDir(candidate: string, dirs: string[]): boolean {
+	let real: string;
 	try {
-		return fs.realpathSync(candidate);
+		real = fs.realpathSync(candidate);
 	} catch {
-		// A nonexistent file cannot execute; the lexical result keeps the check
-		// deterministic for a script that is not on disk yet.
-		return candidate;
+		return false;
 	}
+	return dirs.some((dir) => real === dir || real.startsWith(dir + path.sep));
 }
 
 /**
@@ -93,9 +103,11 @@ function resolveRealPath(base: string, token: string): string {
  * loaded skills' real `scripts/` dirs. This is a STRUCTURAL check, not a pattern
  * match: a forged `/tmp/skills/...` path never resolves inside a real skill dir.
  *
- * A leading `cd <dir> &&` guard sets the resolution base. The optional leading
- * interpreter (`bash`/`sh`/`dash`/`zsh`) is skipped. The token must contain a
- * `/` and end in `.sh`; `rm script.sh` has first token `rm`, so it never passes.
+ * A leading `cd <dir> &&` guard sets the resolution base. The interpreter is
+ * recognised by basename, so `/bin/bash <script>` works; interpreter flags are
+ * NOT skipped, so `bash -c ...` and `bash -x ...` stay denied. The script token
+ * must be a plain path, contain a `/`, and end in `.sh`; `rm script.sh` has
+ * first token `rm`, so it never passes.
  */
 export function isAllowedSkillScript(segment: string, skillScriptsDirs: string[], cwd: string): boolean {
 	let base = cwd;
@@ -107,30 +119,36 @@ export function isAllowedSkillScript(segment: string, skillScriptsDirs: string[]
 	}
 	const tokens = rest.split(/\s+/);
 	let token = tokens[0] ?? "";
-	if (SCRIPT_INTERPRETERS.has(token)) token = tokens[1] ?? "";
+	if (SCRIPT_INTERPRETERS.has(path.basename(token))) token = tokens[1] ?? "";
+	if (!PLAIN_PATH_RE.test(token)) return false;
 	if (!token.includes("/") || !token.endsWith(".sh")) return false;
-	const resolved = resolveRealPath(base, token);
-	return skillScriptsDirs.some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
+	return resolvesInsideScriptDir(path.resolve(base, token), skillScriptsDirs);
 }
 
 /**
- * True when every unapproved segment is a loaded skill's script. The regex
- * verdict is computed first; this only rescues a deny-by-default fall-through,
- * so deny and ask rules always win. An empty command returns false.
+ * True when every segment that falls through to deny-by-default is a loaded
+ * skill's real script. This rescues a deny-by-default fall-through, so deny and
+ * ask rules always win; segments the caller approved or an allow rule already
+ * matched are skipped, so a command may mix regex-allowed parts with skill
+ * scripts. An empty command returns false.
  */
 export function allSegmentsAreSkillScripts(
 	command: string,
 	approvedSegmentIndices: ReadonlySet<number>,
 	skillScriptsDirs: string[],
 	cwd: string,
+	ruleSets: RuleSets,
+	toolName: string,
 ): boolean {
-	const segments = splitShellSegments(command);
+	const { segments, indices } = unallowedSegments(
+		command,
+		true,
+		ruleSets,
+		toolName,
+		approvedSegmentIndices,
+	);
 	if (segments.length === 0) return false;
-	for (let idx = 0; idx < segments.length; idx++) {
-		if (approvedSegmentIndices.has(idx)) continue;
-		if (!isAllowedSkillScript(segments[idx], skillScriptsDirs, cwd)) return false;
-	}
-	return true;
+	return indices.every((idx) => isAllowedSkillScript(segments[idx], skillScriptsDirs, cwd));
 }
 
 export function installPermissionGate(
@@ -221,9 +239,13 @@ export function installPermissionGate(
 			}
 			if (decision.kind === "default") {
 				// The regex verdict fell through to deny-by-default. A loaded skill's
-				// real script is the one structural exception. Deny and ask already won
-				// above, so this can never override them.
-				if (skillDirs.length > 0 && allSegmentsAreSkillScripts(probe, approvedSegments, skillDirs, ctx.cwd)) {
+				// real script is the one structural exception. Segments an allow rule
+				// already matched are skipped, so a mixed command works. Deny and ask
+				// already won above, so this can never override them.
+				if (
+					skillDirs.length > 0 &&
+					allSegmentsAreSkillScripts(probe, approvedSegments, skillDirs, ctx.cwd, ruleSets, toolName)
+				) {
 					return undefined;
 				}
 				return { block: true, reason: decision.reason };
