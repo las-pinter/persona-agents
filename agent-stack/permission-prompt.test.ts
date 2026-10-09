@@ -1,21 +1,30 @@
 /**
- * Unit tests for the pure permission-prompt model.
+ * Tests for the permission-prompt model + the real-gate wire-up.
  *
- * Runs under plain Node (type stripping) with no dependencies:
+ * Runs under plain Node (type stripping):
  *   npm test
  *
  * `buildPromptModel` must never carry the rule regex, must show the human
  * reason, must name the blocked part with its index/total, and must keep the
- * four shell decisions and their meaning.
+ * four shell decisions and their meaning. The integration block drives the
+ * real `installPermissionGate` handler to prove `permissions.ts` passes the
+ * rule's reason, never its regex, into the prompt.
  */
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	buildPromptModel,
 	plainPromptTitle,
 	type PromptModel,
 } from "./permission-prompt.ts";
+import { installPermissionGate } from "./permissions.ts";
+import type { AgentConfig, PermissionRule } from "./resolver.ts";
 
 const REASON = "orchestrator commit requires user approval";
 const REGEX = "(?:^|[;&|(\\n])\\s*git\\s+(push|pull)\\b";
@@ -141,4 +150,78 @@ test("plainPromptTitle carries the target, blocked part, and Why", () => {
 	assert.ok(title.includes(model.target));
 	assert.ok(title.includes("Blocked part (2 of 3)"));
 	assert.ok(title.includes(`Why: ${REASON}`));
+});
+
+// ---------------------------------------------------------------------------
+// Integration: drive the real gate handler, not a mirror of it.
+// `permissions.ts` must hand the rule's human `reason` to the prompt. A
+// regression that passes `rule.match` instead would leak the regex into the
+// select title and turn this test red.
+// ---------------------------------------------------------------------------
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// An isolated (empty) global permissions file so the repo file cannot interfere.
+const isolatedGlobalFile = path.join(
+	fs.mkdtempSync(path.join(os.tmpdir(), "reason-gate-")),
+	"permissions.json",
+);
+fs.writeFileSync(isolatedGlobalFile, JSON.stringify({ deny: [], ask: [] }));
+process.env.PI_PERMISSIONS_FILE = isolatedGlobalFile;
+
+type ToolCallContext = {
+	cwd: string;
+	hasUI: boolean;
+	mode: string;
+	ui: { select(title: string, options: string[]): Promise<string | undefined> };
+};
+type ToolCallHandler = (
+	event: { toolName: string; input: Record<string, unknown> },
+	ctx: ToolCallContext,
+) => unknown;
+
+/** Install the real gate and return its captured `tool_call` handler. */
+function installAskGate(ask: PermissionRule[]): ToolCallHandler {
+	let captured: ToolCallHandler | null = null;
+	const pi = {
+		on(name: string, handler: ToolCallHandler): void {
+			if (name === "tool_call") captured = handler;
+		},
+		events: { emit: (): void => {} },
+	};
+	const agent: AgentConfig = {
+		name: "orchestrator",
+		description: "integration test agent",
+		systemPrompt: "",
+		source: "package",
+		filePath: "",
+		permissions: { mode: "deny-by-default", ask },
+	};
+	installPermissionGate(pi as unknown as ExtensionAPI, () => agent);
+	assert.ok(captured, "the gate must register a tool_call handler");
+	return captured;
+}
+
+test("the real gate prompt title carries the rule reason, not the rule regex", async () => {
+	const reason = "orchestrator commit requires user approval";
+	const regex = "\\bgit\\s+commit\\b";
+	const handler = installAskGate([{ tool: "bash", match: regex, reason }]);
+
+	let capturedTitle = "";
+	const ctx: ToolCallContext = {
+		cwd: repoRoot,
+		hasUI: true,
+		mode: "rpc", // non-TUI: renderPermissionPrompt uses ctx.ui.select
+		ui: {
+			async select(title: string): Promise<string | undefined> {
+				capturedTitle = title;
+				return undefined; // cancel => deny (fail closed)
+			},
+		},
+	};
+
+	await handler({ toolName: "bash", input: { command: "git commit -m tinker" } }, ctx);
+
+	assert.ok(capturedTitle.includes(reason), `title must show the reason: ${capturedTitle}`);
+	assert.ok(!capturedTitle.includes(regex), `title must not leak the regex: ${capturedTitle}`);
 });

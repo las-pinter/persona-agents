@@ -197,8 +197,10 @@ function renderPanel(
 		return body.map((line) => mod.truncateToWidth(line, total, "…", false));
 	}
 
-	const title = theme.fg("border", "─ ") + theme.fg("accent", theme.bold(model.title)) +
+	// Clip the title so a long title never pushes the top border past the panel width.
+	const rawTitle = theme.fg("border", "─ ") + theme.fg("accent", theme.bold(model.title)) +
 		theme.fg("border", ` ── ${model.toolName} `);
+	const title = mod.truncateToWidth(rawTitle, Math.max(0, total - 2), "…", false);
 	const used = 2 + mod.visibleWidth(title);
 	const top = theme.fg("border", "┌") + title + theme.fg("border", "─".repeat(Math.max(0, total - used)) + "┐");
 
