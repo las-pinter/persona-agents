@@ -112,7 +112,7 @@ function emptySnapshot(): SidebarSnapshot {
 		changedCount: 0,
 		files: [],
 	};
-	return { cwd: "", tree: [], session, workspace, mcp: [], todos: [], tps: 0 };
+	return { cwd: "", tree: [], session, workspace, mcp: [], todos: [], todosTurnMarker: false, tps: 0 };
 }
 
 /** The agent directory's `mcp.json`, guarded against a missing helper. */
@@ -495,7 +495,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 	/** Apply one `persona-agents/todos/v1` payload. Bad data is ignored. */
 	function applyTodoPayload(data: unknown): void {
 		if (typeof data !== "object" || data === null) return;
-		const payload = data as { todos?: unknown; nextId?: unknown };
+		const payload = data as { todos?: unknown; nextId?: unknown; showTurnMarker?: unknown };
 		if (!Array.isArray(payload.todos)) return;
 		const todos: Array<{ id: string; text: string; done: boolean }> = [];
 		for (const item of payload.todos) {
@@ -509,6 +509,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			});
 		}
 		state.snapshot.todos = todos;
+		state.snapshot.todosTurnMarker = payload.showTurnMarker === true;
 		if (typeof payload.nextId === "number" && Number.isFinite(payload.nextId)) {
 			state.todosNextId = payload.nextId;
 		}
@@ -523,9 +524,11 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 				text: todo.text,
 				done: todo.done,
 			}));
+			state.snapshot.todosTurnMarker = reconstructed.showTurnMarker;
 			state.todosNextId = reconstructed.nextId;
 		} catch {
 			state.snapshot.todos = [];
+			state.snapshot.todosTurnMarker = false;
 		}
 	}
 

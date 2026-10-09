@@ -456,6 +456,7 @@ test("todo glyphs use the success and dim tokens", () => {
 			{ id: "2", text: "open", done: false },
 		],
 		60,
+		8,
 		recording,
 	);
 	assert.ok(calls.includes("success"));
@@ -596,7 +597,7 @@ test("TODOS renders a progress line and checkbox lines", () => {
 		{ id: "1", text: "write code", done: true },
 		{ id: "2", text: "write tests", done: false },
 	];
-	const lines = content(renderTodosPanel(todos, 60, theme));
+	const lines = content(renderTodosPanel(todos, 60, 8, theme));
 	assert.equal(lines[0]?.trimEnd(), " TODOS");
 	assert.ok(lines.includes("1/2"));
 	assert.ok(lines.some((line) => line.includes("✓ write code")));
@@ -604,7 +605,7 @@ test("TODOS renders a progress line and checkbox lines", () => {
 });
 
 test("an empty TODOS list renders (no todos)", () => {
-	const lines = content(renderTodosPanel([], 60, theme));
+	const lines = content(renderTodosPanel([], 60, 8, theme));
 	assert.ok(lines.includes("(no todos)"));
 });
 
@@ -614,8 +615,106 @@ test("a long todo list clips with a more marker", () => {
 		text: `todo ${index}`,
 		done: false,
 	}));
-	const lines = renderTodosPanel(todos, 60, theme);
-	assert.ok(lines.some((line) => line.includes("… +2 more")));
+	const lines = renderTodosPanel(todos, 60, 4, theme);
+	assert.ok(lines.some((line) => line.includes("… +5 more")));
+});
+
+test("six todos at height 12 show all six without an overflow line", () => {
+	const todos: TodoSnapshot = Array.from({ length: 6 }, (_value, index) => ({
+		id: String(index),
+		text: `todo ${index}`,
+		done: false,
+	}));
+	const lines = content(renderTodosPanel(todos, 60, 12, theme));
+	assert.equal(lines.length, 8, "header, summary, and six item lines");
+	assert.ok(lines.some((line) => line.includes("todo 5")));
+	assert.ok(!lines.some((line) => line.includes("more")));
+});
+
+test("the turn marker renders when requested", () => {
+	const lines = content(
+		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, 8, theme, true),
+	);
+	assert.ok(lines.some((line) => line.includes("— new turn —")));
+});
+
+test("no turn marker renders when it is false", () => {
+	const lines = content(
+		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, 8, theme),
+	);
+	assert.ok(!lines.some((line) => line.includes("— new turn —")));
+});
+
+test("a done todo is dim and keeps its check glyph", () => {
+	const calls: Array<[string, string]> = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push([name, text]);
+			return text;
+		},
+	};
+	const lines = content(
+		renderTodosPanel([{ id: "1", text: "finished", done: true }], 60, 8, recording),
+	);
+	assert.ok(lines.some((line) => line.includes("✓ finished")));
+	assert.ok(calls.some(([name, text]) => name === "dim" && text === "finished"));
+});
+
+test("all done todos render the all-done cue", () => {
+	const lines = content(
+		renderTodosPanel(
+			[
+				{ id: "1", text: "a", done: true },
+				{ id: "2", text: "b", done: true },
+			],
+			60,
+			8,
+			theme,
+		),
+	);
+	assert.ok(lines.some((line) => line.includes("✓ all done")));
+});
+
+test("the all-done cue survives an item overflow", () => {
+	const todos: TodoSnapshot = Array.from({ length: 4 }, (_value, index) => ({
+		id: String(index),
+		text: `todo ${index}`,
+		done: true,
+	}));
+	const lines = content(renderTodosPanel(todos, 60, 4, theme));
+
+	assert.ok(lines.some((line) => line.includes("✓ all done")));
+	assert.ok(lines.some((line) => line.includes("… +4 more")));
+});
+
+test("an empty list still shows the turn marker", () => {
+	const lines = content(renderTodosPanel([], 60, 8, theme, true));
+
+	assert.ok(lines.some((line) => line.includes("(no todos)")));
+	assert.ok(lines.some((line) => line.includes("— new turn —")));
+});
+
+test("an empty list keeps the turn marker at a tight height", () => {
+	const lines = content(renderTodosPanel([], 60, 2, theme, true));
+
+	assert.equal(lines.length, 2, "header and marker only");
+	assert.ok(lines.some((line) => line.includes("— new turn —")));
+	assert.ok(!lines.some((line) => line.includes("(no todos)")));
+});
+
+test("height 0 renders no lines and height 1 renders only the header", () => {
+	assert.deepEqual(renderTodosPanel([{ id: "1", text: "a", done: false }], 60, 0, theme), []);
+	const headerOnly = content(
+		renderTodosPanel([{ id: "1", text: "a", done: false }], 60, 1, theme),
+	);
+	assert.deepEqual(headerOnly, [" TODOS"]);
+});
+
+test("the turn marker and all-done cue clip to a narrow width", () => {
+	for (const width of [0, 1, 5]) {
+		const lines = renderTodosPanel([{ id: "1", text: "a", done: true }], width, 8, theme, true);
+		assertFits(lines, width);
+	}
 });
 
 test("hasRunningNode is false when no node runs", () => {
@@ -853,7 +952,7 @@ for (const width of [0, 1, 45]) {
 			renderSessionPanel(makeSession(), width, theme),
 			renderWorkspacePanel(makeWorkspace(), width, theme),
 			renderMcpPanel([{ name: "context7", configured: true, connected: true, status: "connected" }], width, theme),
-			renderTodosPanel([{ id: "1", text: "do it", done: false }], width, theme),
+			renderTodosPanel([{ id: "1", text: "do it", done: false }], width, 8, theme),
 			renderSidebarPanel(
 				makeSnapshot({
 					tree: [node],
@@ -887,6 +986,35 @@ for (const height of [0, 1, 3, 8, 15, 30]) {
 		assert.ok(lines.length <= height, `height ${height} overflowed with ${lines.length} lines`);
 	});
 }
+
+test("renderSidebarPanel gives TODOS the leftover height and shows every item", () => {
+	const snapshot = makeSnapshot({
+		tree: [],
+		todos: Array.from({ length: 6 }, (_value, index) => ({
+			id: String(index),
+			text: `todo ${index}`,
+			done: false,
+		})),
+	});
+	const lines = renderSidebarPanel(snapshot, 80, 60, theme, 0);
+	assert.ok(lines.some((line) => line.includes("todo 5")), "the sixth item must render when height allows");
+	assert.ok(!lines.some((line) => line.includes("more")), "no overflow marker when every item fits");
+});
+
+test("renderSidebarPanel paints the turn marker from the snapshot", () => {
+	const snapshot = makeSnapshot({
+		tree: [],
+		todos: [{ id: "1", text: "open", done: false }],
+		todosTurnMarker: true,
+	});
+	const withMarker = content(renderSidebarPanel(snapshot, 80, 60, theme, 0));
+	assert.ok(withMarker.some((line) => line.includes("— new turn —")));
+
+	const withoutMarker = content(
+		renderSidebarPanel(makeSnapshot({ tree: [], todos: [{ id: "1", text: "open", done: false }] }), 80, 60, theme, 0),
+	);
+	assert.ok(!withoutMarker.some((line) => line.includes("— new turn —")));
+});
 
 test("renderSidebarPanel drops lower panels first", () => {
 	const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
@@ -1032,6 +1160,12 @@ test("treeSignature changes when only an MCP status changes", () => {
 test("treeSignature changes when a todos field changes", () => {
 	const before = treeSignature(makeSnapshot({ todos: [{ id: "1", text: "first", done: false }] }));
 	const after = treeSignature(makeSnapshot({ todos: [{ id: "1", text: "second", done: false }] }));
+	assert.notEqual(before, after);
+});
+
+test("treeSignature changes when the todos turn marker changes", () => {
+	const before = treeSignature(makeSnapshot({ todosTurnMarker: false }));
+	const after = treeSignature(makeSnapshot({ todosTurnMarker: true }));
 	assert.notEqual(before, after);
 });
 

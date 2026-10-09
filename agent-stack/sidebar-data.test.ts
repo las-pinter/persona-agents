@@ -15,6 +15,7 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createSidebarData } from "./sidebar-data.ts";
+import { TODOS_EVENT_CHANNEL, TODOS_TURN_ENTRY } from "./todo-tool.ts";
 import type { McpSnapshot, SessionSnapshot, WorkspaceFileSnapshot } from "./sidebar-render.ts";
 
 /** A scripted response for the two git calls the collector makes. */
@@ -344,4 +345,134 @@ test("a user message is not counted as an assistant turn", () => {
 	assert.equal(session.turns, 1);
 	assert.equal(session.tokensIn, 7);
 	assert.equal(session.tokensOut, 3);
+});
+
+// --- todo turn marker plumbing -----------------------------------------------
+
+/** A fake pi whose event bus exposes the registered TODOS handler. */
+function makeEventBusPi(): { pi: ExtensionAPI; handlers: Map<string, (data: unknown) => void> } {
+	const handlers = new Map<string, (data: unknown) => void>();
+	const base = makeFakePi({}) as unknown as Record<string, unknown>;
+	base.events = {
+		on: (channel: string, handler: (data: unknown) => void) => {
+			handlers.set(channel, handler);
+			return () => {};
+		},
+		emit: () => {},
+	};
+	return { pi: base as unknown as ExtensionAPI, handlers };
+}
+
+test("a todo payload with showTurnMarker true sets the snapshot marker", () => {
+	const { pi, handlers } = makeEventBusPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		assert.equal(data.snapshot().todosTurnMarker, false, "the default is no marker");
+
+		handlers.get(TODOS_EVENT_CHANNEL)?.({
+			todos: [{ id: "1", text: "a", done: false }],
+			nextId: 2,
+			showTurnMarker: true,
+		});
+		assert.equal(data.snapshot().todosTurnMarker, true);
+
+		handlers.get(TODOS_EVENT_CHANNEL)?.({ todos: [], nextId: 1 });
+		assert.equal(data.snapshot().todosTurnMarker, false, "a payload without the flag clears it");
+	} finally {
+		data.dispose();
+	}
+});
+
+test("refreshTodosFromEntries carries the reconstructed turn marker", () => {
+	const branch = [
+		{
+			type: "custom",
+			customType: TODOS_TURN_ENTRY,
+			data: {
+				todos: [{ id: "1", text: "a", done: false }],
+				nextId: 2,
+				turn: 3,
+				showTurnMarker: true,
+			},
+		},
+	];
+	const data = createSidebarData(makeFakePi({}));
+	try {
+		data.subscribe(makeFakeCtx(branch));
+		assert.equal(data.snapshot().todosTurnMarker, true);
+		assert.deepEqual(data.snapshot().todos, [{ id: "1", text: "a", done: false }]);
+	} finally {
+		data.dispose();
+	}
+});
+
+/** A fake pi that captures the `pi.on` handlers, so tests can fire session events. */
+function makeCapturingPi(): {
+	pi: ExtensionAPI;
+	piHandlers: Map<string, (event: unknown, ctx: unknown) => void>;
+} {
+	const piHandlers = new Map<string, (event: unknown, ctx: unknown) => void>();
+	const base = makeFakePi({}) as unknown as Record<string, unknown>;
+	base.on = (event: string, handler: (event: unknown, ctx: unknown) => void) => {
+		piHandlers.set(event, handler);
+		return () => {};
+	};
+	return { pi: base as unknown as ExtensionAPI, piHandlers };
+}
+
+/** A branch that reconstructs to a single open todo and an active turn marker. */
+function markedBranch(): unknown[] {
+	return [
+		{
+			type: "custom",
+			customType: TODOS_TURN_ENTRY,
+			data: {
+				todos: [{ id: "1", text: "a", done: false }],
+				nextId: 2,
+				turn: 3,
+				showTurnMarker: true,
+			},
+		},
+	];
+}
+
+test("a failed todo refresh clears the todos and the turn marker", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx(markedBranch()));
+		assert.equal(data.snapshot().todosTurnMarker, true, "the marker is set before the failure");
+
+		const throwingCtx = {
+			...makeFakeCtx([]),
+			sessionManager: {
+				getBranch: () => {
+					throw new Error("branch-boom");
+				},
+			},
+		} as unknown as ExtensionContext;
+		piHandlers.get("session_start")?.({}, throwingCtx);
+
+		assert.deepEqual(data.snapshot().todos, [], "the failed refresh clears the list");
+		assert.equal(data.snapshot().todosTurnMarker, false, "the failed refresh clears the marker");
+	} finally {
+		data.dispose();
+	}
+});
+
+test("agent_end does not clear the turn marker", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx(markedBranch()));
+		assert.equal(data.snapshot().todosTurnMarker, true);
+
+		// An empty branch would clear the marker if agent_end refreshed the todos.
+		piHandlers.get("agent_end")?.({}, makeFakeCtx([]));
+
+		assert.equal(data.snapshot().todosTurnMarker, true, "the marker survives the end of the turn");
+	} finally {
+		data.dispose();
+	}
 });

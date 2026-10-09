@@ -18,8 +18,6 @@ export const WORKSPACE_CHANGED_SHOWN = 4;
 export const WORKSPACE_FILES_SHOWN = 4;
 /** Server lines shown in MCP before the `… +N more` mark. */
 export const MCP_SERVERS_SHOWN = 4;
-/** Todo lines shown in TODOS before the `… +N more` mark. */
-export const TODOS_SHOWN = 4;
 /** Output-preview lines kept in the node detail overlay. */
 export const DETAIL_PREVIEW_LINES = 20;
 /** Fixed cell count of the SESSION context fill bar. */
@@ -126,6 +124,8 @@ export interface SidebarSnapshot {
 	workspace: WorkspaceSnapshot;
 	mcp: McpSnapshot;
 	todos: TodoSnapshot;
+	/** True when the TODOS panel paints the last turn boundary. */
+	todosTurnMarker?: boolean;
 	tps: number;
 }
 
@@ -574,30 +574,50 @@ export function renderMcpPanel(
 	return lines.map((line) => clipLine(line, width));
 }
 
-/** The TODOS panel: header plus a progress line and todo lines. */
+/** The TODOS panel: header, progress, an optional turn marker, and item lines. */
 export function renderTodosPanel(
 	todos: TodoSnapshot | null | undefined,
 	width: number,
+	height: number,
 	theme: SidebarTheme,
+	showTurnMarker: boolean = false,
 ): string[] {
+	const budget = Math.max(0, Math.floor(height));
+	if (budget <= 0) return [];
 	const lines: string[] = [header(theme, " TODOS ")];
 	const items = todos ?? [];
 
 	if (items.length === 0) {
-		lines.push("(no todos)");
+		// Reserve the marker line first, so an emptied list keeps the boundary cue.
+		const markerReserve = showTurnMarker ? 1 : 0;
+		if (budget >= 2 + markerReserve) lines.push("(no todos)");
+		if (showTurnMarker && lines.length < budget) lines.push(styleDim(theme, "— new turn —"));
 		return lines.map((line) => clipLine(line, width));
 	}
+	if (budget < 2) return lines.map((line) => clipLine(line, width));
 
 	const done = items.filter((item) => item.done).length;
+	const allDone = done === items.length;
 	lines.push(`${done}/${items.length}`);
+	if (showTurnMarker && lines.length < budget) lines.push(styleDim(theme, "— new turn —"));
+	// Reserve the all-done cue before the item lines, so an overflow never drops it.
+	if (allDone && lines.length < budget) lines.push(styleDim(theme, "✓ all done"));
 
-	const shown = items.slice(0, TODOS_SHOWN);
-	for (const item of shown) {
+	const itemBudget = budget - lines.length;
+	if (itemBudget <= 0) return lines.map((line) => clipLine(line, width));
+
+	const itemLine = (item: TodoItem): string => {
 		const glyph = color(theme, item.done ? "success" : "dim", item.done ? "✓" : "○");
-		lines.push(`${glyph} ${oneLine(item.text ?? "")}`);
-	}
-	if (items.length > shown.length) {
-		lines.push(styleDim(theme, `… +${items.length - shown.length} more`));
+		const text = oneLine(item.text ?? "");
+		return `${glyph} ${item.done ? styleDim(theme, text) : text}`;
+	};
+
+	if (itemBudget >= items.length) {
+		for (const item of items) lines.push(itemLine(item));
+	} else {
+		const shown = Math.max(0, itemBudget - 1);
+		for (const item of items.slice(0, shown)) lines.push(itemLine(item));
+		lines.push(styleDim(theme, `… +${items.length - shown} more`));
 	}
 	return lines.map((line) => clipLine(line, width));
 }
@@ -708,6 +728,7 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		workspace,
 		mcp,
 		todos,
+		todosTurnMarker: snapshot.todosTurnMarker === true,
 		tps: snapshot.tps,
 	});
 }
@@ -775,13 +796,21 @@ export function renderSidebarPanel(
 	const ctx: PanelContext = { width, height: limit, frame };
 
 	const now = Date.now();
-	const panels: string[][] = [
-		renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now),
-		renderSessionPanel(snapshot.session, width, theme, now),
-		renderWorkspacePanel(snapshot.workspace, width, theme),
-		renderMcpPanel(snapshot.mcp, width, theme),
-		renderTodosPanel(snapshot.todos, width, theme),
-	];
-
+	const treePanel = renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now);
+	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
+	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
+	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme);
+	const upper = [treePanel, sessionPanel, workspacePanel, mcpPanel];
+	// The +upper.length counts the section rules, including the rule before TODOS.
+	const usedByUpper = upper.reduce((sum, panel) => sum + panel.length, 0) + upper.length;
+	const todosHeight = Math.max(0, limit - usedByUpper);
+	const todosPanel = renderTodosPanel(
+		snapshot.todos,
+		width,
+		todosHeight,
+		theme,
+		snapshot.todosTurnMarker === true,
+	);
+	const panels = [...upper, todosPanel].filter((panel) => panel.length > 0);
 	return composePanels(ctx, panels, theme);
 }

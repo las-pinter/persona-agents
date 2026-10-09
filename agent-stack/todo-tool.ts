@@ -12,6 +12,7 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { isRootProcessEnv } from "./depth.ts";
 
 /** One todo item. `id` is a string so it can feed the pure renderer directly. */
 export interface Todo {
@@ -35,6 +36,10 @@ export interface TodoDetails {
 export interface TodoState {
 	todos: Todo[];
 	nextId: number;
+	/** User turns since the session started. */
+	turn: number;
+	/** True after a turn boundary, until the next boundary replaces it. */
+	showTurnMarker: boolean;
 }
 
 /** Input for one pure operation. */
@@ -64,6 +69,10 @@ export interface TodoOperationOutcome {
  */
 export interface TodoSessionEntry {
 	type?: string;
+	/** Present on a custom entry; names the payload kind. */
+	customType?: string;
+	/** Present on a custom entry; holds the persisted payload. */
+	data?: unknown;
 	message?:
 		| {
 				role?: string;
@@ -76,6 +85,9 @@ export interface TodoSessionEntry {
 /** pi.events channel that publishes the todo snapshot. */
 export const TODOS_EVENT_CHANNEL = "persona-agents/todos/v1";
 
+/** Custom session entry that records one turn boundary. */
+export const TODOS_TURN_ENTRY = "persona-agents/todos-turn/v1";
+
 /** TypeBox schema for the `todo` tool input. */
 export const TodoParams = Type.Object({
 	action: StringEnum(["list", "add", "toggle", "remove", "clear"] as const),
@@ -85,12 +97,23 @@ export const TodoParams = Type.Object({
 
 /** A fresh empty state. */
 export function emptyTodoState(): TodoState {
-	return { todos: [], nextId: 1 };
+	return { todos: [], nextId: 1, turn: 0, showTurnMarker: false };
 }
 
 /** Copy a state so callers cannot mutate the input through the result. */
 function cloneState(state: TodoState): TodoState {
-	return { todos: state.todos.map((todo) => ({ ...todo })), nextId: state.nextId };
+	return {
+		todos: state.todos.map((todo) => ({ ...todo })),
+		nextId: state.nextId,
+		turn: state.turn,
+		showTurnMarker: state.showTurnMarker,
+	};
+}
+
+/** Advance one user turn: drop done todos, bump the counter, raise the marker. Pure. */
+export function beginTurn(state: TodoState): TodoState {
+	const kept = state.todos.filter((todo) => !todo.done).map((todo) => ({ ...todo }));
+	return { todos: kept, nextId: state.nextId, turn: state.turn + 1, showTurnMarker: true };
 }
 
 /** A one-line-per-todo summary for the model. */
@@ -204,6 +227,18 @@ function isTodoDetails(value: unknown): value is TodoDetails {
 	return Array.isArray(candidate.todos) && typeof candidate.nextId === "number" && Number.isFinite(candidate.nextId);
 }
 
+/** Type guard for a stored turn-boundary payload. */
+function isTodoStateData(value: unknown): value is {
+	todos: unknown[];
+	nextId: number;
+	turn?: number;
+	showTurnMarker?: boolean;
+} {
+	if (typeof value !== "object" || value === null) return false;
+	const c = value as { todos?: unknown; nextId?: unknown };
+	return Array.isArray(c.todos) && typeof c.nextId === "number" && Number.isFinite(c.nextId);
+}
+
 /** Copy stored todos and drop malformed items. */
 function cloneStoredTodos(todos: readonly unknown[]): Todo[] {
 	const result: Todo[] = [];
@@ -223,13 +258,37 @@ function cloneStoredTodos(todos: readonly unknown[]): Todo[] {
 export function reconstructTodosFromEntries(entries: readonly TodoSessionEntry[]): TodoState {
 	let state = emptyTodoState();
 	for (const entry of entries) {
+		if (entry?.type === "custom" && entry.customType === TODOS_TURN_ENTRY && isTodoStateData(entry.data)) {
+			const data = entry.data;
+			state = {
+				todos: cloneStoredTodos(data.todos),
+				nextId: data.nextId,
+				turn: typeof data.turn === "number" && Number.isFinite(data.turn) ? data.turn : state.turn,
+				showTurnMarker: data.showTurnMarker === true,
+			};
+			continue;
+		}
 		if (entry?.type !== "message") continue;
 		const message = entry.message;
 		if (!message || message.role !== "toolResult" || message.toolName !== "todo") continue;
 		if (!isTodoDetails(message.details)) continue;
-		state = { todos: cloneStoredTodos(message.details.todos), nextId: message.details.nextId };
+		state = { ...state, todos: cloneStoredTodos(message.details.todos), nextId: message.details.nextId };
 	}
 	return state;
+}
+
+/** Persist one turn boundary. Best-effort: the in-memory state still prunes. */
+function persistTurnBoundary(pi: ExtensionAPI, state: TodoState): void {
+	try {
+		pi.appendEntry(TODOS_TURN_ENTRY, {
+			todos: state.todos.map((todo) => ({ ...todo })),
+			nextId: state.nextId,
+			turn: state.turn,
+			showTurnMarker: state.showTurnMarker,
+		});
+	} catch {
+		/* persistence is best-effort; the in-memory state is still pruned */
+	}
 }
 
 /** Emit the snapshot. A missing subscriber must never break a tool call. */
@@ -238,6 +297,8 @@ function emitTodos(pi: ExtensionAPI, state: TodoState): void {
 		pi.events.emit(TODOS_EVENT_CHANNEL, {
 			todos: state.todos.map((todo) => ({ ...todo })),
 			nextId: state.nextId,
+			turn: state.turn,
+			showTurnMarker: state.showTurnMarker,
 			at: new Date().toISOString(),
 		});
 	} catch {
@@ -259,6 +320,14 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 
 	pi.on("session_start", (_event, ctx) => reconstruct(ctx));
 	pi.on("session_tree", (_event, ctx) => reconstruct(ctx));
+
+	pi.on("before_agent_start", () => {
+		// Root only: a child process has no sidebar. Its parent id is set.
+		if (!isRootProcessEnv(process.env)) return;
+		state = beginTurn(state);
+		persistTurnBoundary(pi, state);
+		emitTodos(pi, state);
+	});
 
 	pi.registerTool({
 		name: "todo",
