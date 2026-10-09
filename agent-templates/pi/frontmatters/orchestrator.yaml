@@ -6,7 +6,7 @@ description: Coordinates work by delegating to subagents; routes tasks, manages 
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/simplified-technical-english"]
-alwaysLoad: ["orchestrator/journal-management", "orchestrator/project-notes", "common/simplified-technical-english"]
+alwaysLoad: ["orchestrator/journal-management", "orchestrator/project-notes", "orchestrator/commit-hygiene", "common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:

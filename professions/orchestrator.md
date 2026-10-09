@@ -92,4 +92,5 @@ Do NOT load skills that belong to subagents you delegate to.
 - **journal-management** (`skills/orchestrator/journal-management/`) — Hierarchical journal system for operational context with time-based consolidation.
 - **project-notes** (`skills/orchestrator/project-notes/`) — Plain, persona-free project context management.
 - **plan-tracking** (`skills/orchestrator/plan-tracking/`) — Complete plan lifecycle management: listing, marking status, verifying integrity, reporting.
+- **commit-hygiene** (`skills/orchestrator/commit-hygiene/`) — Final quality gate on completed work: review the commit chain, verify the tree, and squash workarounds before push.
 - **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

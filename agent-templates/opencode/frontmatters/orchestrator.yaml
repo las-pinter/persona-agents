@@ -359,6 +359,9 @@ permissions:
     resource: plan-tracking
     effect: allow
   - action: skill
+    resource: commit-hygiene
+    effect: allow
+  - action: skill
     resource: task-routing
     effect: allow
   - action: skill
