@@ -44,6 +44,16 @@ permission:
     "rsync *": ask
     "git push *": deny
     "git pull *": deny
+    "git merge": deny
+    "git merge *": deny
+    "* git merge": deny
+    "* git merge *": deny
+    "*;git merge": deny
+    "*&&git merge": deny
+    "*|git merge": deny
+    "*;git merge *": deny
+    "*&&git merge *": deny
+    "*|git merge *": deny
     "git add *": deny
     "git commit *": deny
     "gh pr *": deny

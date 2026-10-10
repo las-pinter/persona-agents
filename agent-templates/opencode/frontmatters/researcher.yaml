@@ -215,6 +215,36 @@ permissions:
     resource: "git pull *"
     effect: deny
   - action: shell
+    resource: "git merge"
+    effect: deny
+  - action: shell
+    resource: "git merge *"
+    effect: deny
+  - action: shell
+    resource: "* git merge"
+    effect: deny
+  - action: shell
+    resource: "* git merge *"
+    effect: deny
+  - action: shell
+    resource: "*;git merge"
+    effect: deny
+  - action: shell
+    resource: "*&&git merge"
+    effect: deny
+  - action: shell
+    resource: "*|git merge"
+    effect: deny
+  - action: shell
+    resource: "*;git merge *"
+    effect: deny
+  - action: shell
+    resource: "*&&git merge *"
+    effect: deny
+  - action: shell
+    resource: "*|git merge *"
+    effect: deny
+  - action: shell
     resource: "git -C * add *"
     effect: deny
   - action: shell

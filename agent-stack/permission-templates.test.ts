@@ -1165,3 +1165,90 @@ describe("opencode/kiro: accepted over-deny for read-only tag long options", () 
 		assert.equal(verdict("orchestrator", "git tag --format=%(refname) -l"), "ask");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Git merge doctrine: a merge writes history, so it asks the orchestrator on
+// pi/opencode and stays unlisted (ask) on kiro. Every non-orchestrator must not
+// merge: pi blocks by deny-by-default mode; opencode and kiro carry explicit
+// deny rules.
+// ---------------------------------------------------------------------------
+
+const MERGE_COMMANDS = ["git merge origin/main", "cd /repo && git merge origin/main"];
+
+// A boundary slip in the merge rules would turn the read-only `git merge-base`
+// into an ask (opencode, where the last match wins) or a deny (kiro).
+const MERGE_BASE_COMMANDS = ["git merge-base origin/dev origin/main"];
+
+describe("git merge permission doctrine", () => {
+	test("pi orchestrator: git merge asks", () => {
+		for (const command of MERGE_COMMANDS) assert.equal(verdict("orchestrator", command), "ask", command);
+	});
+
+	test("pi non-orchestrators: git merge defaults to deny", () => {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
+			for (const command of MERGE_COMMANDS) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator: git merge asks", () => {
+		for (const command of MERGE_COMMANDS) assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+	});
+
+	test("opencode non-orchestrators: git merge denies", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of MERGE_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro orchestrator: git merge defaults to ask", () => {
+		for (const command of MERGE_COMMANDS) assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+	});
+
+	test("kiro non-orchestrators: git merge denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of MERGE_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator: git merge-base stays allow (not ask, not deny)", () => {
+		for (const command of MERGE_BASE_COMMANDS) {
+			assert.equal(opencodeVerdict("orchestrator", command), "allow", command);
+		}
+	});
+
+	test("kiro orchestrator: git merge-base is not denied", () => {
+		for (const command of MERGE_BASE_COMMANDS) {
+			assert.notEqual(kiroVerdict("orchestrator", command), "deny", command);
+		}
+	});
+
+	test("pi orchestrator: git merge-base is not ask and not deny", () => {
+		for (const command of MERGE_BASE_COMMANDS) {
+			const kind = verdict("orchestrator", command);
+			assert.notEqual(kind, "ask", command);
+			assert.notEqual(kind, "deny", command);
+		}
+	});
+
+	test("opencode non-orchestrators: git merge-base is not denied", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of MERGE_BASE_COMMANDS) {
+				assert.notEqual(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: git merge-base is not denied", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of MERGE_BASE_COMMANDS) {
+				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+});

@@ -140,7 +140,7 @@ permissions:
     resource: "git cat-file"
     effect: allow
   - action: shell
-    resource: "git merge-base"
+    resource: "git merge-base *"
     effect: allow
   - action: shell
     resource: "git fetch"
@@ -204,6 +204,36 @@ permissions:
     effect: ask
   - action: shell
     resource: "git pull *"
+    effect: ask
+  - action: shell
+    resource: "git merge"
+    effect: ask
+  - action: shell
+    resource: "git merge *"
+    effect: ask
+  - action: shell
+    resource: "* git merge"
+    effect: ask
+  - action: shell
+    resource: "* git merge *"
+    effect: ask
+  - action: shell
+    resource: "*;git merge"
+    effect: ask
+  - action: shell
+    resource: "*&&git merge"
+    effect: ask
+  - action: shell
+    resource: "*|git merge"
+    effect: ask
+  - action: shell
+    resource: "*;git merge *"
+    effect: ask
+  - action: shell
+    resource: "*&&git merge *"
+    effect: ask
+  - action: shell
+    resource: "*|git merge *"
     effect: ask
   - action: shell
     resource: "gh pr *"
