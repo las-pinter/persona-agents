@@ -19,6 +19,7 @@ welcome here.
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
 - [Style Guide](#style-guide)
+- [Versioning and Release](#versioning-and-release)
 - [License](#license)
 
 ---
@@ -35,8 +36,8 @@ installable extension package.
 The original system at its core is a **template-based agent generation system**.
 
 **`agents.json`** is the source of truth — a registry that defines which themes
-(e.g., `goblin`, `wh40k`, `wh40kOrk`) exist and which professions each theme
-supports. Each theme+profession combination maps to a persona file, a
+exist (`goblin`, `wh40k`, `wh40kOrk`, `pub`, `caveman`, `cyberpunk`, `catcrew`,
+`fantasy`) and which professions each theme supports. Each theme+profession combination maps to a persona file, a
 description, and a welcome message.
 
 **Templates** define the platform-specific configuration for each profession:
@@ -44,7 +45,7 @@ description, and a welcome message.
 - `agent-templates/kiro/{profession}.json` — Kiro JSON format with tool
   permissions, allowed commands, subagent config, etc.
 - `agent-templates/opencode/frontmatters/{profession}.yaml` — OpenCode YAML
-  frontmatter with permission rules and model settings.
+  frontmatter with permission rules.
 
 **Personas** (`personas/{theme}/*.md`) provide character voice, personality,
 and speech patterns. **Professions** (`professions/*.md`) define role behavior
@@ -105,8 +106,8 @@ and the `agents.json` theme ↔ profession persona mapping. The extension adds
 spawn-based subagents (the `subagent` tool) with a 3-level nesting cap, a
 per-agent permission gate (deny-by-default + regex allow lists), a `todo` tool
 that feeds the TODOS sidebar panel, a live five-panel agent-tree sidebar, and
-the `/agents`, `/persona`, `/skills`, `/sidebar`, `/agents-tree`, and
-`/agent-inspect` slash commands. Install with the pi CLI (`pi install …`, see
+the `/agents`, `/persona`, `/skills`, `/sidebar`, `/agents-tree`,
+`/agent-inspect`, `/runs`, and `/inspect` slash commands. Install with the pi CLI (`pi install …`, see
 README.md) — `install.sh` does not generate pi files.
 
 ## Repository Structure
@@ -116,6 +117,13 @@ persona-agents/
 ├── agents.json                        # Source of truth: themes → professions → personas
 ├── agent-stack/                       # Pi extension: subagent + todo tools, permission gate, sidebar
 │   ├── extension.ts                   # Entry: wires gate, commands, tools, session hooks
+│   ├── resolver.ts                    # Composes frontmatter + profession + persona at load time
+│   ├── commands.ts                    # Registers the pi slash commands
+│   ├── command-segments.ts            # Parses permission-gated shell command segments
+│   ├── inspector.ts                   # `/runs` run archive, `/inspect` overlay
+│   ├── permissions.ts                 # Per-agent permission gate (deny-by-default + allow lists)
+│   ├── permission-prompt.ts           # ASK prompt rendering for gated tools
+│   ├── state.ts                       # Shared session state for the extension
 │   ├── subagent.ts                    # Spawn-based subagent tool + tree logging
 │   ├── todo-tool.ts                   # `todo` tool: session-entry state + todos event
 │   ├── depth.ts                       # Nesting depth cap + parent `--tools` strip
@@ -124,12 +132,17 @@ persona-agents/
 │   ├── sidebar-render.ts              # Pure five-panel renderers
 │   ├── sidebar-data.ts                # Snapshot collector (events + polls)
 │   ├── sidebar.ts                     # Right-column compositor + /sidebar config
-│   └── tree-ui.ts                     # Sidebar glue, overlays, lifecycle
+│   ├── tree-ui.ts                     # Sidebar glue, `/agents-tree`, `/agent-inspect`
+│   ├── README.md                      # Architecture notes for the extension
+│   ├── fixtures/                      # Test fixtures for the extension
+│   └── *.test.ts                      # Node test suites (run by `npm test`)
 ├── agent-templates/
 │   ├── kiro/                          # Kiro JSON templates per profession
 │   │   ├── orchestrator.json
 │   │   ├── planner.json
 │   │   ├── implementer.json
+│   │   ├── implementer-python.json
+│   │   ├── implementer-react.json
 │   │   ├── reviewer.json
 │   │   ├── tester.json
 │   │   ├── researcher.json
@@ -140,6 +153,8 @@ persona-agents/
 │   │       ├── orchestrator.yaml
 │   │       ├── planner.yaml
 │   │       ├── implementer.yaml
+│   │       ├── implementer-python.yaml
+│   │       ├── implementer-react.yaml
 │   │       ├── reviewer.yaml
 │   │       ├── tester.yaml
 │   │       ├── researcher.yaml
@@ -166,13 +181,18 @@ persona-agents/
 │   │   ├── gibz-psycho.md
 │   │   └── kommissnik.md
 │   ├── wh40k/                         # WH40K Warband persona files
-│   │   └── ...
-│   └── wh40kOrk/                      # WH40K Ork Warband persona files
-│       └── ...
+│   ├── wh40kOrk/                      # WH40K Ork Warband persona files
+│   ├── pub/                           # Pub persona files
+│   ├── caveman/                       # Caveman persona files
+│   ├── cyberpunk/                     # Cyberpunk persona files
+│   ├── catcrew/                       # Cat crew persona files
+│   └── fantasy/                       # Fantasy guild persona files
 ├── professions/                       # Role behavior definitions (one per role)
 │   ├── orchestrator.md
 │   ├── planner.md
 │   ├── implementer.md
+│   ├── implementer-python.md
+│   ├── implementer-react.md
 │   ├── reviewer.md
 │   ├── tester.md
 │   ├── researcher.md
@@ -180,10 +200,9 @@ persona-agents/
 │   └── overseer.md
 ├── skills/                            # Skill documents organized by profession
 │   ├── orchestrator/
+│   │   ├── commit-hygiene/SKILL.md
 │   │   ├── journal-management/SKILL.md
-│   │   ├── task-routing/SKILL.md
-│   │   ├── plan-tracking/SKILL.md
-│   │   └── project-notes/SKILL.md
+│   │   └── task-routing/SKILL.md
 │   ├── implementer/
 │   │   ├── code-implementation/SKILL.md
 │   │   └── python-quality-gates/SKILL.md
@@ -197,26 +216,36 @@ persona-agents/
 │   ├── researcher/
 │   │   └── source-selection/SKILL.md
 │   ├── planner/
-│   │   ├── task-decomposition/SKILL.md
-│   │   ├── risk-and-dependency-identification/SKILL.md
-│   │   └── plan-output-template/SKILL.md
+│   │   ├── quick-study/SKILL.md
+│   │   ├── full-study/SKILL.md
+│   │   └── study-questions/SKILL.md
 │   ├── overseer/
 │   │   └── herdr/SKILL.md
 │   └── common/
 │       ├── journal-management-generic/SKILL.md
+│       ├── project-notes/SKILL.md
 │       └── simplified-technical-english/SKILL.md
 ├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
 │   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
-│   └── permission-auditor.js          # Read-only permission audit logger
+│   ├── permission-auditor.js          # Read-only permission audit logger
+│   └── herdr/overseer-herald/         # Herdr plugin for the overseer
+│       ├── herdr-plugin.toml          # Plugin manifest (independent version)
+│       ├── herald.sh                  # Plugin entry script
+│       └── README.md                  # Plugin usage notes
 ├── settings/
 │   ├── kiro-cli.json.example          # Example Kiro CLI config
 │   └── mcp.json.example               # Example MCP server config
+├── docs/
+│   └── demo/
+│       └── personas.gif               # Demo animation referenced by README.md
 ├── install.sh                         # The installer — generates agents + installs plugins
-├── package.json                       # Pi package manifest (extensions/skills metadata; typecheck script)
+├── package.json                       # Pi package manifest (extensions/skills metadata; typecheck + test scripts)
+├── tsconfig.json                      # TypeScript config for `npm run typecheck`
+├── AGENTS.md                          # Agent rules: release ritual and commit doctrine
 ├── .editorconfig                      # Editor formatting rules
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                     # CI pipeline (jq validation, shellcheck)
+│       └── ci.yml                     # CI: typecheck, tests, jq validation, shellcheck, executable-bit check
 ├── .gitignore                         # Git ignore rules (dist/, node_modules/)
 ├── .mdlrc                             # Markdown lint configuration
 ├── README.md
@@ -280,10 +309,13 @@ AT LOAD TIME (extension factory / session start):
 
 - **Separation of concerns:** Templates define *configuration*, personas define
   *voice*, professions define *behavior*. Each is independently editable.
-- **Variable substitution:** Templates never hardcode theme-specific values.
-  All 5 placeholders are substituted at install time.
+- **Variable substitution:** Kiro and OpenCode templates never hardcode
+  theme-specific values. All 5 placeholders are substituted at install time.
+  Pi frontmatters are bare YAML and use no placeholders.
 - **Three-platform output:** The same `agents.json` + templates produce agents
-  for Kiro CLI, OpenCode, and pi from a single source.
+  for Kiro CLI and OpenCode from a single source. Pi exposes only the 8
+  professions that have pi frontmatters; `implementer-python` and
+  `implementer-react` are not pi agents.
 - **On-demand loading:** The plugin loads prompts at runtime only when a stub
   comment is encountered — no pre-loading, no startup cost.
 - **Self-contained plugin:** The plugin resolves resource paths relative to its
@@ -305,23 +337,34 @@ AT LOAD TIME (extension factory / session start):
     # Check for jq (required for agent generation)
     which jq
 
-    # Check for Node.js (required for the OpenCode plugins)
+    # Check for Node.js 22+ (required by `npm test`'s --experimental-strip-types)
     node --version
+
+    # Install the pi extension devDependencies (typescript, typebox, pi packages)
+    npm install
    ```
 
-3. No build step — the OpenCode plugins (`plugins/*.js`) are plain Node.js
-   using only built-ins and are copied as-is by `install.sh`.
-
-4. (Optional) Make a test directory to inspect generated output without
-   touching your real config:
+3. Verify the TypeScript extension and run its tests:
 
    ```bash
-   mkdir -p /tmp/test-kiro /tmp/test-opencode
-   # Run dry-run to preview
+   npm run typecheck
+   npm test
+   ```
+
+4. No build step — the OpenCode plugins (`plugins/*.js`) are plain Node.js
+   using only built-ins and are copied as-is by `install.sh`.
+
+5. (Optional) Preview generated output without touching your real config.
+   `install.sh` writes generated agent files to `~/.kiro/` and
+   `~/.config/opencode/`. It also appends shell aliases to `~/.zshrc` and
+   `~/.bash_aliases`, and it copies the herdr plugin to
+   `~/.local/share/herdr/plugins/overseer-herald`. `--dry-run` writes nothing:
+
+   ```bash
    ./install.sh --dry-run --target all
    ```
 
-5. For quick iteration, use `--theme` and `--profession` filters:
+6. For quick iteration, use `--theme` and `--profession` filters:
 
    ```bash
    ./install.sh --dry-run --target opencode --theme goblin --profession orchestrator
@@ -331,7 +374,9 @@ AT LOAD TIME (extension factory / session start):
 
 Adding a new theme means creating a whole new cast of characters (e.g., a
 cyberpunk crew, a fantasy guild, a team of kitchen appliances). Each theme
-needs one persona file per profession.
+needs a persona mapping for every profession. The two implementer variants,
+`implementer-python` and `implementer-react`, share one persona file — so a
+theme has 8 distinct persona files.
 
 > **Note:** The OpenCode plugin is fully data-driven — adding a new theme
 > requires **no plugin code changes**. Just add to `agents.json` and create
@@ -343,7 +388,7 @@ needs one persona file per profession.
 
 1. **Add the theme to `agents.json`:**
 
-   Add a new top-level key with all 8 professions. Follow the existing format:
+   Add a new top-level key with all 10 professions. Follow the existing format:
 
    ```json
    {
@@ -355,6 +400,8 @@ needs one persona file per profession.
        },
        "planner": { ... },
        "implementer": { ... },
+       "implementer-python": { ... },
+       "implementer-react": { ... },
        "reviewer": { ... },
        "tester": { ... },
        "researcher": { ... },
@@ -368,14 +415,17 @@ needs one persona file per profession.
    }
    ```
 
-2. **Create 8 persona markdown files** under `personas/{new-theme}/`:
+2. **Create the persona markdown files** under `personas/{new-theme}/`.
+   The theme needs 10 `agents.json` entries but only 8 distinct persona
+   files: the `implementer-python` and `implementer-react` entries reuse the
+   base `implementer` persona file.
 
    Each file should follow the [persona format](#adding-or-modifying-personas).
 
    ```bash
    mkdir -p personas/mytheme
    touch personas/mytheme/captain-example.md
-   # ... create the other 7
+   # ... create the other 7 distinct persona files
    ```
 
 3. **Run the installer** to verify everything generates correctly:
@@ -392,7 +442,7 @@ needs one persona file per profession.
 
 ### What you get
 
-The installer will generate 8 agents (one per profession) for both Kiro and
+The installer will generate 10 agents (one per profession) for both Kiro and
 OpenCode targets, each combining the template, profession rules, and your new
 persona. For OpenCode, the generated `.md` files will contain the YAML
 frontmatter plus a stub comment for runtime injection. Your theme's agents are
@@ -405,8 +455,9 @@ patterns, and tool permissions. Adding a new profession (e.g., `architect`,
 `scrum-master`, `devops`) makes it available to all existing themes.
 
 > **Note:** The OpenCode plugin is fully data-driven — adding a new profession
-> requires **no plugin code changes**. You only need a template + a
-> `profession.md` file + an `agents.json` entry. The stub comment format
+> requires **no plugin code changes**. You need a Kiro template, an OpenCode
+> frontmatter, a pi frontmatter, a `profession.md` file, and an `agents.json`
+> entry. The stub comment format
 > (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`) contains the
 > profession name in the agent name portion, parsed dynamically at runtime.
 
@@ -427,7 +478,7 @@ patterns, and tool permissions. Adding a new profession (e.g., `architect`,
    ```
 
    Follow the existing templates for structure. Define tool permissions,
-   allowed/denied commands, subagent config, and write paths appropriate for
+   allowed/denied commands, subagent config, and edit paths appropriate for
    the new role.
 
 3. **Create an OpenCode YAML frontmatter:**
@@ -440,14 +491,23 @@ patterns, and tool permissions. Adding a new profession (e.g., `architect`,
    [Working with Templates](#working-with-templates) for details on the
    permission mapping.
 
-4. **Add the profession to each theme in `agents.json`:**
+4. **Create a pi YAML frontmatter:**
+
+   ```bash
+   touch agent-templates/pi/frontmatters/{name}.yaml
+   ```
+
+   A profession without a pi frontmatter is not exposed as a pi agent. Follow
+   the existing pi frontmatters for `name`, `description`, `tools`, `skills`,
+   `alwaysLoad`, and `permissions`.
+
+5. **Add the profession to every theme in `agents.json`:**
 
    Every theme in `agents.json` needs an entry for the new profession.
-   Add it to the existing goblin, wh40k, and wh40kOrk objects (and any other
-   themes), each with the appropriate persona file, description, and welcome
-   message.
+   Add it to all 8 themes, each with the appropriate persona file,
+   description, and welcome message.
 
-5. **(Optional) Add skills:**
+6. **(Optional) Add skills:**
 
    ```bash
    mkdir -p skills/{name}/{skill-name}
@@ -456,7 +516,7 @@ patterns, and tool permissions. Adding a new profession (e.g., `architect`,
 
    See [Adding Skills](#adding-skills).
 
-6. **Run the installer** to test:
+7. **Run the installer** to test:
 
    ```bash
    ./install.sh --dry-run --force --profession {name}
@@ -464,7 +524,7 @@ patterns, and tool permissions. Adding a new profession (e.g., `architect`,
 
 ### Template variable requirements
 
-All templates **must** support the standard 5 placeholders:
+Kiro and OpenCode templates use the standard 5 placeholders:
 
 | Placeholder | Description | Example |
 |-------------|-------------|---------|
@@ -475,6 +535,7 @@ All templates **must** support the standard 5 placeholders:
 | `{{PROFESSION}}` | Profession name | `orchestrator` |
 
 Templates that don't use all 5 are fine — just don't miss the ones you need.
+Pi frontmatters are bare YAML and use no placeholders.
 
 ## Adding or Modifying Personas
 
@@ -534,8 +595,9 @@ Additional lore or backstory.
   `##`).
 - **Sections required:** `## Personality`, `## Speech Style`, `## Rules`.
 - **Last rule** should specify the themed subagent naming convention (e.g.,
-  `goblin-*`, `wh40k-*`, `wh40kOrk-*`).
-- Sections `## Notes` is optional. Journals are not written inline in
+  `goblin-*`, `wh40k-*`, `wh40kOrk-*`, `pub-*`, `caveman-*`, `cyberpunk-*`,
+  `catcrew-*`, `fantasy-*`).
+- The `## Notes` section is optional. Journals are not written inline in
   personas — they're handled by the orchestrator's `journal-management` skill.
 - Match the tone of your theme — goblins use goblin-speak, WH40K uses
   grimdark formality, Orks use Ork-speak.
@@ -567,8 +629,9 @@ cat ~/.kiro/agents/goblin-orchestrator.json | jq '.resources'
 
 ## Working with Templates
 
-Templates are platform-specific configuration skeletons with `{{...}}`
-placeholders that get filled in at install time.
+Kiro and OpenCode templates are platform-specific configuration skeletons
+with `{{...}}` placeholders that get filled in at install time. Pi frontmatters
+are bare YAML with no placeholders.
 
 ### Kiro templates (JSON)
 
@@ -577,12 +640,14 @@ standard JSON with the following structure:
 
 ```json
 {
-  "name": "{{THEME}}-{{PROFESSION}}",
+  "name": "{{THEME}}-orchestrator",
   "description": "{{AGENT_DESCRIPTION}}",
-  "prompt": "file://~/.kiro/professions/{profession}.md",
+  "prompt": "file://~/.kiro/professions/orchestrator.md",
   "resources": [
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
-    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"
+    "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md",
+    "skill://~/.kiro/skills/common/project-notes/SKILL.md",
+    "skill://~/.kiro/skills/common/simplified-technical-english/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [ ... ],
@@ -591,8 +656,14 @@ standard JSON with the following structure:
 }
 ```
 
-Note: `toolsSettings` contains the permission mapping with `allowedCommands`,
-`deniedCommands`, subagent trust configuration, and write path permissions.
+Note: each Kiro template hardcodes its own profession in the agent name and
+the prompt path (for example, `"name": "{{THEME}}-orchestrator"` and
+`"prompt": "file://~/.kiro/professions/orchestrator.md"`). `{{PROFESSION}}`
+is still used in the `resources` array, for example
+`"skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md"`. Only the theme and other
+agent metadata come from placeholders. `toolsSettings` contains the permission
+mapping with `allowedCommands`, `deniedCommands`, subagent trust configuration,
+and `edit` path permissions.
 
 ### OpenCode frontmatter templates (YAML)
 
@@ -636,10 +707,10 @@ permissions:
 Permissions are an **ordered array** of `{ action, resource, effect }` entries —
 each rule pairs an action with a resource pattern and an effect (`allow`,
 `ask`, or `deny`). Known action names include `read`, `glob`, `grep`, `edit`,
-`shell`, `subagent`, `skill`, `execute`, `external_directory`, `question`, and
-`*`. (V1 action names were renamed in the V2 schema: `bash` → `shell`,
-`task` → `subagent`, `write` → `edit`, `code` → `execute`; `todowrite` was
-dropped.)
+`shell`, `subagent`, `skill`, `execute`, `external_directory`, `question`,
+`webfetch`, `websearch`, `context7`, `deepwiki`, `exa`, and `*`. (V1 action
+names were renamed in the V2 schema: `bash` → `shell`, `task` → `subagent`,
+`write` → `edit`, `code` → `execute`; `todowrite` was dropped.)
 
 ### Stub comment format
 
@@ -678,14 +749,11 @@ roughly like this:
 | `toolsSettings.shell.allowedCommands[]` | `{ action: shell, resource: "command*", effect: allow }` |
 | `toolsSettings.shell.deniedCommands[]` | `{ action: shell, resource: "command*", effect: deny }` |
 | `toolsSettings.subagent.trustedAgents[]` | `{ action: subagent, resource: "pattern", effect: allow }` |
-| `toolsSettings.write.allowedPaths[]` | `{ action: edit, resource: "path", effect: allow }` |
+| `toolsSettings.edit.allowedPaths[]` | `{ action: edit, resource: "path", effect: allow }` |
 | `tools: ["*"]` | `{ action: "*", resource: "*", effect: ask }` |
 
-The Kiro format uses lists of allowed/denied commands. The OpenCode format
-uses an ordered array of permission entries, each combining an `action`, a
-`resource` pattern, and an `effect` (`allow`, `ask`, or `deny`). When adding
-shell permissions, prefer the most specific resource pattern possible —
-`"git status *"` over `"git*"`.
+When adding shell permissions, prefer the most specific resource pattern
+possible — `"git status *"` over `"git*"`.
 
 ### Placeholder reference
 
@@ -758,6 +826,17 @@ by looking for files named `SKILL.md` under the profession's skill directory.
 
 Always test your changes before submitting a PR. Here's the testing workflow:
 
+### Extension type check and tests
+
+Install devDependencies once, then run the TypeScript check and the Node test
+suite (this is what CI runs):
+
+```bash
+npm install
+npm run typecheck
+npm test
+```
+
 ### Syntax check
 
 ```bash
@@ -818,7 +897,7 @@ Once the dry run looks correct, run for real:
 
 After running, verify:
 
-- **All 64 agents generated** — 8 themes × 8 professions = 64 agents per
+- **All 80 agents generated** — 8 themes × 10 professions = 80 agents per
   target. Use `ls ~/.kiro/agents/ | wc -l` or
   `ls ~/.config/opencode/agents/ | wc -l`.
 - **Valid JSON** (Kiro): `jq . ~/.kiro/agents/*.json > /dev/null`
@@ -857,6 +936,9 @@ After running, verify:
 4. **Run tests** — at minimum:
 
    ```bash
+   npm install
+   npm run typecheck
+   npm test
    bash -n install.sh
    node --check plugins/persona-agents.js
    ./install.sh --dry-run --force
@@ -866,12 +948,17 @@ After running, verify:
 
    ```bash
    git add .
-   git commit -m "feat: add cyberpunk theme with 8 personas"
+   git commit -m "feat: add cyberpunk theme with 10 professions"
    ```
 
-   Commit messages should follow conventional commits format:
+   Human contributors should follow the conventional commits format:
    `type: description` where type is `feat`, `fix`, `refactor`, `docs`,
    `style`, `test`, or `chore`.
+
+   > **Note:** AI agents in this repo follow a stricter rule (`AGENTS.md`).
+   > Only the orchestrator writes git history, and every commit it makes
+   > starts with the `ai:` prefix. The implementer never commits; it only
+   > suggests a commit.
 
 6. **Push** your branch:
 
@@ -898,16 +985,17 @@ Before submitting, check:
 - [ ] `node --check plugins/persona-agents.js` parses (plugin syntax)
 - [ ] Persona-agents plugin is installed (`~/.config/opencode/plugins/persona-agents.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
-- [ ] All 64 agents generate (for both targets)
+- [ ] All 80 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output
 - [ ] OpenCode agent `.md` files contain valid stub comments
       (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`)
 - [ ] Persona files follow the required format (`# Name the Title Persona`,
       `## Personality`, `## Speech Style`, `## Rules`)
 - [ ] Profession files follow the required format (`# Profession`,
-      `## Core Behavior`, `## When to Defer`, `## Failure Modes`, `## Output Format`)
+      `## Core Behavior`, `## When to Defer`, `## Failure Modes`,
+      `## Output Format`, `## Skills`)
 - [ ] Templates include proper tool permissions (not too permissive)
-- [ ] New themes are added to ALL 8 professions
+- [ ] New themes are added to ALL 10 professions
 - [ ] New professions are added to ALL existing themes in `agents.json`
 - [ ] New files have no hardcoded theme/profession values (use placeholders)
 
@@ -996,10 +1084,11 @@ First paragraph: role summary.
 Required sections: `## Core Behavior` (with precedence rule),
 `## When to Defer`, `## Failure Modes`, `## Output Format`, `## Skills`.
 
-> **Note:** `professions/implementer.md` is the single, merged implementer
-> profession. It carries the canonical skeleton plus Python and React
-> guidance inline — do not create separate language-specific implementer
-> profession files.
+> **Note:** `professions/implementer.md` is the base implementer profession.
+> The variants `professions/implementer-python.md` and
+> `professions/implementer-react.md` carry language-specific guidance, with
+> matching Kiro and OpenCode templates and `agents.json` entries. Pi has no
+> variant frontmatter, so pi exposes only the base `implementer`.
 
 > **Note:** Mascot/novelty professions that don't perform tool-based work
 > (e.g., `professions/mascot.md`) may omit most or all of these sections.
@@ -1014,9 +1103,27 @@ Required sections: `## Core Behavior` (with precedence rule),
 
 ### Keeping the fun
 
-This is a personality project. Don't make the contributing guide the dryest
+This is a personality project. Don't make the contributing guide the driest
 thing in the repo. Use examples. Be a little playful. The personas should
 make people smile — the code should make them productive.
+
+## Versioning and Release
+
+`package.json` line 3 is the source of truth for the package version. To
+release:
+
+1. Bump the version in `package.json`, line 3 (`"version"`).
+2. Tag the release `v<new-version>`. Create the tag before the release, or
+   select it in the GitHub release form. Pi installs resolve by tag, so a
+   release without the tag does not install.
+
+Do not bump the herdr plugin version
+(`plugins/herdr/overseer-herald/herdr-plugin.toml`, line 3) unless the plugin
+itself changes — it has its own independent version. Do not touch the
+`package.json` dependency pins on release. No `README.md` in this repository
+may contain a version number.
+
+The full release ritual lives in `AGENTS.md`.
 
 ## License
 
