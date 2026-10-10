@@ -12,7 +12,7 @@ permissions:
     - { tool: find, match: "." }
     - { tool: ls, match: "." }
     - { tool: grep, match: "." }
-    - { tool: edit, match: "(^|/)agent-notes/(researcher|orchestrator)/" }
+    - { tool: edit, match: "(^|/)agent-notes/researcher/" }
     - { tool: write, match: "(^|/)agent-notes/researcher/" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|cut|seq|ps|which|command -v|jq|bash -n|mkdir|sleep)\\b" }
     - { tool: bash, match: "^find\\b" }

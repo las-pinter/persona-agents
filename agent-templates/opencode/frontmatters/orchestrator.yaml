@@ -20,22 +20,16 @@ permissions:
     resource: "~/agent-notes/orchestrator/**"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/plans/*"
+    resource: "~/agent-notes/project-notes/*"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/plans/**"
+    resource: "~/agent-notes/project-notes/**"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/*"
+    resource: "~/agent-notes/researcher/reports/*"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/**"
-    effect: allow
-  - action: external_directory
-    resource: "~/agent-notes/researcher/studies/*"
-    effect: allow
-  - action: external_directory
-    resource: "~/agent-notes/researcher/studies/**"
+    resource: "~/agent-notes/researcher/reports/**"
     effect: allow
   - action: edit
     resource: "*"
@@ -47,10 +41,10 @@ permissions:
     resource: "~/agent-notes/orchestrator/**"
     effect: allow
   - action: edit
-    resource: "~/agent-notes/planner/plans/*"
+    resource: "~/agent-notes/project-notes/*"
     effect: allow
   - action: edit
-    resource: "~/agent-notes/planner/plans/**"
+    resource: "~/agent-notes/project-notes/**"
     effect: allow
   - action: glob
     resource: "*"
@@ -354,9 +348,6 @@ permissions:
     effect: ask
   - action: skill
     resource: journal-management
-    effect: allow
-  - action: skill
-    resource: plan-tracking
     effect: allow
   - action: skill
     resource: commit-hygiene

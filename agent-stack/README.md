@@ -290,10 +290,10 @@ denied-by-default):
 
 | Agent | Zones (edit + write) |
 |---|---|
-| orchestrator | `agent-notes/orchestrator/**`, `agent-notes/planner/plans/**` |
-| planner | `agent-notes/planner/**` |
+| orchestrator | `agent-notes/orchestrator/**`, `agent-notes/project-notes/**` |
+| planner | `agent-notes/project-notes/**` |
 | overseer | `agent-notes/overseer/**` |
-| researcher | `agent-notes/researcher/**`, `agent-notes/orchestrator/projects/**` |
+| researcher | `agent-notes/researcher/**` |
 | implementer / tester | workspace files (edit/write everywhere) |
 | reviewer / mascot | none (read-only) |
 

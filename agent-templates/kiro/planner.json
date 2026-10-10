@@ -5,11 +5,13 @@
   "resources": [
     "file://~/.kiro/personas/{{THEME}}/{{PERSONA_FILE}}",
     "skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md",
+    "skill://~/.kiro/skills/common/project-notes/SKILL.md",
     "skill://~/.kiro/skills/common/simplified-technical-english/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [
     "code",
+    "edit",
     "glob",
     "grep",
     "read",
@@ -19,6 +21,7 @@
   ],
   "allowedTools": [
     "code",
+    "edit",
     "glob",
     "grep",
     "read",
@@ -41,6 +44,7 @@
         "head",
         "jq",
         "ls",
+        "mkdir",
         "pwd",
         "sort",
         "tail",
@@ -192,6 +196,11 @@
         "*git --paginate commit*"
       ],
       "autoAllowReadonly": true
+    },
+    "edit": {
+      "allowedPaths": [
+        "~/agent-notes/project-notes/**"
+      ]
     },
     "subagent": {
       "availableAgents": [

@@ -22,12 +22,6 @@ permissions:
   - action: external_directory
     resource: "~/agent-notes/researcher/**"
     effect: allow
-  - action: external_directory
-    resource: "~/agent-notes/orchestrator/projects/*"
-    effect: allow
-  - action: external_directory
-    resource: "~/agent-notes/orchestrator/projects/**"
-    effect: allow
   - action: glob
     resource: "*"
     effect: allow

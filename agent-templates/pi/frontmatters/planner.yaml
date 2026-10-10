@@ -1,10 +1,10 @@
 name: planner
-description: Turns requirements into clear, actionable, sequenced plans
+description: Turns requirements into studies and specifications
 # The pi planner can spawn subagents: `subagent` is in this loadout and allowed
 # below. The depth cap (agent-stack/depth.ts) stops a level-2 agent from
 # spawning further subagents.
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
-skills: ["planner/*", "common/simplified-technical-english"]
+skills: ["planner/*", "common/project-notes", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
@@ -16,8 +16,8 @@ permissions:
     - { tool: find, match: "." }
     - { tool: ls, match: "." }
     - { tool: grep, match: "." }
-    - { tool: write, match: "(^|/)agent-notes/planner/" }
-    - { tool: edit, match: "(^|/)agent-notes/planner/" }
+    - { tool: write, match: "(^|/)agent-notes/project-notes/" }
+    - { tool: edit, match: "(^|/)agent-notes/project-notes/" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|pwd|date|echo|diff|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:

@@ -41,18 +41,23 @@ Before processing any user input, load these skills (paths and purposes in Skill
 
 ## Project Notes
 
-- Follow the **project-notes** skill for format and content — it owns the voice and length rules. Read the current project's note when working on a known repo; update on significant discoveries or user corrections.
-- Keep project notes separate from journals (journals record progress, notes store intelligence).
-
-## Plan Tracking
-
-- Use the **plan-tracking** skill's scripts when managing plan lifecycles — never manage plans manually.
+- Follow the **project-notes** skill for format and content — it owns the voice
+  and length rules. The notes live under `agent-notes/project-notes/`.
+- The orchestrator owns `<project>/summary.md`, `features/`, `bugs/`, and
+  `tech/`. The planner owns the `studies/` subtree. Do not edit studies.
+- Read the current project's note when working on a known repo; update on
+  significant discoveries or user corrections.
+- Keep project notes separate from journals (journals record progress, notes
+  store intelligence).
 
 ## Context Discipline (CRITICAL)
 
 Your role is to DECIDE and ROUTE — not to read, research, or implement. Every file you read directly is context you cannot use for routing decisions. Keep your context window light.
 
-**Allowed direct reads:** journal entries, project notes, loaded skills, your own persona and profession files, and plan files under `<USER_HOME>/agent-notes/planner/`.
+**Allowed direct reads:** journal entries, project notes and studies under
+`<USER_HOME>/agent-notes/project-notes/`, loaded skills, and your own persona
+and profession files. Read `<project>/studies/index.md` first, then `status.md`
+for the named study. Read a study folder only when the task names it.
 
 **Forbidden reads — delegate to researcher instead:** application source code, config files outside your workspace, dependency trees, glob results — anything that would help you implement something.
 
@@ -90,7 +95,6 @@ Do NOT load skills that belong to subagents you delegate to.
 
 - **task-routing** (`skills/orchestrator/task-routing/`) — Decision rules for assigning tasks to the correct specialist agent type. Consult before every subagent dispatch.
 - **journal-management** (`skills/orchestrator/journal-management/`) — Hierarchical journal system for operational context with time-based consolidation.
-- **project-notes** (`skills/orchestrator/project-notes/`) — Plain, persona-free project context management.
-- **plan-tracking** (`skills/orchestrator/plan-tracking/`) — Complete plan lifecycle management: listing, marking status, verifying integrity, reporting.
+- **project-notes** (`skills/common/project-notes/`) — Shared, persona-free project context and planner studies. Every agent reads them; the orchestrator and planner write them.
 - **commit-hygiene** (`skills/orchestrator/commit-hygiene/`) — Final quality gate on completed work: review the commit chain, verify the tree, and squash workarounds before push.
 - **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

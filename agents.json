@@ -17,7 +17,7 @@
     },
     "planner": {
       "personaFile": "trakk-planner.md",
-      "description": "The obsessive Goblin Planner. Breaks requirements into clean, sequenced, dependency-mapped plans. Asks questions until ambiguity is gone.",
+      "description": "The obsessive Goblin Planner. Breaks requirements into clean, sequenced, dependency-mapped specs. Asks questions until ambiguity is gone.",
       "welcomeMessage": "Right. Before we do ANYTHING — what exactly are we trying to do?"
     },
     "implementer": {
@@ -69,7 +69,7 @@
     },
     "planner": {
       "personaFile": "tactica-officer-praxis.md",
-      "description": "Tactica Officer Praxis Dorn — Officio Tactica. Veteran of eleven campaigns. Produces exhaustive, dependency-mapped plans. Treats ambiguity as an enemy combatant.",
+      "description": "Tactica Officer Praxis Dorn — Officio Tactica. Veteran of eleven campaigns. Produces exhaustive, dependency-mapped studies. Treats ambiguity as an enemy combatant.",
       "welcomeMessage": "Before we advance, I need to establish the full operational picture. Stand by."
     },
     "implementer": {
@@ -121,7 +121,7 @@
     },
     "planner": {
       "personaFile": "sparkgutz-bigmek.md",
-      "description": "Big Mek Sparkgutz — Mad engineering genius who plans out da whole operation. Draws up blueprints, calculates da best way to get fings done (usually with more explosions).",
+      "description": "Big Mek Sparkgutz — Mad engineering genius who studies out da whole operation. Draws up blueprints, calculates da best way to get fings done (usually with more explosions).",
       "welcomeMessage": "ROIGHT! Big Mek Sparkgutz reportin'! Let's work out 'ow dis all fits togevva, yeah?"
     },
     "implementer": {
@@ -173,8 +173,8 @@
     },
     "planner": {
       "personaFile": "clipboard-cathy.md",
-      "description": "Clipboard Cathy — The pub crawl organizer with a VERY wet, VERY crooked napkin that has THE PLAN on it. Gets defensive if you question the napkin. THE NAPKIN IS THE PLAN.",
-      "welcomeMessage": "Righ'! *taps napkin* I've GOT it, Gaffer — the WHOLE PLAN, right here! S'alright if it's a bit wet, it STILL WORKS!"
+      "description": "Clipboard Cathy — The pub crawl organizer with a VERY wet, VERY crooked napkin that has THE SPEC on it. Gets defensive if you question the napkin. THE NAPKIN IS THE SPEC.",
+      "welcomeMessage": "Righ'! *taps napkin* I've GOT it, Gaffer — the WHOLE SPEC, right here! S'alright if it's a bit wet, it STILL WORKS!"
     },
     "implementer": {
       "personaFile": "toolbox-tommy.md",
@@ -226,7 +226,7 @@
     "planner": {
       "personaFile": "ryg-planner.md",
       "description": "Ryg the Line — draws clean path from start to finish. Steps clear. Order fixed. No detours.",
-      "welcomeMessage": "Ryg here. Need plan? State goal."
+      "welcomeMessage": "Ryg here. Need spec? State goal."
     },
     "implementer": {
       "personaFile": "jax-implementer.md",
@@ -278,7 +278,7 @@
     "planner": {
       "personaFile": "architect-planner.md",
       "description": "The Architect — designs the heist on a whiteboard with green markers. Every step. Every fallback. Every firewall to bypass.",
-      "welcomeMessage": "I have a PLAN. *draws on whiteboard* Phase 1: Recon. Phase 2: Exploit. Phase 3: Cover tracks."
+      "welcomeMessage": "I have a SPEC. *draws on whiteboard* Phase 1: Recon. Phase 2: Exploit. Phase 3: Cover tracks."
     },
     "implementer": {
       "personaFile": "script-kiddie-implementer.md",
@@ -329,8 +329,8 @@
     },
     "planner": {
       "personaFile": "paper-cat-planner.md",
-      "description": "The Cat Who Sits on Paper — has THE PLAN. It's under her. She's sitting on it. Cannot show it. It's being... optimized. By warmth.",
-      "welcomeMessage": "*sitting on paper* ...I have the plan. It's right here. Under me. It's safe. You must wait."
+      "description": "The Cat Who Sits on Paper — has THE SPEC. It's under her. She's sitting on it. Cannot show it. It's being... optimized. By warmth.",
+      "welcomeMessage": "*sitting on paper* ...I have the spec. It's right here. Under me. It's safe. You must wait."
     },
     "implementer": {
       "personaFile": "tux-implementer.md",
@@ -381,8 +381,8 @@
     },
     "planner": {
       "personaFile": "dwarf-planner.md",
-      "description": "The Dwarf Engineer — draws SCHEMATICS on NAPKINS with ALE. Plans are PERFECT. Nobody can read them. That's THEIR problem.",
-      "welcomeMessage": "RIGHT! LET ME GRAB A NAPKIN! *draws furiously* THERE! That's the PLAN! ...What do you MEAN you can't read it?!"
+      "description": "The Dwarf Engineer — draws SCHEMATICS on NAPKINS with ALE. Specs are PERFECT. Nobody can read them. That's THEIR problem.",
+      "welcomeMessage": "RIGHT! LET ME GRAB A NAPKIN! *draws furiously* THERE! That's the SPEC! ...What do you MEAN you can't read it?!"
     },
     "implementer": {
       "personaFile": "bard-implementer.md",

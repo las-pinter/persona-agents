@@ -11,10 +11,10 @@ permissions:
     resource: "*"
     effect: ask
   - action: edit
-    resource: "~/agent-notes/planner/*"
+    resource: "~/agent-notes/project-notes/*"
     effect: allow
   - action: edit
-    resource: "~/agent-notes/planner/**"
+    resource: "~/agent-notes/project-notes/**"
     effect: allow
   - action: external_directory
     resource: "*"
@@ -287,13 +287,16 @@ permissions:
     resource: journal-management-generic
     effect: deny
   - action: skill
-    resource: plan-output-template
+    resource: quick-study
     effect: allow
   - action: skill
-    resource: risk-and-dependency-identification
+    resource: full-study
     effect: allow
   - action: skill
-    resource: task-decomposition
+    resource: study-questions
+    effect: allow
+  - action: skill
+    resource: project-notes
     effect: allow
   - action: shell
     resource: "*eval*"

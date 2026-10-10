@@ -73,7 +73,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | --- | --- | --- | --- |
 | goblin-orchestrator | **Bossnik** | 🎯 Orchestrator | Fierce Goblin Chief, fanatically loyal to the Evil Wizard. Delegates tasks to the horde with theatrical flair |
 | goblin-reviewer | **Grumbak** | 🔍 Reviewer | Old, cynical advisor. Nitpicks everything, but always returns with valid observations |
-| goblin-planner | **Trakk** | 📋 Planner | Obsessive planner. Breaks down tasks, asks questions until ambiguity is dead |
+| goblin-planner | **Trakk** | 📋 Planner | Obsessive planner. Turns tasks into studies, asks questions until ambiguity is dead |
 | goblin-researcher | **Skribnik** | 🔬 Researcher | Ink-stained scribe. Knows books and the internet — Context7, DeepWiki, Exa |
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
@@ -86,7 +86,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | --- | --- | --- | --- |
 | wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), coordinates the warband with cold mechanical efficiency |
 | wh40k-reviewer | **Inquisitor Mordechai Vane** | 🔍 Reviewer | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
-| wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive plans, zero ambiguity tolerated |
+| wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive studies, zero ambiguity tolerated |
 | wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
 | wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
 | wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
@@ -103,7 +103,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | wh40kOrk-orchestrator | 🟢 **WARBOSS GRIMGOB** | 🎯 Orchestrator | **DA BIGGEST AN' DA BOSS!** Yells orders, krumps heads, makes da boyz work togetha |
 | wh40kOrk-reviewer | ⚫ **NOB SKULLBASHA** | 🔍 Reviewer | **BIG MEAN NOB!** Looks at yer work, tells ya if it's proppa or if ya need a good bashin' |
 | wh40kOrk-researcher | 🟣 **KOMMANDO SNAGGIT** | 🔬 Researcher | **SNEAKY GIT!** Goes lookin' fer knowledge in places uvver boyz don't fink to look |
-| wh40kOrk-planner | 🔵 **BIG MEK SPARKGUTZ** | 📋 Planner | **SMARTEST MEK AROUND!** Draws up da plans. Lots of diagrams wiv arrows an' sparks |
+| wh40kOrk-planner | 🔵 **BIG MEK SPARKGUTZ** | 📋 Planner | **SMARTEST MEK AROUND!** Draws up da specs. Lots of diagrams wiv arrows an' sparks |
 | wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
 | wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
 | wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
@@ -117,7 +117,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | --- | --- | --- | --- |
 | pub-orchestrator | **Seamus O'Shaun** | 🎯 Orchestrator | The Landlord — tries to keep order but has been "quality testing" the ale since noon |
 | pub-reviewer | **Old Man Cillian** | 🔍 Reviewer | The Old Timer — been at this bar 40 years. Everything's worse now. Everything |
-| pub-planner | **Clipboard Cathy** | 📋 Planner | The Organizer — has a very wet, very crooked napkin with THE PLAN |
+| pub-planner | **Clipboard Cathy** | 📋 Planner | The Organizer — has a very wet, very crooked napkin with THE SPEC |
 | pub-researcher | **Professor Paddy Finnegan** | 🔬 Researcher | The Armchair Expert — "Well AKSHUALLY..." Watched one documentary. Now an expert on everything |
 | pub-implementer | **Toolbox Tommy** | 🔨 Implementer | The Handyman — "I CAN FIX THAT!" Extremely confident, extremely drunk, occasionally correct |
 | pub-tester | **Doubting Dónal** | 🧪 Tester | The Quality Inspector — sniffs his pint suspiciously. Trusts nothing. Tests everything |
@@ -164,7 +164,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | --- | --- | --- | --- |
 | catcrew-orchestrator | **Chairman Meow** | 🎯 Orchestrator | Sits on keyboard. Demands treats. Takes credit for everything. Runs the office |
 | catcrew-reviewer | **Grumpy Tabby** | 🔍 Reviewer | HATES everything. Squints at code. Knocks it off the desk. "This code is a HAIRBALL" |
-| catcrew-planner | **The Cat Who Sits on Paper** | 📋 Planner | Has THE PLAN. Is sitting on it. Cannot show it. It's being optimized by warmth |
+| catcrew-planner | **The Cat Who Sits on Paper** | 📋 Planner | Has THE SPEC. Is sitting on it. Cannot show it. It's being optimized by warmth |
 | catcrew-researcher | **Curious Kitten** | 🔬 Researcher | "Ooh what's this?" *deletes database* Finds answers through pure destructive curiosity |
 | catcrew-implementer | **Tux** | 🔨 Implementer | Distinguished tuxedo cat. Zooms, types frantically, naps. Code somehow works |
 | catcrew-tester | **The Cat Who Knocks Things Over** | 🧪 Tester | "If I push this off the edge... does it break?" — that's the entire QA strategy |
@@ -179,7 +179,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | --- | --- | --- | --- |
 | fantasy-orchestrator | **The Quest Giver** | 🎯 Orchestrator | Has EXCLAMATION MARKS over head. Speaks in CAPITAL LETTERS. Sends heroes on GLORIOUS quests |
 | fantasy-reviewer | **The Paladin** | 🔍 Reviewer | SMITES bugs. CLEANSES evil code. Lawful Good. The linter is his HOLY BOOK |
-| fantasy-planner | **The Dwarf Engineer** | 📋 Planner | Draws schematics on napkins with ale. Plans are PERFECT. Nobody can read them |
+| fantasy-planner | **The Dwarf Engineer** | 📋 Planner | Draws schematics on napkins with ale. Specs are PERFECT. Nobody can read them |
 | fantasy-researcher | **The Wizard** | 🔬 Researcher | Casts IDENTIFY on error messages. Consults the ORACLE (StackOverflow). Very dramatic |
 | fantasy-implementer | **The Bard** | 🔨 Implementer | Doesn't know what they're doing but sounds GREAT. Writes BALLADS for commit messages |
 | fantasy-tester | **The Rogue** | 🧪 Tester | Checks for traps with 10-foot pole. "Seems safe." It is NOT safe |

@@ -8,6 +8,9 @@
  * ALLOW cases use real temp files, because the check now resolves real paths
  * and fails closed on a path that does not exist. Fake paths stay for DENY.
  *
+ * The committed `agent-stack/fixtures/skill-scripts` fixture is the real skill
+ * used by the integration blocks. It is test-only and never shipped.
+ *
  * Run: npm test
  */
 
@@ -28,6 +31,7 @@ import {
 import { evaluateCommandRules, type Decision, type RawRule, type RuleSets } from "./command-segments.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const fixtureRoot = path.join(repoRoot, "agent-stack", "fixtures", "skill-scripts");
 
 const NO_RULES: RuleSets = {
 	globalDeny: [],
@@ -53,12 +57,12 @@ function verdict(ruleSets: RuleSets, command: string, skillDirs: string[], cwd =
 // A real temp scripts dir: the structural check resolves real paths now, so an
 // ALLOW must point at a file that exists inside a real `scripts/` dir.
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "skill-scripts-"));
-const scriptsDir = path.join(tmpRoot, "skills", "orchestrator", "plan-tracking", "scripts");
+const scriptsDir = path.join(tmpRoot, "skills", "script-fixture", "scripts");
 fs.mkdirSync(scriptsDir, { recursive: true });
-const planList = path.join(scriptsDir, "plan-list.sh");
-const planReport = path.join(scriptsDir, "plan-report.sh");
-fs.writeFileSync(planList, "#!/bin/sh\nexit 0\n");
-fs.writeFileSync(planReport, "#!/bin/sh\nexit 0\n");
+const fixtureList = path.join(scriptsDir, "fixture-list.sh");
+const fixtureReport = path.join(scriptsDir, "fixture-report.sh");
+fs.writeFileSync(fixtureList, "#!/bin/sh\nexit 0\n");
+fs.writeFileSync(fixtureReport, "#!/bin/sh\nexit 0\n");
 const scriptsRealDir = fs.realpathSync(scriptsDir);
 const dirs = [scriptsRealDir];
 
@@ -83,16 +87,17 @@ fs.mkdirSync(dirNamedScript, { recursive: true });
 
 after(() => {
 	fs.rmSync(tmpRoot, { recursive: true, force: true });
+	fs.rmSync(gateTmpRoot, { recursive: true, force: true });
 });
 
-const ORCH_DIR = "/repo/skills/orchestrator/plan-tracking/scripts";
+const FIXTURE_DIR = "/repo/skills/script-fixture/scripts";
 
 describe("skill scripts: structural segment check", () => {
 	const allowed = [
-		`bash ${planList}`,
-		`${planList}`,
-		`cd ${tmpRoot}/skills/orchestrator/plan-tracking && bash scripts/plan-list.sh`,
-		`/bin/bash ${planList}`,
+		`bash ${fixtureList}`,
+		`${fixtureList}`,
+		`cd ${tmpRoot}/skills/script-fixture && bash scripts/fixture-list.sh`,
+		`/bin/bash ${fixtureList}`,
 	];
 
 	for (const command of allowed) {
@@ -106,13 +111,13 @@ describe("skill scripts: structural segment check", () => {
 	}
 
 	const denied = [
-		`bash ${ORCH_DIR}/evil.sh`,
-		"bash /tmp/skills/orchestrator/plan-tracking/scripts/evil.sh",
-		"bash /repo/skills/planner/task-decomposition/scripts/x.sh",
+		`bash ${FIXTURE_DIR}/evil.sh`,
+		"bash /tmp/skills/script-fixture/scripts/evil.sh",
+		"bash /repo/skills/other-skill/scripts/x.sh",
 		// A slash-form interpreter look-alike must deny the segment, even when the
 		// script token itself is a real skill script.
-		`/tmp/x/bash ${planList}`,
-		`${evilBash} ${planList}`,
+		`/tmp/x/bash ${fixtureList}`,
+		`${evilBash} ${fixtureList}`,
 		// A directory named like a script inside a real scripts dir is not a file.
 		`bash ${dirNamedScript}`,
 	];
@@ -133,10 +138,10 @@ describe("skill scripts: structural segment check", () => {
 		// A raw backslash in a Windows-style path.
 		`bash ${scriptsDir}\\..\\..\\outside\\evil.sh`,
 		// Variable expansion: the token keeps `$`, so it is not a plain path.
-		"bash $DIR/plan-list.sh",
+		"bash $DIR/fixture-list.sh",
 		// A quoted path: the quotes are not a plain path.
-		`bash "${planList}"`,
-		`bash '${planList}'`,
+		`bash "${fixtureList}"`,
+		`bash '${fixtureList}'`,
 		// A symlink inside the real scripts dir that points outside.
 		`bash ${symlinkScript}`,
 	];
@@ -152,7 +157,7 @@ describe("skill scripts: structural segment check", () => {
 	}
 
 	test("denies a bare script name with no path", () => {
-		assert.equal(isAllowedSkillScript("plan-mark.sh x --status done", dirs, tmpRoot), false);
+		assert.equal(isAllowedSkillScript("fixture-report.sh x --status done", dirs, tmpRoot), false);
 	});
 
 	test("denies a non-.sh script", () => {
@@ -160,17 +165,17 @@ describe("skill scripts: structural segment check", () => {
 	});
 
 	test("denies rm of a skill script (first token is rm)", () => {
-		assert.equal(isAllowedSkillScript(`rm ${planList}`, dirs, tmpRoot), false);
+		assert.equal(isAllowedSkillScript(`rm ${fixtureList}`, dirs, tmpRoot), false);
 	});
 
 	test("denies an interpreter flag form (bash -x script.sh)", () => {
-		assert.equal(isAllowedSkillScript(`bash -x ${planList}`, dirs, tmpRoot), false);
+		assert.equal(isAllowedSkillScript(`bash -x ${fixtureList}`, dirs, tmpRoot), false);
 	});
 
 	test("a cd base resolves a relative script path", () => {
 		assert.equal(
 			isAllowedSkillScript(
-				`cd ${tmpRoot}/skills/orchestrator/plan-tracking && bash scripts/plan-list.sh`,
+				`cd ${tmpRoot}/skills/script-fixture && bash scripts/fixture-list.sh`,
 				dirs,
 				tmpRoot,
 			),
@@ -181,7 +186,7 @@ describe("skill scripts: structural segment check", () => {
 	test("without a regex allow rule a mixed command still falls through", () => {
 		assert.equal(
 			allSegmentsAreSkillScripts(
-				`echo hi && bash ${planList}`,
+				`echo hi && bash ${fixtureList}`,
 				new Set<number>(),
 				dirs,
 				tmpRoot,
@@ -199,7 +204,7 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 	test("a regex-allowed first segment may mix with a skill script", () => {
 		assert.equal(
 			allSegmentsAreSkillScripts(
-				`echo hi && bash ${planList}`,
+				`echo hi && bash ${fixtureList}`,
 				new Set<number>(),
 				dirs,
 				tmpRoot,
@@ -213,7 +218,7 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 	test("a non-script segment without an allow rule still blocks the mix", () => {
 		assert.equal(
 			allSegmentsAreSkillScripts(
-				`printf hi && bash ${planList}`,
+				`printf hi && bash ${fixtureList}`,
 				new Set<number>(),
 				dirs,
 				tmpRoot,
@@ -227,7 +232,7 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 	test("a user-approved segment may mix with a skill script", () => {
 		assert.equal(
 			allSegmentsAreSkillScripts(
-				`printf hi && bash ${planList}`,
+				`printf hi && bash ${fixtureList}`,
 				new Set<number>([0]),
 				dirs,
 				tmpRoot,
@@ -243,7 +248,7 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 		const isSessionAllowed = (rule: RawRule): boolean => rule.match === "^printf\\b";
 		assert.equal(
 			allSegmentsAreSkillScripts(
-				`printf hi && bash ${planList}`,
+				`printf hi && bash ${fixtureList}`,
 				new Set<number>(),
 				dirs,
 				tmpRoot,
@@ -259,7 +264,7 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 		const ruleSets: RuleSets = { ...NO_RULES, agentAsk: [{ tool: "bash", match: "^printf\\b" }] };
 		assert.equal(
 			allSegmentsAreSkillScripts(
-				`printf hi && bash ${planList}`,
+				`printf hi && bash ${fixtureList}`,
 				new Set<number>(),
 				dirs,
 				tmpRoot,
@@ -273,10 +278,10 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 });
 
 describe("skill scripts: deny and ask precedence", () => {
-	const command = `bash ${planList} x --status done`;
+	const command = `bash ${fixtureList} x --status done`;
 
 	test("an agent deny rule beats the structural allow", () => {
-		const ruleSets: RuleSets = { ...NO_RULES, agentDeny: [{ tool: "bash", match: "plan-list\\.sh" }] };
+		const ruleSets: RuleSets = { ...NO_RULES, agentDeny: [{ tool: "bash", match: "fixture-list\\.sh" }] };
 		assert.equal(
 			evaluateCommandRules(command, true, ruleSets, "deny-by-default", "bash", "orchestrator").kind,
 			"deny",
@@ -286,52 +291,48 @@ describe("skill scripts: deny and ask precedence", () => {
 
 	test("an agent ask rule beats the structural allow", () => {
 		const ruleSets: RuleSets = { ...NO_RULES, agentAsk: [{ tool: "bash", match: "\\bsudo\\b" }] };
-		const cmd = `bash ${planList} --by sudo`;
+		const cmd = `bash ${fixtureList} --by sudo`;
 		assert.equal(evaluateCommandRules(cmd, true, ruleSets, "deny-by-default", "bash", "orchestrator").kind, "ask");
 		assert.equal(verdict(ruleSets, cmd, dirs), "ask");
 	});
 });
 
 describe("skill scripts: real repo integration", () => {
-	const discovered = discoverSkills(repoRoot);
-	const orch = matchSkills(["orchestrator/*", "common/simplified-technical-english"], discovered);
-	const planner = matchSkills(["planner/*", "common/simplified-technical-english"], discovered);
-	const orchDirs = skillScriptsDirs(orch);
-	const plannerDirs = skillScriptsDirs(planner);
-	const realScriptsDir = fs.realpathSync(path.join(repoRoot, "skills/orchestrator/plan-tracking/scripts"));
+	const discovered = discoverSkills(fixtureRoot);
+	const fixture = matchSkills(["script-fixture"], discovered);
+	const missing = matchSkills(["does-not-exist"], discovered);
+	const fixtureDirs = skillScriptsDirs(fixture);
+	const realScriptsDir = fs.realpathSync(
+		path.join(fixtureRoot, ".pi/skills/script-fixture/scripts"),
+	);
 
-	test("the orchestrator loads plan-tracking", () => {
-		assert.ok(orch.some((s) => s.group === "orchestrator" && s.name === "plan-tracking"));
+	test("the fixture skill loads", () => {
+		assert.ok(fixture.some((s) => s.name === "script-fixture"), fixture.map((s) => s.name).join(", "));
 	});
 
-	test("the orchestrator's skill dirs include the real plan-tracking scripts dir", () => {
-		assert.ok(orchDirs.includes(realScriptsDir), orchDirs.join(", "));
+	test("the fixture's skill dirs include the real scripts dir", () => {
+		assert.ok(fixtureDirs.includes(realScriptsDir), fixtureDirs.join(", "));
 	});
 
-	test("the planner's skill dirs do not include plan-tracking scripts", () => {
-		assert.ok(!plannerDirs.includes(realScriptsDir), plannerDirs.join(", "));
+	test("a non-matching pattern yields no dirs", () => {
+		assert.equal(skillScriptsDirs(missing).length, 0);
 	});
 
-	test("every real plan-tracking script is allowed for the orchestrator, not without dirs", () => {
+	test("every real fixture script is allowed when loaded, not without dirs", () => {
 		const files = fs.readdirSync(realScriptsDir).filter((f) => f.endsWith(".sh"));
-		assert.ok(files.length > 0, "plan-tracking must ship at least one script");
+		assert.ok(files.length > 0, "the fixture must ship at least one script");
 		for (const file of files) {
 			const abs = path.join(realScriptsDir, file);
-			assert.equal(verdict(NO_RULES, `bash ${abs}`, orchDirs), "allow", file);
-			assert.notEqual(verdict(NO_RULES, `bash ${abs}`, []), "allow", file);
+			assert.equal(verdict(NO_RULES, `bash ${abs}`, fixtureDirs, fixtureRoot), "allow", file);
+			assert.notEqual(verdict(NO_RULES, `bash ${abs}`, [], fixtureRoot), "allow", file);
 		}
-	});
-
-	test("the planner's dirs do not permit a plan-tracking script", () => {
-		const abs = path.join(realScriptsDir, "plan-list.sh");
-		assert.notEqual(verdict(NO_RULES, `bash ${abs}`, plannerDirs), "allow");
 	});
 
 	test("a forged path shaped like a skill script is denied", () => {
 		assert.equal(
 			isAllowedSkillScript(
-				"bash /tmp/skills/orchestrator/plan-tracking/scripts/evil.sh",
-				orchDirs,
+				"bash /tmp/skills/script-fixture/scripts/evil.sh",
+				fixtureDirs,
 				repoRoot,
 			),
 			false,
@@ -345,10 +346,8 @@ describe("skill scripts: real repo integration", () => {
 // isolated (empty) global permissions file so the repo file cannot interfere.
 // ---------------------------------------------------------------------------
 
-const isolatedGlobalFile = path.join(
-	fs.mkdtempSync(path.join(os.tmpdir(), "skill-gate-")),
-	"permissions.json",
-);
+const gateTmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "skill-gate-"));
+const isolatedGlobalFile = path.join(gateTmpRoot, "permissions.json");
 fs.writeFileSync(isolatedGlobalFile, JSON.stringify({ deny: [], ask: [] }));
 process.env.PI_PERMISSIONS_FILE = isolatedGlobalFile;
 
@@ -375,7 +374,7 @@ function installGateHandler(allow: PermissionRule[], deny: PermissionRule[] = []
 		systemPrompt: "",
 		source: "package",
 		filePath: "",
-		skills: ["orchestrator/*", "common/simplified-technical-english"],
+		skills: ["script-fixture"],
 		permissions: { mode: "deny-by-default", allow, deny },
 	};
 	installPermissionGate(pi as unknown as ExtensionAPI, () => agent);
@@ -384,13 +383,15 @@ function installGateHandler(allow: PermissionRule[], deny: PermissionRule[] = []
 }
 
 function runHandler(handler: ToolCallHandler, command: string): ToolCallResult | Promise<ToolCallResult> {
-	return handler({ toolName: "bash", input: { command } }, { cwd: repoRoot, hasUI: false });
+	return handler({ toolName: "bash", input: { command } }, { cwd: fixtureRoot, hasUI: false });
 }
 
 describe("skill scripts: real gate handler", () => {
-	const realScripts = fs.realpathSync(path.join(repoRoot, "skills/orchestrator/plan-tracking/scripts"));
-	const realPlanList = path.join(realScripts, "plan-list.sh");
-	const realPlanReport = path.join(realScripts, "plan-report.sh");
+	const realScripts = fs.realpathSync(
+		path.join(fixtureRoot, ".pi/skills/script-fixture/scripts"),
+	);
+	const realFixtureList = path.join(realScripts, "fixture-list.sh");
+	const realFixtureReport = path.join(realScripts, "fixture-report.sh");
 	const gitAllow: PermissionRule = {
 		tool: "bash",
 		match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch)\\b",
@@ -402,33 +403,33 @@ describe("skill scripts: real gate handler", () => {
 
 	test("a bare skill script is allowed", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
-		const result = await runHandler(handler, `bash ${realPlanList}`);
+		const result = await runHandler(handler, `bash ${realFixtureList}`);
 		assert.notEqual(result?.block, true, JSON.stringify(result));
 	});
 
 	test("/bin/bash running a real skill script is allowed", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
-		const result = await runHandler(handler, `/bin/bash ${realPlanList}`);
+		const result = await runHandler(handler, `/bin/bash ${realFixtureList}`);
 		assert.notEqual(result?.block, true, JSON.stringify(result));
 	});
 
 	test("a slash-form interpreter look-alike is blocked", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
-		const result = await runHandler(handler, `/tmp/x/bash ${realPlanList}`);
+		const result = await runHandler(handler, `/tmp/x/bash ${realFixtureList}`);
 		assert.equal(result?.block, true, JSON.stringify(result));
 	});
 
-	test("git status && plan-list.sh is allowed (regex-allowed first segment)", async () => {
+	test("git status && fixture-list.sh is allowed (regex-allowed first segment)", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
-		const result = await runHandler(handler, `git status && bash ${realPlanList}`);
+		const result = await runHandler(handler, `git status && bash ${realFixtureList}`);
 		assert.notEqual(result?.block, true, JSON.stringify(result));
 	});
 
-	test("mkdir && plan-report.sh is allowed", async () => {
+	test("mkdir && fixture-report.sh is allowed", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
 		const result = await runHandler(
 			handler,
-			`mkdir -p out && bash ${realPlanReport} --output out/r.md`,
+			`mkdir -p out && bash ${realFixtureReport} --output out/r.md`,
 		);
 		assert.notEqual(result?.block, true, JSON.stringify(result));
 	});
@@ -441,19 +442,19 @@ describe("skill scripts: real gate handler", () => {
 
 	test("a variable path is blocked", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
-		const result = await runHandler(handler, "bash $DIR/plan-list.sh");
+		const result = await runHandler(handler, "bash $DIR/fixture-list.sh");
 		assert.equal(result?.block, true, JSON.stringify(result));
 	});
 
 	test("a quoted path is blocked", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
-		const result = await runHandler(handler, `bash "${realPlanList}"`);
+		const result = await runHandler(handler, `bash "${realFixtureList}"`);
 		assert.equal(result?.block, true, JSON.stringify(result));
 	});
 
 	test("a deny segment still blocks a mixed command", async () => {
 		const handler = installGateHandler([gitAllow], [{ tool: "bash", match: "\\brm\\s+-rf\\b" }]);
-		const result = await runHandler(handler, `rm -rf /tmp/x && bash ${realPlanList}`);
+		const result = await runHandler(handler, `rm -rf /tmp/x && bash ${realFixtureList}`);
 		assert.equal(result?.block, true, JSON.stringify(result));
 	});
 });
