@@ -10,6 +10,7 @@
     "skills": ["./skills/**/SKILL.md"]
   },
   "scripts": {
+    "lint": "shellcheck install.sh",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test agent-stack/depth.test.ts agent-stack/tree-log.test.ts agent-stack/tree-model.test.ts agent-stack/sidebar-render.test.ts agent-stack/sidebar-data.test.ts agent-stack/todo-tool.test.ts agent-stack/sidebar.test.ts agent-stack/command-segments.test.ts agent-stack/permission-prompt.test.ts agent-stack/permission-templates.test.ts agent-stack/skill-scripts.test.ts",
     "test:permissions": "node --experimental-strip-types --test agent-stack/command-segments.test.ts"
