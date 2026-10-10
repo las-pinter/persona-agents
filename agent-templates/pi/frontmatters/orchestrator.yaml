@@ -1,8 +1,10 @@
 name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, shared project notes, and studies
-# Not spawnable as a subagent: the orchestrator is the only agent that holds
-# gated git write rights (add/commit/push/pull) and `gh pr` rights, all gated
-# by a user prompt, so a dispatcher must never escalate them by spawning one.
+# Not spawnable as a subagent: the orchestrator alone holds the gated
+# `git add`/`commit`/`push`/`pull`, `gh pr`, `gh release`, `git tag` (create),
+# and `git merge` operations. It shares the gated `cp`/`mv`/`rsync` asks with
+# the implementer. Every one prompts the user, so a dispatcher must never
+# escalate them by spawning one.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/project-notes", "common/simplified-technical-english"]
@@ -18,7 +20,7 @@ permissions:
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
     - { tool: subagent, match: "." }
     - { tool: ask_user_question, match: "." }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|tag\\s+(-l|--list))\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|merge-base|tag\\s+(-l|--list))\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+tag\\s*$" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }

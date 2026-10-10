@@ -143,6 +143,9 @@ permissions:
     resource: "git merge-base *"
     effect: allow
   - action: shell
+    resource: "git -C * merge-base *"
+    effect: allow
+  - action: shell
     resource: "git fetch"
     effect: allow
   - action: shell

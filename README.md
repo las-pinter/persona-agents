@@ -27,7 +27,7 @@ you build.
 ## Prerequisites
 
 - **`jq`** — for agent generation
-- **Node.js** (v18+) — for the OpenCode plugins (plain JS, no build step)
+- **Node.js** (v22.6+) — for the OpenCode plugins (plain JS, no build step)
 
 **Ubuntu/Debian:** `sudo apt-get install jq`
 **macOS:** `brew install jq`

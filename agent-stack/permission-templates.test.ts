@@ -864,7 +864,9 @@ describe("file-migration permission doctrine (cp/mv/rsync)", () => {
 	test("mascot: no shell surface on any stack", () => {
 		assert.ok(!piHasBashTool("mascot"), "pi mascot must not have a bash tool");
 		assert.ok(!kiroHasShellTool("mascot"), "kiro mascot must not have a shell tool");
-		assert.ok(hasOpenCodeRule("mascot", "cp *", "deny"), "opencode mascot must explicitly deny cp");
+		for (const resource of MIGRATION_RESOURCES) {
+			assert.ok(hasOpenCodeRule("mascot", resource, "deny"), `opencode mascot must explicitly deny ${resource}`);
+		}
 	});
 });
 
@@ -897,7 +899,9 @@ const TIMEOUT_WRAPPED_MIGRATIONS = [
 	"chrt 5 cp a b",
 ];
 
-const MIGRATION_NEAR_MISSES = ["scp a b", "cpfoo", "grep cp", "mvn test", "MCP", "mvfoo", "rsyncd"];
+const MIGRATION_NEAR_MISS_ALLOWED = ["grep cp"];
+
+const MIGRATION_NEAR_MISS_DEFAULT = ["scp a b", "cpfoo", "mvn test", "MCP", "mvfoo", "rsyncd"];
 
 describe("pi: cp/mv/rsync wrapper boundaries", () => {
 	test("command -v/-V probes stay allowed, never asked", () => {
@@ -926,8 +930,11 @@ describe("pi: cp/mv/rsync wrapper boundaries", () => {
 
 	test("near-miss tokens never over-match the ask rule", () => {
 		for (const agent of PI_MIGRATION_AGENTS) {
-			for (const command of MIGRATION_NEAR_MISSES) {
-				assert.notEqual(verdict(agent, command), "ask", `${agent}: ${command}`);
+			for (const command of MIGRATION_NEAR_MISS_ALLOWED) {
+				assert.equal(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+			for (const command of MIGRATION_NEAR_MISS_DEFAULT) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
 			}
 		}
 	});
@@ -1175,9 +1182,13 @@ describe("opencode/kiro: accepted over-deny for read-only tag long options", () 
 
 const MERGE_COMMANDS = ["git merge origin/main", "cd /repo && git merge origin/main"];
 
-// A boundary slip in the merge rules would turn the read-only `git merge-base`
+// A boundary slip in the merge rules could turn the read-only `git merge-base`
 // into an ask (opencode, where the last match wins) or a deny (kiro).
-const MERGE_BASE_COMMANDS = ["git merge-base origin/dev origin/main"];
+const MERGE_BASE_COMMAND = "git merge-base origin/dev origin/main";
+const MERGE_BASE_COMMANDS = [MERGE_BASE_COMMAND, "git -C /repo merge-base origin/dev origin/main"];
+// `git merge-file`/`git merge-tree` share the `merge` token but are not
+// merge-base. They must not fall into the merge ask or the merge deny.
+const MERGE_NEAR_MISS_COMMANDS = ["git merge-file a b c", "git merge-tree base head"];
 
 describe("git merge permission doctrine", () => {
 	test("pi orchestrator: git merge asks", () => {
@@ -1216,23 +1227,37 @@ describe("git merge permission doctrine", () => {
 		}
 	});
 
+	test("pi orchestrator: git merge-base is allow", () => {
+		assert.equal(verdict("orchestrator", MERGE_BASE_COMMAND), "allow");
+	});
+
+	test("pi orchestrator: merge near misses are not ask and not allow", () => {
+		for (const command of MERGE_NEAR_MISS_COMMANDS) {
+			const kind = verdict("orchestrator", command);
+			assert.notEqual(kind, "ask", command);
+			assert.notEqual(kind, "allow", command);
+		}
+	});
+
 	test("opencode orchestrator: git merge-base stays allow (not ask, not deny)", () => {
 		for (const command of MERGE_BASE_COMMANDS) {
 			assert.equal(opencodeVerdict("orchestrator", command), "allow", command);
 		}
+		assert.ok(
+			hasOpenCodeRule("orchestrator", "git -C * merge-base *", "allow"),
+			"missing {shell, git -C * merge-base *, allow}",
+		);
 	});
 
-	test("kiro orchestrator: git merge-base is not denied", () => {
-		for (const command of MERGE_BASE_COMMANDS) {
-			assert.notEqual(kiroVerdict("orchestrator", command), "deny", command);
+	test("opencode orchestrator: merge near misses stay ask (not allow, not deny)", () => {
+		for (const command of MERGE_NEAR_MISS_COMMANDS) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
 		}
 	});
 
-	test("pi orchestrator: git merge-base is not ask and not deny", () => {
-		for (const command of MERGE_BASE_COMMANDS) {
-			const kind = verdict("orchestrator", command);
-			assert.notEqual(kind, "ask", command);
-			assert.notEqual(kind, "deny", command);
+	test("kiro orchestrator: git merge-base and near misses are not denied", () => {
+		for (const command of [...MERGE_BASE_COMMANDS, ...MERGE_NEAR_MISS_COMMANDS]) {
+			assert.notEqual(kiroVerdict("orchestrator", command), "deny", command);
 		}
 	});
 
@@ -1262,6 +1287,7 @@ describe("git merge permission doctrine", () => {
 
 const RELEASE_COMMANDS = [
 	"gh release create v3.0.0 --title v3.0.0",
+	"env gh release create x",
 	"cd /repo && gh release create v3.0.0 --title v3.0.0",
 	"cd /repo&&gh release create v3.0.0",
 ];
