@@ -25,6 +25,10 @@ permissions:
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
   ask:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rm\\s+[^-\\s;|&*?\\[\\]{}'\"$`!#][^\\s;|&*?\\[\\]{}'\"$`]*$", reason: "deleting a named file prompts the user" }
+    # File migrations (copy/move/sync) prompt the user; the rule is path-agnostic.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?cp\\b", reason: "file copy requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?mv\\b", reason: "file move requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?rsync\\b", reason: "file sync requires user approval" }
   deny:
     # The implementer may SUGGEST a commit. It never runs add/commit/push/pull/gh pr.
     - { tool: bash, match: "^eval\\b" }

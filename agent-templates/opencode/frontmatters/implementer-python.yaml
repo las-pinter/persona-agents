@@ -39,6 +39,9 @@ permission:
     "wc": allow
     "which": allow
     "xargs *": ask
+    "cp *": ask
+    "mv *": ask
+    "rsync *": ask
     "git push *": deny
     "git pull *": deny
     "git add *": deny

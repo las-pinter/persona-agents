@@ -125,6 +125,24 @@ permissions:
     resource: "xargs *"
     effect: ask
   - action: shell
+    resource: "cp *"
+    effect: deny
+  - action: shell
+    resource: "mv *"
+    effect: deny
+  - action: shell
+    resource: "rsync *"
+    effect: deny
+  - action: shell
+    resource: "* cp *"
+    effect: deny
+  - action: shell
+    resource: "* mv *"
+    effect: deny
+  - action: shell
+    resource: "* rsync *"
+    effect: deny
+  - action: shell
     resource: "git push *"
     effect: deny
   - action: shell

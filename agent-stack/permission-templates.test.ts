@@ -73,7 +73,10 @@ const WRITE_COMMANDS = [
 
 const ANCHORED_COMMANDS = ["git -C /repo push", "cd /repo && git push"];
 
-const OTHER_AGENTS = ["researcher", "reviewer", "tester", "planner", "overseer"];
+const OTHER_AGENTS = ["researcher", "reviewer", "tester", "planner", "overseer", "mascot"];
+// Mascot has no bash tool. Bash behavior matrices skip it: deny-by-default still
+// denies it, but the kind is `default`, not an explicit `deny` rule.
+const PI_SHELL_AGENTS = OTHER_AGENTS.filter((agent) => agent !== "mascot");
 
 describe("git-write permission doctrine (pi templates)", () => {
 	test("orchestrator: add/commit/push/pull and gh pr all ask", () => {
@@ -93,12 +96,12 @@ describe("git-write permission doctrine (pi templates)", () => {
 	});
 
 	test("non-orchestrators: compound npm test && git push denies", () => {
-		for (const agent of ["implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			assert.equal(verdict(agent, "npm test && git push"), "deny", agent);
 		}
 	});
 
-	for (const agent of OTHER_AGENTS) {
+	for (const agent of PI_SHELL_AGENTS) {
 		test(`${agent}: push/pull and gh pr deny`, () => {
 			const commands = [
 				"git push",
@@ -257,7 +260,7 @@ describe("pi: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: env-prefixed writes deny", () => {
-		for (const agent of ["implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of ENV_PREFIXED) assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 		}
 	});
@@ -269,7 +272,7 @@ describe("pi: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: destructive branch denies, read-only not denied", () => {
-		for (const agent of ["implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of BRANCH_DESTRUCTIVE) assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 			assert.notEqual(verdict(agent, "git branch -a"), "deny", `${agent}: git branch -a`);
 		}
@@ -280,7 +283,7 @@ describe("pi: env-prefix bypass and branch gate", () => {
 	});
 
 	test("xargs-wrapped git push is blocked, never ask", () => {
-		for (const agent of ["orchestrator", "implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["orchestrator", "implementer", ...PI_SHELL_AGENTS]) {
 			const kind = verdict(agent, "xargs git push");
 			assert.notEqual(kind, "ask", agent);
 			assert.notEqual(kind, "allow", agent);
@@ -292,7 +295,7 @@ describe("pi: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: sudo option-flag writes deny", () => {
-		for (const agent of ["implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of SUDO_FLAG_WRITES) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -346,6 +349,13 @@ function opencodeVerdict(agent: string, command: string): string {
 	return "ask";
 }
 
+/** True when the agent's rules carry an exact shell rule (action, resource, effect). */
+function hasOpenCodeRule(agent: string, resource: string, effect: string): boolean {
+	return loadOpenCodeRules(agent).some(
+		(rule) => rule.action === "shell" && rule.resource === resource && rule.effect === effect,
+	);
+}
+
 /** Mirror of kiro's globset: `*` -> `.*`, `?` -> `.`, anchored, no optional trailing. */
 function kiroGlob(pattern: string, value: string): boolean {
 	const body = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
@@ -362,6 +372,35 @@ function kiroVerdict(agent: string, command: string): string {
 	return "ask";
 }
 
+interface KiroAgentConfig {
+	tools?: string[];
+	allowedTools?: string[];
+	toolsSettings?: { shell?: { allowedCommands?: string[]; deniedCommands?: string[] } };
+}
+
+function loadKiroConfig(agent: string): KiroAgentConfig {
+	return JSON.parse(
+		fs.readFileSync(path.join(repoRoot, "agent-templates/kiro", `${agent}.json`), "utf-8"),
+	) as KiroAgentConfig;
+}
+
+function kiroDeniedCommands(agent: string): string[] {
+	return loadKiroConfig(agent).toolsSettings?.shell?.deniedCommands ?? [];
+}
+
+/** kiro grants the shell tool only when `tools` or `allowedTools` lists it. */
+function kiroHasShellTool(agent: string): boolean {
+	const cfg = loadKiroConfig(agent);
+	return (cfg.tools ?? []).includes("shell") || (cfg.allowedTools ?? []).includes("shell");
+}
+
+/** pi grants a tool only when the frontmatter lists it in `tools`. */
+function piHasBashTool(agent: string): boolean {
+	const content = fs.readFileSync(path.join(frontmatterDir, `${agent}.yaml`), "utf-8");
+	const { frontmatter } = parseFrontmatter<{ tools?: string[] }>(`---\n${content}\n---\n`);
+	return (frontmatter.tools ?? []).includes("bash");
+}
+
 const OPENCODE_AGENTS = [
 	"implementer",
 	"implementer-python",
@@ -371,8 +410,13 @@ const OPENCODE_AGENTS = [
 	"tester",
 	"planner",
 	"overseer",
+	"mascot",
 ];
 const KIRO_AGENTS = [...OPENCODE_AGENTS];
+// Mascot grants no shell command on opencode (the base `*:*` rule denies) and has
+// no shell tool on kiro. Shell behavior matrices run on the shell-capable agents.
+const OPENCODE_SHELL_AGENTS = OPENCODE_AGENTS.filter((agent) => agent !== "mascot");
+const KIRO_SHELL_AGENTS = KIRO_AGENTS.filter((agent) => agent !== "mascot");
 
 describe("opencode: env-prefix bypass and branch gate", () => {
 	test("orchestrator: writes ask", () => {
@@ -382,7 +426,7 @@ describe("opencode: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: env-prefixed and bare writes deny", () => {
-		for (const agent of OPENCODE_AGENTS) {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
 			for (const command of [...ENV_PREFIXED, ...WRITE_BARE]) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -390,7 +434,7 @@ describe("opencode: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: destructive branch denies", () => {
-		for (const agent of OPENCODE_AGENTS) {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
 			for (const command of BRANCH_DESTRUCTIVE) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -404,7 +448,7 @@ describe("opencode: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: read-only branch stays not denied", () => {
-		for (const agent of OPENCODE_AGENTS) {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
 			for (const command of READ_ONLY_BRANCH) {
 				assert.notEqual(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -412,7 +456,7 @@ describe("opencode: env-prefix bypass and branch gate", () => {
 	});
 
 	test("non-orchestrators: xargs-wrapped writes deny", () => {
-		for (const agent of OPENCODE_AGENTS) {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
 			for (const command of XARGS_WRITES) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -434,7 +478,7 @@ describe("kiro: bare forms, env-prefix bypass, and branch gate", () => {
 	});
 
 	test("non-orchestrators: bare and env-prefixed writes deny", () => {
-		for (const agent of KIRO_AGENTS) {
+		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of [...ENV_PREFIXED, ...WRITE_BARE]) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -442,7 +486,7 @@ describe("kiro: bare forms, env-prefix bypass, and branch gate", () => {
 	});
 
 	test("non-orchestrators: destructive branch denies", () => {
-		for (const agent of KIRO_AGENTS) {
+		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of BRANCH_DESTRUCTIVE) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -456,12 +500,12 @@ describe("kiro: bare forms, env-prefix bypass, and branch gate", () => {
 	});
 
 	test("xargs-wrapped git push denies for non-orchestrators and asks for orchestrator", () => {
-		for (const agent of KIRO_AGENTS) assert.equal(kiroVerdict(agent, "xargs git push"), "deny", agent);
+		for (const agent of KIRO_SHELL_AGENTS) assert.equal(kiroVerdict(agent, "xargs git push"), "deny", agent);
 		assert.equal(kiroVerdict("orchestrator", "xargs git push"), "ask");
 	});
 
 	test("non-orchestrators: read-only branch stays not denied", () => {
-		for (const agent of KIRO_AGENTS) {
+		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of READ_ONLY_BRANCH) {
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -477,7 +521,7 @@ describe("opencode: command-substitution and option-form bypass", () => {
 	});
 
 	test("non-orchestrators: substitution and option-form writes deny", () => {
-		for (const agent of OPENCODE_AGENTS) {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
 			for (const command of SUBSTITUTION_WRITES) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -495,7 +539,7 @@ describe("kiro: command-substitution and option-form bypass", () => {
 	});
 
 	test("non-orchestrators: substitution and option-form writes deny", () => {
-		for (const agent of KIRO_AGENTS) {
+		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of SUBSTITUTION_WRITES) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -519,7 +563,7 @@ const READ_ONLY_AFTER_CATCHALL = [
 
 describe("read-only commands survive the tightened catch-alls", () => {
 	test("opencode: read-only commands are not denied", () => {
-		for (const agent of ["orchestrator", ...OPENCODE_AGENTS]) {
+		for (const agent of ["orchestrator", ...OPENCODE_SHELL_AGENTS]) {
 			for (const command of READ_ONLY_AFTER_CATCHALL) {
 				assert.notEqual(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -527,7 +571,7 @@ describe("read-only commands survive the tightened catch-alls", () => {
 	});
 
 	test("kiro: read-only commands are not denied", () => {
-		for (const agent of ["orchestrator", ...KIRO_AGENTS]) {
+		for (const agent of ["orchestrator", ...KIRO_SHELL_AGENTS]) {
 			for (const command of READ_ONLY_AFTER_CATCHALL) {
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
@@ -573,7 +617,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	test("pi: a leading branch flag cannot hide the destructive flag", () => {
 		for (const command of BRANCH_FLAG_ORDER) {
 			assert.equal(verdict("orchestrator", command), "ask", command);
-			for (const agent of ["implementer", ...OTHER_AGENTS]) {
+			for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -581,7 +625,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 
 	test("pi: plain read-only branch commands are not denied", () => {
 		for (const command of READ_ONLY_BRANCH_PLAIN) {
-			for (const agent of ["orchestrator", "implementer", ...OTHER_AGENTS]) {
+			for (const agent of ["orchestrator", "implementer", ...PI_SHELL_AGENTS]) {
 				assert.notEqual(verdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -590,7 +634,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	test("pi: writes hidden behind a broad allow ask the orchestrator and deny others", () => {
 		for (const command of HIDDEN_WRITES) {
 			assert.equal(verdict("orchestrator", command), "ask", command);
-			for (const agent of ["implementer", ...OTHER_AGENTS]) {
+			for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -599,7 +643,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	test("opencode: a leading branch flag cannot hide the destructive flag", () => {
 		for (const command of BRANCH_FLAG_ORDER) {
 			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
-			for (const agent of OPENCODE_AGENTS) {
+			for (const agent of OPENCODE_SHELL_AGENTS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -607,7 +651,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 
 	test("opencode: plain read-only branch commands are not denied", () => {
 		for (const command of READ_ONLY_BRANCH_PLAIN) {
-			for (const agent of ["orchestrator", ...OPENCODE_AGENTS]) {
+			for (const agent of ["orchestrator", ...OPENCODE_SHELL_AGENTS]) {
 				assert.notEqual(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -616,7 +660,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	test("opencode: writes hidden behind a broad allow ask the orchestrator and deny others", () => {
 		for (const command of HIDDEN_WRITES) {
 			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
-			for (const agent of OPENCODE_AGENTS) {
+			for (const agent of OPENCODE_SHELL_AGENTS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -625,7 +669,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	test("kiro: a leading branch flag cannot hide the destructive flag", () => {
 		for (const command of BRANCH_FLAG_ORDER) {
 			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
-			for (const agent of KIRO_AGENTS) {
+			for (const agent of KIRO_SHELL_AGENTS) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -633,7 +677,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 
 	test("kiro: plain read-only branch commands are not denied", () => {
 		for (const command of READ_ONLY_BRANCH_PLAIN) {
-			for (const agent of ["orchestrator", ...KIRO_AGENTS]) {
+			for (const agent of ["orchestrator", ...KIRO_SHELL_AGENTS]) {
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -642,7 +686,7 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	test("kiro: writes hidden behind a broad allow ask the orchestrator and deny others", () => {
 		for (const command of HIDDEN_WRITES) {
 			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
-			for (const agent of KIRO_AGENTS) {
+			for (const agent of KIRO_SHELL_AGENTS) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -693,7 +737,7 @@ describe("pi: git reset --soft is orchestrator-gated", () => {
 	});
 
 	test("non-orchestrators: git reset --soft denies", () => {
-		for (const agent of ["implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			const kind = verdict(agent, "git reset --soft HEAD~1");
 			assert.notEqual(kind, "ask", agent);
 			assert.notEqual(kind, "allow", agent);
@@ -707,14 +751,184 @@ describe("pi: mutating read-only git forms are gated", () => {
 	});
 
 	test("non-orchestrators: reflog/fetch/remote mutations deny", () => {
-		for (const agent of ["implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of READONLY_ABUSE) assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 		}
 	});
 
 	test("all agents: plain read-only reflog/fetch/remote are not denied", () => {
-		for (const agent of ["orchestrator", "implementer", ...OTHER_AGENTS]) {
+		for (const agent of ["orchestrator", "implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of READONLY_SAFE) assert.notEqual(verdict(agent, command), "deny", `${agent}: ${command}`);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// File migrations (cp/mv/rsync) prompt the orchestrator and the implementer on
+// every stack, so the user can approve a migration on demand. Every other agent
+// stays hard-gated: pi blocks by deny-by-default mode; opencode and kiro carry
+// explicit deny rules, so the command never runs silently.
+// ---------------------------------------------------------------------------
+
+const FILE_MIGRATION_COMMANDS = [
+	"cp src/a.txt dest/b.txt",
+	"mv src/a.txt dest/b.txt",
+	"rsync -a src/ dest/",
+	"cd /repo && cp src/a dest/b",
+	"env cp src/a dest/b",
+];
+
+const FILE_MIGRATION_TARGETS = [
+	"orchestrator",
+	"implementer",
+	"implementer-python",
+	"implementer-react",
+];
+
+describe("file-migration permission doctrine (cp/mv/rsync)", () => {
+	const MIGRATION_RESOURCES = ["cp *", "mv *", "rsync *"];
+
+	test("pi orchestrator and implementer: cp/mv/rsync ask", () => {
+		for (const agent of ["orchestrator", "implementer"]) {
+			for (const command of FILE_MIGRATION_COMMANDS) {
+				assert.equal(verdict(agent, command), "ask", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("pi other agents: cp/mv/rsync deny by default", () => {
+		for (const agent of OTHER_AGENTS) {
+			for (const command of FILE_MIGRATION_COMMANDS) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	// opencode: the ask must come from an explicit rule, not the default ask.
+	test("opencode orchestrator and implementers: explicit ask rules exist", () => {
+		for (const agent of FILE_MIGRATION_TARGETS) {
+			for (const resource of MIGRATION_RESOURCES) {
+				assert.ok(hasOpenCodeRule(agent, resource, "ask"), `${agent}: missing {shell, ${resource}, ask}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator and implementers: cp/mv/rsync ask", () => {
+		for (const agent of FILE_MIGRATION_TARGETS) {
+			for (const command of FILE_MIGRATION_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "ask", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode other agents: explicit deny rules deny cp/mv/rsync", () => {
+		for (const agent of OPENCODE_AGENTS.filter((name) => !FILE_MIGRATION_TARGETS.includes(name))) {
+			for (const resource of MIGRATION_RESOURCES) {
+				assert.ok(hasOpenCodeRule(agent, resource, "deny"), `${agent}: missing {shell, ${resource}, deny}`);
+			}
+			for (const command of FILE_MIGRATION_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	// kiro: orchestrator/implementer are unlisted, so the platform default asks.
+	// Assert no deniedCommands pattern matches them.
+	test("kiro orchestrator and implementers: unlisted -> ask, no deny matches", () => {
+		for (const agent of FILE_MIGRATION_TARGETS) {
+			const denied = kiroDeniedCommands(agent);
+			for (const command of FILE_MIGRATION_COMMANDS) {
+				assert.ok(!denied.some((pattern) => kiroGlob(pattern, command)), `${agent}: deny matches ${command}`);
+				assert.equal(kiroVerdict(agent, command), "ask", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro other agents: explicit deniedCommands deny cp/mv/rsync", () => {
+		for (const agent of KIRO_AGENTS.filter((name) => !FILE_MIGRATION_TARGETS.includes(name))) {
+			if (!kiroHasShellTool(agent)) {
+				// Mascot gets no shell at all, so cp/mv/rsync cannot run. That is
+				// stronger than a deny entry; assert the tool is absent instead.
+				assert.ok(!kiroHasShellTool(agent), `${agent}: a shell-less agent cannot run cp/mv/rsync`);
+				continue;
+			}
+			for (const command of ["cp", "mv", "rsync"]) {
+				assert.ok(kiroDeniedCommands(agent).includes(command), `${agent}: missing deniedCommands ${command}`);
+			}
+			for (const command of FILE_MIGRATION_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("mascot: no shell surface on any stack", () => {
+		assert.ok(!piHasBashTool("mascot"), "pi mascot must not have a bash tool");
+		assert.ok(!kiroHasShellTool("mascot"), "kiro mascot must not have a shell tool");
+		assert.ok(hasOpenCodeRule("mascot", "cp *", "deny"), "opencode mascot must explicitly deny cp");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// File-migration wrapper boundaries on pi: the `command -v` read-only probe
+// must stay allowed, `timeout`/`chrt`-wrapped migrations must still ask, and
+// near-miss tokens must never over-match the ask rule.
+// ---------------------------------------------------------------------------
+
+const PI_MIGRATION_AGENTS = ["orchestrator", "implementer"];
+
+const COMMAND_VERSION_PROBES = [
+	"command -v cp",
+	"command -V cp",
+	"command -v mv",
+	"command -V mv",
+	"command -v rsync",
+	"command -V rsync",
+];
+
+const COMMAND_PREFIXED_MIGRATIONS = ["command cp a b", "command mv a b", "command rsync a b"];
+
+const TIMEOUT_WRAPPED_MIGRATIONS = [
+	"timeout 5 cp a b",
+	"timeout 5 mv a b",
+	"timeout 5 rsync a b",
+	"timeout -s TERM 5 cp a b",
+	"timeout -s TERM 5 mv a b",
+	"timeout -s TERM 5 rsync a b",
+	"chrt 5 cp a b",
+];
+
+const MIGRATION_NEAR_MISSES = ["scp a b", "cpfoo", "grep cp", "mvn test", "MCP", "mvfoo", "rsyncd"];
+
+describe("pi: cp/mv/rsync wrapper boundaries", () => {
+	test("command -v/-V probes stay allowed, never asked", () => {
+		for (const agent of PI_MIGRATION_AGENTS) {
+			for (const command of COMMAND_VERSION_PROBES) {
+				assert.equal(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("command-prefixed migrations fall through to deny-by-default", () => {
+		for (const agent of PI_MIGRATION_AGENTS) {
+			for (const command of COMMAND_PREFIXED_MIGRATIONS) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("timeout/chrt-wrapped migrations still ask", () => {
+		for (const agent of PI_MIGRATION_AGENTS) {
+			for (const command of TIMEOUT_WRAPPED_MIGRATIONS) {
+				assert.equal(verdict(agent, command), "ask", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("near-miss tokens never over-match the ask rule", () => {
+		for (const agent of PI_MIGRATION_AGENTS) {
+			for (const command of MIGRATION_NEAR_MISSES) {
+				assert.notEqual(verdict(agent, command), "ask", `${agent}: ${command}`);
+			}
 		}
 	});
 });

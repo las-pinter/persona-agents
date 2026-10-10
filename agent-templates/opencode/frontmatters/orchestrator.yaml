@@ -191,6 +191,15 @@ permissions:
     resource: "xargs *"
     effect: ask
   - action: shell
+    resource: "cp *"
+    effect: ask
+  - action: shell
+    resource: "mv *"
+    effect: ask
+  - action: shell
+    resource: "rsync *"
+    effect: ask
+  - action: shell
     resource: "git push *"
     effect: ask
   - action: shell
