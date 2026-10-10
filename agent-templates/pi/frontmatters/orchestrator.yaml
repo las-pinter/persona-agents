@@ -18,7 +18,8 @@ permissions:
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
     - { tool: subagent, match: "." }
     - { tool: ask_user_question, match: "." }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|tag\\s+(-l|--list))\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+tag\\s*$" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:
@@ -34,6 +35,7 @@ permissions:
     # committing is orchestrator-only, gated per call.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(add|commit)\\b", reason: "orchestrator commit requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(push|pull)\\b", reason: "orchestrator push/pull requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\s+(?!-d\\b|--(?:delete|delet|dele|del|de|d|force|forc)\\b|-f\\b|-l\\b|--list\\b)", reason: "tag creation requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b", reason: "pull request operations require user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+branch\\b[^\\n]*\\s(?:-[a-zA-Z]*[fDmMdcC]\\b|--(?:delete|delet|dele|del|de|d|force|forc|for|move|mov|mo|copy|cop)\\b)", reason: "destructive branch operation requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+reflog\\s+(?:expire|delete|drop)\\b", reason: "reflog rewrite requires user approval" }
@@ -53,3 +55,5 @@ permissions:
     - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
+    # A destructive tag flag can appear anywhere after `tag`, not only first.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\b[^;&|(\\n]*\\s(?:-[A-Za-z]*[df]\\b|--(?:delete|delet|dele|del|de|d|force|forc)\\b)" }

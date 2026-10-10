@@ -181,6 +181,73 @@ permission:
     "*git --paginate pull*": deny
     "*git --paginate add*": deny
     "*git --paginate commit*": deny
+    "git tag *": deny
+    "* git tag *": deny
+    "*;git tag*": deny
+    "*&&git tag*": deny
+    "*|git tag*": deny
+    "*$(git tag*": deny
+    "*`git tag*": deny
+    "git -C * tag *": deny
+    "* git -C * tag *": deny
+    "git tag -d*": deny
+    "* git tag -d*": deny
+    "*;git tag -d*": deny
+    "*&&git tag -d*": deny
+    "*|git tag -d*": deny
+    "*$(git tag -d*": deny
+    "*`git tag -d*": deny
+    "git -C * tag -d*": deny
+    "* git -C * tag -d*": deny
+    "git tag --delete*": deny
+    "* git tag --delete*": deny
+    "*;git tag --delete*": deny
+    "*&&git tag --delete*": deny
+    "*|git tag --delete*": deny
+    "*$(git tag --delete*": deny
+    "*`git tag --delete*": deny
+    "git -C * tag --delete*": deny
+    "* git -C * tag --delete*": deny
+    "git tag -f*": deny
+    "* git tag -f*": deny
+    "*;git tag -f*": deny
+    "*&&git tag -f*": deny
+    "*|git tag -f*": deny
+    "*$(git tag -f*": deny
+    "*`git tag -f*": deny
+    "git -C * tag -f*": deny
+    "* git -C * tag -f*": deny
+    "git tag --force*": deny
+    "* git tag --force*": deny
+    "*;git tag --force*": deny
+    "*&&git tag --force*": deny
+    "*|git tag --force*": deny
+    "*$(git tag --force*": deny
+    "*`git tag --force*": deny
+    "git -C * tag --force*": deny
+    "* git -C * tag --force*": deny
+    "*$(git -C * tag -d*": deny
+    "*`git -C * tag -d*": deny
+    "*;git -C * tag -d*": deny
+    "*&&git -C * tag -d*": deny
+    "*|git -C * tag -d*": deny
+    "*$(git -C * tag --delete*": deny
+    "*`git -C * tag --delete*": deny
+    "*;git -C * tag --delete*": deny
+    "*&&git -C * tag --delete*": deny
+    "*|git -C * tag --delete*": deny
+    "*$(git -C * tag -f*": deny
+    "*`git -C * tag -f*": deny
+    "*;git -C * tag -f*": deny
+    "*&&git -C * tag -f*": deny
+    "*|git -C * tag -f*": deny
+    "*$(git -C * tag --force*": deny
+    "*`git -C * tag --force*": deny
+    "*;git -C * tag --force*": deny
+    "*&&git -C * tag --force*": deny
+    "*|git -C * tag --force*": deny
+    "*git -C * tag -*d*": deny
+    "*git -C * tag -*f*": deny
   task:
     "*": deny
     "{{THEME}}-researcher": allow

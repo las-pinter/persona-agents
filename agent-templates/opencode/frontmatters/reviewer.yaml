@@ -568,3 +568,204 @@ permissions:
   - action: shell
     resource: "*git --paginate commit*"
     effect: deny
+  - action: shell
+    resource: "git tag *"
+    effect: deny
+  - action: shell
+    resource: "* git tag *"
+    effect: deny
+  - action: shell
+    resource: "*;git tag*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag *"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag *"
+    effect: deny
+  - action: shell
+    resource: "git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "* git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "* git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "* git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "* git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*git -C * tag -*d*"
+    effect: deny
+  - action: shell
+    resource: "*git -C * tag -*f*"
+    effect: deny
