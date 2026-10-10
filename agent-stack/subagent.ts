@@ -108,11 +108,29 @@ function formatUsageStats(
 	return parts.join(" ");
 }
 
+/** Format a duration like pi core: one decimal second under a minute. */
+export function formatToolDuration(durationMs: number): string {
+	const seconds = durationMs / 1000;
+	if (seconds < 60) return `${seconds.toFixed(1)}s`;
+
+	const totalSeconds = Math.floor(seconds);
+	const minutes = Math.floor(totalSeconds / 60);
+	const remainder = totalSeconds % 60;
+	if (minutes < 60) return `${minutes}m ${remainder}s`;
+
+	return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
+}
+
 function formatToolCall(
 	toolName: string,
 	args: Record<string, unknown>,
 	themeFg: (color: any, text: string) => string,
+	durationMs?: number,
 ): string {
+	const suffix =
+		durationMs !== undefined && Number.isFinite(durationMs)
+			? themeFg("dim", `  ${formatToolDuration(durationMs)}`)
+			: "";
 	const shortenPath = (p: string) => {
 		const home = os.homedir();
 		return p.startsWith(home) ? `~${p.slice(home.length)}` : p;
@@ -122,7 +140,7 @@ function formatToolCall(
 		case "bash": {
 			const command = (args.command as string) || "...";
 			const preview = command.length > 60 ? `${command.slice(0, 60)}...` : command;
-			return themeFg("muted", "$ ") + themeFg("toolOutput", preview);
+			return themeFg("muted", "$ ") + themeFg("toolOutput", preview) + suffix;
 		}
 		case "read": {
 			const rawPath = (args.file_path || args.path || "...") as string;
@@ -135,7 +153,7 @@ function formatToolCall(
 				const endLine = limit !== undefined ? startLine + limit - 1 : "";
 				text += themeFg("warning", `:${startLine}${endLine ? `-${endLine}` : ""}`);
 			}
-			return themeFg("muted", "read ") + text;
+			return themeFg("muted", "read ") + text + suffix;
 		}
 		case "write": {
 			const rawPath = (args.file_path || args.path || "...") as string;
@@ -144,20 +162,20 @@ function formatToolCall(
 			const lines = content.split("\n").length;
 			let text = themeFg("muted", "write ") + themeFg("accent", filePath);
 			if (lines > 1) text += themeFg("dim", ` (${lines} lines)`);
-			return text;
+			return text + suffix;
 		}
 		case "edit": {
 			const rawPath = (args.file_path || args.path || "...") as string;
-			return themeFg("muted", "edit ") + themeFg("accent", shortenPath(rawPath));
+			return themeFg("muted", "edit ") + themeFg("accent", shortenPath(rawPath)) + suffix;
 		}
 		case "ls": {
 			const rawPath = (args.path || ".") as string;
-			return themeFg("muted", "ls ") + themeFg("accent", shortenPath(rawPath));
+			return themeFg("muted", "ls ") + themeFg("accent", shortenPath(rawPath)) + suffix;
 		}
 		case "find": {
 			const pattern = (args.pattern || "*") as string;
 			const rawPath = (args.path || ".") as string;
-			return themeFg("muted", "find ") + themeFg("accent", pattern) + themeFg("dim", ` in ${shortenPath(rawPath)}`);
+			return themeFg("muted", "find ") + themeFg("accent", pattern) + themeFg("dim", ` in ${shortenPath(rawPath)}`) + suffix;
 		}
 		case "grep": {
 			const pattern = (args.pattern || "") as string;
@@ -165,13 +183,14 @@ function formatToolCall(
 			return (
 				themeFg("muted", "grep ") +
 				themeFg("accent", `/${pattern}/`) +
-				themeFg("dim", ` in ${shortenPath(rawPath)}`)
+				themeFg("dim", ` in ${shortenPath(rawPath)}`) +
+				suffix
 			);
 		}
 		default: {
 			const argsStr = JSON.stringify(args);
 			const preview = argsStr.length > 50 ? `${argsStr.slice(0, 50)}...` : argsStr;
-			return themeFg("accent", toolName) + themeFg("dim", ` ${preview}`);
+			return themeFg("accent", toolName) + themeFg("dim", ` ${preview}`) + suffix;
 		}
 	}
 }
@@ -284,15 +303,29 @@ function appendTreeEvent(event: RunEvent): void {
 	appendEvent(logPath, event);
 }
 
-type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
+type DisplayItem =
+	| { type: "text"; text: string }
+	| { type: "toolCall"; name: string; args: Record<string, any>; durationMs?: number };
 
 function getDisplayItems(messages: Message[]): DisplayItem[] {
+	const durations = new Map<string, number>();
+	for (const msg of messages) {
+		if (msg.role === "toolResult" && typeof msg.durationMs === "number") {
+			durations.set(msg.toolCallId, msg.durationMs);
+		}
+	}
 	const items: DisplayItem[] = [];
 	for (const msg of messages) {
 		if (msg.role === "assistant") {
 			for (const part of msg.content) {
 				if (part.type === "text") items.push({ type: "text", text: part.text });
-				else if (part.type === "toolCall") items.push({ type: "toolCall", name: part.name, args: part.arguments });
+				else if (part.type === "toolCall")
+					items.push({
+						type: "toolCall",
+						name: part.name,
+						args: part.arguments,
+						durationMs: durations.get(part.id),
+					});
 			}
 		}
 	}
@@ -1017,7 +1050,7 @@ export default function (pi: ExtensionAPI) {
 			return new Text(text, 0, 0);
 		},
 
-		renderResult(result, { expanded }, theme, _context) {
+		renderResult(result, { expanded }, theme, context) {
 			const details = result.details as SubagentDetails | undefined;
 			if (!details || details.results.length === 0) {
 				const text = result.content[0];
@@ -1025,6 +1058,13 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			const mdTheme = getMarkdownTheme();
+
+			// pi-coding-agent 1.0.0 types lack `durationMs`; the 1.1.0 runtime supplies the run total.
+			const runDurationMs = (context as { durationMs?: number }).durationMs;
+			const runDuration =
+				typeof runDurationMs === "number" && Number.isFinite(runDurationMs)
+					? ` ${theme.fg("dim", formatToolDuration(runDurationMs))}`
+					: "";
 
 			const renderDisplayItems = (items: DisplayItem[], limit?: number) => {
 				const toShow = limit ? items.slice(-limit) : items;
@@ -1036,7 +1076,7 @@ export default function (pi: ExtensionAPI) {
 						const preview = expanded ? item.text : item.text.split("\n").slice(0, 3).join("\n");
 						text += `${theme.fg("toolOutput", preview)}\n`;
 					} else {
-						text += `${theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme))}\n`;
+						text += `${theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme), item.durationMs)}\n`;
 					}
 				}
 				return text.trimEnd();
@@ -1051,7 +1091,7 @@ export default function (pi: ExtensionAPI) {
 
 				if (expanded) {
 					const container = new Container();
-					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
+					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}`;
 					if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 					container.addChild(new Text(header, 0, 0));
 					if (isError && r.errorMessage)
@@ -1068,7 +1108,7 @@ export default function (pi: ExtensionAPI) {
 							if (item.type === "toolCall")
 								container.addChild(
 									new Text(
-										theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
+										theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme), item.durationMs),
 										0,
 										0,
 									),
@@ -1087,7 +1127,7 @@ export default function (pi: ExtensionAPI) {
 					return container;
 				}
 
-				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
+				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}`;
 				if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 				if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
 				else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
@@ -1124,7 +1164,8 @@ export default function (pi: ExtensionAPI) {
 							icon +
 								" " +
 								theme.fg("toolTitle", theme.bold("chain ")) +
-								theme.fg("accent", `${successCount}/${details.results.length} steps`),
+								theme.fg("accent", `${successCount}/${details.results.length} steps`) +
+								runDuration,
 							0,
 							0,
 						),
@@ -1150,7 +1191,7 @@ export default function (pi: ExtensionAPI) {
 							if (item.type === "toolCall") {
 								container.addChild(
 									new Text(
-										theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
+										theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme), item.durationMs),
 										0,
 										0,
 									),
@@ -1181,7 +1222,8 @@ export default function (pi: ExtensionAPI) {
 					icon +
 					" " +
 					theme.fg("toolTitle", theme.bold("chain ")) +
-					theme.fg("accent", `${successCount}/${details.results.length} steps`);
+					theme.fg("accent", `${successCount}/${details.results.length} steps`) +
+					runDuration;
 				for (const r of details.results) {
 					const rIcon = r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
 					const displayItems = getDisplayItems(r.messages);
@@ -1213,7 +1255,7 @@ export default function (pi: ExtensionAPI) {
 					const container = new Container();
 					container.addChild(
 						new Text(
-							`${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}`,
+							`${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}${runDuration}`,
 							0,
 							0,
 						),
@@ -1235,7 +1277,7 @@ export default function (pi: ExtensionAPI) {
 							if (item.type === "toolCall") {
 								container.addChild(
 									new Text(
-										theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
+										theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme), item.durationMs),
 										0,
 										0,
 									),
@@ -1262,7 +1304,7 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				// Collapsed view (or still running)
-				let text = `${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}`;
+				let text = `${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}${runDuration}`;
 				for (const r of details.results) {
 					const rIcon =
 						r.exitCode === -1
