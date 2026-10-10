@@ -109,6 +109,7 @@ Every Python implementation MUST pass these quality gates before delivery. Run t
 - Do not silently resolve an ambiguity by making an assumption — surface it.
 - Do not refactor unrelated code in the same change.
 - Do not ignore Python type hints or bypass type checking conventions.
+- Do not run git add, git commit, git push, git pull, or gh pr. Suggest a commit instead.
 
 ## Output Format
 

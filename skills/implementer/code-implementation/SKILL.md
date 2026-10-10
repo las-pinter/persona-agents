@@ -12,7 +12,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 2. PLAN      → Read full files, consider edge cases, identify changes
 3. IMPLEMENT → Follow patterns, handle all states, comment WHY not WHAT
 4. VERIFY    → Run quality gates in order (see Phase 4)
-5. DELIVER   → Self-review, update docs, leave commits to orchestrator
+5. DELIVER   → Self-review, update docs, suggest a commit (never run one)
 ```
 
 ---
@@ -78,7 +78,7 @@ Type Check → Lint → Existing Tests → Build → New Tests
 
 - Review your own code as if you were a reviewer: correctness, edge cases, naming, comments, dead code, security.
 - Update docs affected by the change: README, API docs, inline docs, changelog.
-- Leave commits to the orchestrator.
+- Suggest a commit message. Never run git add, commit, push, pull, or gh pr.
 
 ---
 

@@ -20,22 +20,16 @@ permissions:
     resource: "~/agent-notes/orchestrator/**"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/plans/*"
+    resource: "~/agent-notes/project-notes/*"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/plans/**"
+    resource: "~/agent-notes/project-notes/**"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/*"
+    resource: "~/agent-notes/researcher/reports/*"
     effect: allow
   - action: external_directory
-    resource: "~/agent-notes/planner/**"
-    effect: allow
-  - action: external_directory
-    resource: "~/agent-notes/researcher/studies/*"
-    effect: allow
-  - action: external_directory
-    resource: "~/agent-notes/researcher/studies/**"
+    resource: "~/agent-notes/researcher/reports/**"
     effect: allow
   - action: edit
     resource: "*"
@@ -47,10 +41,10 @@ permissions:
     resource: "~/agent-notes/orchestrator/**"
     effect: allow
   - action: edit
-    resource: "~/agent-notes/planner/plans/*"
+    resource: "~/agent-notes/project-notes/*"
     effect: allow
   - action: edit
-    resource: "~/agent-notes/planner/plans/**"
+    resource: "~/agent-notes/project-notes/**"
     effect: allow
   - action: glob
     resource: "*"
@@ -68,164 +62,329 @@ permissions:
     resource: "*"
     effect: ask
   - action: shell
-    resource: "bash -n *"
+    resource: "bash -n"
     effect: allow
   - action: shell
     resource: "bash -c *"
     effect: ask
   - action: shell
-    resource: "cat *"
+    resource: "cat"
     effect: allow
   - action: shell
     resource: "cat *>*"
     effect: ask
   - action: shell
-    resource: "date *"
+    resource: "date"
     effect: allow
   - action: shell
-    resource: "diff *"
+    resource: "diff"
     effect: allow
   - action: shell
-    resource: "echo *"
+    resource: "echo"
     effect: allow
   - action: shell
     resource: "echo *>*"
     effect: ask
   - action: shell
-    resource: "find *-name*"
+    resource: "find"
     effect: allow
   - action: shell
-    resource: "find *-type*"
+    resource: "git status"
     effect: allow
   - action: shell
-    resource: "git status *"
+    resource: "git log"
     effect: allow
   - action: shell
-    resource: "git log *"
+    resource: "git diff"
     effect: allow
   - action: shell
-    resource: "git diff *"
-    effect: allow
-  - action: shell
-    resource: "git show *"
+    resource: "git show"
     effect: allow
   - action: shell
     resource: "git add *"
+    effect: ask
+  - action: shell
+    resource: "git branch --show-current"
     effect: allow
   - action: shell
-    resource: "git branch --show-current *"
+    resource: "git branch -a"
     effect: allow
   - action: shell
-    resource: "git branch -a *"
+    resource: "git branch -r"
     effect: allow
   - action: shell
-    resource: "git branch -r *"
-    effect: allow
-  - action: shell
-    resource: "git -C * branch --show-current *"
-    effect: allow
-  - action: shell
-    resource: "git -C * branch -a *"
-    effect: allow
-  - action: shell
-    resource: "git -C * check-ignore *"
-    effect: allow
-  - action: shell
-    resource: "git -C * diff *"
-    effect: allow
-  - action: shell
-    resource: "git -C * grep *"
-    effect: allow
-  - action: shell
-    resource: "git -C * log *"
-    effect: allow
-  - action: shell
-    resource: "git -C * ls-files *"
-    effect: allow
-  - action: shell
-    resource: "git -C * reflog *"
-    effect: allow
-  - action: shell
-    resource: "git -C * show *"
-    effect: allow
-  - action: shell
-    resource: "git -C * status *"
+    resource: "git -C"
     effect: allow
   - action: shell
     resource: "git -C * push *"
-    effect: deny
+    effect: ask
   - action: shell
     resource: "git -C * pull *"
-    effect: deny
+    effect: ask
   - action: shell
     resource: "git -C * push"
-    effect: deny
+    effect: ask
   - action: shell
     resource: "git -C * pull"
-    effect: deny
+    effect: ask
   - action: shell
     resource: "git commit *"
+    effect: ask
+  - action: shell
+    resource: "git reset --soft *"
+    effect: ask
+  - action: shell
+    resource: "git rev-parse"
     effect: allow
   - action: shell
-    resource: "git rev-parse *"
-    effect: allow
-  - action: shell
-    resource: "git cat-file *"
+    resource: "git cat-file"
     effect: allow
   - action: shell
     resource: "git merge-base *"
     effect: allow
   - action: shell
-    resource: "git fetch *"
+    resource: "git fetch"
     effect: allow
   - action: shell
-    resource: "git rev-list *"
+    resource: "git rev-list"
     effect: allow
   - action: shell
-    resource: "grep *"
+    resource: "grep"
     effect: allow
   - action: shell
-    resource: "head *"
+    resource: "head"
     effect: allow
   - action: shell
-    resource: "jq *"
+    resource: "jq"
     effect: allow
   - action: shell
-    resource: "ls *"
+    resource: "ls"
     effect: allow
   - action: shell
-    resource: "mkdir *"
+    resource: "mkdir"
     effect: allow
   - action: shell
     resource: "pwd"
     effect: allow
   - action: shell
-    resource: "ruff *"
+    resource: "ruff"
     effect: allow
   - action: shell
-    resource: "sort *"
+    resource: "sort"
     effect: allow
   - action: shell
-    resource: "tail*"
+    resource: "tail"
     effect: allow
   - action: shell
-    resource: "tr *"
+    resource: "tr"
     effect: allow
   - action: shell
-    resource: "uniq *"
+    resource: "uniq"
     effect: allow
   - action: shell
-    resource: "wc *"
+    resource: "wc"
     effect: allow
   - action: shell
-    resource: "which *"
+    resource: "which"
     effect: allow
+  - action: shell
+    resource: "xargs *"
+    effect: ask
+  - action: shell
+    resource: "cp *"
+    effect: ask
+  - action: shell
+    resource: "mv *"
+    effect: ask
+  - action: shell
+    resource: "rsync *"
+    effect: ask
   - action: shell
     resource: "git push *"
-    effect: deny
+    effect: ask
   - action: shell
     resource: "git pull *"
-    effect: deny
+    effect: ask
+  - action: shell
+    resource: "git merge"
+    effect: ask
+  - action: shell
+    resource: "git merge *"
+    effect: ask
+  - action: shell
+    resource: "* git merge"
+    effect: ask
+  - action: shell
+    resource: "* git merge *"
+    effect: ask
+  - action: shell
+    resource: "*;git merge"
+    effect: ask
+  - action: shell
+    resource: "*&&git merge"
+    effect: ask
+  - action: shell
+    resource: "*|git merge"
+    effect: ask
+  - action: shell
+    resource: "*;git merge *"
+    effect: ask
+  - action: shell
+    resource: "*&&git merge *"
+    effect: ask
+  - action: shell
+    resource: "*|git merge *"
+    effect: ask
+  - action: shell
+    resource: "gh pr *"
+    effect: ask
+  - action: shell
+    resource: "* git add"
+    effect: ask
+  - action: shell
+    resource: "* git add *"
+    effect: ask
+  - action: shell
+    resource: "* git commit"
+    effect: ask
+  - action: shell
+    resource: "* git commit *"
+    effect: ask
+  - action: shell
+    resource: "* git push"
+    effect: ask
+  - action: shell
+    resource: "* git push *"
+    effect: ask
+  - action: shell
+    resource: "* git pull"
+    effect: ask
+  - action: shell
+    resource: "* git pull *"
+    effect: ask
+  - action: shell
+    resource: "* gh pr"
+    effect: ask
+  - action: shell
+    resource: "* gh pr *"
+    effect: ask
+  - action: shell
+    resource: "* git -C * add"
+    effect: ask
+  - action: shell
+    resource: "* git -C * add *"
+    effect: ask
+  - action: shell
+    resource: "* git -C * commit"
+    effect: ask
+  - action: shell
+    resource: "* git -C * commit *"
+    effect: ask
+  - action: shell
+    resource: "* git -C * push"
+    effect: ask
+  - action: shell
+    resource: "* git -C * push *"
+    effect: ask
+  - action: shell
+    resource: "* git -C * pull"
+    effect: ask
+  - action: shell
+    resource: "* git -C * pull *"
+    effect: ask
+  - action: shell
+    resource: "git tag *"
+    effect: ask
+  - action: shell
+    resource: "* git tag *"
+    effect: ask
+  - action: shell
+    resource: "*;git tag*"
+    effect: ask
+  - action: shell
+    resource: "*&&git tag*"
+    effect: ask
+  - action: shell
+    resource: "*|git tag*"
+    effect: ask
+  - action: shell
+    resource: "*$(git tag*"
+    effect: ask
+  - action: shell
+    resource: "*`git tag*"
+    effect: ask
+  - action: shell
+    resource: "git -C * tag *"
+    effect: ask
+  - action: shell
+    resource: "* git -C * tag *"
+    effect: ask
+  - action: shell
+    resource: "git branch -f*"
+    effect: ask
+  - action: shell
+    resource: "git branch -D*"
+    effect: ask
+  - action: shell
+    resource: "git branch -m*"
+    effect: ask
+  - action: shell
+    resource: "git branch -M*"
+    effect: ask
+  - action: shell
+    resource: "git branch --delete*"
+    effect: ask
+  - action: shell
+    resource: "git branch --force*"
+    effect: ask
+  - action: shell
+    resource: "git branch --move*"
+    effect: ask
+  - action: shell
+    resource: "git branch --copy*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -f*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -D*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -m*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -M*"
+    effect: ask
+  - action: shell
+    resource: "* git branch --delete*"
+    effect: ask
+  - action: shell
+    resource: "* git branch --force*"
+    effect: ask
+  - action: shell
+    resource: "* git branch --move*"
+    effect: ask
+  - action: shell
+    resource: "* git branch --copy*"
+    effect: ask
+  - action: shell
+    resource: "git branch -d*"
+    effect: ask
+  - action: shell
+    resource: "git branch -c*"
+    effect: ask
+  - action: shell
+    resource: "git branch -C*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -d*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -c*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -C*"
+    effect: ask
   - action: shell
     resource: "find * -exec *"
     effect: deny
@@ -233,19 +392,16 @@ permissions:
     resource: "sed -i *"
     effect: ask
   - action: shell
-    resource: "xargs *"
-    effect: ask
-  - action: shell
     resource: "whoami"
     effect: allow
   - action: shell
-    resource: "/home/dev/.local/bin/herdr * --help *"
+    resource: "/home/dev/.local/bin/herdr"
     effect: allow
   - action: shell
-    resource: "HERDR_ENV=1 /home/dev/.local/bin/herdr agent list *"
+    resource: "HERDR_ENV=1 /home/dev/.local/bin/herdr agent list"
     effect: allow
   - action: shell
-    resource: "HERDR_ENV=1 /home/dev/.local/bin/herdr plugin list *"
+    resource: "HERDR_ENV=1 /home/dev/.local/bin/herdr plugin list"
     effect: allow
   - action: subagent
     resource: "*"
@@ -260,7 +416,7 @@ permissions:
     resource: journal-management
     effect: allow
   - action: skill
-    resource: plan-tracking
+    resource: commit-hygiene
     effect: allow
   - action: skill
     resource: task-routing
@@ -288,4 +444,454 @@ permissions:
     effect: deny
   - action: shell
     resource: "zsh -c *"
+    effect: deny
+  - action: shell
+    resource: "*git --git-dir* push*"
+    effect: ask
+  - action: shell
+    resource: "*git --work-tree* push*"
+    effect: ask
+  - action: shell
+    resource: "*git -p push*"
+    effect: ask
+  - action: shell
+    resource: "*git --no-pager push*"
+    effect: ask
+  - action: shell
+    resource: "*git --bare push*"
+    effect: ask
+  - action: shell
+    resource: "*git --namespace* push*"
+    effect: ask
+  - action: shell
+    resource: "*git -c * push*"
+    effect: ask
+  - action: shell
+    resource: "*git -C * push*"
+    effect: ask
+  - action: shell
+    resource: "*git push*"
+    effect: ask
+  - action: shell
+    resource: "*git --git-dir* pull*"
+    effect: ask
+  - action: shell
+    resource: "*git --work-tree* pull*"
+    effect: ask
+  - action: shell
+    resource: "*git -p pull*"
+    effect: ask
+  - action: shell
+    resource: "*git --no-pager pull*"
+    effect: ask
+  - action: shell
+    resource: "*git --bare pull*"
+    effect: ask
+  - action: shell
+    resource: "*git --namespace* pull*"
+    effect: ask
+  - action: shell
+    resource: "*git -c * pull*"
+    effect: ask
+  - action: shell
+    resource: "*git -C * pull*"
+    effect: ask
+  - action: shell
+    resource: "*git pull*"
+    effect: ask
+  - action: shell
+    resource: "*git --git-dir* add*"
+    effect: ask
+  - action: shell
+    resource: "*git --work-tree* add*"
+    effect: ask
+  - action: shell
+    resource: "*git -p add*"
+    effect: ask
+  - action: shell
+    resource: "*git --no-pager add*"
+    effect: ask
+  - action: shell
+    resource: "*git --bare add*"
+    effect: ask
+  - action: shell
+    resource: "*git --namespace* add*"
+    effect: ask
+  - action: shell
+    resource: "*git -c * add*"
+    effect: ask
+  - action: shell
+    resource: "*git -C * add*"
+    effect: ask
+  - action: shell
+    resource: "*git add*"
+    effect: ask
+  - action: shell
+    resource: "*git --git-dir* commit*"
+    effect: ask
+  - action: shell
+    resource: "*git --work-tree* commit*"
+    effect: ask
+  - action: shell
+    resource: "*git -p commit*"
+    effect: ask
+  - action: shell
+    resource: "*git --no-pager commit*"
+    effect: ask
+  - action: shell
+    resource: "*git --bare commit*"
+    effect: ask
+  - action: shell
+    resource: "*git --namespace* commit*"
+    effect: ask
+  - action: shell
+    resource: "*git -c * commit*"
+    effect: ask
+  - action: shell
+    resource: "*git -C * commit*"
+    effect: ask
+  - action: shell
+    resource: "*git commit*"
+    effect: ask
+  - action: shell
+    resource: "*gh -R * pr*"
+    effect: ask
+  - action: shell
+    resource: "*gh --repo * pr*"
+    effect: ask
+  - action: shell
+    resource: "*gh pr*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch -d*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch -D*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch -m*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch -M*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch -c*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch -C*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch --delete*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch --force*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch --move*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch --copy*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -d*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -D*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -m*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -M*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -c*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -C*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -f*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --delete*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --force *"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --move*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --copy*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --de*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --del*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --dele*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --delet*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --d *"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --for *"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --forc *"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --mov*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --mo *"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --cop*"
+    effect: ask
+  - action: shell
+    resource: "*git --paginate push*"
+    effect: ask
+  - action: shell
+    resource: "*git --paginate pull*"
+    effect: ask
+  - action: shell
+    resource: "*git --paginate add*"
+    effect: ask
+  - action: shell
+    resource: "*git --paginate commit*"
+    effect: ask
+  - action: shell
+    resource: "git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "* git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag -d*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "* git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "* git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag -f*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "* git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag --force*"
+    effect: deny
+  - action: shell
+    resource: "git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "* git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "git tag * --delete*"
+    effect: deny
+  - action: shell
+    resource: "git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "git tag * --force*"
+    effect: deny
+  - action: shell
+    resource: "* git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag * -d*"
+    effect: deny
+  - action: shell
+    resource: "* git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "*;git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "*&&git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "*|git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "*$(git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "*`git tag * -f*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag -d*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag --delete*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag -f*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*;git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*&&git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*|git -C * tag --force*"
+    effect: deny
+  - action: shell
+    resource: "*git tag -*d*"
+    effect: deny
+  - action: shell
+    resource: "*git tag -*f*"
+    effect: deny
+  - action: shell
+    resource: "*git -C * tag -*d*"
+    effect: deny
+  - action: shell
+    resource: "*git -C * tag -*f*"
     effect: deny

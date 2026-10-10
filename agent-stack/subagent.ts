@@ -39,6 +39,18 @@ import {
 } from "./resolver.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { archiveRun, type InspectTask } from "./inspector.ts";
+import {
+	ENV_AGENT_DEPTH,
+	ENV_PARENT_RUN_ID,
+	ENV_RUN_ID,
+	ENV_TREE_LOG,
+	canSpawn,
+	childToolArgs,
+	newRunId,
+	parseDepth,
+	planSpawn,
+} from "./depth.ts";
+import { type RunEvent, appendEvent } from "./tree-log.ts";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -46,6 +58,9 @@ const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
+
+/** This process's nesting depth, read once at module load. Absent env means level 0. */
+const myDepth = parseDepth(process.env[ENV_AGENT_DEPTH]);
 
 /** Byte-safe truncation of the chain `{previous}` output so a giant prior step
  * cannot blow up the next spawn's prompt. Preserves behavior for normal sizes. */
@@ -246,6 +261,29 @@ function truncateParallelOutput(output: string): string {
 	return `${truncated}\n\n[Output truncated: ${byteLength - Buffer.byteLength(truncated, "utf8")} bytes omitted. Full output preserved in tool details.]`;
 }
 
+/** Tree-event text caps. The log writer also enforces a hard 4 KiB line cap. */
+const TREE_TASK_PREVIEW_BYTES = 1000;
+const TREE_OUTPUT_PREVIEW_BYTES = 2048;
+/** One `update` event per run per second. */
+const TREE_UPDATE_INTERVAL_MS = 1000;
+
+/** Byte-safe UTF-8 truncation for tree-event text fields. */
+function truncateUtf8(value: string, maxBytes: number): string {
+	if (Buffer.byteLength(value, "utf8") <= maxBytes) return value;
+	let truncated = value.slice(0, maxBytes);
+	while (truncated.length > 0 && Buffer.byteLength(truncated, "utf8") > maxBytes) {
+		truncated = truncated.slice(0, -1);
+	}
+	return truncated;
+}
+
+/** Append one tree event when the shared log is enabled. Best-effort. */
+function appendTreeEvent(event: RunEvent): void {
+	const logPath = process.env[ENV_TREE_LOG];
+	if (!logPath) return;
+	appendEvent(logPath, event);
+}
+
 type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
 
 function getDisplayItems(messages: Message[]): DisplayItem[] {
@@ -297,9 +335,16 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	return { command: "pi", args };
 }
 
-function buildChildEnv(): NodeJS.ProcessEnv {
+/** Build the child environment. Env is a carrier for depth and run identity;
+ * the parent `--tools` strip is the real control. */
+function buildChildEnv(childDepthValue: number, childRunId: string, parentRunId: string | null): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env };
 	delete env.HERDR_ENV;
+	env[ENV_AGENT_DEPTH] = String(childDepthValue);
+	env[ENV_RUN_ID] = childRunId;
+	// Overwrite any inherited parent id: this child's parent is THIS process.
+	if (parentRunId) env[ENV_PARENT_RUN_ID] = parentRunId;
+	else delete env[ENV_PARENT_RUN_ID];
 	return env;
 }
 
@@ -341,6 +386,21 @@ async function runSingleAgent(
 		};
 	}
 
+	// Depth cap: refuse before any process starts. Env is the carrier; this
+	// self-guard is the defense-in-depth backstop for a stale template.
+	if (!canSpawn(myDepth)) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: "Depth cap reached (level 2): subagents cannot spawn further subagents.",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
 	// Spawn allowlist: a resolved agent (direct name OR theme-profession alias)
 	// whose frontmatter sets `spawnable: false` is never dispatched — it runs as
 	// the main session only. Reject before any process is spawned.
@@ -364,14 +424,20 @@ async function runSingleAgent(
 	if (inheritsDispatchConfig && dispatchDefaults.thinkingLevel) {
 		args.push("--thinking", dispatchDefaults.thinkingLevel);
 	}
-	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	// Keep the `subagent` strip in the pure `childToolArgs` helper. pi locks
+	// tools at process start, so this is the real control. An absent `--tools`
+	// re-enables pi defaults, so a stripped-to-empty list passes `--no-tools`.
+	const requestedTools = agent.tools ?? [];
+	const spawnPlan = planSpawn(myDepth, requestedTools);
+	args.push(...childToolArgs(requestedTools, myDepth));
 
 	// The child must activate EXACTLY this agent + persona; otherwise the child's
 	// own applyDefaults would pull in global defaultAgent/defaultPersona and
 	// override the caller's theme choice.
 	args.push("--agent", agent.name);
 	const persona = resolveSpawnPersona(agent.name);
-	args.push("--persona", persona ? formatPersonaId(persona) : "off");
+	const personaId = persona ? formatPersonaId(persona) : null;
+	args.push("--persona", personaId ?? "off");
 
 	const currentResult: SingleResult = {
 		agent: agentName,
@@ -383,6 +449,57 @@ async function runSingleAgent(
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model,
 		step,
+	};
+
+	/** Run identity carried to the child via env. Parent id comes from our env. */
+	const childRunId = newRunId();
+	const parentRunId = process.env[ENV_RUN_ID] ?? null;
+
+	// The parent writes this run's records. Append the start before the spawn so
+	// the tree shows the child the moment it exists.
+	let lastTreeUpdateAt = Date.now();
+	const taskBytes = Buffer.byteLength(task, "utf8");
+	let bytesOut = 0;
+	// Tool calls this child started. A `tool_execution_start` carries a unique
+	// `toolCallId`, so the set counts each call exactly once.
+	const toolCallIds = new Set<string>();
+	appendTreeEvent({
+		v: 1,
+		type: "start",
+		runId: childRunId,
+		parentRunId,
+		depth: spawnPlan.childDepth,
+		agent: agent.name,
+		persona: personaId,
+		status: "running",
+		at: new Date().toISOString(),
+		task: truncateUtf8(task, TREE_TASK_PREVIEW_BYTES),
+	});
+
+	const emitTreeUpdate = () => {
+		const now = Date.now();
+		if (now - lastTreeUpdateAt < TREE_UPDATE_INTERVAL_MS) return;
+		lastTreeUpdateAt = now;
+		appendTreeEvent({
+			v: 1,
+			type: "update",
+			runId: childRunId,
+			parentRunId,
+			depth: spawnPlan.childDepth,
+			agent: agent.name,
+			persona: personaId,
+			status: "running",
+			at: new Date().toISOString(),
+			bytesIn: taskBytes,
+			bytesOut,
+			toolCount: toolCallIds.size,
+			usage: {
+				input: currentResult.usage.input,
+				output: currentResult.usage.output,
+				cost: currentResult.usage.cost,
+				turns: currentResult.usage.turns,
+			},
+		});
 	};
 
 	const emitUpdate = () => {
@@ -401,13 +518,26 @@ async function runSingleAgent(
 		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
-			const invocation = getPiInvocation(args);
-			const proc = spawn(invocation.command, invocation.args, {
-				cwd: cwd ?? defaultCwd,
-				shell: false,
-				stdio: ["ignore", "pipe", "pipe"],
-				env: buildChildEnv(),
-			});
+			const spawnChild = () => {
+				const invocation = getPiInvocation(args);
+				return spawn(invocation.command, invocation.args, {
+					cwd: cwd ?? defaultCwd,
+					shell: false,
+					stdio: ["ignore", "pipe", "pipe"],
+					env: buildChildEnv(spawnPlan.childDepth, childRunId, parentRunId),
+				});
+			};
+			let proc: ReturnType<typeof spawnChild>;
+			try {
+				proc = spawnChild();
+			} catch (error) {
+				// A synchronous spawn throw (bad options or args) must still close the
+				// run, or the tree's `start` node stays `running` for five minutes.
+				// Resolve here and let the normal post-await `end` emission run.
+				currentResult.errorMessage = error instanceof Error ? error.message : String(error);
+				resolve(1);
+				return;
+			}
 			let buffer = "";
 
 			const processLine = (line: string) => {
@@ -417,6 +547,10 @@ async function runSingleAgent(
 					event = JSON.parse(line);
 				} catch {
 					return;
+				}
+
+				if (event.type === "tool_execution_start" && typeof event.toolCallId === "string") {
+					toolCallIds.add(event.toolCallId);
 				}
 
 				if (event.type === "message_end" && event.message) {
@@ -439,12 +573,14 @@ async function runSingleAgent(
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
 					}
 					emitUpdate();
+					emitTreeUpdate();
 				}
 				// Note: tool results arrive as message_end with role "toolResult" (handled
 				// above); pi emits no separate "tool_result_end" event.
 			};
 
 			proc.stdout.on("data", (data) => {
+				bytesOut += data.length;
 				buffer += data.toString();
 				const lines = buffer.split("\n");
 				buffer = lines.pop() || "";
@@ -478,6 +614,29 @@ async function runSingleAgent(
 		});
 
 		currentResult.exitCode = exitCode;
+		appendTreeEvent({
+			v: 1,
+			type: "end",
+			runId: childRunId,
+			parentRunId,
+			depth: spawnPlan.childDepth,
+			agent: agent.name,
+			persona: personaId,
+			status: isFailedResult(currentResult) ? "failed" : "done",
+			at: new Date().toISOString(),
+			bytesIn: taskBytes,
+			bytesOut,
+			toolCount: toolCallIds.size,
+			usage: {
+				input: currentResult.usage.input,
+				output: currentResult.usage.output,
+				cost: currentResult.usage.cost,
+				turns: currentResult.usage.turns,
+			},
+			exitCode,
+			error: currentResult.errorMessage ?? null,
+			outputPreview: truncateUtf8(getResultOutput(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
+		});
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {

@@ -22,3 +22,21 @@ permissions:
   - action: shell
     resource: "zsh -c *"
     effect: deny
+  - action: shell
+    resource: "cp *"
+    effect: deny
+  - action: shell
+    resource: "mv *"
+    effect: deny
+  - action: shell
+    resource: "rsync *"
+    effect: deny
+  - action: shell
+    resource: "* cp *"
+    effect: deny
+  - action: shell
+    resource: "* mv *"
+    effect: deny
+  - action: shell
+    resource: "* rsync *"
+    effect: deny

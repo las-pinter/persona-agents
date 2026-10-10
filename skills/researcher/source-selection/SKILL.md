@@ -9,14 +9,14 @@ description: Decision rules for choosing between Context7, DeepWiki, and Exa bas
 
 Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
 
-1. Glob `<USER_HOME>/agent-notes/researcher/studies/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
+1. Glob `<USER_HOME>/agent-notes/researcher/reports/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
 2. Decide based on what exists:
-   - Prior study fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.
-   - Prior study partially covers it → state the gap and extend that existing study.
+   - Prior report fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.
+   - Prior report partially covers it → state the gap and extend that existing report.
    - Nothing relevant exists → proceed to Step 1 and do new research.
-3. After writing any new study:
-   - Use `YYYY-MM-DD-study-description.md` naming; check existing filenames first to avoid near-duplicates.
-   - List prior studies it builds on under a `Related study:` line.
+3. After writing any new report:
+   - Use `YYYY-MM-DD-<topic>.md` naming; check existing filenames first to avoid near-duplicates.
+   - List prior reports it builds on under a `Related report:` line.
    - Append `date + filename + short topic` to `<USER_HOME>/agent-notes/researcher/index.md` (create it if missing).
 
 ---

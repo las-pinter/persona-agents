@@ -12,6 +12,14 @@ One extension, one entry: `extension.ts`. Internally modular:
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
+| `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent `--tools` strip, run-id allocation |
+| `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
+| `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
+| `sidebar-render.ts` | Pure five-panel renderers (AGENTS, SESSION, WORKSPACE, MCP, TODOS) |
+| `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
+| `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
+| `tree-ui.ts` | Sidebar glue: binds compositor, data, commands, and lifecycle; reads the git branch |
+| `todo-tool.ts` | `todo` tool: session-entry state, registration, and the `persona-agents/todos/v1` event |
 
 ## Install
 
@@ -52,7 +60,8 @@ The pi templates were translated from `agent-templates/opencode/frontmatters`
   variants, the python/jest/tsc toolchain, the read-only viewers).
 - opencode's default `ask` for core actions (e.g. `edit` for implementer/tester)
   becomes `allow`: headless subagents block on confirm prompts, so their raison
-  d'être would be unusable. `deny` lists keep the hard blocks (push/pull,
+  d'être would be unusable. `deny` lists keep the hard blocks (push/pull for
+  non-orchestrators,
   `find -exec/-execdir/-delete/-ok/-okdir/-fls/-fprint(0|f)`, `curl|sh`,
   `xargs → rm|sh|bash|zsh|mv|cp` (first non-option token after xargs options),
   `rm -r/-f/-rf/-fr`, `sudo`, mkfs/dd).
@@ -145,25 +154,33 @@ An `ask` rule is a manual override for calls the allow list does not cover (e.g.
 headless runs (subagent children, `-p`, `--mode json`) have no UI, so `ask` there is a
 hard block.
 
-An `ask` approval is per call or per segment, never global. The ask prompt offers
-**four options: Deny / Allow once (whole command) / Allow once (this segment only) /
-Always allow (session)**. "Allow once (whole command)" grants exactly that single call.
-"This segment only" and "Always allow (session)" both approve exactly the matching
-segment of a compound command and then re-evaluate the remaining segments — they never
-grant a different segment (an unallowed remaining segment blocks the whole command).
-"Always allow (session)" also remembers the `agent|tool|rule` for the rest of the
-session — **in-memory only, nothing is persisted to disk** (a persistent always-allow
-list is a future decision). The whole-command ask probe runs FIRST on the first
-evaluation pass, before the per-segment asks, so a rule whose pattern spans a separator
-is always shown once — even when a per-segment ask would match first or a
-session-allowed segment exists. A "this segment only" choice on that probe approves no
-real segment and fails closed.
+An `ask` prompt offers three choices: **Deny**, **Allow once**, and **Always allow
+this rule (session)**. Deny blocks the call ("Denied by user"). Allow once grants
+exactly that single call, including a rule whose pattern spans a separator. Always
+allow remembers the `agent|tool|rule` for the rest of the session — **in-memory only,
+nothing is persisted to disk** (a persistent always-allow list is a future decision).
+The ask prompt is a highlighted panel in TUI mode and a plain selector otherwise. It
+shows the full command and highlights the blocked part (the plain fallback marks it
+with brackets), shows the rule's human `reason` as "Why:", and never the raw regex.
+For a compound command, a segment always-allow also approves exactly the matching
+segment and re-evaluates the remaining segments; it never grants a different segment
+(an unallowed remaining segment blocks the whole command). The whole-command ask probe
+runs FIRST on the first evaluation pass, before the per-segment asks, so a rule whose
+pattern spans a separator is always shown once — even when a per-segment ask would
+match first or a session-allowed segment exists. The panel notes that the rule spans
+the whole command and highlights nothing. A spanning allow-once runs the call once. A
+spanning always-allow runs the current call and remembers the rule, approving no
+segment; later calls skip the spanning ask, but they still must pass the allow checks,
+so deny-by-default can still block them.
 
-**Delegated commits now ask**: the orchestrator's `git add`/`git commit` moved from its
-`allow` list to its `ask` list — a commit prompts allow/deny in the main session instead
-of running silently (`git push`/`pull` stay hard-denied). Since a commit is an `ask` rule
-and ask is a hard block without a UI, **headless orchestrator runs (delegated/`-p`/
-`--mode json`) cannot commit**.
+**Git writes now ask**: the orchestrator's `git add`, `git commit`, `git push`,
+`git pull`, and every `gh pr` command moved to its `ask` list — each one prompts
+allow/deny in the main session instead of running silently. The implementer gets a
+hard DENY for the same commands. It may only SUGGEST a commit. Since a write is an
+`ask` rule and ask is a hard block without a UI, **headless orchestrator runs
+(delegated/`-p`/`--mode json`) cannot commit**. The global file
+`~/.pi/agent/permissions.json` is live and unversioned; it carries a global ask for
+push/pull and `gh pr` as a safety net.
 
 Gate scope: only `bash`/`powershell` (command), `read`/`grep`/`find`/`ls`/`edit`/`write`
 (path/pattern), and other plain tools (JSON args) are probed. `mcp__…` and namespaced
@@ -188,6 +205,83 @@ Every completed subagent tool run is archived (bounded to the last 12).
   agent views): task list, per-task tool calls, final output, usage, and errors.
   Keys: `↑/↓` + `PgUp/PgDn` scroll · `Tab`/`←/→` switch task · `q`/`Esc` close.
 
+## Nested subagents and the live sidebar
+
+The extension caps agent nesting at 3 levels: 0 (the root), 1, and 2. A level-2
+agent cannot spawn.
+
+The primary control is the parent `--tools` strip. When a child would be at the
+cap, the parent removes `subagent` from the child's `--tools` list. pi locks the
+tool set at process start, so the child never receives the tool.
+`PI_AGENT_DEPTH` carries the depth, and the child self-guard refuses a stale
+spawn.
+
+The cap is NOT a security boundary. All pi processes have the same OS privilege.
+A child with an allowed interpreter can run `pi -ne …` with a forged
+`PI_AGENT_DEPTH`. That bypasses every in-process guard. Only OS isolation — a
+separate user, a container, or a sandbox — is a true boundary. OS isolation is
+OUT OF SCOPE for this feature. The `--tools` strip stops the normal path only.
+
+The sidebar owns the right column. It paints FIVE panels:
+
+1. AGENTS — the live agent tree.
+2. SESSION — model, thinking level, context use, cost, and tokens per second.
+3. WORKSPACE — cwd, git branch, and the changed-file count.
+4. MCP — configured servers and an inferred connection dot.
+5. TODOS — the `todo` tool's list.
+
+The tree is the only cross-process panel. Every other panel shows the root
+process's data. `pi.events` is process-local, so a child's session, MCP, and todo
+data is not visible to the root sidebar.
+
+The tree comes from a shared append-only NDJSON log. The root creates the log in
+`os.tmpdir()`, unique per root. The root compacts the log when it grows past the
+cap. Each spawned process appends the records of its own children.
+
+MCP fidelity is reduced. The built-in `pi.getMcpServers()` returns config only,
+with no live connection state. The panel infers `connected` from the tool names
+in `getAllTools()` (`mcp__<server>__<tool>`).
+
+### The `todo` tool
+
+pi has no built-in todo tool, so the extension ships one. Actions: `list`,
+`add` (text), `toggle` (id), `remove` (id), `clear`. State lives in session
+entries, with an in-memory cache. Each change publishes the
+`persona-agents/todos/v1` event for the TODOS panel.
+
+These agents may call `todo`: orchestrator, planner, implementer, tester,
+researcher, reviewer. Mascot and overseer are excluded. Each allowed agent lists
+`todo` in `tools:` and has a `{ tool: todo, match: "." }` allow rule.
+
+### Commands
+
+- `/sidebar [on|off]` — show or hide the right column. A bare `/sidebar` toggles.
+- `/agents-tree` — open the live tree overlay. Up/down selects a node.
+- `/agent-inspect [runId|last]` — open one node's detail.
+
+The sidebar has no keyboard focus, so node details use these overlays.
+
+### Turn `pi-sidebar-tui` off
+
+The extension ships its own compositor. Turn the third-party `pi-sidebar-tui`
+package OFF, or the two sidebars collide. Do not edit the operator's settings
+from this repo. Use one of these operator steps:
+
+1. Run `/sidebar-tui off` in pi. This persists to
+   `~/.pi/agent/sidebar-tui.json`.
+2. Remove `"npm:pi-sidebar-tui"` from the `packages` array in
+   `~/.pi/agent/settings.json`.
+
+`pi-sidebar-tui` is a package, not a built-in. `pi config` does not list it under
+Built-in.
+
+### Clean room
+
+The compositor is a clean-room re-implementation of the technique: narrow
+`terminal.columns`, wrap `tui.doRender`, and paint a right column. No upstream
+code was copied. The upstream package declares the MIT license, but its npm
+tarball ships no `LICENSE` file.
+
 ## Editable agent-notes zones
 
 Per the kiro/opencode templates' `edit`/`external_directory` allows, each profession may
@@ -196,10 +290,10 @@ denied-by-default):
 
 | Agent | Zones (edit + write) |
 |---|---|
-| orchestrator | `agent-notes/orchestrator/**`, `agent-notes/planner/plans/**` |
-| planner | `agent-notes/planner/**` |
+| orchestrator | `agent-notes/orchestrator/**`, `agent-notes/project-notes/**` |
+| planner | `agent-notes/project-notes/**` |
 | overseer | `agent-notes/overseer/**` |
-| researcher | `agent-notes/researcher/**`, `agent-notes/orchestrator/projects/**` |
+| researcher | `agent-notes/researcher/**` |
 | implementer / tester | workspace files (edit/write everywhere) |
 | reviewer / mascot | none (read-only) |
 

@@ -16,6 +16,8 @@
 import * as fs from "node:fs";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
+import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts";
+import { MAX_LOG_BYTES, appendEvent, compactLog, createRootLogPath, readEvents } from "./tree-log.ts";
 
 function debugLog(...parts: unknown[]): void {
 	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
@@ -29,6 +31,173 @@ function debugLog(...parts: unknown[]): void {
 
 const MODULE_LOAD_ID = `${process.pid}-${Math.random().toString(36).slice(2, 7)}`;
 
+/** Tree-log identity for this process. Set once at `session_start`. */
+let rootRunId: string | null = null;
+let isRootProcess = false;
+let createdRootLog: string | null = null;
+
+/**
+ * Set up the shared tree log for the root process.
+ *
+ * Root vs child comes from `PI_AGENT_PARENT_RUN_ID`, not `PI_AGENT_RUN_ID`:
+ * the root sets its own run id and that id survives `/reload`.
+ *
+ * `/reload` re-runs the extension factory and fires `session_start` again, so
+ * this function must be reload-safe. The run id and the log path come from the
+ * environment of the previous life, so the log is inherited (never unlinked
+ * here) and the root `start` is re-appended. A child always has a parent id and
+ * must not create a root identity.
+ */
+function initTreeRoot(): void {
+	try {
+		if (rootRunId) return;
+		if (!isRootProcessEnv(process.env)) {
+			// Child process: the parent writes this run's records.
+			return;
+		}
+
+		isRootProcess = true;
+		const inheritedRunId = process.env[ENV_RUN_ID];
+		const inheritedLog = process.env[ENV_TREE_LOG];
+
+		// Reuse the run id and log path from the previous life so the tree
+		// survives `/reload`. A set-but-empty env value is not valid.
+		rootRunId = inheritedRunId || newRunId();
+		process.env[ENV_RUN_ID] = rootRunId;
+		const logPath = inheritedLog || createRootLogPath();
+		if (!inheritedLog) createdRootLog = logPath;
+		process.env[ENV_TREE_LOG] = logPath;
+
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "start",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status: "idle",
+			at: new Date().toISOString(),
+		});
+		compactIfNeeded(logPath, rootRunId);
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
+/** Compact the log over `MAX_LOG_BYTES`, keeping live runs and the root. */
+function compactIfNeeded(logPath: string, keepRunId: string): void {
+	try {
+		if (fs.statSync(logPath).size <= MAX_LOG_BYTES) return;
+		const events = readEvents(logPath);
+		const ended = new Set(events.filter((event) => event.type === "end").map((event) => event.runId));
+		const live = new Set(events.filter((event) => !ended.has(event.runId)).map((event) => event.runId));
+		live.add(keepRunId);
+		compactLog(logPath, live);
+	} catch {
+		// A missing file means there is nothing to compact.
+	}
+}
+
+/**
+ * Append the root end record, then remove the log only when this process
+ * created it. Called only for a real `quit`.
+ *
+ * After `/reload` module state is fresh: `createdRootLog` is null and the log
+ * is inherited. A later real quit cannot unlink that inherited temp log, so it
+ * leaks. This is intentional: the extension does not delete a path it cannot
+ * prove it created in this life.
+ */
+function shutdownTreeRoot(): void {
+	try {
+		if (!isRootProcess || !rootRunId) return;
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "end",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status: "done",
+			at: new Date().toISOString(),
+			exitCode: 0,
+		});
+
+		if (createdRootLog) {
+			try {
+				fs.unlinkSync(createdRootLog);
+			} catch {
+				// The log may already be gone.
+			}
+		}
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
+/**
+ * Append one root status update. The root is idle between agent runs and
+ * running during one. Best-effort: never throws.
+ */
+function appendRootUpdate(status: "running" | "idle"): void {
+	try {
+		if (!isRootProcess || !rootRunId) return;
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "update",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status,
+			at: new Date().toISOString(),
+		});
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
+/**
+ * Append one root `clear` marker at the start of a new root turn. The marker is
+ * NOT a node: it tells the tree model that finished children from the previous
+ * turn are superseded. Only the root process writes `clear`. Best-effort.
+ */
+function appendRootClear(): void {
+	try {
+		if (!isRootProcess || !rootRunId) return;
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+		const agent = getActiveAgent();
+		const persona = getActivePersona();
+		appendEvent(logPath, {
+			v: 1,
+			type: "clear",
+			runId: rootRunId,
+			parentRunId: null,
+			depth: 0,
+			agent: agent?.name ?? "orchestrator",
+			persona: persona ? formatPersonaId(persona) : null,
+			status: "running",
+			at: new Date().toISOString(),
+		});
+	} catch {
+		// Logging must never break a session.
+	}
+}
+
 // Tunable budgets, not yet settings-backed.
 const SKILL_INJECTION_BUDGET_BYTES = 24 * 1024;
 const SKILL_BODY_CAP_BYTES = 12 * 1024;
@@ -40,12 +209,16 @@ import { getActiveAgent, getActivePersona } from "./state.ts";
 import {
 	discoverAgents,
 	discoverSkills,
+	formatPersonaId,
 	matchSkills,
 	resolvePersonaForAgent,
 	resolveResources,
+	skillScriptsDir,
 } from "./resolver.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
 import registerSubagentTool from "./subagent.ts";
+import { registerTodoTool } from "./todo-tool.ts";
+import { disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 
 export default function (pi: ExtensionAPI): void {
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
@@ -59,6 +232,22 @@ export default function (pi: ExtensionAPI): void {
 
 	// 3. Orchestrator tool (spawn-based subagents, isolated contexts).
 	registerSubagentTool(pi);
+
+	// 3b. Todo tool (session-entry state, feeds the TODOS sidebar panel).
+	// Guarded: a registration failure must never break the extension.
+	try {
+		registerTodoTool(pi);
+	} catch (error) {
+		debugLog("todo tool registration failed:", error instanceof Error ? error.message : String(error));
+	}
+
+	// 3c. Sidebar glue: compositor, data, commands, and lifecycle.
+	// Guarded: a registration failure must never break the extension.
+	try {
+		registerTreeUi(pi);
+	} catch (error) {
+		debugLog("tree ui registration failed:", error instanceof Error ? error.message : String(error));
+	}
 
 	// 4. Apply configured defaults when a session starts.
 	// CLI flags: `pi --agent orchestrator --persona goblin/bossnik-chief`.
@@ -116,7 +305,8 @@ export default function (pi: ExtensionAPI): void {
 		}
 	};
 
-	// Factory-time: survives /reload even though session_start does not re-fire.
+	// `/reload` re-runs the factory and `session_start` fires again, so defaults
+	// are applied twice. Both calls are idempotent.
 	applyDefaults(undefined);
 
 	/** Reflect the active agent/persona in the footer status bar. */
@@ -134,7 +324,36 @@ export default function (pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => {
 		debugLog("session_start cwd=", ctx.cwd);
 		applyDefaults(ctx.cwd);
+		initTreeRoot();
 		syncStatus(ctx);
+	});
+
+	pi.on("session_shutdown", (event) => {
+		// Only a real process end writes the root `end`. On `/reload`, `new`,
+		// `resume`, or `fork` the process lives on and inherits the log; a stale
+		// root `end` would pin the sidebar spinner to done. A missing reason
+		// counts as a real end.
+		if (!event.reason || event.reason === "quit") {
+			shutdownTreeRoot();
+		}
+		// The sidebar teardown must run on every reason: reload replaces the
+		// runtime and the old timers and compositor must stop.
+		try {
+			disposeTreeSidebar();
+		} catch (error) {
+			debugLog("tree sidebar dispose failed:", error instanceof Error ? error.message : String(error));
+		}
+	});
+
+	// The root node spins only during an agent run. Between runs it is idle, so
+	// the sidebar spinner stops instead of animating for the whole session.
+	pi.on("agent_start", () => {
+		appendRootClear();
+		appendRootUpdate("running");
+	});
+
+	pi.on("agent_end", () => {
+		appendRootUpdate("idle");
 	});
 
 	// 5. Inject agent + persona prompts ahead of every agent run.
@@ -181,7 +400,8 @@ export default function (pi: ExtensionAPI): void {
 						continue;
 					}
 					mandatoryBudget -= body.length;
-					extra += `\n\n## Mandatory skill: ${id}\n${body}`;
+					const scriptsDir = skillScriptsDir(s);
+					extra += `\n\n## Mandatory skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
 				}
 				for (const pattern of agent.alwaysLoad) {
 					if (matchSkills([pattern], discoveredSkills).length === 0) {
@@ -204,7 +424,8 @@ export default function (pi: ExtensionAPI): void {
 					const body = s.body.length > SKILL_BODY_CAP_BYTES ? `${s.body.slice(0, SKILL_BODY_CAP_BYTES)}\n<!-- (truncated) -->` : s.body;
 					budget -= body.length;
 					if (budget < 0) break;
-					extra += `\n\n### Skill: ${id}\n${body}`;
+					const scriptsDir = skillScriptsDir(s);
+					extra += `\n\n### Skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
 				}
 				debugLog("skills injected:", Array.from(seen).join(","));
 			}

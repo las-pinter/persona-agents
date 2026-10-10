@@ -17,7 +17,7 @@ Files that carry a version number but do NOT track the package release:
 - `plugins/herdr/overseer-herald/herdr-plugin.toml`, line 3
   (`version = "0.1.0"`) — the herdr plugin has its own independent version.
   Bump it only when the plugin itself changes, never on a package release.
-- `package.json` dependency pins (lines 23–29) — dependency versions, not the
+- `package.json` dependency pins (lines 26–32) — dependency versions, not the
   package version. Do not touch them on release.
 
 No other file carries the package version number.
@@ -29,4 +29,12 @@ Rules:
 
 ## Commit rule
 
-Every agent commit message must start with the prefix `ai:`.
+Only the orchestrator writes git history. Every commit it makes starts with
+the prefix `ai:`. The implementer never commits. It suggests a commit.
+
+The doctrine lives in the permission templates and the live global file
+`~/.pi/agent/permissions.json`. The orchestrator gets an ASK verdict for
+`git add`, `git commit`, `git push`, `git pull`, `git merge`, `git tag`, and
+every `gh pr` command. Every other agent gets a DENY for these. `cp`, `mv`,
+and `rsync` also ASK for the orchestrator and the implementer, and are denied
+to the rest. The global file change is live and unversioned.

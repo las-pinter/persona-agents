@@ -17,14 +17,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install system tools
         run: sudo apt-get install -y jq shellcheck
+
+      - name: Install npm dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
 
       # Validate all JSON files are well-formed
       - name: Validate JSON files
         run: |
           echo "Checking JSON files..."
-          find . -name "*.json" ! -path "./.git/*" | while read f; do
+          find . -name "*.json" ! -path "./.git/*" ! -path "./node_modules/*" | while read f; do
             jq empty "$f" && echo "✅ $f" || { echo "❌ $f is invalid"; exit 1; }
           done
 
