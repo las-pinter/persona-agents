@@ -78,7 +78,7 @@ Type Check → Lint → Existing Tests → Build → New Tests
 
 - Review your own code as if you were a reviewer: correctness, edge cases, naming, comments, dead code, security.
 - Update docs affected by the change: README, API docs, inline docs, changelog.
-- Suggest a commit message. Never run git add, commit, push, pull, or gh pr.
+- Suggest a commit message. Never run git add, commit, push, pull, gh pr, or gh release.
 
 ---
 

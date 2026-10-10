@@ -194,6 +194,9 @@ permissions:
     resource: "gh pr *"
     effect: deny
   - action: shell
+    resource: "gh release *"
+    effect: deny
+  - action: shell
     resource: "* git add"
     effect: deny
   - action: shell
@@ -222,6 +225,9 @@ permissions:
     effect: deny
   - action: shell
     resource: "* gh pr *"
+    effect: deny
+  - action: shell
+    resource: "* gh release *"
     effect: deny
   - action: shell
     resource: "* git -C * add"
@@ -477,6 +483,9 @@ permissions:
     effect: deny
   - action: shell
     resource: "*gh pr*"
+    effect: deny
+  - action: shell
+    resource: "*gh release*"
     effect: deny
   - action: shell
     resource: "*git*branch -d*"

@@ -57,6 +57,7 @@ permission:
     "git add *": deny
     "git commit *": deny
     "gh pr *": deny
+    "gh release *": deny
     "git -C * add *": deny
     "git -C * commit *": deny
     "git -C * push *": deny
@@ -71,6 +72,7 @@ permission:
     "* git pull *": deny
     "* gh pr": deny
     "* gh pr *": deny
+    "* gh release *": deny
     "* git -C * add": deny
     "* git -C * add *": deny
     "* git -C * commit": deny
@@ -171,6 +173,7 @@ permission:
     "*gh -R * pr*": deny
     "*gh --repo * pr*": deny
     "*gh pr*": deny
+    "*gh release*": deny
     "*git*branch -d*": deny
     "*git*branch -D*": deny
     "*git*branch -m*": deny

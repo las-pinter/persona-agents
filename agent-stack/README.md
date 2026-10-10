@@ -174,7 +174,7 @@ segment; later calls skip the spanning ask, but they still must pass the allow c
 so deny-by-default can still block them.
 
 **Git writes now ask**: the orchestrator's `git add`, `git commit`, `git push`,
-`git pull`, and every `gh pr` command moved to its `ask` list — each one prompts
+`git pull`, and every `gh pr` and `gh release` command moved to its `ask` list — each one prompts
 allow/deny in the main session instead of running silently. The implementer gets a
 hard DENY for the same commands. It may only SUGGEST a commit. Since a write is an
 `ask` rule and ask is a hard block without a UI, **headless orchestrator runs

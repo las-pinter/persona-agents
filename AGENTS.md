@@ -35,6 +35,6 @@ the prefix `ai:`. The implementer never commits. It suggests a commit.
 The doctrine lives in the permission templates and the live global file
 `~/.pi/agent/permissions.json`. The orchestrator gets an ASK verdict for
 `git add`, `git commit`, `git push`, `git pull`, `git merge`, `git tag`, and
-every `gh pr` command. Every other agent gets a DENY for these. `cp`, `mv`,
+every `gh pr` and `gh release` command. Every other agent gets a DENY for these. `cp`, `mv`,
 and `rsync` also ASK for the orchestrator and the implementer, and are denied
 to the rest. The global file change is live and unversioned.

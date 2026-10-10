@@ -2,9 +2,9 @@
  * Regression harness for the git-write permission doctrine on the pi platform.
  *
  * Loads the shipped pi agent frontmatters and asserts the verdict matrix:
- *   orchestrator                                -> ASK for add/commit/push/pull and `gh pr`
- *   implementer                                 -> DENY for add/commit/push/pull and `gh pr`
- *   researcher/reviewer/tester/planner/overseer -> DENY for push/pull and `gh pr`
+ *   orchestrator                                -> ASK for add/commit/push/pull and `gh pr`/`gh release`
+ *   implementer                                 -> DENY for add/commit/push/pull and `gh pr`/`gh release`
+ *   researcher/reviewer/tester/planner/overseer -> DENY for push/pull and `gh pr`/`gh release`
  *
  * Also checks the live global file does not keep a push/pull or `gh pr` deny.
  * That check skips when the file is absent, because the file is outside the repo.
@@ -1248,6 +1248,61 @@ describe("git merge permission doctrine", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of MERGE_BASE_COMMANDS) {
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// GitHub release doctrine: `gh release` publishes a release, a GitHub write.
+// It asks the orchestrator on every stack (pi/opencode by an explicit rule,
+// kiro via the unlisted default) and denies every non-orchestrator, matching
+// the `gh pr` doctrine.
+// ---------------------------------------------------------------------------
+
+const RELEASE_COMMANDS = [
+	"gh release create v3.0.0 --title v3.0.0",
+	"cd /repo && gh release create v3.0.0 --title v3.0.0",
+	"cd /repo&&gh release create v3.0.0",
+];
+
+describe("github release permission doctrine", () => {
+	test("pi orchestrator: gh release asks", () => {
+		for (const command of RELEASE_COMMANDS) assert.equal(verdict("orchestrator", command), "ask", command);
+	});
+
+	test("pi non-orchestrators: gh release denies", () => {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
+			for (const command of RELEASE_COMMANDS) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator: gh release asks", () => {
+		for (const command of RELEASE_COMMANDS) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("opencode non-orchestrators: gh release denies", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of RELEASE_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro orchestrator: gh release defaults to ask", () => {
+		for (const command of RELEASE_COMMANDS) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("kiro non-orchestrators: gh release denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of RELEASE_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
 	});

@@ -239,6 +239,9 @@ permissions:
     resource: "gh pr *"
     effect: ask
   - action: shell
+    resource: "gh release *"
+    effect: ask
+  - action: shell
     resource: "* git add"
     effect: ask
   - action: shell
@@ -267,6 +270,9 @@ permissions:
     effect: ask
   - action: shell
     resource: "* gh pr *"
+    effect: ask
+  - action: shell
+    resource: "* gh release *"
     effect: ask
   - action: shell
     resource: "* git -C * add"
@@ -561,6 +567,9 @@ permissions:
     effect: ask
   - action: shell
     resource: "*gh pr*"
+    effect: ask
+  - action: shell
+    resource: "*gh release*"
     effect: ask
   - action: shell
     resource: "*git*branch -d*"
