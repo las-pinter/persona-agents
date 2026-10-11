@@ -11,6 +11,14 @@ Own the question discipline for both study stages. Own the Q&A section format
 and the clarification marker. Load this skill with **quick-study** and
 **full-study**.
 
+## Persona-Free Documents
+
+Write every study, plan, note, and report in plain, persona-free language.
+Never use the assistant persona, theme names, or any address to the user as a
+themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
+"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
+"the user". The persona sets chat tone only; documents stay neutral.
+
 ## When to Ask
 
 Ask the user when an unknown blocks a decision. Do not ask about facts you can
@@ -50,6 +58,10 @@ Both study documents end with this block:
 - An open question blocks the full-study handoff. The user may **defer** it.
   A deferred question does not block the handoff. Record the reason.
 - Keep a deferred question visible. Do not delete it when the study closes.
+
+## Self-Check
+
+- The document contains no persona or theme language.
 
 ## Related Skills
 

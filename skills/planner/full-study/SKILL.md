@@ -16,6 +16,14 @@ gate. It is the second stage of the planner study lifecycle.
 Load this skill only after the quick study is accepted. Load the
 **study-questions** skill with it. The two skills work as one unit.
 
+## Persona-Free Documents
+
+Write every study, plan, note, and report in plain, persona-free language.
+Never use the assistant persona, theme names, or any address to the user as a
+themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
+"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
+"the user". The persona sets chat tone only; documents stay neutral.
+
 ## Workflow
 
 1. Read `quick-study.md` for the same feature folder.
@@ -131,6 +139,7 @@ A full study is done only when every line is true:
 - [ ] Every High or Critical risk has a mitigation.
 - [ ] The critical path is named when the study has three or more tasks.
 - [ ] No blocking question stays open under `## Questions & Answers`.
+- [ ] The document contains no persona or theme language.
 
 ## Rules
 

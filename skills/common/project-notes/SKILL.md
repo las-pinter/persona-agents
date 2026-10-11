@@ -14,6 +14,14 @@ Every line must earn its place.
 **Every agent reads `agent-notes`.** Only the orchestrator and the planner
 write the shared notes.
 
+## Persona-Free Documents
+
+Write every study, plan, note, and report in plain, persona-free language.
+Never use the assistant persona, theme names, or any address to the user as a
+themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
+"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
+"the user". The persona sets chat tone only; documents stay neutral.
+
 ## Storage
 
 ```

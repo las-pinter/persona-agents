@@ -5,6 +5,14 @@ description: Final quality gate on completed work — review the commit chain, v
 
 # Commit Hygiene
 
+## Persona-Free Documents
+
+Write every study, plan, note, and report in plain, persona-free language.
+Never use the assistant persona, theme names, or any address to the user as a
+themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
+"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
+"the user". The persona sets chat tone only; documents stay neutral.
+
 ## Purpose
 
 A task can have many fix-ups. The history then holds workarounds,
