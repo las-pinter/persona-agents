@@ -5,8 +5,8 @@
  * and the option list. `renderPermissionPrompt()` owns the pi wiring — a
  * pi-tui panel in TUI mode, a plain `ctx.ui.select` fallback otherwise.
  *
- * Every prompt kind shows the same three choices: Deny, Allow once, and Always
- * allow this rule (session). The model never carries the rule's raw regex. It
+ * Every prompt kind shows the same three choices: Allow once, Always allow
+ * this rule (session), and Deny. The model never carries the rule's raw regex. It
  * shows the rule's human `reason` as "Why:". The full command is the target;
  * the panel highlights the blocked segment inside it when the parsed segment
  * is a literal slice of the command.
@@ -132,9 +132,9 @@ export function buildPromptModel(input: PromptInput): PromptModel {
 
 	// One shared list: every kind offers the same three choices.
 	const options: PromptOption[] = [
-		{ label: "Deny", decision: "deny" },
 		{ label: "Allow once", decision: "allow-once" },
 		{ label: "Always allow this rule (session)", decision: "always-allow" },
+		{ label: "Deny", decision: "deny" },
 	];
 
 	return {
@@ -243,6 +243,7 @@ function createPermissionPanel(
 	mod: TuiModule,
 	done: (choice: PermissionChoice) => void,
 ): Component & { dispose?(): void } {
+	// The first row is the default, so a bare Enter selects the first option.
 	let selected = 0;
 	let cached: string[] | undefined;
 

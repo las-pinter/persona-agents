@@ -154,8 +154,8 @@ An `ask` rule is a manual override for calls the allow list does not cover (e.g.
 headless runs (subagent children, `-p`, `--mode json`) have no UI, so `ask` there is a
 hard block.
 
-An `ask` prompt offers three choices: **Deny**, **Allow once**, and **Always allow
-this rule (session)**. Deny blocks the call ("Denied by user"). Allow once grants
+An `ask` prompt offers three choices: **Allow once**, **Always allow this rule
+(session)**, and **Deny**. Deny blocks the call ("Denied by user"). Allow once grants
 exactly that single call, including a rule whose pattern spans a separator. Always
 allow remembers the `agent|tool|rule` for the rest of the session — **in-memory only,
 nothing is persisted to disk** (a persistent always-allow list is a future decision).

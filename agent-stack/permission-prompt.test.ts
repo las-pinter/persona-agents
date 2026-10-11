@@ -27,6 +27,7 @@ import {
 	humanReason,
 	plainPromptTitle,
 	renderPanel,
+	renderPermissionPrompt,
 	type PromptModel,
 } from "./permission-prompt.ts";
 import { installPermissionGate } from "./permissions.ts";
@@ -34,7 +35,7 @@ import type { AgentConfig, PermissionRule } from "./resolver.ts";
 
 const REASON = "orchestrator commit requires user approval";
 const REGEX = "(?:^|[;&|(\\n])\\s*git\\s+(push|pull)\\b";
-const THREE_LABELS = ["Deny", "Allow once", "Always allow this rule (session)"];
+const THREE_LABELS = ["Allow once", "Always allow this rule (session)", "Deny"];
 
 function shellModel(overrides: Partial<Parameters<typeof buildPromptModel>[0]> = {}): PromptModel {
 	const probe = overrides.probe ?? 'git status && git commit -m "fix" && git push';
@@ -138,7 +139,7 @@ test("the highlight falls back when the parsed segment is not a literal slice", 
 test("a shell segment prompt keeps the three decisions in order", () => {
 	const model = shellModel();
 	assert.equal(model.kind, "shell-segment");
-	assert.deepEqual(decisions(model), ["deny", "allow-once", "always-allow"]);
+	assert.deepEqual(decisions(model), ["allow-once", "always-allow", "deny"]);
 	assert.deepEqual(
 		model.options.map((option) => option.label),
 		THREE_LABELS,
@@ -171,7 +172,7 @@ test("a non-bash tool shows the target and the three shared options", () => {
 	assert.equal(model.kind, "target");
 	assert.equal(model.target, "/etc/hosts");
 	assert.equal(model.highlight, null);
-	assert.deepEqual(decisions(model), ["deny", "allow-once", "always-allow"]);
+	assert.deepEqual(decisions(model), ["allow-once", "always-allow", "deny"]);
 	const always = model.options.find((option) => option.decision === "always-allow");
 	assert.equal(always?.label, "Always allow this rule (session)");
 	assert.ok(!always?.label.includes("reading system host files"));
@@ -186,7 +187,7 @@ test("a spanning probe shows the spanning note and keeps the three decisions", (
 	assert.equal(model.kind, "shell-spanning");
 	assert.equal(model.highlight, null);
 	assert.ok(model.lines.some((line) => /spans the whole command/i.test(line)));
-	assert.deepEqual(decisions(model), ["deny", "allow-once", "always-allow"]);
+	assert.deepEqual(decisions(model), ["allow-once", "always-allow", "deny"]);
 });
 
 test("a missing reason falls back without leaking the regex", () => {
@@ -325,6 +326,99 @@ test("renderPanel shows the full command and every choice", () => {
 	assert.ok(text.includes("Deny"));
 	assert.ok(text.includes("Allow once"));
 	assert.ok(text.includes("Always allow this rule (session)"));
+});
+
+test("the TUI prompt defaults its cursor to Allow once and Esc denies", async () => {
+	const model = shellModel();
+	let panel:
+		| { render(width: number): string[]; handleInput(data: string): void }
+		| undefined;
+	let resolveCustom!: () => void;
+	const customReady = new Promise<void>((resolve) => {
+		resolveCustom = resolve;
+	});
+	// Drive the real renderPermissionPrompt; capture the panel component it builds.
+	const ctx = {
+		mode: "tui",
+		ui: {
+			custom<T>(
+				factory: (
+					tui: unknown,
+					theme: Theme,
+					keybindings: unknown,
+					done: (choice: T) => void,
+				) => unknown,
+			): Promise<T> {
+				return new Promise<T>((resolve) => {
+					panel = factory(
+						{ requestRender(): void {} },
+						ansiTheme,
+						{},
+						(choice: T) => resolve(choice),
+					) as typeof panel;
+					resolveCustom();
+				});
+			},
+		},
+	} as unknown as Parameters<typeof renderPermissionPrompt>[0];
+
+	const answered = renderPermissionPrompt(ctx, model);
+	await customReady;
+	const component = panel;
+	assert.ok(component, "the TUI prompt must build the panel component");
+	const plain = component.render(60).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+	const cursored = plain.split("\n").filter((line) => line.includes("❯"));
+	assert.equal(cursored.length, 1, `exactly one row carries the cursor: ${plain}`);
+	assert.ok(
+		cursored[0].startsWith("│ ❯ Allow once"),
+		`the default row must be Allow once, not Deny: ${cursored[0]}`,
+	);
+
+	component.handleInput("\x1b"); // Esc
+	assert.equal(await answered, "deny");
+});
+
+test("pressing Enter on the default TUI prompt allows the call once", async () => {
+	const model = shellModel();
+	let panel:
+		| { render(width: number): string[]; handleInput(data: string): void }
+		| undefined;
+	let resolveCustom!: () => void;
+	const customReady = new Promise<void>((resolve) => {
+		resolveCustom = resolve;
+	});
+	// Drive the real renderPermissionPrompt; capture the panel component it builds.
+	const ctx = {
+		mode: "tui",
+		ui: {
+			custom<T>(
+				factory: (
+					tui: unknown,
+					theme: Theme,
+					keybindings: unknown,
+					done: (choice: T) => void,
+				) => unknown,
+			): Promise<T> {
+				return new Promise<T>((resolve) => {
+					panel = factory(
+						{ requestRender(): void {} },
+						ansiTheme,
+						{},
+						(choice: T) => resolve(choice),
+					) as typeof panel;
+					resolveCustom();
+				});
+			},
+		},
+	} as unknown as Parameters<typeof renderPermissionPrompt>[0];
+
+	const answered = renderPermissionPrompt(ctx, model);
+	await customReady;
+	const component = panel;
+	assert.ok(component, "the TUI prompt must build the panel component");
+
+	component.handleInput("\r"); // Enter on the default row
+	assert.equal(await answered, "allow-once");
 });
 
 // ---------------------------------------------------------------------------

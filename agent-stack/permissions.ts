@@ -14,11 +14,11 @@
  *
  * Ask rules (steps 2 and 4) prompt with plain-language options
  * (`permission-prompt.ts`). Every tool shows the same three choices:
- *   - Deny                             → block this call ("Denied by user")
  *   - Allow once                       → grant THIS single call
  *   - Always allow this rule (session) → remember the rule for the session
  *                                        (agent|tool|match key, in-memory
  *                                        only, nothing persisted to disk)
+ *   - Deny                             → block this call ("Denied by user")
  * A shell segment also approves the matching segment and re-evaluates the
  * remaining segments. A spanning rule runs the whole call once and approves no
  * segment. The prompt shows the full command, highlights the blocked part, and
