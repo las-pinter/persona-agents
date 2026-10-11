@@ -35,7 +35,9 @@ import {
 	disposeSidebarCompositor,
 	getSidebarCompositor,
 	installSidebarCompositor,
+	planSidebarWidthChange,
 	resolveSidebarEnabled,
+	resolveSidebarWidth,
 	toggleSidebarState,
 	writeSidebarConfig,
 } from "./sidebar.ts";
@@ -79,6 +81,8 @@ let capturedTheme: SidebarTheme | null = null;
 let mode = "";
 let bound = false;
 let disposed = false;
+/** The right-column width, kept in step with the compositor and the renderer. */
+let resolvedWidth = SIDEBAR_DEFAULT_WIDTH;
 
 /** Spinner animation frame. */
 let frame = 0;
@@ -111,7 +115,7 @@ function terminalHeight(): number {
 /** Render the full right column for the current terminal size. */
 function buildLines(snapshot: SidebarSnapshot): string[] {
 	try {
-		return renderSidebarPanel(snapshot, SIDEBAR_DEFAULT_WIDTH, terminalHeight(), themeDuck(), frame);
+		return renderSidebarPanel(snapshot, resolvedWidth, terminalHeight(), themeDuck(), frame);
 	} catch {
 		return [];
 	}
@@ -140,7 +144,7 @@ function requestRender(): void {
 function installCompositor(): void {
 	try {
 		if (!capturedTui || !data) return;
-		installSidebarCompositor(capturedTui, getLines, SIDEBAR_DEFAULT_WIDTH);
+		installSidebarCompositor(capturedTui, getLines, resolvedWidth);
 	} catch {
 		/* an install failure must never break the session */
 	}
@@ -288,15 +292,23 @@ function stopTimers(): void {
 /** The `/agents-tree` overlay: a node list plus `renderNodeDetail` for the selection. */
 class TreeOverlayComponent {
 	wantsKeyRelease = false;
+	private readonly tui: TUI;
+	private readonly theme: SidebarTheme;
+	private readonly getSnapshot: () => SidebarSnapshot;
+	private readonly done: () => void;
 	private selectedId: string | null;
 
 	constructor(
-		private readonly tui: TUI,
-		private readonly theme: SidebarTheme,
-		private readonly getSnapshot: () => SidebarSnapshot,
-		private readonly done: () => void,
+		tui: TUI,
+		theme: SidebarTheme,
+		getSnapshot: () => SidebarSnapshot,
+		done: () => void,
 		initialId: string | null = null,
 	) {
+		this.tui = tui;
+		this.theme = theme;
+		this.getSnapshot = getSnapshot;
+		this.done = done;
 		this.selectedId = initialId;
 	}
 
@@ -353,12 +365,15 @@ class TreeOverlayComponent {
 /** The `/agent-inspect` overlay: one node's detail. */
 class NodeDetailComponent {
 	wantsKeyRelease = false;
+	private readonly theme: SidebarTheme;
+	private readonly node: TreeNode;
+	private readonly done: () => void;
 
-	constructor(
-		private readonly theme: SidebarTheme,
-		private readonly node: TreeNode,
-		private readonly done: () => void,
-	) {}
+	constructor(theme: SidebarTheme, node: TreeNode, done: () => void) {
+		this.theme = theme;
+		this.node = node;
+		this.done = done;
+	}
 
 	handleInput(input: string): void {
 		try {
@@ -484,6 +499,7 @@ export function bindTreeSidebar(ctx: ExtensionContext): void {
 		boundCtx = ctx;
 		mode = ctx.mode;
 		disposed = false;
+		resolvedWidth = resolveSidebarWidth();
 		data.subscribe(ctx);
 
 		if (resolveSidebarEnabled(ctx.mode)) installCompositor();
@@ -537,6 +553,7 @@ export function disposeTreeSidebar(): void {
 	boundCtx = null;
 	bound = false;
 	mode = "";
+	resolvedWidth = SIDEBAR_DEFAULT_WIDTH;
 	lastSignature = null;
 	lastSpinnerLines = "";
 	frame = 0;
@@ -549,7 +566,7 @@ export function registerTreeUi(pi: ExtensionAPI): void {
 	piRef = pi;
 
 	pi.registerCommand("sidebar", {
-		description: "Show or hide the persona-agents sidebar (usage: /sidebar [on|off])",
+		description: "Show or hide the persona-agents sidebar, or set its width (usage: /sidebar [on|off|width <n>])",
 		handler: async (args: string, ctx) => {
 			try {
 				const arg = args.trim().toLowerCase();
@@ -559,13 +576,39 @@ export function registerTreeUi(pi: ExtensionAPI): void {
 				else if (arg === "off") enabled = false;
 				else if (arg === "") enabled = !current;
 				else {
-					ctx.ui?.notify?.(`Unknown option "${arg}". Use /sidebar [on|off].`, "warning");
+					const parts = arg.split(/\s+/);
+					if (parts[0] === "width") {
+						const plan = planSidebarWidthChange(parts.slice(1), resolvedWidth);
+						if (!plan.ok) {
+							ctx.ui?.notify?.(plan.message, "warning");
+							return;
+						}
+						resolvedWidth = plan.width;
+						const write = writeSidebarConfig(current, undefined, plan.width);
+						// The compositor captures its width at install time, so a live
+						// change needs a dispose + reinstall (install does both). Repaint
+						// right away so the new width shows without waiting for the tick.
+						if (plan.shouldReinstall && ctx.mode === "tui" && getSidebarCompositor() !== null) {
+							installCompositor();
+							requestRender();
+						}
+						const persisted = write.ok ? "" : ` (not persisted: ${write.error ?? "write failed"})`;
+						ctx.ui?.notify?.(`Sidebar width ${plan.width}${persisted}.`, write.ok ? "info" : "warning");
+						return;
+					}
+					ctx.ui?.notify?.(
+						`Unknown option "${arg}". Use /sidebar [on|off] or /sidebar width <n>.`,
+						"warning",
+					);
 					return;
 				}
 
 				const installed = getSidebarCompositor() !== null;
 				const plan = toggleSidebarState(enabled, ctx.mode, installed);
-				const write = writeSidebarConfig(plan.enabled);
+				// Re-read the width from disk so the live compositor matches disk. A
+				// width changed by another window must not leave the cached value stale.
+				resolvedWidth = resolveSidebarWidth();
+				const write = writeSidebarConfig(plan.enabled, undefined, resolvedWidth);
 
 				if (plan.shouldInstall && ctx.mode === "tui") {
 					ensureBound(ctx);

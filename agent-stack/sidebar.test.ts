@@ -16,17 +16,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	SIDEBAR_CONFIG_ENV,
+	SIDEBAR_DEFAULT_WIDTH,
+	SIDEBAR_MAX_WIDTH,
+	SIDEBAR_MIN_WIDTH,
 	SidebarCompositor,
 	defaultSidebarConfigPath,
 	defaultSidebarEnabled,
 	disposeSidebarCompositor,
 	getSidebarCompositor,
 	installSidebarCompositor,
+	parseSidebarWidth,
+	planSidebarWidthChange,
 	readSidebarConfig,
+	resolveSidebarWidth,
 	toggleSidebarState,
 	writeSidebarConfig,
 	type SidebarTerminal,
 } from "./sidebar.ts";
+import {
+	renderSidebarPanel,
+	type SidebarSnapshot,
+	type SidebarTheme,
+} from "./sidebar-render.ts";
 
 // --- fakes ------------------------------------------------------------------
 
@@ -63,6 +74,32 @@ function makeTui(terminal: FakeTerminal): FakeTui {
 	return tui;
 }
 
+/** A terminal whose raw column count can change, like a real resize. */
+interface ResizableTerminal extends FakeTerminal {
+	resize(columns: number): void;
+}
+
+function makeResizableTerminal(columns: number, rows = 30): ResizableTerminal {
+	let raw = columns;
+	const writes: string[] = [];
+	return {
+		rows,
+		writes,
+		get columns(): number {
+			return raw;
+		},
+		set columns(value: number) {
+			raw = value;
+		},
+		write(data: string): void {
+			writes.push(data);
+		},
+		resize(next: number): void {
+			raw = next;
+		},
+	};
+}
+
 // --- compositor install / dispose -------------------------------------------
 
 test("install narrows terminal.columns to raw - width - 1", () => {
@@ -77,6 +114,40 @@ test("install narrows terminal.columns to raw - width - 1", () => {
 
 	compositor.dispose();
 	assert.equal(terminal.columns, original);
+});
+
+test("a width wider than the terminal hides the sidebar until a resize reveals it", () => {
+	const terminal = makeResizableTerminal(80, 24);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => ["panel"], SIDEBAR_MAX_WIDTH);
+
+	compositor.install();
+	// 80 columns cannot hold a 120-wide column beside a usable main area.
+	assert.equal(compositor.width, SIDEBAR_MAX_WIDTH);
+	assert.equal(terminal.columns, 1, "the main area collapsed to zero or less");
+	terminal.writes.length = 0;
+	compositor.paint();
+	assert.equal(terminal.writes.length, 0, "the sidebar was drawn on a too-narrow terminal");
+
+	// Widen past width + 1: the sidebar appears at the configured width.
+	terminal.resize(250);
+	assert.equal(terminal.columns, 250 - SIDEBAR_MAX_WIDTH - 1);
+	terminal.writes.length = 0;
+	compositor.paint();
+	assert.ok(
+		terminal.writes.join("").includes(`\x1b[1;${250 - SIDEBAR_MAX_WIDTH}H│`),
+		"the separator was not drawn after the resize",
+	);
+
+	// Shrink back: the sidebar hides again and the main area stays at least 1 column.
+	terminal.resize(100);
+	assert.equal(terminal.columns, 1, "the main area collapsed to zero or less");
+	terminal.writes.length = 0;
+	compositor.paint();
+	assert.equal(terminal.writes.length, 0, "the sidebar was drawn after shrinking again");
+
+	compositor.dispose();
+	assert.equal(terminal.columns, 100);
 });
 
 test("dispose restores the original doRender", () => {
@@ -327,6 +398,57 @@ test("installSidebarCompositor and disposeSidebarCompositor manage the singleton
 	disposeSidebarCompositor();
 });
 
+test("a live width change keeps the renderer and compositor widths equal", () => {
+	const terminal = makeTerminal(200, 30);
+	const tui = makeTui(terminal);
+	const snapshot: SidebarSnapshot = {
+		cwd: "/tmp",
+		tree: [],
+		session: {
+			model: "m",
+			thinkingLevel: null,
+			contextTokens: null,
+			contextWindow: null,
+			contextPercent: null,
+			cost: 0,
+			tps: 0,
+			tokensIn: 0,
+			tokensOut: 0,
+			turns: 0,
+			sessionStartMs: null,
+		},
+		workspace: { cwd: "/tmp", branch: null, changed: [], changedCount: 0, files: [] },
+		mcp: [],
+		todos: [],
+		tps: 0,
+	};
+	const theme: SidebarTheme = { bold: (text) => text, dim: (text) => text };
+	let width = 80;
+	const getLines = () => renderSidebarPanel(snapshot, width, 30, theme, 0);
+
+	installSidebarCompositor(tui, getLines, width);
+	assert.equal(getSidebarCompositor()?.width, 80);
+	assert.equal(terminal.columns, 200 - 80 - 1);
+	terminal.writes.length = 0;
+	tui.doRender();
+	let output = terminal.writes.join("");
+	assert.ok(output.includes("─".repeat(80)), "renderer did not use width 80");
+	assert.ok(output.includes("\x1b[30;120H│"), "separator is not at raw - 80");
+
+	// A live change moves the renderer and the compositor together.
+	width = 30;
+	installSidebarCompositor(tui, getLines, width);
+	assert.equal(getSidebarCompositor()?.width, 30);
+	assert.equal(terminal.columns, 200 - 30 - 1);
+	terminal.writes.length = 0;
+	tui.doRender();
+	output = terminal.writes.join("");
+	assert.ok(output.includes("─".repeat(30)), "renderer did not use width 30");
+	assert.ok(output.includes("\x1b[30;170H│"), "separator is not at raw - 30");
+
+	disposeSidebarCompositor();
+});
+
 // --- toggle config ----------------------------------------------------------
 
 test("writeSidebarConfig round-trips atomically", () => {
@@ -385,6 +507,90 @@ test("the config path honors the env override", () => {
 	}
 });
 
+test("writeSidebarConfig round-trips the width", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pa-sidebar-"));
+	const configPath = join(dir, "persona-agents-sidebar.json");
+	try {
+		const write = writeSidebarConfig(true, configPath, 80);
+		assert.equal(write.ok, true);
+		assert.equal(write.width, 80);
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 80 });
+		assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), { enabled: true, width: 80 });
+		assert.equal(resolveSidebarWidth(configPath), 80);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("readSidebarConfig clamps an out-of-range width on read", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pa-sidebar-"));
+	const configPath = join(dir, "persona-agents-sidebar.json");
+	try {
+		writeFileSync(configPath, JSON.stringify({ enabled: true, width: 500 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 120 });
+		writeFileSync(configPath, JSON.stringify({ enabled: true, width: 2 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 10 });
+		writeFileSync(configPath, JSON.stringify({ enabled: true, width: 0 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 10 });
+		writeFileSync(configPath, JSON.stringify({ enabled: true, width: -5 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 10 });
+		writeFileSync(configPath, JSON.stringify({ enabled: true, width: 10.9 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 10 });
+		for (const invalid of ["80", null, true, false]) {
+			writeFileSync(configPath, JSON.stringify({ enabled: true, width: invalid }));
+			assert.deepEqual(readSidebarConfig(configPath), { enabled: true });
+		}
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a stored width survives when enabled is missing or invalid", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pa-sidebar-"));
+	const configPath = join(dir, "persona-agents-sidebar.json");
+	try {
+		writeFileSync(configPath, JSON.stringify({ width: 80 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 80 });
+		assert.equal(resolveSidebarWidth(configPath), 80);
+
+		// A later toggle must persist the stored width instead of overwriting it.
+		const write = writeSidebarConfig(false, configPath, resolveSidebarWidth(configPath));
+		assert.equal(write.ok, true);
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: false, width: 80 });
+
+		writeFileSync(configPath, JSON.stringify({ enabled: "yes", width: 80 }));
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: true, width: 80 });
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("writeSidebarConfig merges an omitted width with the stored one", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pa-sidebar-"));
+	const configPath = join(dir, "persona-agents-sidebar.json");
+	try {
+		writeSidebarConfig(true, configPath, 80);
+		const write = writeSidebarConfig(false, configPath);
+		assert.equal(write.ok, true);
+		assert.equal(write.width, 80);
+		assert.deepEqual(readSidebarConfig(configPath), { enabled: false, width: 80 });
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("resolveSidebarWidth falls back to the default when no width is set", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pa-sidebar-"));
+	try {
+		assert.equal(
+			resolveSidebarWidth(join(dir, "nope.json")),
+			SIDEBAR_DEFAULT_WIDTH,
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 test("defaultSidebarEnabled is ON in TUI and OFF elsewhere", () => {
 	assert.equal(defaultSidebarEnabled("tui"), true);
 	assert.equal(defaultSidebarEnabled("rpc"), false);
@@ -417,5 +623,93 @@ test("toggleSidebarState plans install in TUI and dispose when off", () => {
 		canCompose: true,
 		shouldInstall: false,
 		shouldDispose: false,
+	});
+});
+
+// --- width command planning -------------------------------------------------
+
+test("parseSidebarWidth accepts the range bounds and a middle value", () => {
+	assert.deepEqual(parseSidebarWidth(String(SIDEBAR_MIN_WIDTH)), {
+		ok: true,
+		width: SIDEBAR_MIN_WIDTH,
+	});
+	assert.deepEqual(parseSidebarWidth("80"), { ok: true, width: 80 });
+	assert.deepEqual(parseSidebarWidth(String(SIDEBAR_MAX_WIDTH)), {
+		ok: true,
+		width: SIDEBAR_MAX_WIDTH,
+	});
+});
+
+test("parseSidebarWidth trims surrounding whitespace", () => {
+	assert.deepEqual(parseSidebarWidth("  80  "), { ok: true, width: 80 });
+	assert.equal(parseSidebarWidth("   ").ok, false);
+});
+
+test("parseSidebarWidth rejects a non-numeric, a missing, and an empty value", () => {
+	const nonNumeric = parseSidebarWidth("abc");
+	assert.equal(nonNumeric.ok, false);
+	if (!nonNumeric.ok) assert.match(nonNumeric.message, /Invalid width "abc"/);
+
+	const missing = parseSidebarWidth(undefined);
+	assert.equal(missing.ok, false);
+	if (!missing.ok) assert.match(missing.message, /Usage: \/sidebar width/);
+
+	const empty = parseSidebarWidth("");
+	assert.equal(empty.ok, false);
+	if (!empty.ok) assert.match(empty.message, /Usage: \/sidebar width/);
+});
+
+test("parseSidebarWidth rejects an out-of-range value", () => {
+	const low = parseSidebarWidth(String(SIDEBAR_MIN_WIDTH - 1));
+	assert.equal(low.ok, false);
+	if (!low.ok) assert.match(low.message, /out of range/);
+
+	const high = parseSidebarWidth(String(SIDEBAR_MAX_WIDTH + 1));
+	assert.equal(high.ok, false);
+	if (!high.ok) assert.match(high.message, /out of range/);
+});
+
+test("planSidebarWidthChange accepts a valid width and asks to reinstall", () => {
+	assert.deepEqual(planSidebarWidthChange(["80"], SIDEBAR_DEFAULT_WIDTH), {
+		ok: true,
+		width: 80,
+		shouldReinstall: true,
+	});
+});
+
+test("planSidebarWidthChange rejects a missing argument", () => {
+	const plan = planSidebarWidthChange([], SIDEBAR_DEFAULT_WIDTH);
+	assert.equal(plan.ok, false);
+	if (!plan.ok) assert.match(plan.message, /Usage: \/sidebar width/);
+});
+
+test("planSidebarWidthChange rejects an extra argument", () => {
+	const plan = planSidebarWidthChange(["80", "90"], SIDEBAR_DEFAULT_WIDTH);
+	assert.equal(plan.ok, false);
+	if (!plan.ok) assert.match(plan.message, /Unexpected argument/);
+});
+
+test("planSidebarWidthChange rejects junk values", () => {
+	for (const junk of ["1e3", "10.5", "--", ""]) {
+		const plan = planSidebarWidthChange([junk], SIDEBAR_DEFAULT_WIDTH);
+		assert.equal(plan.ok, false, `"${junk}" should be rejected`);
+	}
+});
+
+test("planSidebarWidthChange rejects both range ends", () => {
+	const low = planSidebarWidthChange([String(SIDEBAR_MIN_WIDTH - 1)], SIDEBAR_DEFAULT_WIDTH);
+	assert.equal(low.ok, false);
+	if (!low.ok) assert.match(low.message, /out of range/);
+
+	const high = planSidebarWidthChange([String(SIDEBAR_MAX_WIDTH + 1)], SIDEBAR_DEFAULT_WIDTH);
+	assert.equal(high.ok, false);
+	if (!high.ok) assert.match(high.message, /out of range/);
+});
+
+test("planSidebarWidthChange does not reinstall for the current width", () => {
+	assert.deepEqual(planSidebarWidthChange(["80"], 80), {
+		ok: true,
+		width: 80,
+		shouldReinstall: false,
 	});
 });

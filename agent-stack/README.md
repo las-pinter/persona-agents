@@ -255,7 +255,7 @@ researcher, reviewer. Mascot and overseer are excluded. Each allowed agent lists
 
 ### Commands
 
-- `/sidebar [on|off]` — show or hide the right column. A bare `/sidebar` toggles.
+- `/sidebar [on|off|width <n>]` — show or hide the right column, or set its width (10 to 120). A bare `/sidebar` toggles.
 - `/agents-tree` — open the live tree overlay. Up/down selects a node.
 - `/agent-inspect [runId|last]` — open one node's detail.
 

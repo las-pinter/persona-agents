@@ -454,12 +454,16 @@ export function disposeSidebarCompositor(): void {
 /** Persisted toggle shape. */
 export interface SidebarConfig {
 	enabled: boolean;
+	/** Optional clamped right-column width. Absent means the default. */
+	width?: number;
 }
 
 /** Result of one atomic config write. */
 export interface SidebarConfigWrite {
 	ok: boolean;
 	enabled: boolean;
+	/** The written width, when a width was requested. */
+	width?: number;
 	path: string;
 	error?: string;
 }
@@ -484,21 +488,29 @@ export function defaultSidebarConfigPath(): string {
 
 /**
  * Read the persisted toggle. A missing or malformed file yields
- * `fallbackEnabled`; this function never throws.
+ * `fallbackEnabled`; this function never throws. Set `rememberEnabled` to false
+ * for a width-only read that must not change the in-memory enable state.
  */
 export function readSidebarConfig(
 	configPath: string = defaultSidebarConfigPath(),
 	fallbackEnabled = true,
+	rememberEnabled = true,
 ): SidebarConfig {
 	try {
 		const raw = readFileSync(configPath, "utf8");
 		const parsed: unknown = JSON.parse(raw);
 		if (typeof parsed === "object" && parsed !== null) {
-			const enabled = (parsed as { enabled?: unknown }).enabled;
-			if (typeof enabled === "boolean") {
-				inMemoryEnabled = enabled;
-				return { enabled };
+			const record = parsed as { enabled?: unknown; width?: unknown };
+			const config: SidebarConfig = { enabled: fallbackEnabled };
+			if (typeof record.enabled === "boolean") {
+				// A width-only read must not change the in-memory enable state.
+				if (rememberEnabled) inMemoryEnabled = record.enabled;
+				config.enabled = record.enabled;
 			}
+			// Clamp on read: a hand-edited out-of-range width must not break the
+			// layout, and a stored width must survive a missing or invalid `enabled`.
+			if (typeof record.width === "number") config.width = clampWidth(record.width);
+			return config;
 		}
 	} catch {
 		// A missing or malformed file falls back to the default.
@@ -518,6 +530,13 @@ export function resolveSidebarEnabled(
 	return readSidebarConfig(configPath, defaultSidebarEnabled(mode)).enabled;
 }
 
+/** The effective right-column width: the persisted width, clamped, or the default. */
+export function resolveSidebarWidth(
+	configPath: string = defaultSidebarConfigPath(),
+): number {
+	return readSidebarConfig(configPath, true, false).width ?? SIDEBAR_DEFAULT_WIDTH;
+}
+
 /**
  * Persist the toggle with an atomic temp-file-then-rename write. On failure the
  * in-memory state is kept and the error is returned; this function never throws.
@@ -525,14 +544,22 @@ export function resolveSidebarEnabled(
 export function writeSidebarConfig(
 	enabled: boolean,
 	configPath: string = defaultSidebarConfigPath(),
+	width?: number,
 ): SidebarConfigWrite {
+	const config: SidebarConfig = { enabled };
+	// Merge instead of overwrite: an omitted width must never drop the stored one.
+	const nextWidth =
+		typeof width === "number" && Number.isFinite(width)
+			? clampWidth(width)
+			: readSidebarConfig(configPath, true, false).width;
+	if (nextWidth !== undefined) config.width = nextWidth;
 	inMemoryEnabled = enabled;
 	const temp = `${configPath}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
 	try {
 		mkdirSync(dirname(configPath), { recursive: true });
-		writeFileSync(temp, `${JSON.stringify({ enabled }, null, 2)}\n`, "utf8");
+		writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 		renameSync(temp, configPath);
-		return { ok: true, enabled, path: configPath };
+		return { ok: true, enabled, width: config.width, path: configPath };
 	} catch (error) {
 		try {
 			unlinkSync(temp);
@@ -542,6 +569,7 @@ export function writeSidebarConfig(
 		return {
 			ok: false,
 			enabled,
+			width: config.width,
 			path: configPath,
 			error: error instanceof Error ? error.message : String(error),
 		};
@@ -574,5 +602,61 @@ export function toggleSidebarState(
 		canCompose,
 		shouldInstall: canCompose && !installed,
 		shouldDispose: installed && !canCompose,
+	};
+}
+
+/** Result of parsing a `/sidebar width <n>` argument. Pure. */
+export type SidebarWidthParse =
+	| { ok: true; width: number }
+	| { ok: false; message: string };
+
+/**
+ * Parse and range-check a `/sidebar width <n>` argument. Pure: the glue writes
+ * the width and reports the message. A bad value never reaches the layout.
+ */
+export function parseSidebarWidth(raw: string | undefined): SidebarWidthParse {
+	const value = raw?.trim() ?? "";
+	if (value.length === 0) {
+		return { ok: false, message: "Usage: /sidebar width <n>." };
+	}
+	if (!/^\d+$/.test(value)) {
+		return {
+			ok: false,
+			message: `Invalid width "${value}". Use an integer from ${SIDEBAR_MIN_WIDTH} to ${SIDEBAR_MAX_WIDTH}.`,
+		};
+	}
+	const width = Number(value);
+	if (width < SIDEBAR_MIN_WIDTH || width > SIDEBAR_MAX_WIDTH) {
+		return {
+			ok: false,
+			message: `Width ${width} is out of range. Use ${SIDEBAR_MIN_WIDTH} to ${SIDEBAR_MAX_WIDTH}.`,
+		};
+	}
+	return { ok: true, width };
+}
+
+/** What the glue must do for a requested width change. Pure. */
+export type SidebarWidthPlan =
+	| { ok: true; width: number; shouldReinstall: boolean }
+	| { ok: false; message: string };
+
+/**
+ * Plan one `/sidebar width <n>` change from the tokens after `width`. Pure: the
+ * glue persists the width, reinstalls the compositor on a real change, and
+ * reports the message. `current` is the width the compositor already uses.
+ */
+export function planSidebarWidthChange(
+	input: readonly string[],
+	current: number,
+): SidebarWidthPlan {
+	if (input.length > 1) {
+		return { ok: false, message: "Unexpected argument. Usage: /sidebar width <n>." };
+	}
+	const parsed = parseSidebarWidth(input[0]);
+	if (!parsed.ok) return parsed;
+	return {
+		ok: true,
+		width: parsed.width,
+		shouldReinstall: parsed.width !== current,
 	};
 }
