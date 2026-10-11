@@ -205,7 +205,9 @@ persona-agents/
 │   │   └── task-routing/SKILL.md
 │   ├── implementer/
 │   │   ├── code-implementation/SKILL.md
-│   │   └── python-quality-gates/SKILL.md
+│   │   ├── python-quality-gates/SKILL.md
+│   │   ├── rust-implementation/SKILL.md
+│   │   └── rust-quality-gates/SKILL.md
 │   ├── reviewer/
 │   │   └── code-review-checklist/SKILL.md
 │   ├── tester/
