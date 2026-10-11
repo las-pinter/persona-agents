@@ -17,10 +17,16 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|fetch|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
     - { tool: bash, match: "^(pytest\\b|mypy\\b|ruff\\b|npm\\s+(?:test|run)|tsc\\b|docker\\s+(ps|logs|inspect)|python3?\\s+-m\\s+(pytest|mypy)|(\\.venv/bin/)?python -m pytest)\\b" }
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?(rustc|cargo|rustup)\\s+(--version|-V)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rustup\\s+show\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(metadata|tree|locate-project|pkgid)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(check|clippy|doc|test|nextest)(\\s|$)" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+fmt\\s+--check\\b" }
   ask: []
   deny:
     - { tool: bash, match: "^eval\\b" }
     - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\b(?:\"[^\"]*\"|'[^']*'|[^;&|\\n])*--config\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(push|pull)\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(add|commit)\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b" }

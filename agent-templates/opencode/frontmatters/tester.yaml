@@ -454,6 +454,114 @@ permissions:
   - action: shell
     resource: "rg"
     effect: allow
+  - action: shell
+    resource: "rustc --version"
+    effect: allow
+  - action: shell
+    resource: "cargo --version"
+    effect: allow
+  - action: shell
+    resource: "rustup show"
+    effect: allow
+  - action: shell
+    resource: "cargo metadata *"
+    effect: allow
+  - action: shell
+    resource: "cargo tree *"
+    effect: allow
+  - action: shell
+    resource: "cargo locate-project *"
+    effect: allow
+  - action: shell
+    resource: "cargo check *"
+    effect: allow
+  - action: shell
+    resource: "cargo clippy *"
+    effect: allow
+  - action: shell
+    resource: "cargo fmt --check *"
+    effect: allow
+  - action: shell
+    resource: "cargo doc *"
+    effect: allow
+  - action: shell
+    resource: "cargo build *"
+    effect: allow
+  - action: shell
+    resource: "cargo test *"
+    effect: allow
+  - action: shell
+    resource: "cargo nextest *"
+    effect: allow
+  - action: shell
+    resource: "cargo bench *"
+    effect: allow
+  - action: shell
+    resource: "cargo add *"
+    effect: ask
+  - action: shell
+    resource: "cargo remove *"
+    effect: ask
+  - action: shell
+    resource: "cargo update *"
+    effect: ask
+  - action: shell
+    resource: "cargo run *"
+    effect: deny
+  - action: shell
+    resource: "cargo install *"
+    effect: deny
+  - action: shell
+    resource: "cargo publish *"
+    effect: deny
+  - action: shell
+    resource: "cargo login *"
+    effect: deny
+  - action: shell
+    resource: "cargo yank *"
+    effect: deny
+  - action: shell
+    resource: "rustup install *"
+    effect: deny
+  - action: shell
+    resource: "rustup update *"
+    effect: deny
+  - action: shell
+    resource: "rustup toolchain *"
+    effect: deny
+  - action: shell
+    resource: "rustup component *"
+    effect: deny
+  - action: shell
+    resource: "rustup default *"
+    effect: deny
+  - action: shell
+    resource: "rustup self *"
+    effect: deny
+  - action: shell
+    resource: "rustup run *"
+    effect: deny
+  - action: shell
+    resource: "rustup target *"
+    effect: deny
+  - action: shell
+    resource: "rustup override *"
+    effect: deny
+  - action: shell
+    resource: "rustup set *"
+    effect: deny
+  - action: shell
+    resource: "rustup which *"
+    effect: deny
+  # opencode matches literal shell text; it does not normalize quote or
+  # backslash obfuscation. The literal `--config` form is denied here, but an
+  # obfuscated `--config` is an accepted residual on this engine.
+  - action: shell
+    resource: "*cargo *--config*"
+    effect: deny
+  - action: shell
+    resource: "*CARGO_HOME*"
+    effect: deny
   - action: subagent
     resource: "*"
     effect: deny

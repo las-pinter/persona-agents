@@ -571,6 +571,19 @@ function unique(values: string[]): string[] {
 	return Array.from(new Set(values));
 }
 
+/**
+ * A probe with quotes removed and backslash escapes resolved. A quoted
+ * separator (`"a;b"`) keeps a segment whole, and a mid-token quote
+ * (`--co"nfig"`) splits a token, so both hide a literal deny from the raw
+ * probe. A shell also resolves a backslash escape before cargo sees it
+ * (`--co\nfig` becomes `--config`), so the deny probe must model the resolved
+ * form. Deny rules test this variant as well, so it can only add a denial,
+ * never an allowance.
+ */
+function dequoteProbe(probe: string): string {
+	return probe.replace(/["']/g, "").replace(/\\(.)/g, "$1");
+}
+
 interface RuleMatch {
 	rule: RawRule;
 	probe: string;
@@ -682,12 +695,16 @@ export function evaluateCommandRules(
 	// compound deny rules such as `curl ... | sh` working, and the raw pre-fold
 	// segments keep anchored rules working after a `cd` fold rewrites a separator.
 	const probes = unique([command, ...segments, ...rawSegments]);
+	// Deny-only defense in depth: a quoted separator, a mid-token quote, or a
+	// backslash escape hides a literal deny from the raw probes. The normalized
+	// variants can add a denial, never an allowance.
+	const denyProbes = unique([...probes, ...probes.map(dequoteProbe)]);
 
-	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, probes);
+	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, denyProbes);
 	if (globalDeny) {
 		return { kind: "deny", reason: denyReason(globalDeny.rule, toolName, "global") };
 	}
-	const agentDeny = firstMatch(compile(ruleSets.agentDeny), toolName, probes);
+	const agentDeny = firstMatch(compile(ruleSets.agentDeny), toolName, denyProbes);
 	if (agentDeny) {
 		return { kind: "deny", reason: denyReason(agentDeny.rule, toolName, agentName ?? "agent") };
 	}

@@ -23,7 +23,12 @@ permissions:
     - { tool: bash, match: "^(python|python3(\\.[0-9]+)?)\\s+-m\\s+(pytest|unittest|mypy|flake8|pylint|black|isort|ruff)\\b" }
     - { tool: bash, match: "^(\\.venv/bin/(python -m pytest|pre-commit))\\b" }
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?(rustc|cargo|rustup)\\s+(--version|-V)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rustup\\s+show\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(metadata|tree|locate-project|pkgid)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(check|clippy|fmt|doc|build|test|nextest|bench|run)(\\s|$)" }
   ask:
+    - { tool: bash, match: "^cargo\\s+(add|remove|update|upgrade)\\b", reason: "dependency manifest or lockfile change requires user approval" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rm\\s+[^-\\s;|&*?\\[\\]{}'\"$`!#][^\\s;|&*?\\[\\]{}'\"$`]*$", reason: "deleting a named file prompts the user" }
     # File migrations (copy/move/sync) prompt the user; the rule is path-agnostic.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?cp\\b", reason: "file copy requires user approval" }
@@ -33,6 +38,7 @@ permissions:
     # The implementer may SUGGEST a commit. It never runs add/commit/push/pull/gh pr/gh release.
     - { tool: bash, match: "^eval\\b" }
     - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\b(?:\"[^\"]*\"|'[^']*'|[^;&|\\n])*--config\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(push|pull)\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(add|commit)\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b" }

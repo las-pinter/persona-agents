@@ -1333,3 +1333,419 @@ describe("github release permission doctrine", () => {
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Rust toolchain permission doctrine.
+// Each stack and agent must carry the intended allow entries, must never allow
+// install/publish/rustup/config overrides, and must hold the fmt/build boundary.
+// The existence checks are load-bearing: a missing rule fails here instead of
+// passing on an engine default.
+// ---------------------------------------------------------------------------
+
+const RUST_AGENTS = ["implementer", "tester", "reviewer", "researcher"] as const;
+type RustAgent = (typeof RUST_AGENTS)[number];
+
+// Commands that must never be allowed on any stack. The --config form uses the
+// prefix position: the pi allow anchor requires a cargo subcommand directly.
+const RUST_FORBIDDEN_NEVER_ALLOWED = [
+	"cargo install cargo-edit",
+	"cargo publish",
+	"rustup install stable",
+	"rustup update",
+	"cargo --config net.offline=true check",
+];
+
+// opencode shell resources that must exist verbatim, per agent.
+const OPENCODE_RUST_ALLOWS: Record<RustAgent, string[]> = {
+	implementer: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata *",
+		"cargo tree *",
+		"cargo locate-project *",
+		"cargo check *",
+		"cargo clippy *",
+		"cargo fmt *",
+		"cargo doc *",
+		"cargo build *",
+		"cargo test *",
+		"cargo nextest *",
+		"cargo bench *",
+		"cargo run *",
+	],
+	tester: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata *",
+		"cargo tree *",
+		"cargo locate-project *",
+		"cargo check *",
+		"cargo clippy *",
+		"cargo fmt --check *",
+		"cargo doc *",
+		"cargo build *",
+		"cargo test *",
+		"cargo nextest *",
+		"cargo bench *",
+	],
+	reviewer: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata *",
+		"cargo tree *",
+		"cargo locate-project *",
+		"cargo check *",
+		"cargo clippy *",
+		"cargo fmt --check *",
+		"cargo doc *",
+		"cargo test *",
+		"cargo nextest *",
+	],
+	researcher: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata *",
+		"cargo tree *",
+		"cargo locate-project *",
+	],
+};
+
+// kiro allowedCommands strings that must exist verbatim, per agent.
+const KIRO_RUST_ALLOWS: Record<RustAgent, string[]> = {
+	implementer: [
+		"cargo --version",
+		"cargo metadata",
+		"cargo metadata *",
+		"cargo tree",
+		"cargo tree *",
+		"cargo locate-project",
+		"cargo locate-project *",
+		"cargo check",
+		"cargo check *",
+		"cargo clippy",
+		"cargo clippy *",
+		"cargo fmt",
+		"cargo fmt *",
+		"cargo doc",
+		"cargo doc *",
+		"cargo build",
+		"cargo build *",
+		"cargo test",
+		"cargo test *",
+		"cargo nextest",
+		"cargo nextest *",
+		"cargo bench",
+		"cargo bench *",
+		"cargo run",
+		"cargo run *",
+		"rustc --version",
+		"rustup show",
+	],
+	tester: [
+		"cargo --version",
+		"cargo metadata",
+		"cargo metadata *",
+		"cargo tree",
+		"cargo tree *",
+		"cargo locate-project",
+		"cargo locate-project *",
+		"cargo check",
+		"cargo check *",
+		"cargo clippy",
+		"cargo clippy *",
+		"cargo fmt --check",
+		"cargo fmt --check *",
+		"cargo doc",
+		"cargo doc *",
+		"cargo build",
+		"cargo build *",
+		"cargo test",
+		"cargo test *",
+		"cargo nextest",
+		"cargo nextest *",
+		"cargo bench",
+		"cargo bench *",
+		"rustc --version",
+		"rustup show",
+	],
+	reviewer: [
+		"cargo --version",
+		"cargo metadata",
+		"cargo metadata *",
+		"cargo tree",
+		"cargo tree *",
+		"cargo locate-project",
+		"cargo locate-project *",
+		"cargo check",
+		"cargo check *",
+		"cargo clippy",
+		"cargo clippy *",
+		"cargo fmt --check",
+		"cargo fmt --check *",
+		"cargo doc",
+		"cargo doc *",
+		"cargo test",
+		"cargo test *",
+		"cargo nextest",
+		"cargo nextest *",
+		"rustc --version",
+		"rustup show",
+	],
+	researcher: [
+		"cargo --version",
+		"cargo metadata",
+		"cargo metadata *",
+		"cargo tree",
+		"cargo tree *",
+		"cargo locate-project",
+		"cargo locate-project *",
+		"rustc --version",
+		"rustup show",
+	],
+};
+
+// pi commands that must return `allow`, per agent. The pi frontmatter is
+// deny-by-default, so a missing rule yields `default`, not `allow`.
+const PI_RUST_ALLOWS: Record<RustAgent, string[]> = {
+	implementer: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata",
+		"cargo tree",
+		"cargo locate-project",
+		"cargo check",
+		"cargo clippy",
+		"cargo fmt --check",
+		"cargo doc",
+		"cargo build",
+		"cargo test",
+		"cargo nextest",
+		"cargo bench",
+		"cargo run",
+		"cd /repo && cargo test",
+	],
+	tester: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata",
+		"cargo tree",
+		"cargo locate-project",
+		"cargo check",
+		"cargo clippy",
+		"cargo fmt --check",
+		"cargo doc",
+		"cargo build",
+		"cargo test",
+		"cargo nextest",
+		"cargo bench",
+	],
+	reviewer: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata",
+		"cargo tree",
+		"cargo locate-project",
+		"cargo check",
+		"cargo clippy",
+		"cargo fmt --check",
+		"cargo doc",
+		"cargo test",
+		"cargo nextest",
+	],
+	researcher: [
+		"rustc --version",
+		"cargo --version",
+		"rustup show",
+		"cargo metadata",
+		"cargo tree",
+		"cargo locate-project",
+	],
+};
+
+// Engine residual: pi normalizes quotes and backslash escapes in its deny
+// probes, so an obfuscated `--config` is still caught there. opencode and kiro
+// are external engines that match literal text only; they deny the literal
+// `--config` form, but an obfuscated `--config` is an ACCEPTED RESIDUAL there.
+
+describe("rust toolchain permission doctrine", () => {
+	test("pi: each agent allows its Rust read/build/test set", () => {
+		for (const agent of RUST_AGENTS) {
+			for (const command of PI_RUST_ALLOWS[agent]) {
+				assert.equal(verdict(agent, command), "allow", `pi ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("pi: each agent never allows install/publish/rustup/config", () => {
+		for (const agent of RUST_AGENTS) {
+			for (const command of RUST_FORBIDDEN_NEVER_ALLOWED) {
+				assert.notEqual(verdict(agent, command), "allow", `pi ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("pi implementer: cargo add/remove/update ask the user", () => {
+		for (const command of ["cargo add serde", "cargo remove serde", "cargo update serde", "cargo upgrade serde"]) {
+			assert.equal(verdict("implementer", command), "ask", command);
+		}
+	});
+
+	// A prefix or a flag before the subcommand escapes the anchored allow rule.
+	// The config override must hit the deny rule; the rest fall to deny-by-default.
+	test("pi implementer: config overrides and unanchored cargo forms never allow", () => {
+		const cases: Array<{ command: string; kind: Decision["kind"] }> = [
+			{ command: "cargo check --config net.offline=true", kind: "deny" },
+			{ command: "cargo --config net.offline=true check", kind: "deny" },
+			{ command: "cargo build --config net.offline=false", kind: "deny" },
+			{ command: "cargo +nightly build", kind: "default" },
+			{ command: "/usr/bin/cargo build", kind: "default" },
+			{ command: "FOO=1 cargo build", kind: "default" },
+		];
+		for (const { command, kind } of cases) {
+			assert.equal(verdict("implementer", command), kind, `pi implementer: ${command}`);
+		}
+	});
+
+	// FINDING 1 regression: a quote or a backslash escape must not smuggle a
+	// config override past the deny bridge. `"a;b"` hides a separator;
+	// `--co"nfig"` splits the flag token; `--co\nfig` escapes the `n`.
+	test("pi: quoted, split, and backslash-escaped flags cannot allow a config override", () => {
+		const commands = [
+			'cargo build --features "a;b" --config net.offline=true',
+			'cargo build --co"nfig" x',
+			"cargo build --co\\nfig x",
+		];
+		for (const agent of RUST_AGENTS) {
+			for (const command of commands) {
+				assert.equal(verdict(agent, command), "deny", `pi ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode: each agent carries the explicit Rust allow entries", () => {
+		for (const agent of RUST_AGENTS) {
+			for (const resource of OPENCODE_RUST_ALLOWS[agent]) {
+				assert.ok(
+					hasOpenCodeRule(agent, resource, "allow"),
+					`opencode ${agent}: missing {shell, ${resource}, allow}`,
+				);
+			}
+		}
+	});
+
+	test("opencode: the implementer carries both Rust skill allows", () => {
+		const rules = loadOpenCodeRules("implementer");
+		for (const skill of ["rust-quality-gates", "rust-implementation"]) {
+			assert.ok(
+				rules.some((rule) => rule.action === "skill" && rule.resource === skill && rule.effect === "allow"),
+				`missing {skill, ${skill}, allow}`,
+			);
+		}
+	});
+
+	test("opencode: each agent behaves with its Rust allow set", () => {
+		for (const agent of RUST_AGENTS) {
+			for (const resource of OPENCODE_RUST_ALLOWS[agent]) {
+				const command = resource.replace(/ \*$/, "");
+				assert.equal(opencodeVerdict(agent, command), "allow", `opencode ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode: each agent denies install/publish/rustup/config", () => {
+		for (const agent of RUST_AGENTS) {
+			for (const command of RUST_FORBIDDEN_NEVER_ALLOWED) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `opencode ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode: each agent denies CARGO_HOME overrides", () => {
+		for (const agent of RUST_AGENTS) {
+			assert.ok(
+				hasOpenCodeRule(agent, "*CARGO_HOME*", "deny"),
+				`opencode ${agent}: missing {shell, *CARGO_HOME*, deny}`,
+			);
+			assert.equal(opencodeVerdict(agent, "CARGO_HOME=/tmp cargo build"), "deny", `opencode ${agent}: CARGO_HOME`);
+		}
+	});
+
+	test("opencode: rustup show stays allowed and the mutating forms deny", () => {
+		for (const agent of RUST_AGENTS) {
+			assert.equal(opencodeVerdict(agent, "rustup show"), "allow", `opencode ${agent}: rustup show`);
+			for (const command of [
+				"rustup run stable cargo build",
+				"rustup target add wasm32-unknown-unknown",
+				"rustup override set nightly",
+				"rustup set profile minimal",
+				"rustup which cargo",
+			]) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `opencode ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro: each agent carries the explicit Rust allow strings", () => {
+		for (const agent of RUST_AGENTS) {
+			const allowed = loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? [];
+			for (const command of KIRO_RUST_ALLOWS[agent]) {
+				assert.ok(allowed.includes(command), `kiro ${agent}: missing allowedCommands ${command}`);
+				// Existence alone is not enough: a deny glob must not shadow the allow.
+				// A trailing " *" is the wildcard form, so the bare command is the probe.
+				const probe = command.replace(/ \*$/, "");
+				assert.equal(kiroVerdict(agent, probe), "allow", `kiro ${agent}: ${probe}`);
+			}
+		}
+	});
+
+	test("kiro: rustup show stays allowed and the mutating forms deny", () => {
+		for (const agent of RUST_AGENTS) {
+			assert.equal(kiroVerdict(agent, "rustup show"), "allow", `kiro ${agent}: rustup show`);
+			for (const command of [
+				"rustup",
+				"rustup install stable",
+				"rustup run stable cargo build",
+				"rustup target add wasm32-unknown-unknown",
+				"rustup override set nightly",
+				"rustup set profile minimal",
+				"rustup which cargo",
+			]) {
+				assert.equal(kiroVerdict(agent, command), "deny", `kiro ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro: each agent denies install/publish/rustup/config", () => {
+		for (const agent of RUST_AGENTS) {
+			for (const command of RUST_FORBIDDEN_NEVER_ALLOWED) {
+				assert.equal(kiroVerdict(agent, command), "deny", `kiro ${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("boundary: reviewer allows cargo fmt --check but not cargo fmt", () => {
+		assert.equal(verdict("reviewer", "cargo fmt --check"), "allow", "pi reviewer fmt --check");
+		assert.notEqual(verdict("reviewer", "cargo fmt"), "allow", "pi reviewer fmt");
+		assert.ok(hasOpenCodeRule("reviewer", "cargo fmt --check *", "allow"), "opencode reviewer fmt --check allow");
+		assert.equal(opencodeVerdict("reviewer", "cargo fmt --check"), "allow", "opencode reviewer fmt --check");
+		assert.notEqual(opencodeVerdict("reviewer", "cargo fmt"), "allow", "opencode reviewer fmt");
+		assert.equal(kiroVerdict("reviewer", "cargo fmt --check"), "allow", "kiro reviewer fmt --check");
+		assert.notEqual(kiroVerdict("reviewer", "cargo fmt"), "allow", "kiro reviewer fmt");
+	});
+
+	test("boundary: tester allows cargo build, reviewer denies it", () => {
+		assert.equal(verdict("tester", "cargo build"), "allow", "pi tester build");
+		assert.notEqual(verdict("reviewer", "cargo build"), "allow", "pi reviewer build");
+		assert.equal(opencodeVerdict("tester", "cargo build"), "allow", "opencode tester build");
+		assert.equal(opencodeVerdict("reviewer", "cargo build"), "deny", "opencode reviewer build");
+		assert.equal(kiroVerdict("tester", "cargo build"), "allow", "kiro tester build");
+		assert.equal(kiroVerdict("reviewer", "cargo build"), "deny", "kiro reviewer build");
+	});
+});
