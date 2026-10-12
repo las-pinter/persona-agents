@@ -352,6 +352,9 @@ permissions:
   - action: skill
     resource: project-notes
     effect: allow
+  - action: skill
+    resource: persona-free-documents
+    effect: allow
   - action: shell
     resource: "*eval*"
     effect: deny

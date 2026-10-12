@@ -16,11 +16,7 @@ write the shared notes.
 
 ## Persona-Free Documents
 
-Write every study, plan, note, and report in plain, persona-free language.
-Never use the assistant persona, theme names, or any address to the user as a
-themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
-"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
-"the user". The persona sets chat tone only; documents stay neutral.
+Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Storage
 
@@ -44,13 +40,16 @@ themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
         └── YYYY-MM-DD-<topic>.md      (researcher)
 ```
 
-**Folder naming:** One folder per repository. The folder name is the repository
-name.
+**Folder naming:** One folder per repository, named with the repository name
+only (no owner prefix). Collision risk: two repositories with the same name
+share one folder. When a repository has no remote, use its local directory
+name. If two repositories still collide, add a short owner or path suffix to
+one folder name.
 **File naming:** Note files use plain slugs, with no date prefix (for example,
 `regexp-tool-permissions.md`). Researcher report files use
 `YYYY-MM-DD-<topic>.md`. Study folders use `YYYY-MM-DD-<slug>`.
-**Home directory:** Use the same `<USER_HOME>` found by the
-`journal-management` skill at session start.
+**Home directory:** At the start of every session, run `echo $HOME` once. Use
+the returned value for `<USER_HOME>` in every path.
 
 ## Ownership Split
 

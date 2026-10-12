@@ -18,17 +18,13 @@ Load this skill at the start of every new feature or idea. Load the
 
 ## Persona-Free Documents
 
-Write every study, plan, note, and report in plain, persona-free language.
-Never use the assistant persona, theme names, or any address to the user as a
-themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
-"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
-"the user". The persona sets chat tone only; documents stay neutral.
+Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Workflow
 
 1. Read the request and restate it in one or two plain sentences.
-2. Dispatch a researcher subagent to gather context. For a goblin theme, use
-   `goblin-researcher`.
+2. Dispatch a researcher subagent to gather context. Use the
+   `<theme>-researcher` alias for the active theme.
 3. Ask the user many questions. Ask about the problem, the users, the scope,
    and the success measures. Use the **study-questions** skill for the format.
 4. Write the quick study to the study folder.
@@ -62,8 +58,7 @@ date inside the slug. See the **project-notes** skill for the folder layout.
 
 ## Size Limit
 
-Keep `quick-study.md` to 150 lines or fewer. If the study grows past the limit,
-move detail into the full study or split the feature.
+The **project-notes** skill owns the `quick-study.md` line cap. Follow it.
 
 ## Rules
 

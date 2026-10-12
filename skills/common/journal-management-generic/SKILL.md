@@ -7,11 +7,7 @@ description: Generic hierarchical journal system for any agent's operational con
 
 ## Persona-Free Documents
 
-Write every study, plan, note, and report in plain, persona-free language.
-Never use the assistant persona, theme names, or any address to the user as a
-themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
-"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
-"the user". The persona sets chat tone only; documents stay neutral.
+Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Discovery — Find Your Home Directory
 
@@ -94,32 +90,31 @@ ls <USER_HOME>/agent-notes/<AGENT_TYPE>/journals/daily/ | sort | tail -1
 
 For the correct current date use the `date` bash command.
 
-### Merge-aware updates (shared journal cave)
+### Append-only updates (shared journal cave)
 
 Journal files under agent-notes may be written by MORE THAN ONE session (e.g.
 several sessions of the same profession sharing one home directory). A naive
-read-then-write clobbers the other sessions' entries. Follow these rules on
-EVERY update:
+rewrite clobbers the other sessions' entries. Follow these rules on EVERY
+update:
 
-1. Re-read the file IMMEDIATELY before writing. Never write from an earlier
+1. Re-read the file IMMEDIATELY before appending. Never append from an earlier
    read or from memory — the file may have changed since you first loaded it.
-2. Never rebuild the file from memory. The content you write must be the
-   current on-disk content plus your own additions.
-3. Preserve verbatim every section/subsection you did not author, including
-   other projects' `### <project>` sections and any unknown content. Add or
-   update only your own project's section. When two sessions share the same
-   project subsection, treat your additions as append-only and always write
-   from the current disk content.
-4. If the file was heavily rewritten or consolidated since your read, write
-   from the latest recoverable state and note the discrepancy in your entry.
-5. If a write fails, retry once with a fresh re-read; if it fails again,
+2. A journal update is an APPEND-ONLY targeted edit. Each session writes its
+   own block under the relevant `### <project>` section. A session never
+   rewrites the whole file.
+3. Preserve verbatim every section you did not author, including other
+   projects' `### <project>` sections and unknown content. Add only your own
+   project's block.
+4. If the file was heavily rewritten or consolidated since your read, append
+   from the latest recoverable state and note the discrepancy in your block.
+5. If an append fails, retry once with a fresh re-read; if it fails again,
    report it — never silently discard.
-6. Re-read-before-write narrows but cannot fully eliminate a simultaneous
+6. Re-read-before-append narrows but cannot fully eliminate a simultaneous
    write by two sessions; if that happens the later write wins silently. Check
    for lost sections before finishing a session.
 
-Always use the `write` tool, never `edit`. Follow the merge-aware rules above
-when updating; do not skip the merged re-read.
+Use the `write` tool only to CREATE the day's first file or to CONSOLIDATE.
+Use the `edit` tool for every later append to an existing journal file.
 
 ---
 
@@ -209,10 +204,11 @@ Key rules:
 ## Entry Types
 
 - **CREATE** — First entry of the day. Write the full file.
-- **UPDATE** — Later work the same day. Read existing, update, write full file
-  (see Writing).
-- **APPEND** — For consolidation. Read source files first, then write the
-  merged result.
+- **APPEND** — Later work the same day, or work from another session. Re-read,
+  then add your own block under the relevant `### <project>` section with a
+  targeted `edit`.
+- **CONSOLIDATE** — Read the source files first, then write the merged result
+  at the target level.
 
 ---
 

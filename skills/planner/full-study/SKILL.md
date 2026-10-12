@@ -18,11 +18,7 @@ Load this skill only after the quick study is accepted. Load the
 
 ## Persona-Free Documents
 
-Write every study, plan, note, and report in plain, persona-free language.
-Never use the assistant persona, theme names, or any address to the user as a
-themed character. Forbidden words include "Wizard", "Evil Wizard", "the horde",
-"Chief", "m'lord", and any theme name. Refer to the human as "the owner" or
-"the user". The persona sets chat tone only; documents stay neutral.
+Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Workflow
 
@@ -124,8 +120,7 @@ chain. A delay on that chain delays the study. Mark it.
 
 ## Size Limit
 
-Keep `full-study.md` to 500 lines or fewer. If it grows past the limit, split
-the feature into two study folders.
+The **project-notes** skill owns the `full-study.md` line cap. Follow it.
 
 ## Quality Gate Checklist
 

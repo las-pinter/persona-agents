@@ -498,6 +498,9 @@ permissions:
   - action: skill
     resource: source-selection
     effect: allow
+  - action: skill
+    resource: persona-free-documents
+    effect: allow
   - action: shell
     resource: "*eval*"
     effect: deny

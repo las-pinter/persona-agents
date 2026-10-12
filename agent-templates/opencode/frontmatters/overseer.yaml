@@ -457,6 +457,9 @@ permissions:
   - action: skill
     resource: journal-management-generic
     effect: allow
+  - action: skill
+    resource: persona-free-documents
+    effect: allow
   - action: shell
     resource: "*eval*"
     effect: deny

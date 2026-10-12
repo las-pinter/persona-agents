@@ -165,10 +165,10 @@ herdr agent send-keys <name> ctrl+x
 herdr agent send-keys <name> a
 ```
 
-Type the agent-name filter text (for example `wh40k-orchestrator`):
+Type the agent-name filter text (for example `<theme>-orchestrator`):
 
 ```bash
-herdr pane send-text <pane-id> 'wh40k-orchestrator'
+herdr pane send-text <pane-id> '<theme>-orchestrator'
 ```
 
 Press enter to confirm the selection (`dialog.select.submit`):
@@ -220,15 +220,15 @@ If a wait fails or returns `blocked`, inspect `agent get` and `agent read` befor
 Launch a pi process with the profession and persona flags:
 
 ```bash
-pi --agent mascot --persona goblin/gibz-psycho
+pi --agent mascot --persona <theme>/<persona-file>
 ```
 
-The `--agent` flag takes the bare profession name, for example `mascot` or `orchestrator`. It does not take a theme-prefixed name, for example `goblin-mascot`.
+The `--agent` flag takes the bare profession name, for example `mascot` or `orchestrator`. It does not take a theme-prefixed name, for example `<theme>-mascot`.
 
 Start the process under herdr control:
 
 ```bash
-herdr agent start <name> --kind pi --pane <returned-pane-id> -- --agent mascot --persona goblin/gibz-psycho
+herdr agent start <name> --kind pi --pane <returned-pane-id> -- --agent mascot --persona <theme>/<persona-file>
 ```
 
 Bind the pi agent with `agent start`. Herdr accepts its pane reports only when the agent is bound.
@@ -244,7 +244,7 @@ The user settings file holds the defaults:
 $HOME/.pi/agent/settings.json
 ```
 
-It stores `defaultAgent` and `defaultPersona`. Example values are `orchestrator` and `goblin/bossnik-chief`.
+It stores `defaultAgent` and `defaultPersona`. Example values are `orchestrator` and `<theme>/<persona-file>`.
 
 A pi process freshly started by herdr reports its state through the session file. Herdr skips screen scanning for it. The `overseer.herald` plugin fires reliably. The official pi integration lives at `$HOME/.pi/agent/extensions/herdr-agent-state.ts`. It self-reports when `HERDR_ENV` is set. Fresh-pane reporting makes the herald push work, from watchdog to overseer.
 

@@ -470,6 +470,9 @@ permissions:
     resource: code-review-checklist
     effect: allow
   - action: skill
+    resource: persona-free-documents
+    effect: allow
+  - action: skill
     resource: skill-resolution
     effect: allow
   - action: skill

@@ -590,6 +590,9 @@ permissions:
     resource: production-issue-flagging
     effect: allow
   - action: skill
+    resource: persona-free-documents
+    effect: allow
+  - action: skill
     resource: skill-resolution
     effect: allow
   - action: skill

@@ -6,7 +6,7 @@ spawnable: false
 # pi has no fetch/webfetch tool, so the opencode template's webfetch allows for
 # herdr.dev / raw.githubusercontent.com intentionally do not exist here.
 tools: [bash, read, edit, write, find, ls, grep, ask_user_question]
-skills: ["overseer/*", "common/journal-management-generic", "common/simplified-technical-english"]
+skills: ["overseer/*", "common/journal-management-generic", "common/simplified-technical-english", "common/persona-free-documents"]
 alwaysLoad: ["common/journal-management-generic", "common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
