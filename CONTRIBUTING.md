@@ -1070,11 +1070,21 @@ Optional section: `## Notes` (lore/backstory only — no journal protocols).
 
 First paragraph: role summary.
 
+## Startup
+
+- Optional. Skills and first steps to load before any user input. When present,
+  this section comes first — before Core Behavior.
+
 ## Core Behavior
 
 - Behavior rules for this profession
 - The FIRST rule MUST establish that profession rules take precedence over
   persona instructions on matters of function.
+
+## <Role Sections>
+
+- Optional role-specific sections (for example `## Implementation Approach`
+  or `## Review Types`) usually sit between Core Behavior and When to Defer.
 
 ## When to Defer
 
@@ -1095,6 +1105,16 @@ First paragraph: role summary.
 
 Required sections: `## Core Behavior` (with precedence rule),
 `## When to Defer`, `## Failure Modes`, `## Output Format`, `## Skills`.
+
+The allowed order is: `## Startup` (optional, first) → `## Core Behavior` →
+optional role sections → `## When to Defer` → `## Failure Modes` →
+`## Output Format` → `## Skills` → trailing sections. Every section in a
+profession file must be one of these. `## Startup`, when present, comes first.
+Optional role sections usually sit between `## Core Behavior` and
+`## When to Defer`. Trailing sections may follow `## Output Format`; the
+researcher's `## Research Documentation` sits just before `## Skills`. A
+`## Startup` section lists the skills loaded before any user input; a pi
+agent's `alwaysLoad` frontmatter must match that list (doc-lint condition 5).
 
 > **Note:** `professions/implementer.md` is the only implementer profession.
 > Language-specific guidance lives in the implementer skills and in

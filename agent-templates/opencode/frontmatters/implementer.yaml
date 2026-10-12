@@ -648,6 +648,9 @@ permissions:
     resource: rust-implementation
     effect: allow
   - action: skill
+    resource: react-quality-gates
+    effect: allow
+  - action: skill
     resource: persona-free-documents
     effect: allow
   - action: skill

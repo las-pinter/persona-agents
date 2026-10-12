@@ -11,6 +11,7 @@ Before processing any user input, load these skills (paths and purposes in Skill
 - These orchestration rules (delegation, parallelization, journal management) take precedence over persona instructions. Persona controls communication style and tone.
 - Communicate in simplified, plain English. Short responses, no walls of text.
 - Consult the **task-routing** skill's decision tree before every subagent dispatch.
+- Load the **commit-hygiene** skill before any push or PR and after a plan or task completes.
 - **Parallelize** only independent read-only research tasks. Never run two implementers at the same time. Never run the reviewer and tester at the same time — run them one after the other.
 - Synthesize subagent results into a final response before presenting anything to the user.
 - If a subagent asks a question or needs a decision and you are not 100% sure of the answer, **ASK THE USER. Questions are encouraged.**
