@@ -179,7 +179,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 			const matched = matchSkills(agent.skills, skills);
 			ctx.ui?.notify?.(
 				`Agent "${agent.name}" skills patterns: ${(agent.skills ?? []).join(", ") || "none"}\n` +
-					`Loaded (${matched.length}): ${matched
+					`Matched (${matched.length}): ${matched
 						.map((s) => (s.group ? `${s.group}/${s.name}` : s.name))
 						.join(", ") || "none"}`,
 				"info",

@@ -1807,19 +1807,198 @@ describe("pi researcher: every configured MCP server is covered by a tool entry"
 
 const HERDR_PATH_BYPASS = ["mv x /home/dev/.local/bin/herdr", "cp x y/.local/bin/herdr"];
 
-describe("opencode overseer: autonomous herdr commands allow; pane run/close ask", () => {
-	test("agent rename and send-keys allow", () => {
-		for (const command of ["herdr agent rename", "herdr pane send-keys", "herdr agent send-keys"]) {
-			assert.ok(hasOpenCodeRule("overseer", command, "allow"), `missing {shell, ${command}, allow}`);
+// T25 REVERT (owner decision). The ` *` wildcard allows are gone. On stacks that
+// match the raw command string (kiro, opencode), an argument-bearing herdr call
+// does not match any allow, so it falls to the platform default: ask. This is
+// the fail-safe. The bare forms stay allowed.
+const HERDR_BARE_COMMANDS = [
+	"herdr agent rename",
+	"herdr pane split",
+	"herdr pane send-keys",
+	"herdr agent send-keys",
+	"herdr pane send-text",
+	"herdr agent start",
+	"herdr agent prompt",
+];
+
+const HERDR_ARG_COMMANDS = [
+	"herdr agent rename w1:p1 overseer",
+	"herdr pane split --current --direction right --cwd /repo --no-focus",
+	"herdr pane send-keys w1:p1 ctrl+x",
+	"herdr agent send-keys reviewer enter",
+	"herdr pane send-text w1:p1 theme-orchestrator",
+	"herdr agent start reviewer --kind codex --pane w1:p1",
+	"herdr agent prompt reviewer Review the diff --wait --timeout 120000",
+];
+
+// The commands that must stay gated after the wildcard allows are removed.
+const HERDR_STILL_DENY = ["herdr server stop", "herdr server stop now", "herdr --machine test agent list"];
+const HERDR_STILL_ASK = ["herdr pane run scripts/test.sh", "herdr pane close w1:p1"];
+
+// kiro and opencode match the RAW command string. With the wildcard allows gone,
+// a compound that starts with an argument form cannot ride an allow. The crude
+// embedded denies are gone too, so quoted prompt text is not denied.
+const HERDR_COMPOUND_BYPASS = [
+	"herdr agent rename w1:p1 overseer; rm foo",
+	"herdr agent rename w1:p1 overseer; herdr server stop",
+	"herdr agent rename w1:p1 overseer; herdr server stop --force",
+	"herdr agent rename w1:p1 overseer; herdr plugin install x",
+	"herdr agent rename w1:p1 overseer && herdr --machine prod agent list",
+];
+const HERDR_COMPOUND_PLAIN = "herdr agent rename w1:p1 overseer";
+
+describe("opencode overseer: bare herdr forms allow; argument forms ask", () => {
+	test("bare herdr forms have explicit allow rules", () => {
+		for (const resource of HERDR_BARE_COMMANDS) {
+			assert.ok(hasOpenCodeRule("overseer", resource, "allow"), `missing {shell, ${resource}, allow}`);
+		}
+	});
+
+	test("bare herdr forms allow", () => {
+		for (const command of HERDR_BARE_COMMANDS) {
 			assert.equal(opencodeVerdict("overseer", command), "allow", command);
 		}
 	});
 
-	test("pane run and pane close stay ask", () => {
-		for (const command of ["herdr pane run", "herdr pane close"]) {
+	test("argument herdr forms ask (no wildcard allow)", () => {
+		for (const command of HERDR_ARG_COMMANDS) {
 			assert.notEqual(opencodeVerdict("overseer", command), "allow", command);
 			assert.equal(opencodeVerdict("overseer", command), "ask", command);
 		}
+	});
+
+	test("pane run and pane close stay ask", () => {
+		for (const command of HERDR_STILL_ASK) {
+			assert.notEqual(opencodeVerdict("overseer", command), "allow", command);
+			assert.equal(opencodeVerdict("overseer", command), "ask", command);
+		}
+	});
+
+	test("server stop and --machine stay deny", () => {
+		for (const command of HERDR_STILL_DENY) {
+			assert.equal(opencodeVerdict("overseer", command), "deny", command);
+		}
+	});
+});
+
+describe("kiro overseer: bare herdr forms allow; argument forms ask", () => {
+	function kiroAllowedCommands(agent: string): string[] {
+		return loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? [];
+	}
+
+	test("bare herdr forms are in allowedCommands", () => {
+		const allowed = kiroAllowedCommands("overseer");
+		for (const resource of HERDR_BARE_COMMANDS) {
+			assert.ok(allowed.includes(resource), `missing allowedCommands ${resource}`);
+		}
+	});
+
+	test("bare herdr forms allow", () => {
+		for (const command of HERDR_BARE_COMMANDS) {
+			assert.equal(kiroVerdict("overseer", command), "allow", command);
+		}
+	});
+
+	test("argument herdr forms ask (no wildcard allow)", () => {
+		for (const command of HERDR_ARG_COMMANDS) {
+			assert.notEqual(kiroVerdict("overseer", command), "allow", command);
+			assert.equal(kiroVerdict("overseer", command), "ask", command);
+		}
+	});
+
+	test("pane run and pane close stay ask", () => {
+		for (const command of HERDR_STILL_ASK) {
+			assert.notEqual(kiroVerdict("overseer", command), "allow", command);
+			assert.equal(kiroVerdict("overseer", command), "ask", command);
+		}
+	});
+
+	test("server stop and --machine stay deny", () => {
+		for (const command of HERDR_STILL_DENY) {
+			assert.equal(kiroVerdict("overseer", command), "deny", command);
+		}
+	});
+});
+
+describe("opencode/kiro overseer: argument and compound herdr forms fail safe to ask", () => {
+	test("opencode: rename and send-keys arguments ask", () => {
+		assert.equal(opencodeVerdict("overseer", "herdr agent rename w1:p1 overseer"), "ask");
+		assert.equal(opencodeVerdict("overseer", "herdr pane send-keys w1:p1 ctrl+x"), "ask");
+	});
+
+	test("kiro: rename and send-keys arguments ask", () => {
+		assert.equal(kiroVerdict("overseer", "herdr agent rename w1:p1 overseer"), "ask");
+		assert.equal(kiroVerdict("overseer", "herdr pane send-keys w1:p1 ctrl+x"), "ask");
+	});
+
+	test("opencode and kiro: the exact bare rename still allows", () => {
+		assert.equal(opencodeVerdict("overseer", "herdr agent rename"), "allow");
+		assert.equal(kiroVerdict("overseer", "herdr agent rename"), "allow");
+	});
+
+	test("opencode and kiro: a compound after an argument rename cannot ride an allow", () => {
+		for (const command of HERDR_COMPOUND_BYPASS) {
+			assert.notEqual(opencodeVerdict("overseer", command), "allow", command);
+			assert.equal(opencodeVerdict("overseer", command), "ask", command);
+			assert.notEqual(kiroVerdict("overseer", command), "allow", command);
+			assert.equal(kiroVerdict("overseer", command), "ask", command);
+		}
+	});
+
+	test("opencode and kiro: quoted prompt text is not denied", () => {
+		const command = 'herdr agent prompt reviewer "explain the plugin system"';
+		assert.notEqual(opencodeVerdict("overseer", command), "deny", command);
+		assert.notEqual(kiroVerdict("overseer", command), "deny", command);
+	});
+
+	test("pi: argument forms still allow; the same compounds deny", () => {
+		for (const command of HERDR_COMPOUND_BYPASS.slice(1)) {
+			assert.equal(verdict("overseer", command), "deny", command);
+		}
+		// Every segment of a compound must match an allow. `herdr agent rename`
+		// allows, but `rm foo` matches no allow. The deny-by-default gate therefore
+		// blocks the whole compound with `default`, not an explicit `deny`.
+		assert.equal(
+			verdict("overseer", "herdr agent rename w1:p1 overseer; rm foo"),
+			"default",
+			"a compound with an unallowed segment must block",
+		);
+		assert.equal(verdict("overseer", HERDR_COMPOUND_PLAIN), "allow");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// `herdr plugin` is a privileged surface. pi denies it through its compound +
+// server/plugin/--machine regex. kiro and opencode carry an anchored deny, so
+// the rule starts the command: a compound cannot ride it, and the rule never
+// matches the word "plugin" inside quoted prompt text.
+// ---------------------------------------------------------------------------
+
+const HERDR_PLUGIN_BARE = "herdr plugin";
+const HERDR_PLUGIN_DENIED = "herdr plugin install x";
+const HERDR_PLUGIN_PROMPT = 'herdr agent prompt reviewer "explain the plugin system"';
+
+describe("overseer: herdr plugin is denied on every stack", () => {
+	test("pi: bare and argument forms deny (existing regex parity)", () => {
+		assert.equal(verdict("overseer", HERDR_PLUGIN_BARE), "deny");
+		assert.equal(verdict("overseer", HERDR_PLUGIN_DENIED), "deny");
+	});
+
+	test("opencode: anchored deny rule exists and wins", () => {
+		assert.ok(hasOpenCodeRule("overseer", "herdr plugin *", "deny"), "missing {shell, herdr plugin *, deny}");
+		assert.equal(opencodeVerdict("overseer", HERDR_PLUGIN_BARE), "deny");
+		assert.equal(opencodeVerdict("overseer", HERDR_PLUGIN_DENIED), "deny");
+		assert.notEqual(opencodeVerdict("overseer", HERDR_PLUGIN_PROMPT), "deny");
+	});
+
+	test("kiro: anchored deny rules exist and win", () => {
+		const denied = kiroDeniedCommands("overseer");
+		for (const resource of ["herdr plugin", "herdr plugin *"]) {
+			assert.ok(denied.includes(resource), `missing deniedCommands ${resource}`);
+		}
+		assert.equal(kiroVerdict("overseer", HERDR_PLUGIN_BARE), "deny");
+		assert.equal(kiroVerdict("overseer", HERDR_PLUGIN_DENIED), "deny");
+		assert.notEqual(kiroVerdict("overseer", HERDR_PLUGIN_PROMPT), "deny");
 	});
 });
 
@@ -1875,8 +2054,11 @@ const UV_GATE_ALLOWED = [
 	"uv run mypy --strict",
 	"uv run bandit -r .",
 	"uv run pip-audit --strict",
-	"uv pip list",
 ];
+
+// T26: `uv pip list` is read-only inventory the quality-gate skill does not
+// order, so the implementer allow drops it on every stack.
+const UV_PIP_LIST = ["uv pip list", "uv pip list --format json"];
 
 // `uv run` is not a blank check: only the quality-gate tools pass.
 const UV_RUN_NON_GATE = ["uv run python -c 'print(1)'", "uv run some-script", "uv run pytest-hack"];
@@ -1929,6 +2111,14 @@ describe("implementer quality-gate tools: uv and cargo gates", () => {
 
 	test("all stacks: non-gate `uv run` does not allow", () => {
 		for (const command of UV_RUN_NON_GATE) {
+			assert.notEqual(verdict("implementer", command), "allow", `pi: ${command}`);
+			assert.notEqual(opencodeVerdict("implementer", command), "allow", `opencode: ${command}`);
+			assert.notEqual(kiroVerdict("implementer", command), "allow", `kiro: ${command}`);
+		}
+	});
+
+	test("all stacks: uv pip list is not allowed (T26)", () => {
+		for (const command of UV_PIP_LIST) {
 			assert.notEqual(verdict("implementer", command), "allow", `pi: ${command}`);
 			assert.notEqual(opencodeVerdict("implementer", command), "allow", `opencode: ${command}`);
 			assert.notEqual(kiroVerdict("implementer", command), "allow", `kiro: ${command}`);

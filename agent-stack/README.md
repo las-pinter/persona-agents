@@ -198,7 +198,7 @@ instead — one entry per matched skill with its name, description, and path, pl
 telling the agent to read the file when the task matches. No skill body loads until the
 agent reads the file. `discoverSkills()` understands both this repo's
 `skills/<group>/<name>/SKILL.md` layout and pi's `skills/<name>/SKILL.md`;
-`/skills [agent]` lists what would load.
+`/skills [agent]` lists the matched skills.
 
 ## Inspecting subagent runs
 

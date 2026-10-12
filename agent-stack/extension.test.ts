@@ -95,8 +95,24 @@ function writeSkill(name: string, description: string, bodyMarker: string, bodyB
 const indexSkillPath = writeSkill("fixture-index", "Index fixture description.", "INDEX_BODY_MARKER");
 writeSkill("fixture-mandatory", "Mandatory fixture description.", "MANDATORY_BODY_MARKER");
 writeSkill("fixture-both", "Both-lists fixture description.", "BOTH_BODY_MARKER");
-writeSkill("fixture-overcap-a", "Overcap fixture A.", "OVERCAP_A", 13_000);
-writeSkill("fixture-overcap-b", "Overcap fixture B.", "OVERCAP_B", 13_000);
+const overcapAPath = writeSkill("fixture-overcap-a", "Overcap fixture A.", "OVERCAP_A", 13_000);
+const overcapBPath = writeSkill("fixture-overcap-b", "Overcap fixture B.", "OVERCAP_B", 13_000);
+
+/** Write a fixture skill whose `description` frontmatter is raw YAML lines. */
+function writeRawSkill(name: string, descriptionYaml: string, bodyMarker: string): string {
+	const dir = path.join(skillsRoot, name);
+	fs.mkdirSync(dir, { recursive: true });
+	const file = path.join(dir, "SKILL.md");
+	fs.writeFileSync(file, `---\nname: ${name}\n${descriptionYaml}\n---\n\n# ${name}\n\n${bodyMarker}\n`);
+	return file;
+}
+
+// A block-scalar description parses to a string with a real newline (fix 3).
+const multilineSkillPath = writeRawSkill(
+	"fixture-multiline",
+	"description: |-\n  Multi line\n  description here.",
+	"MULTILINE_BODY_MARKER",
+);
 
 after(() => {
 	fs.rmSync(tmpRoot, { recursive: true, force: true });
@@ -115,6 +131,20 @@ test("skills: injects an on-demand index of name, description, and path", async 
 	assert.match(prompt, /- fixture-index: Index fixture description\./);
 	assert.ok(prompt.includes(`path: ${indexSkillPath}`), "the index must carry the skill path");
 	assert.doesNotMatch(prompt, /INDEX_BODY_MARKER/, "the skill body must not be injected");
+});
+
+test("skills: a block-scalar description collapses to one index line", async () => {
+	const harness = makePi();
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ skills: ["fixture-multiline"] }));
+
+	const prompt = await promptFor(harness, tmpRoot);
+
+	// The folded description must sit on the `- id:` line, not leak a newline.
+	assert.match(prompt, /- fixture-multiline: Multi line description here\./);
+	assert.doesNotMatch(prompt, /Multi line\n\s+description here\./);
+	assert.ok(prompt.includes(`  path: ${multilineSkillPath}`), "the path must stay on its own line");
 });
 
 test("alwaysLoad: still injects the full skill body", async () => {
@@ -166,6 +196,14 @@ test("alwaysLoad bodies stay under the 12 KB cap and the 24 KB budget", async ()
 
 	assert.match(prompt, />> SKILL TRUNCATED: fixture-overcap-a/);
 	assert.match(prompt, />> SKILL TRUNCATED: fixture-overcap-b/);
+	assert.ok(
+		prompt.includes(`>> SKILL TRUNCATED: fixture-overcap-a (path: ${overcapAPath})`),
+		"the cap-truncated marker must carry the skill path",
+	);
+	assert.ok(
+		prompt.includes(`>> SKILL TRUNCATED: fixture-overcap-b (path: ${overcapBPath})`),
+		"the budget-dropped marker must carry the path so the agent can still read the skill",
+	);
 	// Two 13 KB bodies would be ~26 KB; the budget forces the second body out.
 	assert.ok(prompt.length < 24 * 1024, `prompt length ${prompt.length} must stay under the budget`);
 });

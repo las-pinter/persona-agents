@@ -434,9 +434,6 @@ permissions:
     resource: "uv run pip-audit *"
     effect: allow
   - action: shell
-    resource: "uv pip list *"
-    effect: allow
-  - action: shell
     resource: "node --version"
     effect: allow
   - action: shell

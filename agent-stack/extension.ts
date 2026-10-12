@@ -392,11 +392,11 @@ export default function (pi: ExtensionAPI): void {
 					let body = s.body;
 					if (body.length > SKILL_BODY_CAP_BYTES) {
 						console.warn(`agent-stack: mandatory skill ${id} exceeds the ${SKILL_BODY_CAP_BYTES} byte body cap; truncated`);
-						body = `${body.slice(0, SKILL_BODY_CAP_BYTES)}\n>> SKILL TRUNCATED: ${id}`;
+						body = `${body.slice(0, SKILL_BODY_CAP_BYTES)}\n>> SKILL TRUNCATED: ${id} (path: ${s.path})`;
 					}
 					if (mandatoryBudget - body.length < 0) {
 						console.warn(`agent-stack: mandatory skill ${id} would exceed the ${SKILL_INJECTION_BUDGET_BYTES} byte budget; body omitted`);
-						extra += `\n\n## Mandatory skill: ${id}\n>> SKILL TRUNCATED: ${id}`;
+						extra += `\n\n## Mandatory skill: ${id}\n>> SKILL TRUNCATED: ${id} (path: ${s.path})`;
 						continue;
 					}
 					mandatoryBudget -= body.length;
@@ -422,7 +422,7 @@ export default function (pi: ExtensionAPI): void {
 				const id = s.group ? `${s.group}/${s.name}` : s.name;
 				if (seen.has(id)) continue;
 				seen.add(id);
-				const description = s.description?.trim() || "(no description)";
+				const description = (s.description ?? "").replace(/\s+/g, " ").trim() || "(no description)";
 				indexed.push(`\n\n- ${id}: ${description}\n  path: ${s.path}`);
 			}
 			if (indexed.length > 0) {

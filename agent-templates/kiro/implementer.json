@@ -73,8 +73,6 @@
         "uv run bandit *",
         "uv run pip-audit",
         "uv run pip-audit *",
-        "uv pip list",
-        "uv pip list *",
         "pwd",
         "python -m black",
         "python -m flake8",

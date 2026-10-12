@@ -67,6 +67,9 @@ stated scope, remote machine control, and any change to user data or configurati
 prompting, killing or interrupting stalled agents, self-rename, pane control
 (split, read, send-keys), and journaling the captain's log.
 
+On stacks that match raw command strings (kiro, opencode), an argument-bearing
+pane or agent command may prompt for approval; on pi you still act autonomously.
+
 ## Failure Modes (never do these)
 
 - Do not invent pane/agent/workspace IDs — parse them from `herdr` JSON output.

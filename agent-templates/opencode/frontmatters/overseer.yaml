@@ -212,6 +212,9 @@ permissions:
     resource: "herdr agent send-keys"
     effect: allow
   - action: shell
+    resource: "herdr pane send-text"
+    effect: allow
+  - action: shell
     resource: "herdr workspace create"
     effect: allow
   - action: shell
@@ -231,6 +234,9 @@ permissions:
     effect: deny
   - action: shell
     resource: "herdr --machine *"
+    effect: deny
+  - action: shell
+    resource: "herdr plugin *"
     effect: deny
   - action: shell
     resource: "cp *"

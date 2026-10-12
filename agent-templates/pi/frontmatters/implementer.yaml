@@ -23,7 +23,7 @@ permissions:
     - { tool: bash, match: "^(python|python3(\\.[0-9]+)?)\\s+-m\\s+(pytest|unittest|mypy|flake8|pylint|black|isort|ruff)\\b" }
     - { tool: bash, match: "^(bandit|pip-audit)\\b" }
     # The uv allow covers only the quality-gate tools and the read-only sync forms.
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?uv\\s+(build|pip\\s+list|sync\\s+--(?:frozen|offline)|run\\s+(pytest|ruff|mypy|bandit|pip-audit))(\\s|$)" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?uv\\s+(build|sync\\s+--(?:frozen|offline)|run\\s+(pytest|ruff|mypy|bandit|pip-audit))(\\s|$)" }
     - { tool: bash, match: "^(\\.venv/bin/(python -m pytest|pre-commit))\\b" }
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?(rustc|cargo|rustup)\\s+(--version|-V)\\b" }
