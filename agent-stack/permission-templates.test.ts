@@ -1749,3 +1749,44 @@ describe("rust toolchain permission doctrine", () => {
 		assert.equal(kiroVerdict("reviewer", "cargo build"), "deny", "kiro reviewer build");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// MCP tool coverage guard for the pi researcher.
+//
+// pi drops every MCP tool that no `--tools` entry matches as soon as ONE
+// `mcp__` entry is present. A new server or a typo then fails silently: the
+// tool simply disappears. Assert each server in the committed MCP example has
+// a covering entry in the researcher template. The committed
+// `settings/mcp.json.example` is the repo's only committed server list; the
+// live `~/.pi/agent/mcp.json` is separate and user-managed, so a server added
+// only to the live config is not seen by this guard.
+// ---------------------------------------------------------------------------
+
+/** Configured MCP server names from the committed example config. */
+function configuredMcpServers(): string[] {
+	const raw = fs.readFileSync(path.join(repoRoot, "settings", "mcp.json.example"), "utf-8");
+	const cfg = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
+	return Object.keys(cfg.mcpServers ?? {});
+}
+
+/** The pi `tools:` allowlist of one agent template. */
+function piToolList(agent: string): string[] {
+	const content = fs.readFileSync(path.join(frontmatterDir, `${agent}.yaml`), "utf-8");
+	const { frontmatter } = parseFrontmatter<{ tools?: string[] }>(`---\n${content}\n---\n`);
+	return frontmatter.tools ?? [];
+}
+
+describe("pi researcher: every configured MCP server is covered by a tool entry", () => {
+	test("each mcp.json.example server matches an mcp__<server>__ glob or exact tool", () => {
+		const servers = configuredMcpServers();
+		assert.ok(servers.length > 0, "the committed MCP example must list at least one server");
+		const tools = piToolList("researcher");
+		for (const server of servers) {
+			const prefix = `mcp__${server.replace(/[^A-Za-z0-9_]/g, "_")}__`;
+			const covered =
+				tools.includes(`${prefix}*`) ||
+				tools.some((tool) => tool.startsWith(prefix) && tool.length > prefix.length);
+			assert.ok(covered, `researcher tools must cover MCP server "${server}": add ${prefix}* or an exact tool`);
+		}
+	});
+});

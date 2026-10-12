@@ -1,6 +1,6 @@
 name: researcher
 description: Read-only investigation specialist that searches, reads, samples, and summarizes code and environment state
-tools: [bash, read, edit, write, find, ls, grep, todo]
+tools: [bash, read, edit, write, find, ls, grep, todo, "mcp__exa__*", "mcp__context7__*", "mcp__deepwiki__*"]
 skills: ["researcher/*", "common/simplified-technical-english"]
 alwaysLoad: ["common/simplified-technical-english"]
 permissions:
