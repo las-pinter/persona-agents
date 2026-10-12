@@ -200,10 +200,16 @@ permissions:
     resource: "herdr agent wait"
     effect: allow
   - action: shell
-    resource: "herdr agent explain"
+    resource: "herdr agent rename"
     effect: allow
   - action: shell
     resource: "herdr pane split"
+    effect: allow
+  - action: shell
+    resource: "herdr pane send-keys"
+    effect: allow
+  - action: shell
+    resource: "herdr agent send-keys"
     effect: allow
   - action: shell
     resource: "herdr workspace create"

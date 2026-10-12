@@ -20,7 +20,6 @@
     "write"
   ],
   "allowedTools": [
-    "code",
     "edit",
     "glob",
     "grep",

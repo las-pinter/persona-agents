@@ -349,6 +349,16 @@ function opencodeVerdict(agent: string, command: string): string {
 	return "ask";
 }
 
+/** opencode last-match verdict for any action/resource pair (e.g. edit paths). */
+function opencodeResourceVerdict(agent: string, action: string, resource: string): string {
+	const rules = loadOpenCodeRules(agent);
+	for (let idx = rules.length - 1; idx >= 0; idx--) {
+		const rule = rules[idx];
+		if (opencodeGlob(rule.action, action) && opencodeGlob(rule.resource, resource)) return rule.effect;
+	}
+	return "ask";
+}
+
 /** True when the agent's rules carry an exact shell rule (action, resource, effect). */
 function hasOpenCodeRule(agent: string, resource: string, effect: string): boolean {
 	return loadOpenCodeRules(agent).some(
@@ -392,6 +402,11 @@ function kiroDeniedCommands(agent: string): string[] {
 function kiroHasShellTool(agent: string): boolean {
 	const cfg = loadKiroConfig(agent);
 	return (cfg.tools ?? []).includes("shell") || (cfg.allowedTools ?? []).includes("shell");
+}
+
+/** kiro silently allows only the tools in `allowedTools`; others default to ask. */
+function kiroAllowedTools(agent: string): string[] {
+	return loadKiroConfig(agent).allowedTools ?? [];
 }
 
 /** pi grants a tool only when the frontmatter lists it in `tools`. */
@@ -1787,6 +1802,206 @@ describe("pi researcher: every configured MCP server is covered by a tool entry"
 				tools.includes(`${prefix}*`) ||
 				tools.some((tool) => tool.startsWith(prefix) && tool.length > prefix.length);
 			assert.ok(covered, `researcher tools must cover MCP server "${server}": add ${prefix}* or an exact tool`);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// OpenCode herdr allow anchoring (BLOCKER regression). The allow must start the
+// command. A leading `*` let `mv x .../herdr` match the allow and override the
+// earlier cp/mv ask.
+// ---------------------------------------------------------------------------
+
+const HERDR_PATH_BYPASS = ["mv x /home/dev/.local/bin/herdr", "cp x y/.local/bin/herdr"];
+
+describe("opencode overseer: autonomous herdr commands allow; pane run/close ask", () => {
+	test("agent rename and send-keys allow", () => {
+		for (const command of ["herdr agent rename", "herdr pane send-keys", "herdr agent send-keys"]) {
+			assert.ok(hasOpenCodeRule("overseer", command, "allow"), `missing {shell, ${command}, allow}`);
+			assert.equal(opencodeVerdict("overseer", command), "allow", command);
+		}
+	});
+
+	test("pane run and pane close stay ask", () => {
+		for (const command of ["herdr pane run", "herdr pane close"]) {
+			assert.notEqual(opencodeVerdict("overseer", command), "allow", command);
+			assert.equal(opencodeVerdict("overseer", command), "ask", command);
+		}
+	});
+});
+
+describe("opencode: herdr allow is anchored at the command start", () => {
+	test("orchestrator: cp/mv to the herdr path no longer matches an allow", () => {
+		for (const command of HERDR_PATH_BYPASS) {
+			assert.notEqual(opencodeVerdict("orchestrator", command), "allow", command);
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("researcher: no herdr allow rule matches a cp/mv to that path", () => {
+		const herdrAllows = loadOpenCodeRules("researcher").filter(
+			(rule) => rule.action === "shell" && rule.effect === "allow" && rule.resource.includes("herdr"),
+		);
+		assert.ok(herdrAllows.length > 0, "researcher must keep its herdr allow rules");
+		for (const command of HERDR_PATH_BYPASS) {
+			for (const rule of herdrAllows) {
+				assert.ok(!opencodeGlob(rule.resource, command), `allow ${rule.resource} must not match ${command}`);
+			}
+		}
+	});
+
+	test("orchestrator: anchored bare rules exist and the unanchored rule is gone", () => {
+		for (const resource of ["herdr", "HERDR_ENV=1 herdr agent list", "HERDR_ENV=1 herdr plugin list"]) {
+			assert.ok(hasOpenCodeRule("orchestrator", resource, "allow"), `missing {shell, ${resource}, allow}`);
+		}
+		assert.ok(!hasOpenCodeRule("orchestrator", "*/.local/bin/herdr", "allow"));
+		assert.equal(opencodeVerdict("orchestrator", "herdr"), "allow");
+	});
+
+	test("researcher: anchored bare rules exist and the unanchored rule is gone", () => {
+		for (const resource of ["herdr", "herdr --help", "herdr --version", "herdr api schema"]) {
+			assert.ok(hasOpenCodeRule("researcher", resource, "allow"), `missing {shell, ${resource}, allow}`);
+		}
+		assert.ok(!hasOpenCodeRule("researcher", "*/.local/bin/herdr", "allow"));
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Implementer quality-gate tool gates (IMPORTANT regression). The `uv` allow is
+// narrowed to the gate subcommands; the mutating forms ask. The scanners stay.
+// ---------------------------------------------------------------------------
+
+const UV_GATE_ALLOWED = [
+	"uv build",
+	"uv build --wheel",
+	"uv run pytest",
+	"uv run pytest --cov",
+	"uv run ruff",
+	"uv run ruff check --fix",
+	"uv run mypy",
+	"uv run mypy --strict",
+	"uv run bandit -r .",
+	"uv run pip-audit --strict",
+	"uv pip list",
+];
+
+// `uv run` is not a blank check: only the quality-gate tools pass.
+const UV_RUN_NON_GATE = ["uv run python -c 'print(1)'", "uv run some-script", "uv run pytest-hack"];
+
+// Read-only sync forms are allowed on pi and opencode; kiro asks by omission.
+const UV_SYNC_READONLY = ["uv sync --frozen", "uv sync --offline", "uv sync --frozen --all-extras"];
+
+const UV_MUTATIONS = [
+	"uv add requests",
+	"uv remove requests",
+	"uv sync",
+	"uv sync --all-extras",
+	"uv lock",
+	"uv publish",
+	"cd /repo && uv add requests",
+];
+
+const CARGO_MUTATIONS = ["cargo audit fix", "cargo deny init", "cd /repo && cargo audit fix"];
+
+const CARGO_SCANNER_ALLOWED = ["cargo audit", "cargo deny check", "cargo llvm-cov", "cargo geiger"];
+
+describe("implementer quality-gate tools: uv and cargo gates", () => {
+	test("pi: uv gate subcommands allow; mutations ask", () => {
+		for (const command of UV_GATE_ALLOWED) assert.equal(verdict("implementer", command), "allow", command);
+		for (const command of UV_MUTATIONS) assert.equal(verdict("implementer", command), "ask", command);
+	});
+
+	test("pi: cargo scanners allow; cargo mutations ask", () => {
+		for (const command of CARGO_SCANNER_ALLOWED) assert.equal(verdict("implementer", command), "allow", command);
+		for (const command of CARGO_MUTATIONS) assert.equal(verdict("implementer", command), "ask", command);
+	});
+
+	test("opencode: uv gate subcommands allow; mutations ask", () => {
+		for (const command of UV_GATE_ALLOWED) assert.equal(opencodeVerdict("implementer", command), "allow", command);
+		for (const command of UV_MUTATIONS) assert.equal(opencodeVerdict("implementer", command), "ask", command);
+	});
+
+	test("opencode: cargo scanners allow; cargo mutations ask", () => {
+		for (const command of CARGO_SCANNER_ALLOWED) {
+			assert.equal(opencodeVerdict("implementer", command), "allow", command);
+		}
+		for (const command of CARGO_MUTATIONS) assert.equal(opencodeVerdict("implementer", command), "ask", command);
+	});
+
+	test("kiro: uv gate subcommands allow; mutations default to ask", () => {
+		for (const command of UV_GATE_ALLOWED) assert.equal(kiroVerdict("implementer", command), "allow", command);
+		for (const command of UV_MUTATIONS) assert.equal(kiroVerdict("implementer", command), "ask", command);
+		for (const command of UV_SYNC_READONLY) assert.equal(kiroVerdict("implementer", command), "ask", command);
+	});
+
+	test("all stacks: non-gate `uv run` does not allow", () => {
+		for (const command of UV_RUN_NON_GATE) {
+			assert.notEqual(verdict("implementer", command), "allow", `pi: ${command}`);
+			assert.notEqual(opencodeVerdict("implementer", command), "allow", `opencode: ${command}`);
+			assert.notEqual(kiroVerdict("implementer", command), "allow", `kiro: ${command}`);
+		}
+	});
+
+	test("pi/opencode: read-only uv sync forms allow; other sync forms ask", () => {
+		for (const command of UV_SYNC_READONLY) {
+			assert.equal(verdict("implementer", command), "allow", `pi: ${command}`);
+			assert.equal(opencodeVerdict("implementer", command), "allow", `opencode: ${command}`);
+		}
+		for (const command of ["uv sync", "uv sync --all-extras"]) {
+			assert.equal(verdict("implementer", command), "ask", `pi: ${command}`);
+			assert.equal(opencodeVerdict("implementer", command), "ask", `opencode: ${command}`);
+		}
+	});
+
+	test("pi: the uv allow carries the leading `cd` fold like the cargo allow", () => {
+		for (const command of ["cd /repo && uv build", "cd /repo && uv run pytest", "cd /repo && uv sync --frozen"]) {
+			assert.equal(verdict("implementer", command), "allow", command);
+		}
+	});
+
+	test("kiro: cargo scanners allow; cargo mutations default to ask", () => {
+		for (const command of CARGO_SCANNER_ALLOWED) assert.equal(kiroVerdict("implementer", command), "allow", command);
+		for (const command of CARGO_MUTATIONS) assert.equal(kiroVerdict("implementer", command), "ask", command);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// OpenCode edit tree split (IMPORTANT regression): each writer edits only its
+// own agent-notes tree; every other path denies.
+// ---------------------------------------------------------------------------
+
+describe("opencode: edit allow/deny split", () => {
+	test("orchestrator: agent-notes editable, elsewhere deny", () => {
+		assert.equal(opencodeResourceVerdict("orchestrator", "edit", "~/agent-notes/orchestrator/journal.md"), "allow");
+		assert.equal(opencodeResourceVerdict("orchestrator", "edit", "~/agent-notes/project-notes/foo.md"), "allow");
+		assert.equal(opencodeResourceVerdict("orchestrator", "edit", "~/agent-notes/researcher/reports/x.md"), "deny");
+		assert.equal(opencodeResourceVerdict("orchestrator", "edit", "src/main.ts"), "deny");
+	});
+
+	test("researcher: own agent-notes editable, elsewhere deny", () => {
+		assert.equal(opencodeResourceVerdict("researcher", "edit", "~/agent-notes/researcher/x.md"), "allow");
+		assert.equal(opencodeResourceVerdict("researcher", "edit", "~/agent-notes/orchestrator/x.md"), "deny");
+		assert.equal(opencodeResourceVerdict("researcher", "edit", "src/main.ts"), "deny");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Kiro `code` allow/ask split (IMPORTANT regression): `code` stays in `tools`
+// for reviewer and planner so ask-by-omission applies; it must not be in
+// `allowedTools`. Tester and implementer keep the silent allow.
+// ---------------------------------------------------------------------------
+
+describe("kiro: code allow/ask split", () => {
+	test("reviewer and planner: code is available but not silently allowed", () => {
+		for (const agent of ["reviewer", "planner"]) {
+			assert.ok((loadKiroConfig(agent).tools ?? []).includes("code"), `${agent}: code must stay available`);
+			assert.ok(!kiroAllowedTools(agent).includes("code"), `${agent}: code must not be in allowedTools`);
+		}
+	});
+
+	test("tester and implementer: code is allowed", () => {
+		for (const agent of ["tester", "implementer"]) {
+			assert.ok(kiroAllowedTools(agent).includes("code"), `${agent}: code must be in allowedTools`);
 		}
 	});
 });

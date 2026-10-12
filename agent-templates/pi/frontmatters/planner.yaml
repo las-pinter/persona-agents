@@ -40,7 +40,7 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
     - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }

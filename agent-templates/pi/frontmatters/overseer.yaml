@@ -1,5 +1,5 @@
 name: overseer
-description: Patrols agent status and panes via herdr, keeps the captain's log in agent-notes, and asks before destructive acts
+description: Patrols agent status and panes via herdr and keeps the captain's log in agent-notes. Acts autonomously inside the user's stated scope; asks only outside that scope or for user data or configuration.
 # Not spawnable as a subagent: overseer is a main-session monitor, and its herdr
 # access must not leak into delegated contexts.
 spawnable: false
@@ -21,12 +21,12 @@ permissions:
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|diff|echo|printf|cut|sleep|whoami|which|command -v|jq|bash -n|mkdir|test)\\b" }
     - { tool: bash, match: "^find\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch(--show-current|-a|-vv)?|rev-parse|ls-remote|remote|grep)\\b" }
-    - { tool: bash, match: "^(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+(?:--help|--version|status|machine\\s+list|(?:workspace|tab)\\s+(?:create|list|get)|workspace$|tab$|pane\\s+(?:list|get|current|split|read|wait-output|send-text|layout)|pane$|agent\\s+(?:list|get|rename|start|prompt|wait|read)|agent$)\\b" }
-    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+send-keys\\b" }
-    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+agent\\s+send-keys\\b" }
+    - { tool: bash, match: "^(?:HERDR_ENV=1\\s+)?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\s+(?:--help|--version|status|machine\\s+list|(?:workspace|tab)\\s+(?:create|list|get)|workspace$|tab$|pane\\s+(?:list|get|current|split|read|wait-output|send-text|layout)|pane$|agent\\s+(?:list|get|rename|start|prompt|wait|read)|agent$)\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\s+pane\\s+send-keys\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\s+agent\\s+send-keys\\b" }
   ask:
-    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+run\\b" }
-    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:/home/dev/\\.local/bin/)?herdr\\s+pane\\s+close\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\s+pane\\s+run\\b" }
+    - { tool: bash, match: "(?:HERDR_ENV=1\\s+)?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\s+pane\\s+close\\b" }
   deny:
     - { tool: bash, match: "^eval\\b" }
     - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }

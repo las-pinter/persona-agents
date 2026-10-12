@@ -6,7 +6,7 @@ permissions:
     effect: deny
   - action: edit
     resource: "*"
-    effect: ask
+    effect: deny
   - action: edit
     resource: "~/agent-notes/researcher/*"
     effect: allow
@@ -244,17 +244,19 @@ permissions:
   - action: shell
     resource: "systemctl --user list-units"
     effect: allow
+  # Anchor at the command start. A leading `*` would let `cp`/`mv` to that
+  # path match this allow and override the earlier deny.
   - action: shell
-    resource: "/home/dev/.local/bin/herdr --help"
+    resource: "herdr --help"
     effect: allow
   - action: shell
-    resource: "/home/dev/.local/bin/herdr"
+    resource: "herdr"
     effect: allow
   - action: shell
-    resource: "/home/dev/.local/bin/herdr --version"
+    resource: "herdr --version"
     effect: allow
   - action: shell
-    resource: "/home/dev/.local/bin/herdr api schema"
+    resource: "herdr api schema"
     effect: allow
   - action: shell
     resource: "herdr plugin config-dir"

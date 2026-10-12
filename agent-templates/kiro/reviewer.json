@@ -18,7 +18,6 @@
     "subagent"
   ],
   "allowedTools": [
-    "code",
     "glob",
     "grep",
     "read",

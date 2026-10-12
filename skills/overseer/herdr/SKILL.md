@@ -1,6 +1,6 @@
 ---
 name: herdr
-description: "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1."
+description: "Control Herdr, a terminal multiplexer for coding agents. The overseer always loads this skill. Other agents use it only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use it merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1."
 ---
 
 # Herdr
@@ -241,12 +241,12 @@ Use these commands inside the session:
 The user settings file holds the defaults:
 
 ```text
-/home/dev/.pi/agent/settings.json
+$HOME/.pi/agent/settings.json
 ```
 
 It stores `defaultAgent` and `defaultPersona`. Example values are `orchestrator` and `goblin/bossnik-chief`.
 
-A pi process freshly started by herdr reports its state through the session file. Herdr skips screen scanning for it. The `overseer.herald` plugin fires reliably. The official pi integration lives at `/home/dev/.pi/agent/extensions/herdr-agent-state.ts`. It self-reports when `HERDR_ENV` is set. Fresh-pane reporting makes the herald push work, from watchdog to overseer.
+A pi process freshly started by herdr reports its state through the session file. Herdr skips screen scanning for it. The `overseer.herald` plugin fires reliably. The official pi integration lives at `$HOME/.pi/agent/extensions/herdr-agent-state.ts`. It self-reports when `HERDR_ENV` is set. Fresh-pane reporting makes the herald push work, from watchdog to overseer.
 
 An old pi process does not report its state. Reloading an old process is not a restart. Only a fresh process counts.
 

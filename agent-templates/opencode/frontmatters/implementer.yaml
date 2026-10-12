@@ -404,6 +404,39 @@ permissions:
     resource: "python3 -m ruff"
     effect: allow
   - action: shell
+    resource: "bandit"
+    effect: allow
+  - action: shell
+    resource: "bandit *"
+    effect: allow
+  - action: shell
+    resource: "pip-audit"
+    effect: allow
+  - action: shell
+    resource: "pip-audit *"
+    effect: allow
+  - action: shell
+    resource: "uv build *"
+    effect: allow
+  - action: shell
+    resource: "uv run pytest *"
+    effect: allow
+  - action: shell
+    resource: "uv run ruff *"
+    effect: allow
+  - action: shell
+    resource: "uv run mypy *"
+    effect: allow
+  - action: shell
+    resource: "uv run bandit *"
+    effect: allow
+  - action: shell
+    resource: "uv run pip-audit *"
+    effect: allow
+  - action: shell
+    resource: "uv pip list *"
+    effect: allow
+  - action: shell
     resource: "node --version"
     effect: allow
   - action: shell
@@ -485,6 +518,18 @@ permissions:
     resource: "cargo run *"
     effect: allow
   - action: shell
+    resource: "cargo deny *"
+    effect: allow
+  - action: shell
+    resource: "cargo audit *"
+    effect: allow
+  - action: shell
+    resource: "cargo llvm-cov *"
+    effect: allow
+  - action: shell
+    resource: "cargo geiger *"
+    effect: allow
+  - action: shell
     resource: "cargo add *"
     effect: ask
   - action: shell
@@ -492,6 +537,34 @@ permissions:
     effect: ask
   - action: shell
     resource: "cargo update *"
+    effect: ask
+  - action: shell
+    resource: "cargo audit fix *"
+    effect: ask
+  - action: shell
+    resource: "cargo deny init *"
+    effect: ask
+  - action: shell
+    resource: "uv add *"
+    effect: ask
+  - action: shell
+    resource: "uv remove *"
+    effect: ask
+  - action: shell
+    resource: "uv sync *"
+    effect: ask
+  # Read-only sync forms win over the ask above (opencode is last-match-wins).
+  - action: shell
+    resource: "uv sync --frozen *"
+    effect: allow
+  - action: shell
+    resource: "uv sync --offline *"
+    effect: allow
+  - action: shell
+    resource: "uv lock *"
+    effect: ask
+  - action: shell
+    resource: "uv publish *"
     effect: ask
   - action: shell
     resource: "cargo install *"

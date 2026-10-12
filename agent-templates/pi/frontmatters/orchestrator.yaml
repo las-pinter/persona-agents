@@ -14,7 +14,10 @@ permissions:
   allow:
     # The todo tool tracks work in session entries only; no shell or filesystem surface.
     - { tool: todo, match: "." }
-    - { tool: read, match: "(^|/)(agent-notes|skills|personas|agents)/" }
+    - { tool: read, match: "(^|/)agent-notes/" }
+    - { tool: read, match: "(^|/)(skills|personas|professions|agent-templates|docs)/" }
+    - { tool: read, match: "(^|/)agents\\.json$" }
+    - { tool: read, match: "(^|/)package\\.json$" }
     - { tool: read, match: "SKILL\\.md$" }
     - { tool: edit, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
@@ -57,9 +60,9 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
     - { tool: bash, match: "\\bmkfs|\\bdd\\b.*\\bof=/dev/" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
     - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:/home/dev/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
     # A destructive tag flag can appear anywhere after `tag`, not only first.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\b[^;&|(\\n]*\\s(?:-[A-Za-z]*[df]\\b|--(?:delete|delet|dele|del|de|d|force|forc)\\b)" }

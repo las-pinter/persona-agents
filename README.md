@@ -78,7 +78,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
 | goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
-| goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, and always asks the user before any destructive act |
+| goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, acts autonomously inside the user's stated scope, asks only outside that scope or for user data or configuration |
 
 ### The WH40K Warband
 
