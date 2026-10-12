@@ -77,7 +77,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | goblin-researcher | **Skribnik** | 🔬 Researcher | Ink-stained scribe. Knows books and the internet — Context7, DeepWiki, Exa |
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
-| goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
+| goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools except reading its own persona and skills, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
 | goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, acts autonomously inside the user's stated scope, asks only outside that scope or for user data or configuration |
 
 ### The WH40K Warband
@@ -90,7 +90,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
 | wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
 | wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
-| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools, no profession. Just Brok, trying very hard |
+| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools except reading its own persona and skills, no profession. Just Brok, trying very hard |
 | wh40k-overseer | **Commissar Aldous Vane** | 👁️ Overseer | Unit manager — watches the warband's panes, keeps the captain's log, awaits your word before any sentence falls |
 
 ### The WH40K Ork Warband

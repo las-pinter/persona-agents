@@ -224,7 +224,12 @@ persona-agents/
 │   │   ├── full-study/SKILL.md
 │   │   └── study-questions/SKILL.md
 │   ├── overseer/
-│   │   └── herdr/SKILL.md
+│   │   └── herdr/
+│   │       ├── SKILL.md
+│   │       └── references/
+│   │           ├── cli.md
+│   │           ├── remote.md
+│   │           └── pi-launch.md
 │   └── common/
 │       ├── journal-management-generic/SKILL.md
 │       ├── persona-free-documents/SKILL.md

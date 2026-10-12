@@ -20,21 +20,7 @@ with the name for your stack.
 
 ---
 
-## Step 0: Pre-research — Check Existing Notes First
-
-Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
-
-1. Glob `<USER_HOME>/agent-notes/researcher/reports/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
-2. Decide based on what exists:
-   - Prior report fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.
-   - Prior report partially covers it → state the gap and extend that existing report.
-   - Nothing relevant exists → proceed to Step 1 and do new research.
-3. After writing any new report:
-   - Use `YYYY-MM-DD-<topic>.md` naming; check existing filenames first to avoid near-duplicates.
-   - List prior reports it builds on under a `Related report:` line.
-   - Append `date + filename + short topic` to `<USER_HOME>/agent-notes/researcher/index.md` (create it if missing).
-
-### Freshness Rule
+## Freshness Rule
 
 Reuse a prior report only for a stable topic. Re-verify before reuse for a
 VOLATILE topic. A volatile topic changes after the report date.
@@ -56,6 +42,22 @@ For a volatile topic:
 3. Update the report or write a new one. Correct the index.
 
 When unsure if a topic is volatile: treat it as volatile.
+
+---
+
+## Step 0: Pre-research — Check Existing Notes First
+
+Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
+
+1. Glob `<USER_HOME>/agent-notes/researcher/reports/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
+2. Decide based on what exists:
+   - Prior report fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.
+   - Prior report partially covers it → state the gap and extend that existing report.
+   - Nothing relevant exists → proceed to Step 1 and do new research.
+3. After writing any new report:
+   - Use `YYYY-MM-DD-<topic>.md` naming; check existing filenames first to avoid near-duplicates.
+   - List prior reports it builds on under a `Related report:` line.
+   - Append `date + filename + short topic` to `<USER_HOME>/agent-notes/researcher/index.md` (create it if missing).
 
 ---
 
