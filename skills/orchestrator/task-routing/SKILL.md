@@ -7,7 +7,8 @@ description: Decision rules for assigning tasks to the correct agent type.
 
 ## Routing Decision Tree
 
-Evaluate in sequence. Stop at the first YES.
+This tree is the single authority for every dispatch. Evaluate in sequence.
+Stop at the first YES.
 
 The overseer is user-spawned, not a dispatch target — it does not appear in
 this tree.
@@ -38,54 +39,54 @@ Q4: Is the task ambiguous, large, or in need of decomposition
   Do not route to Planner when the task is already clearly specified — go straight to Implementer.
   Do not route to Implementer for complex architectural decisions — Planner first.
 
-Q5: Is the task for entertainment, morale, or creative breakthrough?
-  → YES: Route to MASCOT
-  → NO:  Proceed.
-
-Q6: Does the task require writing or modifying code
+Q5: Does the task require writing or modifying code
     based on clear specifications?
-  → YES: Route to IMPLEMENTER (single generic type)
+  → YES: Route to IMPLEMENTER (single generic type; the language specialists are retired)
   → NO:  Proceed.
+  Do not route to Implementer for complex architectural decisions — Planner first.
 
-Q7: Does the task require verifying behavior, writing tests,
+Q6: Does the task require verifying behavior, writing tests,
     or hunting edge cases?
   → YES: Route to TESTER
-  → NO:  Handle directly.
+  → NO:  Proceed.
   Do not route to Tester before the code exists — Implementer first.
+
+Q7: Is the task for entertainment, morale, or creative breakthrough?
+  → YES: Route to MASCOT (lowest dispatch priority)
+  → NO:  Handle directly.
 ```
 
-**Handle directly:** synthesizing subagent outputs, status checks and context lookups, trivial one-line changes, greetings and conversation, journal operations, questions answerable from your own context.
+**Handle directly (orchestrator direct duties):** reads of your own notes,
+journals, skills, and persona; git reads; journal and note writes; status and
+synthesis; trivial one-line edits; greetings and conversation; questions
+answerable from your own context.
 
 ---
 
-## Priority Summary
+## Tiebreakers (exact ties only)
 
-| Priority | Agent | Trigger |
-|----------|-------|---------|
-| 1 | User-named type | Explicit agent request |
-| 2 | Researcher | Information needed outside context |
-| 3 | Reviewer | Evaluation against standards |
-| 4 | Planner | Ambiguity, scale, architectural decisions |
-| 5 | Mascot | Entertainment / creative breakthrough |
-| 6 | Implementer | Code with clear specs |
-| 7 | Tester | Behavior verification / test writing |
+The tree decides every dispatch. Use a tiebreaker only when one task matches
+two branches equally and the tree order does not resolve the tie.
 
----
-
-## Tiebreakers
-
-1. **Explicit user signal overrides all** — profession-specific verbs ("review", "test", "find", "plan") are definitive.
-2. **Specificity wins** — the rule with the most conceptual overlap takes priority.
-3. **Pipeline order breaks remaining ties** — Researcher > Reviewer > Planner > Implementer > Tester > Mascot.
-4. **If still tied** — the task is multi-type. Decompose and dispatch each subtask separately.
+1. **Specificity wins** — the branch with the most conceptual overlap.
+2. **Pipeline order breaks the remaining tie** — Researcher > Reviewer >
+   Planner > Implementer > Tester > Mascot.
+3. **Still tied** — the task is multi-type. Decompose it and dispatch each
+   part separately.
 
 ---
 
-## Multi-Agent Orchestration Patterns
+## Parallelization
 
-**Parallelism rule:** dispatch in parallel ONLY independent read-only research
-tasks (researchers). Never run two implementers at the same time. Never run the
-reviewer and the tester at the same time — run them one after the other.
+Dispatch in parallel ONLY independent read-only research tasks (researchers).
+Never run two implementers at the same time. Never run the reviewer and the
+tester at the same time — run them one after the other.
+
+---
+
+## Examples
+
+The patterns below are examples. They do not change the tree.
 
 | Pattern | When | Flow |
 |---------|------|------|
@@ -95,10 +96,7 @@ reviewer and the tester at the same time — run them one after the other.
 | Parallel research | Multiple unrelated read-only investigations in one request | Researchers in parallel → orchestrator combines results |
 | Review → Test | Completed code needs both verifications | Reviewer first → wait → Tester → orchestrator reconciles |
 
----
-
-## Examples
-
 - "Find the best Go rate-limiting library, then implement middleware" → Researcher → Implementer → Reviewer
 - "We need a notification system" → Planner → Implementer → Tester → Reviewer
 - "What did we work on last session?" → Handle directly (in your own journals)
+- "Write a limerick about the failed build" → Mascot

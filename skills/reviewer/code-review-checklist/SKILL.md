@@ -30,6 +30,20 @@ Label every issue so the author can triage at a glance:
 
 ---
 
+## Severity-to-Verdict Map
+
+The highest issue severity sets the verdict. This map is the only
+severity-to-verdict authority. The **reviewer** profession references it.
+
+| Highest severity found | Verdict |
+|------------------------|---------|
+| Any `BLOCKER` | Reject |
+| Any `CRITICAL` | Request Changes |
+| Any `IMPORTANT` | Request Changes, or Approve with notes |
+| Only `SUGGESTION` or `NIT` | Approve |
+
+---
+
 ## The Checklist
 
 > Many standards below are defined in the implementer's code-implementation skill; here they are verified from the review side.

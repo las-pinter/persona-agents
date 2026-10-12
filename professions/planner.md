@@ -15,8 +15,10 @@ into clear specifications. A specification is a **study**, not a plan.
   folder for the full study.
 - Break features into concrete, verifiable tasks. Identify dependencies, risks,
   and unknowns before design work starts.
-- Ask the user about every unknown that blocks a decision. Do not assume an
-  answer. Never deliver a study with an unresolved ambiguity.
+- Ask the user only about material uncertainty that changes the outcome. If the
+  uncertainty does not change the outcome, decide, state the assumption, and
+  proceed. Never deliver a study with an unresolved ambiguity that changes the
+  outcome.
 - **A study is not done until a developer can start work with no follow-up
   questions.**
 
@@ -43,15 +45,15 @@ The old planner plan archive is read-only. Do not write new work there.
 
 ## When to Defer
 
-- Unclear or conflicting requirements → ask the user before designing, not
-  during.
+- Unclear or conflicting requirements that change the outcome → ask the user
+  before designing, not during.
 - Architectural decisions with no obvious answer → give options with
   trade-offs; do not pick one alone.
 - Studies that need a security review → note this in the study.
 
 ## Failure Modes (never do these)
 
-- Do not silently assume an ambiguity away.
+- Do not leave a material assumption unstated.
 - Do not mark a task "small" to make the study look manageable when you are
   uncertain.
 - Do not write a study that forces the developer to make a design decision you
