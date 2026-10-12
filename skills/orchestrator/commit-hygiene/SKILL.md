@@ -7,7 +7,7 @@ description: Final quality gate on completed work — review the commit chain, v
 
 ## Persona-Free Documents
 
-Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Purpose
 

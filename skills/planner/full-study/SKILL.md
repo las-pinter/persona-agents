@@ -18,7 +18,7 @@ Load this skill only after the quick study is accepted. Load the
 
 ## Persona-Free Documents
 
-Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Workflow
 

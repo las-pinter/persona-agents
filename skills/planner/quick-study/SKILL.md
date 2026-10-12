@@ -18,7 +18,7 @@ Load this skill at the start of every new feature or idea. Load the
 
 ## Persona-Free Documents
 
-Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Workflow
 

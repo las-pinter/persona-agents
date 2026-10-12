@@ -412,22 +412,24 @@ export default function (pi: ExtensionAPI): void {
 				debugLog("alwaysLoad injected:", Array.from(seen).join(","));
 			}
 
-			// P3: bind the agent's `skills:` globs (package + user + project).
+			// P3: bind the agent's `skills:` globs (package + user + project) as an
+			// on-demand index. Only name, description, and path are injected; the
+			// agent reads the SKILL.md when the task matches. Full bodies stay out
+			// of the startup prompt, so this branch has no body budget.
 			const skills = matchSkills(agent.skills, discoveredSkills);
-			if (skills.length > 0) {
-				extra += `\n\n## Agent skills for "${agent.name}"`;
-				let budget = SKILL_INJECTION_BUDGET_BYTES;
-				for (const s of skills) {
-					const id = s.group ? `${s.group}/${s.name}` : s.name;
-					if (seen.has(id)) continue;
-					seen.add(id);
-					const body = s.body.length > SKILL_BODY_CAP_BYTES ? `${s.body.slice(0, SKILL_BODY_CAP_BYTES)}\n<!-- (truncated) -->` : s.body;
-					budget -= body.length;
-					if (budget < 0) break;
-					const scriptsDir = skillScriptsDir(s);
-					extra += `\n\n### Skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
-				}
-				debugLog("skills injected:", Array.from(seen).join(","));
+			const indexed: string[] = [];
+			for (const s of skills) {
+				const id = s.group ? `${s.group}/${s.name}` : s.name;
+				if (seen.has(id)) continue;
+				seen.add(id);
+				const description = s.description?.trim() || "(no description)";
+				indexed.push(`\n\n- ${id}: ${description}\n  path: ${s.path}`);
+			}
+			if (indexed.length > 0) {
+				extra += `\n\n## Agent skills for "${agent.name}" (on-demand index)`;
+				extra += `\nRead a skill file when the task matches its description, then follow it.`;
+				extra += indexed.join("");
+				debugLog("skills indexed:", Array.from(seen).join(","));
 			}
 
 			// P3: bind the agent's `resources:` globs relative to the cwd.

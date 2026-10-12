@@ -112,7 +112,7 @@ Template fields (YAML):
 | `tools` | string[] | tool-name allowlist for subagent spawns (`--tools`) |
 | `model` | string | optional `provider/model` override for subagent spawns |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
-| `skills` | string[] | glob bindings to skills under `skills/` (package, user, project). `"orchestrator/*"` loads every skill in the orchestrator group; matched `SKILL.md` bodies are injected into the agent prompt |
+| `skills` | string[] | glob bindings to skills under `skills/` (package, user, project). `"orchestrator/*"` matches every skill in the orchestrator group; each matched skill is injected as an on-demand index entry (name, description, path) and the agent reads the `SKILL.md` when the task matches |
 | `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. A pattern that resolves to no skill, or a body/budget overrun, logs `console.warn` and leaves a visible marker in the prompt (`MISSING skill for alwaysLoad entry: …` / `>> SKILL TRUNCATED: …`) — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
 | `permissions` | object | see below |
@@ -189,10 +189,14 @@ tools are never gated (translation note above).
 ## Skills and resources
 
 An agent's frontmatter `alwaysLoad:` and `skills:` are resolved at `before_agent_start`
-and injected into that agent's system prompt (`alwaysLoad` first, then `skills`, then
-resources, then persona on top): `alwaysLoad` carries the guaranteed-once contract
-(missing/oversized skills warn loudly; a skill in both lists is injected once by the
-shared dedup set). `discoverSkills()` understands both this repo's
+and injected into that agent's system prompt (`alwaysLoad` first, then the skill index,
+then resources, then persona on top). `alwaysLoad` carries the guaranteed full-body
+contract: the skill body is injected whole, missing or oversized skills warn loudly, and
+a skill in both lists is injected once by the shared dedup set (`alwaysLoad` wins) under
+the 24 KB injection budget and the 12 KB body cap. `skills:` injects an on-demand index
+instead — one entry per matched skill with its name, description, and path, plus a line
+telling the agent to read the file when the task matches. No skill body loads until the
+agent reads the file. `discoverSkills()` understands both this repo's
 `skills/<group>/<name>/SKILL.md` layout and pi's `skills/<name>/SKILL.md`;
 `/skills [agent]` lists what would load.
 

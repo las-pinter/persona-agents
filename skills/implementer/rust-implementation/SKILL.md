@@ -5,10 +5,6 @@ description: Rust build patterns for desktop applications — workspace layout, 
 
 # Rust Implementation
 
-**Common-first:** if `rust-best-practices` is installed at
-`~/.agents/skills/rust-best-practices` or `~/.pi/agent/skills/`, follow it
-instead of this skill. This skill is the fallback.
-
 Rust-only patterns that sit on top of **code-implementation**. Load both skills for any Rust task.
 
 ## Workspace & Crate Layout

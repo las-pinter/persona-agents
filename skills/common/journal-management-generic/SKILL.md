@@ -7,7 +7,7 @@ description: Generic hierarchical journal system for any agent's operational con
 
 ## Persona-Free Documents
 
-Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ## Discovery — Find Your Home Directory
 
@@ -87,6 +87,10 @@ ls <USER_HOME>/agent-notes/<AGENT_TYPE>/journals/daily/ | sort | tail -1
 > If new information cannot fit, compress existing content (tighten wording,
 > merge redundant points, drop non-essential detail) rather than exceeding the
 > limit.
+>
+> A session may compress only its own block to stay under the cap, must preserve
+> other authors' text verbatim, and must use consolidation as the sanctioned
+> compression path for the whole file.
 
 For the correct current date use the `date` bash command.
 

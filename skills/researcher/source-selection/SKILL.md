@@ -7,7 +7,7 @@ description: Decision rules for choosing between Context7, DeepWiki, and Exa bas
 
 ## Persona-Free Documents
 
-Follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
 ---
 

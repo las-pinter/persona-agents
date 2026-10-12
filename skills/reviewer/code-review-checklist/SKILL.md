@@ -39,7 +39,7 @@ Label every issue so the author can triage at a glance:
 - [ ] All changes logically belong in this PR
 - [ ] Matches the linked ticket/issue/spec
 - [ ] README, docs, or API specs updated if behavior changed
-- [ ] Documents and code comments follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`); flag any theme word or roleplay address
+- [ ] Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) when reviewing documents and code comments; flag any theme word or roleplay address
 
 ### 2. Design & Architecture
 - [ ] Overall approach makes sense for the problem

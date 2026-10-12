@@ -206,6 +206,7 @@ persona-agents/
 │   ├── implementer/
 │   │   ├── code-implementation/SKILL.md
 │   │   ├── python-quality-gates/SKILL.md
+│   │   ├── react-quality-gates/SKILL.md
 │   │   ├── rust-implementation/SKILL.md
 │   │   └── rust-quality-gates/SKILL.md
 │   ├── reviewer/
@@ -225,6 +226,7 @@ persona-agents/
 │   │   └── herdr/SKILL.md
 │   └── common/
 │       ├── journal-management-generic/SKILL.md
+│       ├── persona-free-documents/SKILL.md
 │       ├── project-notes/SKILL.md
 │       ├── simplified-technical-english/SKILL.md
 │       └── skill-resolution/SKILL.md
@@ -1106,15 +1108,18 @@ First paragraph: role summary.
 Required sections: `## Core Behavior` (with precedence rule),
 `## When to Defer`, `## Failure Modes`, `## Output Format`, `## Skills`.
 
-The allowed order is: `## Startup` (optional, first) → `## Core Behavior` →
-optional role sections → `## When to Defer` → `## Failure Modes` →
-`## Output Format` → `## Skills` → trailing sections. Every section in a
-profession file must be one of these. `## Startup`, when present, comes first.
-Optional role sections usually sit between `## Core Behavior` and
-`## When to Defer`. Trailing sections may follow `## Output Format`; the
-researcher's `## Research Documentation` sits just before `## Skills`. A
-`## Startup` section lists the skills loaded before any user input; a pi
-agent's `alwaysLoad` frontmatter must match that list (doc-lint condition 5).
+The required relative order is: `## Startup` (optional, first) →
+`## Core Behavior` → `## When to Defer` → `## Failure Modes` →
+`## Output Format` → `## Skills`. Every section in a profession file must be
+one of these or an allowed role or trailing section. Role sections usually sit
+between `## Core Behavior` and `## When to Defer`, but may instead sit after
+`## When to Defer` (the orchestrator places `## TODO Lists`,
+`## Journal Management`, `## Project Notes`, and `## Context Discipline
+(CRITICAL)` there). Trailing sections may sit before or after `## Skills`; the
+researcher's `## Research Documentation` sits between `## Output Format` and
+`## Skills`. `## Startup`, when present, comes first and lists the skills
+loaded before any user input; a pi agent's `alwaysLoad` frontmatter must match
+that list (doc-lint condition 5).
 
 > **Note:** `professions/implementer.md` is the only implementer profession.
 > Language-specific guidance lives in the implementer skills and in

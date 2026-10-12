@@ -18,5 +18,5 @@ the 100-line cap, and the consolidation rules. Do not restate it here.
   `monthly/YYYY-MM.md`, monthlies into `yearly/YYYY.md`.
 - **Append-only:** re-read the target file, then append your own block under
   the relevant `### <project>` section with the `edit` tool.
-- **Persona-free documents:** follow the **persona-free-documents** skill
+- **Persona-free documents:** Load and follow the **persona-free-documents** skill
   (`skills/common/persona-free-documents/`).
