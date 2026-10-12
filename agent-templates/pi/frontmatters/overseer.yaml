@@ -47,5 +47,5 @@ permissions:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "herdr\\b(?:[^;\"'|&]|(?:\"[^\"]*\"|'[^']*'))*(?:&&|\\|\\||[;&|]|\\r?\\n)[\\s\\S]*?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
     - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
-    - { tool: bash, match: "herdr\\b[^;\"']*(?:\\bserver\\b|\\bplugin\\b|--machine\\b)(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
+    - { tool: bash, match: "herdr\\b[^;\"']*(?:\\bserver\\b|\\bplugin\\b|--machine\\b)(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)", noDequote: true }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }

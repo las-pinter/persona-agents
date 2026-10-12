@@ -26,6 +26,8 @@ export interface PermissionRule {
 	tool?: string;
 	match: string;
 	reason?: string;
+	/** Deny-only: see `RawRule.noDequote` in command-segments. */
+	noDequote?: boolean;
 }
 
 export interface PermissionConfig {
@@ -141,6 +143,7 @@ function parsePermissionConfig(value: unknown): PermissionConfig | undefined {
 				tool: typeof r.tool === "string" ? r.tool : undefined,
 				match: r.match,
 				reason: typeof r.reason === "string" ? r.reason : undefined,
+				noDequote: r.noDequote === true ? true : undefined,
 			});
 		}
 		return out.length > 0 ? out : undefined;

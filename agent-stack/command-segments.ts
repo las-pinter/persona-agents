@@ -15,6 +15,14 @@ export interface RawRule {
 	tool?: string;
 	match: string;
 	reason?: string;
+	/**
+	 * Deny-only. A rule with this flag is tested on the raw probes only, never
+	 * on the dequoted variant. Set it on a deny whose pattern is already
+	 * quote-aware and whose keyword can appear as ordinary quoted argument text
+	 * (for example `plugin` in `herdr agent prompt \"...\"`). The raw probes
+	 * still see a real command, so this narrows only the dequote defense.
+	 */
+	noDequote?: boolean;
 }
 
 export interface CompiledRule {
@@ -589,11 +597,20 @@ interface RuleMatch {
 	probe: string;
 }
 
-/** First rule (list order) × first probe (order) that matches. */
-function firstMatch(rules: CompiledRule[], toolName: string, probes: string[]): RuleMatch | null {
+/**
+ * First rule (list order) × first probe (order) that matches. `probesFor`
+ * selects the probe list per rule; the deny path uses it so a `noDequote`
+ * rule skips the dequoted probes. Ask and allow always use the flat list.
+ */
+function firstMatch(
+	rules: CompiledRule[],
+	toolName: string,
+	probes: string[],
+	probesFor?: (rule: RawRule) => string[],
+): RuleMatch | null {
 	for (const r of rules) {
 		if (r.tool !== "*" && r.tool !== toolName) continue;
-		for (const probe of probes) {
+		for (const probe of probesFor ? probesFor(r.rule) : probes) {
 			if (r.re.test(probe)) return { rule: r.rule, probe };
 		}
 	}
@@ -699,12 +716,15 @@ export function evaluateCommandRules(
 	// backslash escape hides a literal deny from the raw probes. The normalized
 	// variants can add a denial, never an allowance.
 	const denyProbes = unique([...probes, ...probes.map(dequoteProbe)]);
+	// A `noDequote` deny tests only the raw probes, so a denied word inside
+	// quoted argument text does not fire. The real command still matches raw.
+	const denyProbesFor = (rule: RawRule): string[] => (rule.noDequote ? probes : denyProbes);
 
-	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, denyProbes);
+	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, denyProbes, denyProbesFor);
 	if (globalDeny) {
 		return { kind: "deny", reason: denyReason(globalDeny.rule, toolName, "global") };
 	}
-	const agentDeny = firstMatch(compile(ruleSets.agentDeny), toolName, denyProbes);
+	const agentDeny = firstMatch(compile(ruleSets.agentDeny), toolName, denyProbes, denyProbesFor);
 	if (agentDeny) {
 		return { kind: "deny", reason: denyReason(agentDeny.rule, toolName, agentName ?? "agent") };
 	}

@@ -2002,6 +2002,59 @@ describe("overseer: herdr plugin is denied on every stack", () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// T29: the pi herdr deny probe is quote-aware. The `server|plugin|--machine`
+// rule carries `noDequote`, so the dequoted deny probe no longer matches a
+// denied word that appears only inside quoted argument text. The real commands
+// and the compound still match the raw probes and deny.
+// ---------------------------------------------------------------------------
+
+// Each of the three denied keywords appears only as quoted prompt argument text.
+const HERDR_QUOTED_PROMPTS = [
+	'herdr agent prompt reviewer "explain the plugin system"',
+	"herdr agent prompt reviewer 'stop the server now'",
+	'herdr agent prompt reviewer "--machine is just the flag name"',
+];
+
+const HERDR_REAL_DENY = ["herdr plugin install x", "herdr server stop", "herdr --machine test agent list"];
+
+const HERDR_COMPOUND_DENY = [
+	"herdr agent prompt reviewer ok; herdr server stop",
+	"herdr agent prompt reviewer ok && herdr plugin install x",
+	"herdr agent prompt reviewer ok; herdr --machine prod agent list",
+];
+
+describe("pi overseer: the herdr deny is quote-aware", () => {
+	test("quoted argument text is not denied", () => {
+		for (const command of HERDR_QUOTED_PROMPTS) {
+			assert.equal(verdict("overseer", command), "allow", command);
+		}
+	});
+
+	test("the real plugin, server, and machine commands are denied", () => {
+		for (const command of HERDR_REAL_DENY) {
+			assert.equal(verdict("overseer", command), "deny", command);
+		}
+	});
+
+	test("a compound with a denied tail is denied", () => {
+		for (const command of HERDR_COMPOUND_DENY) {
+			assert.equal(verdict("overseer", command), "deny", command);
+		}
+	});
+
+	// Trade-off guard: `noDequote` skips the dequoted probe for this rule, so a
+	// quote-obfuscated subcommand is no longer an explicit deny. Deny-by-default
+	// still blocks it because it matches no allow. Assert it is never allowed.
+	// Pin the residual kind on one case, so it is not trusted to this comment.
+	test("a quote-obfuscated subcommand is still blocked, never allowed", () => {
+		assert.notEqual(verdict("overseer", 'herdr "plugin" install x'), "allow");
+		assert.equal(verdict("overseer", 'herdr "plugin" install x'), "default");
+		assert.notEqual(verdict("overseer", "herdr serv'er' stop"), "allow");
+		assert.notEqual(verdict("overseer", 'herdr "--machine" prod agent list'), "allow");
+	});
+});
+
 describe("opencode: herdr allow is anchored at the command start", () => {
 	test("orchestrator: cp/mv to the herdr path no longer matches an allow", () => {
 		for (const command of HERDR_PATH_BYPASS) {

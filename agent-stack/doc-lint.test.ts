@@ -38,7 +38,16 @@ const kiroTemplatesDir = path.join(repoRoot, "agent-templates", "kiro");
  */
 const EXPECTED_PROFESSIONS_PER_THEME = 8;
 
-/** Agents whose pi `alwaysLoad` must equal the profession Startup skill list. */
+/**
+ * Agents whose pi `alwaysLoad` must equal the profession Startup skill list.
+ *
+ * Exact list parity applies only to a list-style Startup. The orchestrator's
+ * Startup is one sentence of bold skill names, so its alwaysLoad and Startup
+ * list must match one-for-one. The overseer's Startup is a numbered procedure,
+ * not a skill list (its one bold name, `**herdr**`, is resolved by condition
+ * 1), so exact parity is meaningless there. Its tailored rule below instead
+ * requires every alwaysLoad entry to be a skill the frontmatter declares.
+ */
 const STARTUP_PARITY_AGENTS = ["orchestrator"];
 
 /**
@@ -136,10 +145,69 @@ function repoSkillDirs(): string[] {
 }
 
 function commonSkillRoots(): string[] {
-	return [path.join(HOME, ".agents", "skills"), path.join(HOME, ".pi", "agent", "skills")].filter(
-		(root) => fs.existsSync(root),
-	);
+	return COMMON_SKILL_CONTRACT.roots.filter((root) => fs.existsSync(root));
 }
+
+/**
+ * The `common/skill-resolution` skill owns the installed-common-skill candidate
+ * list and the four common root paths. Derive both here so a new candidate or
+ * root added only to the skill cannot silently make this lint red on a healthy
+ * machine. The candidate parse is scoped to the table after the candidate
+ * marker, so an unrelated table cannot inject names. A parse failure throws
+ * loud: an empty table or root list is a bug.
+ */
+const SKILL_RESOLUTION_FILE = path.join(skillsRoot, "common", "skill-resolution", "SKILL.md");
+
+/** The line that introduces the candidate table in the skill. */
+const CANDIDATE_TABLE_MARKER = "The candidates come from the domain:";
+
+interface CommonSkillContract {
+	candidates: ReadonlySet<string>;
+	roots: string[];
+}
+
+function parseCommonSkillContract(): CommonSkillContract {
+	const text = readText(SKILL_RESOLUTION_FILE);
+	const candidates = new Set<string>();
+
+	// Scope the parse to the block after the marker and before the next `##`.
+	// A table elsewhere in the skill must not add optional names.
+	const markerIndex = text.indexOf(CANDIDATE_TABLE_MARKER);
+	if (markerIndex === -1) {
+		throw new Error(`${SKILL_RESOLUTION_FILE}: candidate table marker not found`);
+	}
+	const afterMarker = text.slice(markerIndex + CANDIDATE_TABLE_MARKER.length);
+	const nextHeading = afterMarker.search(/^##\s/m);
+	const tableBlock = nextHeading === -1 ? afterMarker : afterMarker.slice(0, nextHeading);
+
+	// Candidate table rows: `| rust | primary | secondary, secondary |`.
+	const rowRe = /^\|\s*([a-z0-9-]+)\s*\|([^|]*)\|([^|]*)\|\s*$/gm;
+	let match: RegExpExecArray | null;
+	while ((match = rowRe.exec(tableBlock)) !== null) {
+		if (/^-+$/.test(match[1])) continue; // header separator row
+		for (const cell of [match[2], match[3]]) {
+			for (const raw of cell.split(",")) {
+				const name = raw.trim();
+				if (/^[a-z0-9-]+$/.test(name)) candidates.add(name);
+			}
+		}
+	}
+
+	// Root bullets: ``- `$HOME/.agents/skills` ``.
+	const roots: string[] = [];
+	const rootRe = /^-\s+`\$HOME\/([^`]+)`\s*$/gm;
+	while ((match = rootRe.exec(text)) !== null) roots.push(path.join(HOME, match[1]));
+
+	if (candidates.size === 0) {
+		throw new Error(`${SKILL_RESOLUTION_FILE}: candidate table parsed to an empty set`);
+	}
+	if (roots.length === 0) {
+		throw new Error(`${SKILL_RESOLUTION_FILE}: no common skill roots parsed`);
+	}
+	return { candidates, roots };
+}
+
+const COMMON_SKILL_CONTRACT = parseCommonSkillContract();
 
 function globToRegExp(pattern: string): RegExp {
 	const escaped = pattern
@@ -158,20 +226,11 @@ interface ResolvedSkill {
 }
 
 /**
- * Installed common skills that live outside the repo. `common/skill-resolution`
- * owns this candidate list. A bare name in a profession that is neither a repo
- * skill nor a name here is a dead repo reference and fails.
+ * Installed common skills that live outside the repo. Derived from the
+ * `common/skill-resolution` candidate table. A bare name in a profession that
+ * is neither a repo skill nor a candidate here is dead and fails.
  */
-const OPTIONAL_COMMON_SKILLS: ReadonlySet<string> = new Set([
-	"rust-best-practices",
-	"rust-async-patterns",
-	"python-design-patterns",
-	"python-testing-patterns",
-	"vercel-react-best-practices",
-	"web-design-guidelines",
-	"frontend-design",
-	"shadcn",
-]);
+const OPTIONAL_COMMON_SKILLS: ReadonlySet<string> = COMMON_SKILL_CONTRACT.candidates;
 
 /** Resolve a name to a repo skill dir. A grouped name never falls back to a basename. */
 function findRepoSkill(name: string): string | undefined {
@@ -245,9 +304,9 @@ function explicitSkillPaths(text: string): string[] {
 	return [...refs];
 }
 
-/** Bold skill names in a profession's `## Skills` section. */
-function skillListNames(text: string): string[] {
-	const section = sectionAfterHeading(text, /^##\s+Skills\s*$/m);
+/** Bold `**name**` tokens in the section under a `## <heading>` line. */
+function boldNamesInSection(text: string, heading: RegExp): string[] {
+	const section = sectionAfterHeading(text, heading);
 	const names = new Set<string>();
 	const re = /\*\*([a-z0-9-]+)\*\*/g;
 	let match: RegExpExecArray | null;
@@ -255,13 +314,41 @@ function skillListNames(text: string): string[] {
 	return [...names];
 }
 
-/** Top-level `skills` and `alwaysLoad` arrays in a pi/opencode YAML template. */
-function templateSkillRefs(text: string): string[] {
+/** Bold skill names in a profession's `## Skills` section. */
+function skillListNames(text: string): string[] {
+	return boldNamesInSection(text, /^##\s+Skills\s*$/m);
+}
+
+/** Bold skill names in a profession's `## Startup` section (for example `**herdr**`). */
+function startupSkillNames(text: string): string[] {
+	return boldNamesInSection(text, /^##\s+Startup\s*$/m);
+}
+
+interface TemplateSkillParse {
+	refs: string[];
+	/** Keys present in the frontmatter whose value is not a parseable inline array. */
+	unparsable: string[];
+}
+
+/**
+ * Top-level `skills` and `alwaysLoad` arrays in a pi/opencode YAML template.
+ * A present key whose value is not an inline array (for example a block-style
+ * YAML list) is reported in `unparsable` and fails the check instead of
+ * silently yielding an empty list.
+ */
+function templateSkillRefs(text: string): TemplateSkillParse {
 	const refs = new Set<string>();
+	const unparsable: string[] = [];
 	for (const key of ["skills", "alwaysLoad"]) {
-		for (const ref of parseInlineArray(text, key) ?? []) refs.add(ref);
+		if (!new RegExp(`^${key}:`, "m").test(text)) continue;
+		const parsed = parseInlineArray(text, key);
+		if (parsed === undefined) {
+			unparsable.push(key);
+			continue;
+		}
+		for (const ref of parsed) refs.add(ref);
 	}
-	return [...refs];
+	return { refs: [...refs], unparsable };
 }
 
 /** `skill://.../skills/<ref>` targets in a kiro template's `resources` list. */
@@ -277,10 +364,12 @@ describe("condition 1: named skill paths resolve", () => {
 		test(`profession ${file}`, () => {
 			const text = readText(path.join(professionsDir, file));
 			// Explicit `skills/group/name` paths must live in this repo. Bold names
-			// in the `## Skills` list may also be installed common skills.
+			// in the `## Skills` list and in a `## Startup` procedure may also be
+			// installed common skills.
 			const refs = [
 				...explicitSkillPaths(text).map((ref) => ({ ref, repoOnly: true })),
 				...skillListNames(text).map((ref) => ({ ref, repoOnly: false })),
+				...startupSkillNames(text).map((ref) => ({ ref, repoOnly: false })),
 			];
 			const failures = refs
 				.map(({ ref, repoOnly }) => ({ ref, result: resolveSkillRef(ref, { repoOnly }) }))
@@ -292,11 +381,14 @@ describe("condition 1: named skill paths resolve", () => {
 
 	for (const file of fs.readdirSync(piFrontmattersDir).filter((name) => name.endsWith(".yaml")).sort()) {
 		test(`pi frontmatter ${file}`, () => {
-			const refs = templateSkillRefs(readText(path.join(piFrontmattersDir, file)));
-			const failures = refs
-				.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
-				.filter((entry) => !entry.result.ok)
-				.map((entry) => `${entry.ref}: ${entry.result.detail}`);
+			const { refs, unparsable } = templateSkillRefs(readText(path.join(piFrontmattersDir, file)));
+			const failures = [
+				...unparsable.map((key) => `${key}: present but not an inline array (use [\"...\"] )`),
+				...refs
+					.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
+					.filter((entry) => !entry.result.ok)
+					.map((entry) => `${entry.ref}: ${entry.result.detail}`),
+			];
 			assert.deepEqual(failures, [], `${file} names dead skills`);
 		});
 	}
@@ -305,11 +397,14 @@ describe("condition 1: named skill paths resolve", () => {
 	// their `skill:` entries are runtime permission names, not repo skill paths.
 	for (const file of fs.readdirSync(opencodeFrontmattersDir).filter((name) => name.endsWith(".yaml")).sort()) {
 		test(`opencode frontmatter ${file}`, () => {
-			const refs = templateSkillRefs(readText(path.join(opencodeFrontmattersDir, file)));
-			const failures = refs
-				.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
-				.filter((entry) => !entry.result.ok)
-				.map((entry) => `${entry.ref}: ${entry.result.detail}`);
+			const { refs, unparsable } = templateSkillRefs(readText(path.join(opencodeFrontmattersDir, file)));
+			const failures = [
+				...unparsable.map((key) => `${key}: present but not an inline array (use [\"...\"] )`),
+				...refs
+					.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
+					.filter((entry) => !entry.result.ok)
+					.map((entry) => `${entry.ref}: ${entry.result.detail}`),
+			];
 			assert.deepEqual(failures, [], `${file} names dead skills`);
 		});
 	}
@@ -332,6 +427,24 @@ describe("condition 1: named skill paths resolve", () => {
 			assert.deepEqual(failures, [], `${file} names dead skills`);
 		});
 	}
+});
+
+// --- condition 1: strict frontmatter list parse -------------------------------
+
+describe("condition 1: frontmatter skill list parse", () => {
+	test("a present but block-style list is reported as unparsable", () => {
+		const block = 'skills:\n  - "a/*"\nalwaysLoad: ["common/simplified-technical-english"]\n';
+		const parsed = templateSkillRefs(block);
+		assert.deepEqual(parsed.unparsable, ["skills"], "a block-style skills list must not pass silently");
+		assert.deepEqual(parsed.refs, ["common/simplified-technical-english"]);
+	});
+
+	test("inline arrays parse and report no error", () => {
+		const inline = 'skills: ["a/*", "common/ste"]\nalwaysLoad: ["common/ste"]\n';
+		const parsed = templateSkillRefs(inline);
+		assert.deepEqual(parsed.unparsable, []);
+		assert.deepEqual(parsed.refs, ["a/*", "common/ste"]);
+	});
 });
 
 // --- condition 2: SKILL.md name equals its folder -----------------------------
@@ -430,6 +543,23 @@ describe("condition 5: pi alwaysLoad matches the profession Startup list", () =>
 			);
 		});
 	}
+
+	// T28 tailored rule: the overseer Startup is a numbered procedure, so exact
+	// list parity does not apply. Every alwaysLoad entry must still be a skill the
+	// frontmatter declares.
+	test("pi overseer alwaysLoad is a subset of its declared skills", () => {
+		const frontmatterFile = path.join(piFrontmattersDir, "overseer.yaml");
+		assert.ok(fs.existsSync(frontmatterFile), "missing pi frontmatter for overseer");
+		const text = readText(frontmatterFile);
+		const skills = parseInlineArray(text, "skills") ?? [];
+		const alwaysLoad = parseInlineArray(text, "alwaysLoad") ?? [];
+		const skillNames = new Set(skills.map((ref) => ref.split("/").pop() ?? ref));
+		const undeclared = alwaysLoad
+			.map((ref) => ref.split("/").pop() ?? ref)
+			.filter((name) => !skillNames.has(name))
+			.sort();
+		assert.deepEqual(undeclared, [], "overseer alwaysLoad names a skill it does not declare in skills");
+	});
 });
 
 // --- condition 6: study and note line caps ------------------------------------
