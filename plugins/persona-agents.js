@@ -131,9 +131,8 @@ function parseAgentFromStubComment(text, log = silentLogger) {
   }
 
   // Split agent name on FIRST hyphen to separate theme from profession.
-  // Using first hyphen rather than last supports multi-word profession names
-  // (e.g. "implementer-python", "implementer-react") while remaining backward
-  // compatible since no existing theme contains a hyphen.
+  // Using first hyphen rather than last supports future multi-word profession
+  // names while remaining backward compatible since no theme contains a hyphen.
   const firstHyphen = agentName.indexOf('-');
   if (firstHyphen === -1) {
     log.warn('parseAgentFromStubComment: no hyphen in agentName', { agentName });

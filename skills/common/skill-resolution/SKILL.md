@@ -13,12 +13,11 @@ The repo skill is the fallback.
 
 Apply these rules in order. Stop at the first match.
 
-1. Agent name: `implementer-python` is python. `implementer-react` is reactjs.
-2. Repo marker: `Cargo.toml` is rust. `pyproject.toml`, `setup.py`, or
+1. Repo marker: `Cargo.toml` is rust. `pyproject.toml`, `setup.py`, or
    `requirements.txt` is python. `package.json` with a `react` or `next`
    dependency is reactjs.
-3. Task text words: rust, python, react, frontend, ui, component, tsx, jsx.
-4. No match: do not override. Follow the repo skills.
+2. Task text words: rust, python, react, frontend, ui, component, tsx, jsx.
+3. No match: do not override. Follow the repo skills.
 
 ## Step 2: Test for the Common Skill
 

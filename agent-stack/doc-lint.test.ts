@@ -34,9 +34,9 @@ const kiroTemplatesDir = path.join(repoRoot, "agent-templates", "kiro");
 
 /**
  * The one named constant for the expected profession count per theme.
- * T7 retires the two specialist implementers and lowers this to 8.
+ * T7 retired the two specialist implementers, so each theme has 8.
  */
-const EXPECTED_PROFESSIONS_PER_THEME = 10;
+const EXPECTED_PROFESSIONS_PER_THEME = 8;
 
 /** Agents whose pi `alwaysLoad` must equal the profession Startup skill list. */
 const STARTUP_PARITY_AGENTS = ["orchestrator"];

@@ -418,8 +418,6 @@ function piHasBashTool(agent: string): boolean {
 
 const OPENCODE_AGENTS = [
 	"implementer",
-	"implementer-python",
-	"implementer-react",
 	"researcher",
 	"reviewer",
 	"tester",
@@ -793,12 +791,7 @@ const FILE_MIGRATION_COMMANDS = [
 	"env cp src/a dest/b",
 ];
 
-const FILE_MIGRATION_TARGETS = [
-	"orchestrator",
-	"implementer",
-	"implementer-python",
-	"implementer-react",
-];
+const FILE_MIGRATION_TARGETS = ["orchestrator", "implementer"];
 
 describe("file-migration permission doctrine (cp/mv/rsync)", () => {
 	const MIGRATION_RESOURCES = ["cp *", "mv *", "rsync *"];

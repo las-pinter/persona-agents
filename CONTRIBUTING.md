@@ -61,6 +61,12 @@ pair it:
 4. For OpenCode: generates a `.md` file with YAML frontmatter + a stub comment
 5. Copies resource files (personas, professions, skills) to the target directory
 
+> **Note:** The installer never deletes files. When a profession is retired, its
+> old agent files stay in `~/.kiro/agents/` and
+> `~/.config/opencode/agents/`, and its profession file and templates stay in
+> the installed config tree. Remove those stale files by hand. Release notes
+> state the manual removal; the release text is written at release time.
+
 ### 2. Runtime Plugin Injection (OpenCode)
 
 OpenCode agent files no longer contain inline persona content. Instead they use
@@ -141,8 +147,6 @@ persona-agents/
 │   │   ├── orchestrator.json
 │   │   ├── planner.json
 │   │   ├── implementer.json
-│   │   ├── implementer-python.json
-│   │   ├── implementer-react.json
 │   │   ├── reviewer.json
 │   │   ├── tester.json
 │   │   ├── researcher.json
@@ -153,8 +157,6 @@ persona-agents/
 │   │       ├── orchestrator.yaml
 │   │       ├── planner.yaml
 │   │       ├── implementer.yaml
-│   │       ├── implementer-python.yaml
-│   │       ├── implementer-react.yaml
 │   │       ├── reviewer.yaml
 │   │       ├── tester.yaml
 │   │       ├── researcher.yaml
@@ -191,8 +193,6 @@ persona-agents/
 │   ├── orchestrator.md
 │   ├── planner.md
 │   ├── implementer.md
-│   ├── implementer-python.md
-│   ├── implementer-react.md
 │   ├── reviewer.md
 │   ├── tester.md
 │   ├── researcher.md
@@ -316,9 +316,8 @@ AT LOAD TIME (extension factory / session start):
   theme-specific values. All 5 placeholders are substituted at install time.
   Pi frontmatters are bare YAML and use no placeholders.
 - **Three-platform output:** The same `agents.json` + templates produce agents
-  for Kiro CLI and OpenCode from a single source. Pi exposes only the 8
-  professions that have pi frontmatters; `implementer-python` and
-  `implementer-react` are not pi agents.
+  for Kiro CLI and OpenCode from a single source. Pi exposes the same 8
+  professions; every profession has a pi frontmatter.
 - **On-demand loading:** The plugin loads prompts at runtime only when a stub
   comment is encountered — no pre-loading, no startup cost.
 - **Self-contained plugin:** The plugin resolves resource paths relative to its
@@ -377,9 +376,8 @@ AT LOAD TIME (extension factory / session start):
 
 Adding a new theme means creating a whole new cast of characters (e.g., a
 cyberpunk crew, a fantasy guild, a team of kitchen appliances). Each theme
-needs a persona mapping for every profession. The two implementer variants,
-`implementer-python` and `implementer-react`, share one persona file — so a
-theme has 8 distinct persona files.
+needs a persona mapping for every profession. A theme has 8 professions and 8
+distinct persona files, one per profession.
 
 > **Note:** The OpenCode plugin is fully data-driven — adding a new theme
 > requires **no plugin code changes**. Just add to `agents.json` and create
@@ -391,7 +389,7 @@ theme has 8 distinct persona files.
 
 1. **Add the theme to `agents.json`:**
 
-   Add a new top-level key with all 10 professions. Follow the existing format:
+   Add a new top-level key with all 8 professions. Follow the existing format:
 
    ```json
    {
@@ -403,8 +401,6 @@ theme has 8 distinct persona files.
        },
        "planner": { ... },
        "implementer": { ... },
-       "implementer-python": { ... },
-       "implementer-react": { ... },
        "reviewer": { ... },
        "tester": { ... },
        "researcher": { ... },
@@ -419,9 +415,8 @@ theme has 8 distinct persona files.
    ```
 
 2. **Create the persona markdown files** under `personas/{new-theme}/`.
-   The theme needs 10 `agents.json` entries but only 8 distinct persona
-   files: the `implementer-python` and `implementer-react` entries reuse the
-   base `implementer` persona file.
+   The theme needs 8 `agents.json` entries and 8 distinct persona
+   files, one per profession.
 
    Each file should follow the [persona format](#adding-or-modifying-personas).
 
@@ -445,7 +440,7 @@ theme has 8 distinct persona files.
 
 ### What you get
 
-The installer will generate 10 agents (one per profession) for both Kiro and
+The installer will generate 8 agents (one per profession) for both Kiro and
 OpenCode targets, each combining the template, profession rules, and your new
 persona. For OpenCode, the generated `.md` files will contain the YAML
 frontmatter plus a stub comment for runtime injection. Your theme's agents are
@@ -914,7 +909,7 @@ Once the dry run looks correct, run for real:
 
 After running, verify:
 
-- **All 80 agents generated** — 8 themes × 10 professions = 80 agents per
+- **All 64 agents generated** — 8 themes × 8 professions = 64 agents per
   target. Use `ls ~/.kiro/agents/ | wc -l` or
   `ls ~/.config/opencode/agents/ | wc -l`.
 - **Valid JSON** (Kiro): `jq . ~/.kiro/agents/*.json > /dev/null`
@@ -965,7 +960,7 @@ After running, verify:
 
    ```bash
    git add .
-   git commit -m "feat: add cyberpunk theme with 10 professions"
+   git commit -m "feat: add cyberpunk theme with 8 professions"
    ```
 
    Human contributors should follow the conventional commits format:
@@ -1002,7 +997,7 @@ Before submitting, check:
 - [ ] `node --check plugins/persona-agents.js` parses (plugin syntax)
 - [ ] Persona-agents plugin is installed (`~/.config/opencode/plugins/persona-agents.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
-- [ ] All 80 agents generate (for both targets)
+- [ ] All 64 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output
 - [ ] OpenCode agent `.md` files contain valid stub comments
       (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`)
@@ -1012,7 +1007,7 @@ Before submitting, check:
       `## Core Behavior`, `## When to Defer`, `## Failure Modes`,
       `## Output Format`, `## Skills`)
 - [ ] Templates include proper tool permissions (not too permissive)
-- [ ] New themes are added to ALL 10 professions
+- [ ] New themes are added to ALL 8 professions
 - [ ] New professions are added to ALL existing themes in `agents.json`
 - [ ] New files have no hardcoded theme/profession values (use placeholders)
 
@@ -1101,11 +1096,9 @@ First paragraph: role summary.
 Required sections: `## Core Behavior` (with precedence rule),
 `## When to Defer`, `## Failure Modes`, `## Output Format`, `## Skills`.
 
-> **Note:** `professions/implementer.md` is the base implementer profession.
-> The variants `professions/implementer-python.md` and
-> `professions/implementer-react.md` carry language-specific guidance, with
-> matching Kiro and OpenCode templates and `agents.json` entries. Pi has no
-> variant frontmatter, so pi exposes only the base `implementer`.
+> **Note:** `professions/implementer.md` is the only implementer profession.
+> Language-specific guidance lives in the implementer skills and in
+> `common/skill-resolution`, not in a separate profession.
 
 > **Note:** Mascot/novelty professions that don't perform tool-based work
 > (e.g., `professions/mascot.md`) may omit most or all of these sections.
