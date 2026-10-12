@@ -15,6 +15,7 @@ welcome here.
 - [Adding a New Profession](#adding-a-new-profession)
 - [Adding or Modifying Personas](#adding-or-modifying-personas)
 - [Working with Templates](#working-with-templates)
+- [Research and MCP Tool Names per Stack](#research-and-mcp-tool-names-per-stack)
 - [Adding Skills](#adding-skills)
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
@@ -778,6 +779,20 @@ possible — `"git status *"` over `"git*"`.
 | `{{PERSONA_FILE}}` | `agents.json[theme][profession].personaFile` | Resource/prompt file references |
 | `{{WELCOME_MESSAGE}}` | `agents.json[theme][profession].welcomeMessage` | Kiro welcome message |
 | `{{PROFESSION}}` | Second-level key in `agents.json` | Skill paths, agent names |
+
+## Research and MCP Tool Names per Stack
+
+Each stack names the same research capability differently. Use this table to
+translate a capability name in `skills/researcher/source-selection/` into the
+name for your stack. The pi server names come from `settings/mcp.json.example`;
+the pi tool form is `mcp__<server>__<tool>`.
+
+| Capability | pi | kiro | opencode |
+|---|---|---|---|
+| Web search | `mcp__exa__web_search_exa` | `@exa` or `web_search` | `websearch` or `exa*` |
+| Web fetch | `mcp__exa__web_fetch_exa` | `@exa` | `exa*` |
+| Library and API docs | `mcp__context7__*` | `@context7` | `context7*` |
+| Repository architecture | `mcp__deepwiki__*` | `@deepwiki` | `deepwiki*` |
 
 ## Adding Skills
 

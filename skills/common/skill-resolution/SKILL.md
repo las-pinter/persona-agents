@@ -58,6 +58,9 @@ read prompts the user:
 cat "<printed path>"
 ```
 
+On kiro, read the skill file directly. Kiro `resources` do not bind the domain
+candidate names, so the resolver must load them by path.
+
 ## Step 4: Apply Precedence
 
 A present primary common skill is loaded, and it replaces the repo domain

@@ -24,7 +24,7 @@ for Simplified Technical English. The standard is also called STE.
 - Do not use jargon, slang, or idioms.
 - Do not invent words or abbreviations.
 - Do not nominalize. Say "decide", not "make a decision".
-- Do not stack nouns. Say "the pressure of the fuel" instead of "the fuel pressure". Split long chains of nouns with small words.
+- A noun cluster can have up to three nouns (ASD-STE100). Split a longer chain with small words. Say "the pressure of the fuel" instead of "the fuel pressure sensor assembly".
 - Cut filler words. Cut "please", "just", "simply", and "basically". Say "to", not "in order to". Say "because", not "due to the fact that".
 - Keep fixed professional vocabulary as it is. Keep severity names, tool names, and command names unchanged.
 

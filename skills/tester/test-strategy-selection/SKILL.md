@@ -129,7 +129,9 @@ The shape debate is mostly semantic. What matters: tests are fast, reliable, and
 
 ## Coverage Targets
 
-Use as signals, not goals:
+The quality-gate skills enforce one number: **80% line coverage** (Python and
+Rust). Treat the targets below as signals, not gates. A higher target for
+business logic or utility code is a goal, not a failure.
 
 | Code Type | Target | Test Level |
 |-----------|--------|------------|

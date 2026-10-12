@@ -69,10 +69,20 @@ The `## Task Breakdown` section holds one table. Columns:
 
 ### Complexity Scale
 
-- **Small** — under 1 hour, one file or function, no cross-cutting concerns.
-- **Medium** — half a day, a few files or cross-module work.
-- **Large** — multiple days, cross-cutting changes, or large unknowns.
-- Mark a task `unknown` when you cannot estimate it with confidence.
+Score a task by two axes: size and unknowns.
+
+- **Size** — the files or areas the task touches:
+  - **Small** — one file or one function.
+  - **Medium** — a few files in one area.
+  - **Large** — many files, or more than one area.
+- **Unknowns** — what is not known yet:
+  - **None** — every step is clear.
+  - **Low** — one question with an obvious answer.
+  - **Medium** — a few questions or an unverified assumption.
+  - **High** — a blocking unknown. Add an investigation task first.
+
+Write the estimate as `size / unknowns`, for example `Medium / Low`. When you
+cannot estimate either axis with confidence, mark the task `unknown`.
 
 ### Task-Splitting Patterns
 

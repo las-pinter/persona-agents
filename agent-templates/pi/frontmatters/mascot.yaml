@@ -1,8 +1,6 @@
 name: mascot
 description: Light-hearted companion agent for entertainment and moral support; minimal tool access
 tools: [read]
-skills: ["common/simplified-technical-english"]
-alwaysLoad: ["common/simplified-technical-english"]
 permissions:
   mode: deny-by-default
   allow:

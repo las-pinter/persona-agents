@@ -169,7 +169,7 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 
 | Cause | Frequency | Fix |
 |-------|-----------|-----|
-| Async wait issues | ~45% | Replace `sleep()` with condition-based waits + explicit timeouts |
+| Async wait issues | Most common | Replace `sleep()` with condition-based waits + explicit timeouts |
 | Shared state pollution | Common | Each test creates its own data; transaction rollback |
 | Test order dependencies | Common | Randomize test order; each test self-contained |
 | Non-deterministic data | Common | Fixed seeds; mock time/random |

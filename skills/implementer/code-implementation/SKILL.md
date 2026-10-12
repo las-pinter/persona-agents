@@ -66,6 +66,11 @@ Run in this order. Fix all issues before advancing to the next step:
 Type Check → Lint → Existing Tests → Build → New Tests
 ```
 
+The language gate skills (`python-quality-gates`, `rust-quality-gates`,
+`react-quality-gates`) refine this phase. They add language tools and
+thresholds. They do not replace this order. A language gate is not a rival
+order; follow it inside Phase 4.
+
 1. **Type check** — zero tolerance for type errors (tsc, mypy, cargo check)
 2. **Lint** — zero warnings, matching the project's exact config
 3. **Existing tests** — full suite must pass; if a test was failing before your change, report it

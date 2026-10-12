@@ -11,6 +11,15 @@ Load and follow the **persona-free-documents** skill (`skills/common/persona-fre
 
 ---
 
+## Tool Names Per Stack
+
+Tool names differ by stack. Read the table in
+[CONTRIBUTING.md](../../../CONTRIBUTING.md#research-and-mcp-tool-names-per-stack).
+This skill names the capability (Context7, DeepWiki, Exa). Replace each name
+with the name for your stack.
+
+---
+
 ## Step 0: Pre-research — Check Existing Notes First
 
 Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
@@ -24,6 +33,29 @@ Before choosing a source, check whether this topic was already researched. Do no
    - Use `YYYY-MM-DD-<topic>.md` naming; check existing filenames first to avoid near-duplicates.
    - List prior reports it builds on under a `Related report:` line.
    - Append `date + filename + short topic` to `<USER_HOME>/agent-notes/researcher/index.md` (create it if missing).
+
+### Freshness Rule
+
+Reuse a prior report only for a stable topic. Re-verify before reuse for a
+VOLATILE topic. A volatile topic changes after the report date.
+
+Volatile topics include:
+
+- software versions and release notes;
+- prices and availability;
+- live documentation that changes without a version;
+- current events and recent news.
+
+Stable topics include concepts, architectures, history, and published
+standards. A prior report may still answer a stable topic.
+
+For a volatile topic:
+
+1. Re-run the search. Do not reuse the prior report.
+2. Compare the new result with the prior report.
+3. Update the report or write a new one. Correct the index.
+
+When unsure if a topic is volatile: treat it as volatile.
 
 ---
 
@@ -77,9 +109,9 @@ Is this about a SPECIFIC library/framework's API, config, or usage?
 
 ### Context7 — API Reference, Version-Specific Docs
 
-Always resolve a library ID first:
+Always resolve a library ID first (resolve name per stack: see the table above):
 ```
-context7_resolve(libraryName="Next.js", query="...")
+resolve(libraryName="Next.js", query="...")
 → Use the resolved /org/project ID for the actual query
 → Pin to version if specified: /vercel/next.js/v14.3.0
 ```
@@ -97,12 +129,14 @@ Use exact `owner/repo` format. Ask structural questions: "How does the routing s
 ### Exa — Current Info, Best Practices, Comparisons
 
 Use natural language describing the ideal page, not keywords:
-- ✅ "blog post comparing React Server Components vs Client Components performance 2025"
+- ✅ "blog post comparing React Server Components vs Client Components performance this year"
 - ❌ "React Server Components vs Client Components"
 
-Use date filters for current topics: `after:2025` or `after:2026`.
+Use a date filter for current topics. Compute the date from the current date
+(use the `date` command). Do not hardcode a year. Set the start date 12 months
+back from today.
 
-**Quality signals:** Published within 12 months (for fast-moving topics), authoritative source, covers the topic in depth. If weak → fetch the full page with `exa_web_fetch_exa` on a promising URL.
+**Quality signals:** Published within 12 months (for fast-moving topics), authoritative source, covers the topic in depth. If weak → fetch the full page with the Exa fetch call on a promising URL.
 
 ---
 
@@ -127,7 +161,7 @@ Use date filters for current topics: `after:2025` or `after:2026`.
   ↓ (still poor)
 3rd: Exa (broadest coverage)
   ↓ (still poor)
-4th: exa_web_fetch_exa on specific promising URLs
+4th: the Exa fetch call on specific promising URLs
   ↓ (still poor)
 Report: "Unable to find satisfactory results — here's what was tried"
 ```

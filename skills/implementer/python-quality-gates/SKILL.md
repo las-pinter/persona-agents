@@ -15,14 +15,16 @@ Every Python implementation must pass these gates before delivery. Run them in t
 
 - `mypy --strict` (or the project's `[tool.mypy]` config) — zero errors required.
 - If the project uses Pyright or Pyrefly, use the project's configured tool.
-- Type hints required on ALL public functions — parameters, return values, and internal helpers.
-- No `Any` unless absolutely unavoidable — document why with `# type: ignore[no-any-...]`.
+- Type hints are required on all public functions and methods — parameters and
+  return values. A helper may omit hints when its types are obvious.
+- No `Any` unless absolutely unavoidable — document why with
+  `# type: ignore[no-any-return]`.
 
 ## 2. Lint & Format — MUST HAVE
 
 - `ruff check --fix` — zero warnings (respect `[tool.ruff]` in pyproject.toml).
 - `ruff format` — formatting must be clean.
-- Default rulesets: `E`, `F`, `I`, `B`, `UP`, `SIM`, `COM` (respect project overrides).
+- Default rulesets: `E`, `F`, `I`, `B`, `UP`, `SIM` (respect project overrides). Do not enable `COM` (flake8-commas) — it conflicts with `ruff format`.
 - Replace legacy tools (flake8, black, isort) with Ruff unless the project explicitly uses them.
 
 ## 3. Tests & Coverage — MUST HAVE
