@@ -226,7 +226,8 @@ persona-agents/
 │   └── common/
 │       ├── journal-management-generic/SKILL.md
 │       ├── project-notes/SKILL.md
-│       └── simplified-technical-english/SKILL.md
+│       ├── simplified-technical-english/SKILL.md
+│       └── skill-resolution/SKILL.md
 ├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
 │   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
 │   ├── permission-auditor.js          # Read-only permission audit logger

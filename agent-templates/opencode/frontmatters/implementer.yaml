@@ -574,6 +574,33 @@ permissions:
   - action: skill
     resource: rust-implementation
     effect: allow
+  - action: skill
+    resource: skill-resolution
+    effect: allow
+  - action: skill
+    resource: rust-best-practices
+    effect: allow
+  - action: skill
+    resource: rust-async-patterns
+    effect: allow
+  - action: skill
+    resource: python-design-patterns
+    effect: allow
+  - action: skill
+    resource: python-testing-patterns
+    effect: allow
+  - action: skill
+    resource: vercel-react-best-practices
+    effect: allow
+  - action: skill
+    resource: web-design-guidelines
+    effect: allow
+  - action: skill
+    resource: frontend-design
+    effect: allow
+  - action: skill
+    resource: shadcn
+    effect: allow
   - action: shell
     resource: "*eval*"
     effect: deny

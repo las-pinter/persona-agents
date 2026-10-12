@@ -284,3 +284,4 @@ permission:
     code-implementation: allow
     python-design-patterns: allow
     python-testing-patterns: allow
+    skill-resolution: allow

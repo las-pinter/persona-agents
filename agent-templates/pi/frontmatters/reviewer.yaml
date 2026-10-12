@@ -1,8 +1,8 @@
 name: reviewer
 description: Senior code reviewer for quality, security, and maintainability; read-only analysis
 tools: [bash, read, find, ls, grep, todo]
-skills: ["reviewer/*", "common/simplified-technical-english"]
-alwaysLoad: ["common/simplified-technical-english"]
+skills: ["reviewer/*", "common/simplified-technical-english", "common/skill-resolution"]
+alwaysLoad: ["common/simplified-technical-english", "common/skill-resolution"]
 permissions:
   mode: deny-by-default
   allow:

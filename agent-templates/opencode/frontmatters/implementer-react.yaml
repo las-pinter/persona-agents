@@ -270,3 +270,5 @@ permission:
     frontend-design: allow
     vercel-react-best-practices: allow
     web-design-guidelines: allow
+    shadcn: allow
+    skill-resolution: allow
