@@ -24,6 +24,14 @@ import {
 	getSidebarCompositor,
 } from "./sidebar.ts";
 import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
+
+/**
+ * The outer pi session exports PI_AGENT_TREE_LOG. Its live tree log would fill
+ * the panel and hide the width rule under test. Save the value so each test can
+ * run against an empty tree and then restore the outer environment.
+ */
+const ORIGINAL_TREE_LOG = process.env[ENV_TREE_LOG];
 
 /** Raw terminal columns before the compositor narrows them. */
 const RAW_COLUMNS = 200;
@@ -74,6 +82,8 @@ afterEach(() => {
 	if (currentDir !== null) rmSync(currentDir, { recursive: true, force: true });
 	currentDir = null;
 	delete process.env[SIDEBAR_CONFIG_ENV];
+	if (ORIGINAL_TREE_LOG === undefined) delete process.env[ENV_TREE_LOG];
+	else process.env[ENV_TREE_LOG] = ORIGINAL_TREE_LOG;
 });
 
 /**
@@ -86,6 +96,8 @@ function setup(config: { enabled?: boolean; width?: number }): Harness {
 	const configPath = join(dir, "persona-agents-sidebar.json");
 	writeFileSync(configPath, JSON.stringify(config));
 	process.env[SIDEBAR_CONFIG_ENV] = configPath;
+	// Force an empty tree so the test never reads the live tree log.
+	delete process.env[ENV_TREE_LOG];
 
 	const writes: string[] = [];
 	const terminal: FakeTerminal = {
