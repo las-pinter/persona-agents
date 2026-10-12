@@ -23,8 +23,10 @@ permissions:
     - { tool: write, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
     - { tool: subagent, match: "." }
     - { tool: ask_user_question, match: "." }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|merge-base|tag\\s+(-l|--list))\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|rev-list|tag\\s+(-l|--list))\\b" }
+    # `git fetch` is deliberately not allowed because it writes refs (tags, HEAD, prefetch/refmap); it stays denied.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+tag\\s*$" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+(--version|auth\\s+status)\\s*$" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:

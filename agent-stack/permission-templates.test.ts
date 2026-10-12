@@ -618,6 +618,12 @@ const BRANCH_FLAG_ORDER = [
 const HIDDEN_WRITES = [
 	"git log && git push",
 	"echo $(git --paginate push)",
+	// kiro matches the raw command string, so a wildcard allow would admit a
+	// chained gated write. These exact-string reads must not allow the chain.
+	"git fetch origin && git push",
+	"git rev-parse HEAD && git push",
+	"git cat-file -t HEAD && gh pr create",
+	"git fetch origin ; git commit -m x",
 ];
 
 const READ_ONLY_BRANCH_PLAIN = [
@@ -772,6 +778,140 @@ describe("pi: mutating read-only git forms are gated", () => {
 	test("all agents: plain read-only reflog/fetch/remote are not denied", () => {
 		for (const agent of ["orchestrator", "implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of READONLY_SAFE) assert.notEqual(verdict(agent, command), "deny", `${agent}: ${command}`);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Orchestrator read-only git and gh allows. The orchestrator may inspect refs
+// (`git rev-parse`/`cat-file`/`rev-list`) and read its GitHub CLI version and
+// auth state (`gh --version`/`gh auth status`). Kiro matches the raw command
+// string, so those entries stay exact strings: an argument-bearing form asks by
+// omission, and a chained gated write cannot ride the allow. opencode already
+// allowed the git read forms and only gains the two gh entries. `git fetch` is
+// deliberately not allowed on pi or kiro: it writes refs, so it stays denied.
+// opencode keeps its pre-existing exact `git fetch` allow.
+// ---------------------------------------------------------------------------
+
+const PI_ORCH_GIT_READS = [
+	"git rev-parse --short HEAD",
+	"git cat-file -t HEAD",
+	"git rev-list --count HEAD",
+];
+
+const ORCH_GH_READS = ["gh --version", "gh auth status"];
+
+// `git fetch` writes refs (tags, HEAD, prefetch/refmap). It is not on the pi
+// allow list, so it must not allow.
+const PI_ORCH_FETCH_NOT_ALLOW = [
+	"git fetch",
+	"git fetch origin",
+	"git fetch --tags origin",
+	"git fetch -t origin",
+	"git fetch --update-head-ok origin",
+];
+
+// The `--show-token` flag prints the GitHub auth token. It must not ride the
+// `gh auth status` allow. pi denies by default; kiro and opencode fall to ask.
+const GH_SHOW_TOKEN = "gh auth status --show-token";
+
+// kiro allowedCommands entry -> the bare probe it must allow. The entries are
+// exact strings. A wildcard would let a chained gated write ride the allow,
+// because kiro matches the raw command string.
+const KIRO_ORCH_GIT_ALLOWS: Array<[string, string]> = [
+	["git rev-parse", "git rev-parse"],
+	["git cat-file", "git cat-file"],
+	["git rev-list", "git rev-list"],
+];
+
+// Argument-bearing forms must ask by omission on kiro. An exact allow cannot
+// match them, and kiro has no ask tier, so an unmatched command asks. This is
+// the fail-safe that stops a chained gated write from riding the allow.
+const KIRO_ORCH_GIT_ASKS = [
+	"git rev-parse --short HEAD",
+	"git cat-file -t HEAD",
+	"git rev-list --count HEAD",
+	"git rev-parse HEAD && git push",
+];
+
+// opencode git read allows that must already exist for the orchestrator.
+const OPENCODE_ORCH_GIT_ALLOWS = ["git rev-parse", "git cat-file", "git rev-list"];
+
+describe("orchestrator: read-only git and gh allows", () => {
+	test("pi orchestrator: git reads and gh reads allow", () => {
+		for (const command of [...PI_ORCH_GIT_READS, ...ORCH_GH_READS]) {
+			assert.equal(verdict("orchestrator", command), "allow", command);
+		}
+	});
+
+	test("pi orchestrator: git fetch is not allow", () => {
+		for (const command of PI_ORCH_FETCH_NOT_ALLOW) {
+			assert.notEqual(verdict("orchestrator", command), "allow", command);
+		}
+	});
+
+	test("pi orchestrator: gh --show-token does not ride the gh allow", () => {
+		assert.notEqual(verdict("orchestrator", GH_SHOW_TOKEN), "allow");
+		// pi is deny-by-default: no allow and no ask rule matches --show-token.
+		assert.equal(verdict("orchestrator", GH_SHOW_TOKEN), "default");
+	});
+
+	test("kiro orchestrator: exact git/gh allowedCommands allow the bare form", () => {
+		const allowed = loadKiroConfig("orchestrator").toolsSettings?.shell?.allowedCommands ?? [];
+		for (const [entry, probe] of KIRO_ORCH_GIT_ALLOWS) {
+			assert.ok(allowed.includes(entry), `missing allowedCommands ${entry}`);
+			assert.equal(kiroVerdict("orchestrator", probe), "allow", probe);
+		}
+		for (const entry of ORCH_GH_READS) {
+			assert.ok(allowed.includes(entry), `missing allowedCommands ${entry}`);
+			assert.equal(kiroVerdict("orchestrator", entry), "allow", entry);
+		}
+	});
+
+	test("kiro orchestrator: argument-bearing git reads ask by omission", () => {
+		for (const command of KIRO_ORCH_GIT_ASKS) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("kiro orchestrator: git fetch is absent from the allow list", () => {
+		const allowed = loadKiroConfig("orchestrator").toolsSettings?.shell?.allowedCommands ?? [];
+		assert.ok(!allowed.includes("git fetch"), "git fetch must not be an allowedCommand");
+		for (const command of PI_ORCH_FETCH_NOT_ALLOW) {
+			assert.notEqual(kiroVerdict("orchestrator", command), "allow", command);
+		}
+	});
+
+	test("kiro orchestrator: no deniedCommands entry starts with git fetch", () => {
+		const denied = loadKiroConfig("orchestrator").toolsSettings?.shell?.deniedCommands ?? [];
+		assert.ok(
+			!denied.some((pattern) => pattern.startsWith("git fetch")),
+			"no deniedCommands entry may start with git fetch",
+		);
+	});
+
+	test("kiro orchestrator: gh --show-token falls to ask", () => {
+		assert.equal(kiroVerdict("orchestrator", GH_SHOW_TOKEN), "ask");
+	});
+
+	test("opencode orchestrator: gh read allows exist and allow", () => {
+		for (const resource of ORCH_GH_READS) {
+			assert.ok(hasOpenCodeRule("orchestrator", resource, "allow"), `missing {shell, ${resource}, allow}`);
+			assert.equal(opencodeVerdict("orchestrator", resource), "allow", resource);
+		}
+	});
+
+	test("opencode orchestrator: gh --show-token falls to ask", () => {
+		assert.equal(opencodeVerdict("orchestrator", GH_SHOW_TOKEN), "ask");
+	});
+
+	test("opencode orchestrator: git reads allow the bare form", () => {
+		for (const resource of OPENCODE_ORCH_GIT_ALLOWS) {
+			assert.ok(
+				hasOpenCodeRule("orchestrator", resource, "allow"),
+				`missing {shell, ${resource}, allow}`,
+			);
+			assert.equal(opencodeVerdict("orchestrator", resource), "allow", resource);
 		}
 	});
 });

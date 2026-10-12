@@ -152,6 +152,12 @@ permissions:
     resource: "git rev-list"
     effect: allow
   - action: shell
+    resource: "gh --version"
+    effect: allow
+  - action: shell
+    resource: "gh auth status"
+    effect: allow
+  - action: shell
     resource: "grep"
     effect: allow
   - action: shell
