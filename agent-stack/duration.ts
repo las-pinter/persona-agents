@@ -23,7 +23,11 @@ export function formatDuration(durationMs: number): string {
 /** Compact token count: 999, 1.5k, 12k, 1.0M. */
 export function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
-	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-	if (count < 1000000) return `${Math.round(count / 1000)}k`;
+	if (count < 1000000) {
+		if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
+		const thousands = Math.round(count / 1000);
+		// A value that would round to 1000k must roll up to M.
+		if (thousands < 1000) return `${thousands}k`;
+	}
 	return `${(count / 1000000).toFixed(1)}M`;
 }

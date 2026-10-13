@@ -471,31 +471,31 @@ test("a result without thinking fields renders no thinking line", () => {
 
 test("an active thinking run renders the live indicator", () => {
 	const tool = captureTool();
-	const result = makeSingle({ thinking: { thinking: true, thinkingStartedAt: Date.now(), thinkingMs: 0 } });
-	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
-	assert.ok(out.includes("🧠 thinking…"), out);
+	const result = makeSingle({ thinking: { thinking: true, thinkingStartedAt: 1_000, thinkingMs: 0 } });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, { now: 1_500 });
+	assert.ok(out.includes("🧠 thinking… 500ms"), out);
 });
 
 test("a running result shows the live elapsed in the header", () => {
 	const tool = captureTool();
-	const result = makeSingle({ exitCode: -1, runStartedAt: Date.now() - 2_500 });
-	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
-	assert.match(out.split("\n")[0], /⏱ 2\.\ds/);
+	const result = makeSingle({ exitCode: -1, runStartedAt: 2_500 });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, { now: 5_000 });
+	assert.equal(out.split("\n")[0], "⏳ tester (user) · ⏱ 2.5s");
 });
 
 test("a finished result shows no live elapsed", () => {
 	const tool = captureTool();
-	const result = makeSingle({ exitCode: 0, runStartedAt: Date.now() - 2_500 });
-	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	const result = makeSingle({ exitCode: 0, runStartedAt: 2_500 });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, { now: 5_000 });
 	assert.ok(!out.includes("⏱"), out);
 });
 
 test("a queued parallel task with no start time shows no live elapsed", () => {
 	const tool = captureTool();
 	// A queued task has no runStartedAt yet; only the running task shows ⏱.
-	const running = makeSingle({ agent: "alpha", exitCode: -1, runStartedAt: Date.now() - 2_500 });
+	const running = makeSingle({ agent: "alpha", exitCode: -1, runStartedAt: 2_500 });
 	const queued = makeSingle({ agent: "beta", exitCode: -1 });
-	const out = render(tool, makeResult(makeDetails("parallel", [running, queued])), false, {});
+	const out = render(tool, makeResult(makeDetails("parallel", [running, queued])), false, { now: 5_000 });
 	const alphaLine = out.split("\n").find((line) => line.includes("alpha"));
 	const betaLine = out.split("\n").find((line) => line.includes("beta"));
 	assert.ok(alphaLine?.includes("⏱"), out);
@@ -504,8 +504,8 @@ test("a queued parallel task with no start time shows no live elapsed", () => {
 
 test("a running single block with no output shows (running...)", () => {
 	const tool = captureTool();
-	const result = makeSingle({ exitCode: -1, runStartedAt: Date.now() });
-	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	const result = makeSingle({ exitCode: -1, runStartedAt: 5_000 });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, { now: 5_000 });
 	assert.ok(out.includes("(running...)"), out);
 	assert.ok(!out.includes("(no output)"), out);
 });

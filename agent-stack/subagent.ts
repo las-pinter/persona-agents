@@ -1179,8 +1179,11 @@ export default function (pi: ExtensionAPI) {
 
 			const mdTheme = getMarkdownTheme();
 
-			// pi-coding-agent 1.0.0 types lack `durationMs`; the 1.1.0 runtime supplies the run total.
-			const runDurationMs = (context as { durationMs?: number }).durationMs;
+			// The optional `now` is a test seam for the live-elapsed clock.
+			const runContext = context as { durationMs?: number; now?: number };
+			const runDurationMs = runContext.durationMs;
+			// Tests inject `now`. The live runtime omits it and reads the wall clock.
+			const now = runContext.now ?? Date.now();
 			const runDuration =
 				typeof runDurationMs === "number" && Number.isFinite(runDurationMs)
 					? ` ${theme.fg("dim", formatDuration(runDurationMs))}`
@@ -1204,7 +1207,7 @@ export default function (pi: ExtensionAPI) {
 
 			// Thinking is shown as a status line, never as raw reasoning text.
 			const thinkingLines = (r: SingleResult): string[] => {
-				const raw = formatThinkingIndicator(r.thinking, r.reasoningTokens, Date.now());
+				const raw = formatThinkingIndicator(r.thinking, r.reasoningTokens, now);
 				return raw ? raw.split("\n") : [];
 			};
 			const thinkingText = (r: SingleResult): string => {
@@ -1214,7 +1217,7 @@ export default function (pi: ExtensionAPI) {
 			// Live elapsed while the run is active; empty once the run ends.
 			const liveElapsed = (r: SingleResult): string =>
 				r.exitCode === -1 && typeof r.runStartedAt === "number"
-					? theme.fg("dim", " · ⏱ " + formatDuration(Date.now() - r.runStartedAt))
+					? theme.fg("dim", " · ⏱ " + formatDuration(now - r.runStartedAt))
 					: "";
 
 			if (details.mode === "single" && details.results.length === 1) {
