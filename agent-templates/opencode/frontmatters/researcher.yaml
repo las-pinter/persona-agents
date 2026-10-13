@@ -86,9 +86,6 @@ permissions:
     resource: "git grep"
     effect: allow
   - action: shell
-    resource: "git fetch"
-    effect: allow
-  - action: shell
     resource: "git rev-list"
     effect: allow
   - action: shell

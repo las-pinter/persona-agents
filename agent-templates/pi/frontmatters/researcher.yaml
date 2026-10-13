@@ -16,7 +16,7 @@ permissions:
     - { tool: write, match: "(^|/)agent-notes/researcher/" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|cut|seq|ps|which|command -v|jq|bash -n|mkdir|sleep)\\b" }
     - { tool: bash, match: "^find\\b" }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|fetch|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+blame\\b" }
     - { tool: bash, match: "^(npm\\s+(root|prefix)|python3?\\s+-m\\s+pytest|PYTHONDONTWRITEBYTECODE=1 python3?\\s+-m\\s+pytest|(\\.venv/bin/)?python -m pytest)\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?(rustc|cargo|rustup)\\s+(--version|-V)\\b" }
@@ -24,7 +24,9 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(metadata|tree|locate-project|pkgid)\\b" }
     - { tool: bash, match: "^systemctl\\s+--user\\s+list-units\\b" }
     - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
-  ask: []
+  ask:
+    # `git fetch` writes refs (tags, HEAD, prefetch/refmap); it prompts instead of running silently.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+fetch\\b", reason: "fetch writes refs; approve after review" }
   deny:
     - { tool: bash, match: "^eval\\b" }
     - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
@@ -36,7 +38,7 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+branch\\b[^\\n]*\\s(?:-[a-zA-Z]*[fDmMdcC]\\b|--(?:delete|delet|dele|del|de|d|force|forc|for|move|mov|mo|copy|cop)\\b)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+reflog\\s+(?:expire|delete|drop)\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+fetch\\b[^\\n]*:" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+remote\\s+(?:add|remove|rm|rename|set-url|set-branches|set-head|prune)\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+remote\\s+(?:add|remove|rm|rename|set-url|set-branches|set-head|prune|update)\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }

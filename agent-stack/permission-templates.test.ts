@@ -736,11 +736,50 @@ const READONLY_ABUSE = [
 const READONLY_SAFE = [
 	"git reflog",
 	"git reflog show",
-	"git fetch",
-	"git fetch --all",
 	"git remote",
 	"git remote -v",
 	"git remote show",
+];
+
+// `git fetch` writes local refs (`--tags`/`-t` writes tags, `--update-head-ok`
+// can move HEAD, `--prefetch`/`--refmap` write refs), so it is not a silent
+// read. It is absent from the read-only allow on every non-orchestrator agent.
+const FETCH_ARG_FORMS = [
+	"git fetch",
+	"git fetch origin",
+	"git fetch --tags origin",
+	"git fetch -t origin",
+];
+
+// Fetch argument forms that write refs (`--all`, `--update-head-ok`) must never
+// be a silent allow either.
+const FETCH_ARG_WRITE_FORMS = [
+	"git fetch --all",
+	"git fetch --update-head-ok origin",
+];
+
+// Wrapper and anchor prefixes around `git fetch`. The inner fetch must stay
+// gated through every wrapper, so none of these may be allow.
+const FETCH_WRAPPER_FORMS = [
+	"cd /repo && git fetch",
+	"env FOO=1 git fetch",
+	"time git fetch",
+	"command git fetch",
+	"git -C /repo fetch",
+	"timeout 5 git fetch",
+	"chrt 1 git fetch",
+];
+
+// The pi agents that previously allowed `git fetch`. They now ASK.
+const PI_FETCH_CHANGED_AGENTS = ["implementer", "researcher", "tester", "reviewer"];
+
+// A read-only `git log` must never carry a chained `git fetch` into a silent
+// allow. The chain is not allow on any stack.
+const FETCH_CHAIN_NOT_ALLOW = [
+	"git log && git fetch",
+	"git log && git fetch --tags",
+	"git log && git fetch --tags origin",
+	"git log && git fetch -t origin",
 ];
 
 // ---------------------------------------------------------------------------
@@ -775,9 +814,105 @@ describe("pi: mutating read-only git forms are gated", () => {
 		}
 	});
 
-	test("all agents: plain read-only reflog/fetch/remote are not denied", () => {
+	test("all agents: plain read-only reflog/remote are not denied", () => {
 		for (const agent of ["orchestrator", "implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of READONLY_SAFE) assert.notEqual(verdict(agent, command), "deny", `${agent}: ${command}`);
+		}
+	});
+});
+
+// `git remote update` runs a fetch and writes remote-tracking refs. The bare
+// read-only allow `remote\b` let it through, and the remote deny alternation
+// omitted `update`. `update` now sits next to the other remote mutations on the
+// five non-orchestrator pi agents; the plain read forms still allow.
+const REMOTE_UPDATE_FORMS = ["git remote update", "git remote update --prune"];
+const PI_REMOTE_UPDATE_AGENTS = ["implementer", "researcher", "tester", "reviewer", "overseer"];
+
+const REMOTE_READ_FORMS = ["git remote", "git remote -v", "git remote show"];
+
+describe("pi: git remote update is gated like the other remote mutations", () => {
+	test("changed agents: remote update denies", () => {
+		for (const agent of PI_REMOTE_UPDATE_AGENTS) {
+			for (const command of REMOTE_UPDATE_FORMS) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("changed agents: plain remote reads still allow", () => {
+		for (const agent of PI_REMOTE_UPDATE_AGENTS) {
+			for (const command of REMOTE_READ_FORMS) {
+				assert.equal(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+});
+
+// Fetch writes refs. The pre-existing silent allow is gone: the changed pi
+// agents now ASK, and every other agent must not allow the fetch forms.
+describe("pi: fetch is gated, never a silent allow", () => {
+	test("pi: changed agents ask for every fetch argument and wrapper form", () => {
+		for (const agent of PI_FETCH_CHANGED_AGENTS) {
+			for (const command of [...FETCH_ARG_FORMS, ...FETCH_ARG_WRITE_FORMS, ...FETCH_WRAPPER_FORMS]) {
+				assert.equal(verdict(agent, command), "ask", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("pi: fetch never allows on the other shell agents or the orchestrator", () => {
+		for (const agent of ["orchestrator", "planner", "overseer"]) {
+			for (const command of [...FETCH_ARG_FORMS, ...FETCH_ARG_WRITE_FORMS, ...FETCH_WRAPPER_FORMS]) {
+				assert.notEqual(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+});
+
+describe("opencode: fetch is gated, never a silent allow", () => {
+	test("opencode researcher: fetch asks by omission after the allow is removed", () => {
+		for (const command of FETCH_ARG_FORMS) {
+			assert.equal(opencodeVerdict("researcher", command), "ask", command);
+		}
+	});
+
+	test("opencode orchestrator: fetch asks by omission after the allow is removed", () => {
+		for (const command of [...FETCH_ARG_FORMS, ...FETCH_ARG_WRITE_FORMS]) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("opencode: fetch never allows on the non-orchestrator agents", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of [...FETCH_ARG_FORMS, ...FETCH_ARG_WRITE_FORMS, ...FETCH_WRAPPER_FORMS]) {
+				assert.notEqual(opencodeVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+});
+
+// A read-only segment must not carry a chained fetch into a silent allow.
+describe("fetch chain writes are never a silent allow", () => {
+	test("pi: a chained git fetch is not allow", () => {
+		for (const agent of ["orchestrator", "implementer", ...PI_SHELL_AGENTS]) {
+			for (const command of FETCH_CHAIN_NOT_ALLOW) {
+				assert.notEqual(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode: a chained git fetch is not allow", () => {
+		for (const agent of ["orchestrator", ...OPENCODE_SHELL_AGENTS]) {
+			for (const command of FETCH_CHAIN_NOT_ALLOW) {
+				assert.notEqual(opencodeVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro: a chained git fetch is not allow", () => {
+		for (const agent of ["orchestrator", ...KIRO_SHELL_AGENTS]) {
+			for (const command of FETCH_CHAIN_NOT_ALLOW) {
+				assert.notEqual(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
 		}
 	});
 });
@@ -790,7 +925,7 @@ describe("pi: mutating read-only git forms are gated", () => {
 // omission, and a chained gated write cannot ride the allow. opencode already
 // allowed the git read forms and only gains the two gh entries. `git fetch` is
 // deliberately not allowed on pi or kiro: it writes refs, so it stays denied.
-// opencode keeps its pre-existing exact `git fetch` allow.
+// opencode has no `git fetch` allow either; a bare `git fetch` asks by omission.
 // ---------------------------------------------------------------------------
 
 const PI_ORCH_GIT_READS = [
