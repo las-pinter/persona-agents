@@ -60,8 +60,8 @@ const STARTUP_PARITY_AGENTS = ["orchestrator"];
 const SUMMARY_CAP_LINES = 30;
 const SUMMARY_CAP_SLACK = 3;
 const FEATURE_BUG_TECH_CAP_LINES = 300;
-const QUICK_STUDY_CAP_LINES = 150;
-const FULL_STUDY_CAP_LINES = 500;
+const STUDY_CAP_LINES = 500;
+const SIDE_DOC_CAP_LINES = 300;
 
 const HOME = process.env.HOME ?? os.homedir();
 const AGENT_NOTES_ROOT = path.join(HOME, "agent-notes");
@@ -575,20 +575,43 @@ interface LineCap {
 	label: string;
 }
 
-/** The project-notes caps that apply to a file, or null when no cap maps. */
+/**
+ * True when the path sits under an archived `legacy_studies/` folder.
+ */
+function isLegacyStudy(relativeFile: string): boolean {
+	return relativeFile.split(path.sep).includes("legacy_studies");
+}
+
+/**
+ * The project-notes caps that apply to a file, or null when no cap maps.
+ *
+ * A study holds one `study.md` with a 500-line cap and optional side documents
+ * with a 300-line cap. A pre-overhaul `quick-study.md` or `full-study.md` that
+ * still sits outside `legacy_studies/` maps to no cap. Files under
+ * `legacy_studies/` are skipped as archived.
+ */
 function capFor(relativeFile: string): LineCap | null {
 	const parts = relativeFile.split(path.sep);
+	if (isLegacyStudy(relativeFile)) return null;
 	const base = parts[parts.length - 1];
 	if (base === "summary.md") return { cap: SUMMARY_CAP_LINES + SUMMARY_CAP_SLACK, label: "summary (~30)" };
-	if (base === "quick-study.md") return { cap: QUICK_STUDY_CAP_LINES, label: "quick-study" };
-	if (base === "full-study.md") return { cap: FULL_STUDY_CAP_LINES, label: "full-study" };
+	if (base === "study.md") return { cap: STUDY_CAP_LINES, label: "study" };
+	if (base === "quick-study.md" || base === "full-study.md") return null;
+	if (
+		parts.includes("studies") &&
+		parts.length >= 3 &&
+		base.endsWith(".md") &&
+		base !== "status.md"
+	) {
+		return { cap: SIDE_DOC_CAP_LINES, label: "study side document" };
+	}
 	if (parts.includes("features") || parts.includes("bugs") || parts.includes("tech")) {
 		return { cap: FEATURE_BUG_TECH_CAP_LINES, label: "feature/bug/tech note" };
 	}
 	return null;
 }
 
-describe("condition 6: project note line caps", () => {
+describe("condition 6: study and note line caps", () => {
 	const projectNotes = path.join(AGENT_NOTES_ROOT, "project-notes", REPO_NAME);
 
 	test("this repo's project notes stay under their caps", (t) => {
@@ -603,7 +626,8 @@ describe("condition 6: project note line caps", () => {
 			const relative = path.relative(projectNotes, file);
 			const cap = capFor(relative);
 			if (!cap) {
-				unmapped.push(relative);
+				// Archived studies are exempt and are not reported as unmapped.
+				if (!isLegacyStudy(relative)) unmapped.push(relative);
 				continue;
 			}
 			const lines = lineCount(readText(file));
@@ -614,5 +638,28 @@ describe("condition 6: project note line caps", () => {
 			console.warn(`doc-lint: no project-notes line cap for ${unmapped.length} file(s): ${unmapped.join(", ")}`);
 		}
 		assert.deepEqual(violations, [], "note line caps exceeded");
+	});
+
+	test("capFor maps the study, side-doc, status, and legacy paths", () => {
+		const capCases: { file: string; cap: number | null }[] = [
+			{ file: "studies/2026-01-01-x/study.md", cap: STUDY_CAP_LINES },
+			{ file: "studies/2026-01-01-x/notes.md", cap: SIDE_DOC_CAP_LINES },
+			{ file: "studies/2026-01-01-x/reverse_engineering/finding.md", cap: SIDE_DOC_CAP_LINES },
+			{ file: "studies/2026-01-01-x/status.md", cap: null },
+			{ file: "studies/2026-01-01-x/quick-study.md", cap: null },
+			{ file: "studies/2026-01-01-x/full-study.md", cap: null },
+		];
+		for (const { file, cap } of capCases) {
+			const relative = file.split("/").join(path.sep);
+			assert.equal(capFor(relative)?.cap ?? null, cap, `${file} cap`);
+		}
+		for (const file of [
+			"studies/legacy_studies/2026-01-01-x/study.md",
+			"studies/legacy_studies/2026-01-01-x/notes.md",
+		]) {
+			const relative = file.split("/").join(path.sep);
+			assert.ok(isLegacyStudy(relative), `${file} is archived`);
+			assert.equal(capFor(relative), null, `${file} is skipped`);
+		}
 	});
 });

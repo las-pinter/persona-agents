@@ -220,9 +220,8 @@ persona-agents/
 │   ├── researcher/
 │   │   └── source-selection/SKILL.md
 │   ├── planner/
-│   │   ├── quick-study/SKILL.md
-│   │   ├── full-study/SKILL.md
-│   │   └── study-questions/SKILL.md
+│   │   ├── interview/SKILL.md
+│   │   └── study/SKILL.md
 │   ├── overseer/
 │   │   └── herdr/
 │   │       ├── SKILL.md

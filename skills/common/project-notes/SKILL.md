@@ -30,10 +30,12 @@ Load and follow the **persona-free-documents** skill (`skills/common/persona-fre
 │       ├── tech/<slug>.md             (orchestrator, max 300 lines)
 │       └── studies/
 │           ├── index.md               (planner)
+│           ├── legacy_studies/        (orchestrator)
 │           └── YYYY-MM-DD-<slug>/
-│               ├── quick-study.md     (planner, max 150 lines)
-│               ├── full-study.md      (planner, max 500 lines)
-│               └── status.md          (planner)
+│               ├── study.md           (planner, max 500 lines)
+│               ├── status.md          (planner)
+│               ├── <side-doc>.md      (planner, max 300 lines each)
+│               └── reverse_engineering/  (planner)
 └── researcher/
     ├── index.md                       (researcher)
     └── reports/
@@ -58,16 +60,19 @@ the returned value for `<USER_HOME>` in every path.
 | `summary.md` | orchestrator | On significant discovery or user correction. |
 | `features/`, `bugs/`, `tech/` | orchestrator | On significant discovery or user correction. |
 | `studies/index.md` | planner | On study creation and on every stage change. |
+| `studies/legacy_studies/` | orchestrator | When archiving an old study. |
+| `<study>/study.md` | planner | While the study is active. |
 | `<study>/status.md` | planner | On study creation and on every stage change. |
-| `<study>/quick-study.md` | planner | While the feature is a quick study. |
-| `<study>/full-study.md` | planner | After the quick study is accepted. |
+| `<study>/<side-doc>.md` | planner | When detail must move out of the study. |
 
 The subfolder rule is doctrine, not a gate rule. Do not write another owner's
 subfolder.
 
 **READ rule.** Read `<project>/studies/index.md` first. Then read `status.md`
 for the named study. Read a study folder only when the task names it. Do not
-read all project notes at startup.
+read all project notes at startup. Archived studies live in
+`studies/legacy_studies/`. Read one only when the task names it. Never migrate
+one back.
 
 ## Note Structure
 
@@ -109,28 +114,32 @@ No script writes these files. The planner writes them with the `write` and
 ```markdown
 # <Study Title> — Status
 
-- **Stage:** quick | full | done | blocked | abandoned
+- **Stage:** full | done | blocked | abandoned
 - **Updated:** YYYY-MM-DD
 - **Owner:** planner
 - **Next action:** <one line>
 - **Blocked by:** <none | short reason>
+- **Side documents:** <list, or none>
 
 ## History
 
 | Date | Stage | Note |
 |------|-------|------|
-| YYYY-MM-DD | quick | folder created |
-| YYYY-MM-DD | full | quick study accepted |
+| YYYY-MM-DD | full | folder created |
+| YYYY-MM-DD | done | user accepted the study |
 ```
 
 Rules:
 
 1. Create `status.md` in the same action that creates the study folder.
-2. Move the stage `quick` → `full` → `done`. The stage `blocked` or
-   `abandoned` may replace the current stage at any time.
+2. Move the stage `full` → `done`. The stage `blocked` or `abandoned` may
+   replace the current stage at any time. A study is `done` only on the user's
+   explicit acceptance.
 3. Append one History row on every stage change.
 4. Update the `Updated` field on every `status.md` write.
-5. Create `status.md` only for new studies. Do not backfill the archived plans.
+5. List each side document in the `Side documents` field. A side document has
+   a maximum of 300 lines.
+6. Create `status.md` only for new studies. Do not backfill the archived plans.
 
 ### `studies/index.md` format (one per project)
 
@@ -141,7 +150,7 @@ Location: `~/agent-notes/project-notes/<project>/studies/index.md`.
 
 | Study | Stage | Updated | Path |
 |-------|-------|---------|------|
-| <title> | quick | YYYY-MM-DD | `studies/YYYY-MM-DD-<slug>/` |
+| <title> | full | YYYY-MM-DD | `studies/YYYY-MM-DD-<slug>/` |
 ```
 
 Rules:
@@ -150,6 +159,13 @@ Rules:
 2. Update the row's `Stage` and `Updated` whenever the planner writes
    `status.md`.
 3. Put the newest study on top. Use no script.
+
+### Legacy studies
+
+- Archived studies live in `studies/legacy_studies/`.
+- The orchestrator moves an old study folder there.
+- Read an archived study only when a task names it.
+- Never migrate an archived study back.
 
 ## Note Lifecycle
 
@@ -183,8 +199,8 @@ history. When a feature ships, its note may be removed or consolidated.
 
 ## Related Skills
 
-- **quick-study** (`skills/planner/quick-study/`) — Owns `quick-study.md`.
-- **full-study** (`skills/planner/full-study/`) — Owns `full-study.md`.
-- **study-questions** (`skills/planner/study-questions/`) — Owns the Q&A format.
+- **study** (`skills/planner/study/`) — Owns `study.md` and the side documents.
+- **interview** (`skills/planner/interview/`) — Owns the frontier rounds and the
+  decisions record.
 - **source-selection** (`skills/researcher/source-selection/`) — Owns the
   researcher report root `agent-notes/researcher/reports/`.

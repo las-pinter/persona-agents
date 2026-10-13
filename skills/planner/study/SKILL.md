@@ -1,65 +1,70 @@
 ---
-name: full-study
-description: Turn a ready quick study into a full technical study with tasks, risks, and acceptance criteria.
+name: study
+description: Write and maintain one study document from settled interview decisions.
 ---
 
-# Full Study
+# Study
 
 ## Purpose
 
-Turn a ready quick study into a full technical study. The full study holds the
-design, the interfaces, the tasks, the risks, the test plan, and the quality
-gate. It is the second stage of the planner study lifecycle.
+Write one study per feature. The study holds the goal, the settled decisions,
+the tasks, the risks, and the acceptance criteria. It is the only planner study
+document.
 
 ## When to Load
 
-Load this skill only after the quick study is accepted. Load the
-**study-questions** skill with it. The two skills work as one unit.
+Load this skill after the **interview** skill settles the decisions. Load the
+two skills as one unit. The study is the record of the interview.
 
 ## Persona-Free Documents
 
 Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
 
-## Workflow
+## One Document
 
-1. Read `quick-study.md` for the same feature folder.
-2. Resolve every open question. Ask the user about each blocking unknown.
-3. Write the full study into the same feature folder.
-4. Update `status.md`: set the stage to `full`, add a History row, and update
-   the date.
-5. Update the study row in `studies/index.md`.
+- One study folder per feature: `studies/YYYY-MM-DD-<slug>/`.
+- One study document: `studies/YYYY-MM-DD-<slug>/study.md`.
+- There is no quick stage and no full stage. The stage starts at `full`.
+- Use the `date` command for the date. Use a plain kebab-case slug with no date
+  inside it.
 
 ## Storage
 
 Write the study to
-`<USER_HOME>/agent-notes/project-notes/<project>/studies/YYYY-MM-DD-<slug>/full-study.md`.
-The folder name does not change between stages. See the **project-notes** skill
-for the folder layout.
+`<USER_HOME>/agent-notes/project-notes/<project>/studies/YYYY-MM-DD-<slug>/study.md`.
+`<USER_HOME>` is the user's real home directory (found with `echo $HOME`) —
+never a literal `/home/exampleuser/`. See the **project-notes** skill for the
+folder layout.
 
-## Owned Document: `full-study.md`
+## Document Skeleton
 
 ```markdown
-# YYYY-MM-DD - <Feature> - Full Study
+# YYYY-MM-DD - <Feature> - Study
 
-## Summary
-## Technical Context
-## Design Overview
-## Data Model & Key Entities
-## Interfaces & Contracts
-## Functional Requirements
-## Non-Functional Requirements
-## Task Breakdown
-## Risks & Dependencies
-## Test & Verification Strategy
-## Rollout & Migration
-## Deferred & Out of Scope
-## Quality Gate Checklist
-## Questions & Answers
+## Goal
+## Scope and Non-Goals
+## Decisions
+## Tasks
+## Risks
+## Acceptance Criteria
+## Open Items
+## Side Documents
 ```
 
-## Task Breakdown
+### Decisions
 
-The `## Task Breakdown` section holds one table. Columns:
+The `## Decisions` section holds the interview record. One entry per question:
+
+- the question;
+- the user's answer;
+- the decision;
+- the date.
+
+Keep the question numbers stable. Do not delete a deferred question.
+
+### Tasks
+
+The `## Tasks` section holds one table. Columns:
 
 `| # | Task | Depends On | Complexity | Acceptance |`
 
@@ -105,9 +110,9 @@ investigation task before it.
 | "Fast enough" | "The API answers within 200 ms at p95" |
 | "Handles errors" | "Invalid input returns 400 with `{error: string}`" |
 
-## Risks & Dependencies
+### Risks
 
-The `## Risks & Dependencies` section holds a risk register table:
+The `## Risks` section holds a risk register table:
 
 `| Risk | Type | Score | Impact | Mitigation |`
 
@@ -128,36 +133,57 @@ Required action by score:
 For three or more tasks, name the **critical path**: the longest dependency
 chain. A delay on that chain delays the study. Mark it.
 
-## Size Limit
+## Side Documents
 
-The **project-notes** skill owns the `full-study.md` line cap. Follow it.
+- The planner may add clearly named `.md` files beside `study.md`.
+- A `reverse_engineering/` subfolder holds code inspection or
+  reverse-engineering results.
+- List every side document in `status.md`.
+- Reference every side document from `study.md`.
+- Do not copy the study into a side document. Move detail out and link it.
 
-## Quality Gate Checklist
+## Size Limits
 
-A full study is done only when every line is true:
+- `study.md`: maximum 500 lines.
+- Each side document: maximum 300 lines.
+- Split before exceeding a cap.
+
+## Status and Index
+
+Follow the **project-notes** skill for the exact formats.
+
+- Create `status.md` in the same action that creates the study folder. Set the
+  stage to `full`.
+- Add the study row to `studies/index.md`.
+- Set the stage to `done` only when the user accepts the study in explicit
+  words.
+- Append one History row on every stage change.
+
+## Quality Gate
+
+A study is done only when every line is true:
 
 - [ ] The title and date are set.
-- [ ] The summary states the problem, the users, and the success measures.
+- [ ] The goal states the problem, the users, and the success measures.
 - [ ] Every task has an acceptance condition and a complexity estimate.
 - [ ] Dependencies are mapped with no circular chain.
 - [ ] At least one risk is listed, or "None identified".
 - [ ] Every High or Critical risk has a mitigation.
 - [ ] The critical path is named when the study has three or more tasks.
-- [ ] No blocking question stays open under `## Questions & Answers`.
+- [ ] No `[NEEDS CLARIFICATION]` marker remains.
+- [ ] A developer can start work with no follow-up questions.
 - [ ] The document contains no persona or theme language.
 
 ## Rules
 
-- One folder holds both study stages. Do not rename the folder.
-- Put every question and answer at the bottom under `## Questions & Answers`.
+- One folder, one document. Do not make a second folder for the same feature.
 - Do not write a task that hides an unknown. Add an investigation task.
 - Do not edit another study's files. The planner owns the `studies/` tree.
+- Do not write a side document that repeats the study.
 
 ## Related Skills
 
-- **study-questions** (`skills/planner/study-questions/`) — Owns the Q&A
-  format and the clarification marker. Load with this skill.
-- **quick-study** (`skills/planner/quick-study/`) — The first stage. Its
-  document is the input to this skill.
+- **interview** (`skills/planner/interview/`) — Owns the frontier rounds and the
+  decisions record. Load with this skill.
 - **project-notes** (`skills/common/project-notes/`) — Owns the study tree,
   `status.md`, and `studies/index.md` formats.

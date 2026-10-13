@@ -341,13 +341,10 @@ permissions:
     resource: journal-management-generic
     effect: deny
   - action: skill
-    resource: quick-study
+    resource: study
     effect: allow
   - action: skill
-    resource: full-study
-    effect: allow
-  - action: skill
-    resource: study-questions
+    resource: interview
     effect: allow
   - action: skill
     resource: project-notes

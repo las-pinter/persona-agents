@@ -5,7 +5,7 @@ description: Turns requirements into studies and specifications
 # spawning further subagents.
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
 skills: ["planner/*", "common/project-notes", "common/simplified-technical-english", "common/persona-free-documents"]
-alwaysLoad: ["common/simplified-technical-english"]
+alwaysLoad: ["common/simplified-technical-english", "planner/interview"]
 permissions:
   mode: deny-by-default
   allow:
