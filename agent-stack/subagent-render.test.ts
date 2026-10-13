@@ -15,7 +15,17 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import subagentExtension, { formatToolDuration } from "./subagent.ts";
+import subagentExtension, {
+	formatThinkingIndicator,
+	formatToolDuration,
+	INITIAL_THINKING,
+	makeThinkingEventHandler,
+	reduceThinking,
+	toInspectTask,
+	type SingleResult,
+	type ThinkingState,
+} from "./subagent.ts";
+import { archiveRun, getRuns, registerInspectorCommands } from "./inspector.ts";
 
 // --- harness -----------------------------------------------------------------
 
@@ -113,11 +123,24 @@ function toolResultMessage(toolCallId: string, durationMs?: number) {
 
 // --- formatToolDuration boundaries ------------------------------------------
 
-test("formatToolDuration renders sub-minute durations with one decimal", () => {
-	assert.equal(formatToolDuration(0), "0.0s");
-	assert.equal(formatToolDuration(500), "0.5s");
+test("formatToolDuration renders fast durations as whole milliseconds", () => {
+	assert.equal(formatToolDuration(0), "0ms");
+	assert.equal(formatToolDuration(42), "42ms");
+	assert.equal(formatToolDuration(500), "500ms");
+	assert.equal(formatToolDuration(999), "999ms");
+});
+
+test("formatToolDuration renders durations of one second or more with one decimal", () => {
+	assert.equal(formatToolDuration(1_000), "1.0s");
 	assert.equal(formatToolDuration(1_500), "1.5s");
 	assert.equal(formatToolDuration(59_000), "59.0s");
+});
+
+test("formatToolDuration keeps the millisecond branch below one second", () => {
+	// 999.6 ms must not round into a "1000ms" label; it crosses to the second branch.
+	assert.equal(formatToolDuration(999), "999ms");
+	assert.equal(formatToolDuration(1_000), "1.0s");
+	assert.equal(formatToolDuration(999.6), "1.0s");
 });
 
 test("formatToolDuration rounds 59.999 seconds up to 60.0s", () => {
@@ -311,4 +334,348 @@ test("the single run total and stop reason render duration-first in both collaps
 	// Both views share one order: duration first, then the stop reason.
 	assert.equal(collapsed, "✗ tester (user) 1.2s [aborted]");
 	assert.equal(expanded, "✗ tester (user) 1.2s [aborted]");
+});
+
+// --- thinking reducer (pure) -------------------------------------------------
+
+test("reduceThinking folds a thinking stretch into the run total", () => {
+	let state: ThinkingState = { ...INITIAL_THINKING };
+	state = reduceThinking(state, "thinking_start", 1_000);
+	assert.equal(state.thinking, true);
+	assert.equal(state.thinkingStartedAt, 1_000);
+
+	state = reduceThinking(state, "thinking_delta", 1_500);
+	assert.equal(state.thinking, true);
+
+	state = reduceThinking(state, "thinking_end", 2_200);
+	assert.equal(state.thinking, false);
+	assert.equal(state.thinkingStartedAt, null);
+	assert.equal(state.thinkingMs, 1_200);
+});
+
+test("reduceThinking keeps per-run state independent across runs", () => {
+	let a: ThinkingState = { ...INITIAL_THINKING };
+	let b: ThinkingState = { ...INITIAL_THINKING };
+	a = reduceThinking(a, "thinking_start", 1_000);
+	b = reduceThinking(b, "thinking_start", 5_000);
+	a = reduceThinking(a, "thinking_end", 3_000);
+	assert.equal(a.thinkingMs, 2_000);
+	assert.equal(b.thinkingMs, 0);
+	assert.equal(b.thinking, true);
+});
+
+test("reduceThinking ignores an end with no open stretch", () => {
+	const state = reduceThinking(INITIAL_THINKING, "thinking_end", 1_000);
+	assert.equal(state.thinkingMs, 0);
+	assert.equal(state.thinking, false);
+});
+
+test("reduceThinking opens a stretch on a lone delta", () => {
+	const state = reduceThinking(INITIAL_THINKING, "thinking_delta", 800);
+	assert.equal(state.thinking, true);
+	assert.equal(state.thinkingStartedAt, 800);
+});
+
+// --- thinking emit policy ----------------------------------------------------
+
+test("a thinking_delta does not trigger a repaint", () => {
+	let state: ThinkingState = { ...INITIAL_THINKING };
+	let emits = 0;
+	const handler = makeThinkingEventHandler(
+		() => state,
+		(next) => {
+			state = next;
+		},
+		() => {
+			emits++;
+		},
+		() => 1_000,
+	);
+
+	handler("thinking_start");
+	assert.equal(emits, 1);
+
+	handler("thinking_delta");
+	handler("thinking_delta");
+	assert.equal(emits, 1, "deltas must not repaint; the run ticker covers them");
+	assert.equal(state.thinking, true);
+
+	handler("thinking_end");
+	assert.equal(emits, 2, "end must repaint once");
+	assert.equal(state.thinking, false);
+});
+
+// --- thinking indicator ------------------------------------------------------
+
+test("formatThinkingIndicator shows the live elapsed while thinking", () => {
+	const out = formatThinkingIndicator({ thinking: true, thinkingStartedAt: 1_000, thinkingMs: 0 }, undefined, 1_500);
+	assert.equal(out, "🧠 thinking… 500ms");
+});
+
+test("formatThinkingIndicator keeps the prior total beside the live line", () => {
+	const out = formatThinkingIndicator({ thinking: true, thinkingStartedAt: 2_000, thinkingMs: 500 }, undefined, 2_500);
+	assert.equal(out, "🧠 thinking… 1.0s\n🧠 think 500ms");
+});
+
+test("formatThinkingIndicator shows the total and reasoning count after thinking", () => {
+	const out = formatThinkingIndicator({ thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 }, 500, 9_999);
+	assert.equal(out, "🧠 think 1.2s · 500 reasoning");
+});
+
+test("formatThinkingIndicator returns null when no thinking happened", () => {
+	assert.equal(formatThinkingIndicator(INITIAL_THINKING, undefined, 0), null);
+	assert.equal(formatThinkingIndicator(undefined, undefined, 0), null);
+	assert.equal(formatThinkingIndicator(undefined, 0, 0), null);
+});
+
+test("formatThinkingIndicator shows the count when only reasoning tokens exist", () => {
+	const out = formatThinkingIndicator(undefined, 500, 0);
+	assert.equal(out, "🧠 think 0ms · 500 reasoning");
+});
+
+test("formatThinkingIndicator omits reasoning when the count is zero", () => {
+	const out = formatThinkingIndicator({ thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 }, 0, 9_999);
+	assert.equal(out, "🧠 think 1.2s");
+	assert.ok(!out?.includes("0 reasoning"), out ?? "");
+});
+
+// --- thinking indicator in the inline block ---------------------------------
+
+test("a single block renders the thinking total and reasoning count", () => {
+	const tool = captureTool();
+	const result = makeSingle({
+		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
+		reasoningTokens: 500,
+	});
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	assert.ok(out.includes("🧠 think 1.2s"), out);
+	assert.ok(out.includes("500 reasoning"), out);
+});
+
+test("a thinking-only block does not print 0 reasoning", () => {
+	const tool = captureTool();
+	const result = makeSingle({
+		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
+		reasoningTokens: 0,
+	});
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	assert.ok(out.includes("🧠 think 1.2s"), out);
+	assert.ok(!out.includes("0 reasoning"), out);
+});
+
+test("a result without thinking fields renders no thinking line", () => {
+	const tool = captureTool();
+	const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), false, {});
+	assert.ok(!out.includes("🧠"), out);
+});
+
+test("an active thinking run renders the live indicator", () => {
+	const tool = captureTool();
+	const result = makeSingle({ thinking: { thinking: true, thinkingStartedAt: Date.now(), thinkingMs: 0 } });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	assert.ok(out.includes("🧠 thinking…"), out);
+});
+
+test("a running result shows the live elapsed in the header", () => {
+	const tool = captureTool();
+	const result = makeSingle({ exitCode: -1, runStartedAt: Date.now() - 2_500 });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	assert.match(out.split("\n")[0], /⏱ 2\.\ds/);
+});
+
+test("a finished result shows no live elapsed", () => {
+	const tool = captureTool();
+	const result = makeSingle({ exitCode: 0, runStartedAt: Date.now() - 2_500 });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	assert.ok(!out.includes("⏱"), out);
+});
+
+test("a queued parallel task with no start time shows no live elapsed", () => {
+	const tool = captureTool();
+	// A queued task has no runStartedAt yet; only the running task shows ⏱.
+	const running = makeSingle({ agent: "alpha", exitCode: -1, runStartedAt: Date.now() - 2_500 });
+	const queued = makeSingle({ agent: "beta", exitCode: -1 });
+	const out = render(tool, makeResult(makeDetails("parallel", [running, queued])), false, {});
+	const alphaLine = out.split("\n").find((line) => line.includes("alpha"));
+	const betaLine = out.split("\n").find((line) => line.includes("beta"));
+	assert.ok(alphaLine?.includes("⏱"), out);
+	assert.ok(!betaLine?.includes("⏱"), out);
+});
+
+test("a running single block with no output shows (running...)", () => {
+	const tool = captureTool();
+	const result = makeSingle({ exitCode: -1, runStartedAt: Date.now() });
+	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
+	assert.ok(out.includes("(running...)"), out);
+	assert.ok(!out.includes("(no output)"), out);
+});
+
+test("a finished single block with no output shows (no output)", () => {
+	const tool = captureTool();
+	const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), false, {});
+	assert.ok(out.includes("(no output)"), out);
+});
+
+test("a block never renders raw thinking text", () => {
+	const tool = captureTool();
+	const message = { role: "assistant", content: [{ type: "thinking", thinking: "SECRET-REASONING-TEXT" }] };
+	const result = makeSingle({
+		messages: [message],
+		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 10 },
+	});
+	const out = render(tool, makeResult(makeDetails("single", [result])), true, {});
+	assert.ok(!out.includes("SECRET-REASONING-TEXT"), out);
+	assert.ok(out.includes("🧠 think"), out);
+});
+
+// --- archive carries the thinking fields ------------------------------------
+
+interface CapturedCommand {
+	handler: (args: string, ctx: unknown) => unknown;
+}
+
+function captureCommands(): Map<string, CapturedCommand> {
+	const commands = new Map<string, CapturedCommand>();
+	const pi = {
+		registerCommand: (name: string, def: CapturedCommand) => {
+			commands.set(name, def);
+		},
+	};
+	registerInspectorCommands(pi as unknown as ExtensionAPI);
+	return commands;
+}
+
+test("toInspectTask carries the thinking total and reasoning tokens", () => {
+	const task = toInspectTask(
+		makeSingle({
+			thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
+			reasoningTokens: 500,
+		}) as unknown as SingleResult,
+	);
+	assert.equal(task.thinkingMs, 1_200);
+	assert.equal(task.reasoningTokens, 500);
+});
+
+test("archiveRun stores the thinking fields and /runs shows them", async () => {
+	const task = toInspectTask(
+		makeSingle({
+			thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
+			reasoningTokens: 500,
+		}) as unknown as SingleResult,
+	);
+	archiveRun({ at: "2024-01-01T00:00:00.000Z", mode: "single", agentScope: "user", results: [task] });
+	const last = getRuns().at(-1);
+	assert.equal(last?.results[0].thinkingMs, 1_200);
+	assert.equal(last?.results[0].reasoningTokens, 500);
+
+	const commands = captureCommands();
+	let notified = "";
+	await commands.get("runs")?.handler("", {
+		ui: {
+			notify: (msg: string) => {
+				notified = msg;
+			},
+		},
+		mode: "text",
+	});
+	assert.ok(notified.includes("🧠 1.2s"), notified);
+	assert.ok(notified.includes("500 reasoning"), notified);
+});
+
+test("the inspector detail shows the thinking summary", async () => {
+	const task = toInspectTask(
+		makeSingle({
+			thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 3_400 },
+			reasoningTokens: 25,
+		}) as unknown as SingleResult,
+	);
+	archiveRun({ at: "2024-01-02T00:00:00.000Z", mode: "single", agentScope: "user", results: [task] });
+
+	const commands = captureCommands();
+	let component: { render(width: number): string[] } | undefined;
+	const ctx = {
+		mode: "tui",
+		ui: {
+			custom: async (
+				factory: (tui: unknown, theme: unknown, keys: unknown, done: (v: unknown) => void) => unknown,
+			) => {
+				component = factory({}, {}, {}, () => {}) as { render(width: number): string[] };
+			},
+		},
+	};
+	await commands.get("inspect")?.handler("last", ctx);
+	const lines = component?.render(200).join("\n") ?? "";
+	assert.ok(lines.includes("🧠 3.4s"), lines);
+	assert.ok(lines.includes("25 reasoning"), lines);
+});
+
+test("the inspector formats reasoning tokens like the inline block", async () => {
+	const task = toInspectTask(
+		makeSingle({
+			thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
+			reasoningTokens: 1_500,
+		}) as unknown as SingleResult,
+	);
+	archiveRun({ at: "2024-01-03T00:00:00.000Z", mode: "single", agentScope: "user", results: [task] });
+
+	const commands = captureCommands();
+	let notified = "";
+	await commands.get("runs")?.handler("", {
+		ui: {
+			notify: (msg: string) => {
+				notified = msg;
+			},
+		},
+		mode: "text",
+	});
+	assert.ok(notified.includes("1.5k reasoning"), notified);
+});
+
+test("the inspector omits reasoning when the count is zero", async () => {
+	const task = toInspectTask(
+		makeSingle({ thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 } }) as unknown as SingleResult,
+	);
+	archiveRun({ at: "2024-01-05T00:00:00.000Z", mode: "single", agentScope: "user", results: [task] });
+
+	const commands = captureCommands();
+	let notified = "";
+	await commands.get("runs")?.handler("", {
+		ui: {
+			notify: (msg: string) => {
+				notified = msg;
+			},
+		},
+		mode: "text",
+	});
+	const line = notified.split("\n").find((candidate) => candidate.includes("2024-01-05")) ?? "";
+	assert.ok(line.includes("🧠 1.2s"), notified);
+	assert.ok(!line.includes("reasoning"), line);
+});
+
+test("an old archive record without thinking fields renders without them", async () => {
+	// A record written before the thinking fields existed must not crash.
+	const oldTask = {
+		agent: "tester",
+		status: "done" as const,
+		task: "old run",
+		exitCode: 0,
+		messages: [],
+		stderr: "",
+		usage: zeroUsage(),
+	};
+	archiveRun({ at: "2024-01-06T00:00:00.000Z", mode: "single", agentScope: "user", results: [oldTask] });
+
+	const commands = captureCommands();
+	let notified = "";
+	await commands.get("runs")?.handler("", {
+		ui: {
+			notify: (msg: string) => {
+				notified = msg;
+			},
+		},
+		mode: "text",
+	});
+	const line = notified.split("\n").find((candidate) => candidate.includes("2024-01-06")) ?? "";
+	assert.ok(line.includes("tester"), notified);
+	assert.ok(!line.includes("🧠"), line);
 });

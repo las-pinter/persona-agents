@@ -11,6 +11,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { Message } from "@earendil-works/pi-ai";
+import { formatDuration, formatTokens } from "./duration.ts";
 
 export interface InspectTask {
 	agent: string;
@@ -27,6 +28,8 @@ export interface InspectTask {
 		cost: number;
 		turns: number;
 	};
+	thinkingMs?: number;
+	reasoningTokens?: number;
 	errorMessage?: string;
 }
 
@@ -85,6 +88,15 @@ function formatAt(iso: string): string {
 	return iso.replace("T", " ").slice(0, 19);
 }
 
+/** Compact thinking summary for the /runs list and the inspector detail. */
+function formatThinkingSummary(t: InspectTask): string {
+	const ms = t.thinkingMs ?? 0;
+	const reasoningTokens = typeof t.reasoningTokens === "number" ? t.reasoningTokens : 0;
+	if (ms <= 0 && reasoningTokens <= 0) return "";
+	const reasoning = reasoningTokens > 0 ? ` · ${formatTokens(reasoningTokens)} reasoning` : "";
+	return `🧠 ${formatDuration(ms)}${reasoning}`;
+}
+
 const MAX_VIEW_LINES = 55;
 
 class InspectorComponent {
@@ -141,6 +153,8 @@ class InspectorComponent {
 		const t = this.run.results[this.taskIndex];
 		const detail: string[] = [];
 		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}${t.errorMessage ? " ERR " + t.errorMessage : ""}`);
+		const thinking = formatThinkingSummary(t);
+		if (thinking) detail.push(thinking);
 		for (const c of toolCalls(t.messages)) {
 			detail.push(`→ ${c.length > width - 4 ? c.slice(0, width - 4) : c}`);
 		}
@@ -176,7 +190,13 @@ export function registerInspectorCommands(pi: ExtensionAPI): void {
 				.map((r, i) => {
 					const isLast = i === all.length - 1;
 					const marks = r.results.map((t) => (t.status === "failed" ? "✗" : "✓")).join("");
-					return `${isLast ? "last" : "#" + (i + 1)}  ${formatAt(r.at)} ${r.mode} ${marks} ${r.results.map((t) => t.agent).join(", ")}`;
+					const agents = r.results
+						.map((t) => {
+							const thinking = formatThinkingSummary(t);
+							return thinking ? `${t.agent} ${thinking}` : t.agent;
+						})
+						.join(", ");
+					return `${isLast ? "last" : "#" + (i + 1)}  ${formatAt(r.at)} ${r.mode} ${marks} ${agents}`;
 				})
 				.join("\n");
 			ctx.ui?.notify?.(`Archived runs:\n${lines}\n\nUse /inspect [last|N] to open.`, "info");

@@ -39,6 +39,7 @@ import {
 } from "./resolver.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { archiveRun, type InspectTask } from "./inspector.ts";
+import { formatDuration, formatTokens } from "./duration.ts";
 import {
 	ENV_AGENT_DEPTH,
 	ENV_PARENT_RUN_ID,
@@ -56,6 +57,8 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
+/** Live repaint period during a run. Short enough to look live, long enough to stay cheap. */
+const RUN_TICK_MS = 250;
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
 
@@ -73,13 +76,6 @@ function truncateChainPrevious(output: string): string {
 		truncated = truncated.slice(0, -1);
 	}
 	return `${truncated}\n\n[Previous output truncated: ${Math.ceil((byteLength - Buffer.byteLength(truncated, "utf8")) / 1024)} KiB omitted — only the head was passed to the next chain step.]`;
-}
-
-function formatTokens(count: number): string {
-	if (count < 1000) return count.toString();
-	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-	if (count < 1000000) return `${Math.round(count / 1000)}k`;
-	return `${(count / 1000000).toFixed(1)}M`;
 }
 
 function formatUsageStats(
@@ -108,17 +104,88 @@ function formatUsageStats(
 	return parts.join(" ");
 }
 
-/** Format a duration like pi core: one decimal second under a minute. */
-export function formatToolDuration(durationMs: number): string {
-	const seconds = durationMs / 1000;
-	if (seconds < 60) return `${seconds.toFixed(1)}s`;
+/** Duration formatting lives in `duration.ts`; re-exported for callers. */
+export { formatDuration as formatToolDuration };
 
-	const totalSeconds = Math.floor(seconds);
-	const minutes = Math.floor(totalSeconds / 60);
-	const remainder = totalSeconds % 60;
-	if (minutes < 60) return `${minutes}m ${remainder}s`;
+/** Live thinking state for one subagent run. */
+export interface ThinkingState {
+	thinking: boolean;
+	thinkingStartedAt: number | null;
+	thinkingMs: number;
+}
 
-	return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
+export const INITIAL_THINKING: ThinkingState = { thinking: false, thinkingStartedAt: null, thinkingMs: 0 };
+
+export type ThinkingEventType = "thinking_start" | "thinking_delta" | "thinking_end";
+
+/** True for the three assistant content-block events that mark thinking. */
+export function isThinkingEventType(type: unknown): type is ThinkingEventType {
+	return type === "thinking_start" || type === "thinking_delta" || type === "thinking_end";
+}
+
+/** Pure per-run thinking reducer: start opens a stretch, end folds it into the total. */
+export function reduceThinking(state: ThinkingState, eventType: ThinkingEventType, nowMs: number): ThinkingState {
+	switch (eventType) {
+		case "thinking_start":
+			if (state.thinking) return state;
+			return { thinking: true, thinkingStartedAt: nowMs, thinkingMs: state.thinkingMs };
+		case "thinking_delta":
+			// A delta with no start opens a stretch, so the total still counts.
+			return state.thinking ? state : { thinking: true, thinkingStartedAt: nowMs, thinkingMs: state.thinkingMs };
+		case "thinking_end": {
+			if (!state.thinking) return state;
+			const startedAt = state.thinkingStartedAt ?? nowMs;
+			return {
+				thinking: false,
+				thinkingStartedAt: null,
+				thinkingMs: state.thinkingMs + Math.max(0, nowMs - startedAt),
+			};
+		}
+	}
+}
+
+/**
+ * Build the per-run thinking handler. A delta skips the repaint because the
+ * run ticker repaints; start and end emit at once.
+ */
+export function makeThinkingEventHandler(
+	getState: () => ThinkingState | undefined,
+	setState: (state: ThinkingState) => void,
+	emit: () => void,
+	now: () => number,
+): (eventType: ThinkingEventType) => void {
+	return (eventType) => {
+		setState(reduceThinking(getState() ?? INITIAL_THINKING, eventType, now()));
+		if (eventType === "thinking_delta") return;
+		emit();
+	};
+}
+
+/** Live elapsed for a run: completed stretches plus the active stretch. */
+export function thinkingElapsedMs(state: ThinkingState | undefined, nowMs: number): number {
+	const total = state?.thinkingMs ?? 0;
+	if (!state?.thinking || state.thinkingStartedAt === null) return total;
+	return total + Math.max(0, nowMs - state.thinkingStartedAt);
+}
+
+/** Render the thinking indicator lines for one run, or null when no thinking happened. */
+export function formatThinkingIndicator(
+	state: ThinkingState | undefined,
+	reasoningTokens: number | undefined,
+	nowMs: number,
+): string | null {
+	const s = state ?? INITIAL_THINKING;
+	// Gate on a positive count: a thinking-only run must not print "0 reasoning".
+	const reasoning =
+		typeof reasoningTokens === "number" && reasoningTokens > 0
+			? ` · ${formatTokens(reasoningTokens)} reasoning`
+			: "";
+	const lines: string[] = [];
+	if (s.thinking) lines.push(`🧠 thinking… ${formatDuration(thinkingElapsedMs(s, nowMs))}`);
+	if (s.thinkingMs > 0 || reasoning !== "") {
+		lines.push(`🧠 think ${formatDuration(s.thinkingMs)}${reasoning}`);
+	}
+	return lines.length > 0 ? lines.join("\n") : null;
 }
 
 function formatToolCall(
@@ -129,7 +196,7 @@ function formatToolCall(
 ): string {
 	const suffix =
 		durationMs !== undefined && Number.isFinite(durationMs)
-			? themeFg("dim", `  ${formatToolDuration(durationMs)}`)
+			? themeFg("dim", `  ${formatDuration(durationMs)}`)
 			: "";
 	const shortenPath = (p: string) => {
 		const home = os.homedir();
@@ -205,7 +272,7 @@ interface UsageStats {
 	turns: number;
 }
 
-interface SingleResult {
+export interface SingleResult {
 	agent: string;
 	agentSource: "user" | "project" | "package" | "unknown";
 	task: string;
@@ -217,6 +284,12 @@ interface SingleResult {
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
+	/** Wall-clock start of the run, used for the live elapsed header. */
+	runStartedAt?: number;
+	/** Per-run thinking timing. Absent until the child reports thinking. */
+	thinking?: ThinkingState;
+	/** Reasoning tokens summed over the run's assistant turns, when the provider reports them. */
+	reasoningTokens?: number;
 }
 
 interface SubagentDetails {
@@ -242,7 +315,7 @@ function isFailedResult(result: SingleResult): boolean {
 	return result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 }
 
-function toInspectTask(r: SingleResult): InspectTask {
+export function toInspectTask(r: SingleResult): InspectTask {
 	return {
 		agent: r.agent,
 		status: isFailedResult(r) ? "failed" : "done",
@@ -258,6 +331,8 @@ function toInspectTask(r: SingleResult): InspectTask {
 			cost: r.usage.cost,
 			turns: r.usage.turns,
 		},
+		thinkingMs: r.thinking?.thinkingMs ?? 0,
+		reasoningTokens: r.reasoningTokens,
 		errorMessage: r.errorMessage,
 	};
 }
@@ -476,12 +551,14 @@ async function runSingleAgent(
 		agent: agentName,
 		agentSource: agent.source,
 		task,
-		exitCode: 0,
+		exitCode: -1, // -1 = still running
 		messages: [],
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model,
 		step,
+		runStartedAt: Date.now(),
+		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
 	};
 
 	/** Run identity carried to the child via env. Parent id comes from our env. */
@@ -544,9 +621,37 @@ async function runSingleAgent(
 		}
 	};
 
+	// Repaint the run on a timer so the header elapsed moves during tool runs
+	// too. The ticker reuses the update emit, so parallel and chain repaint.
+	let runTicker: ReturnType<typeof setInterval> | undefined;
+	const stopRunTicker = () => {
+		if (!runTicker) return;
+		clearInterval(runTicker);
+		runTicker = undefined;
+	};
+	const startRunTicker = () => {
+		if (runTicker || !onUpdate) return;
+		runTicker = setInterval(() => {
+			emitUpdate();
+			emitTreeUpdate();
+		}, RUN_TICK_MS);
+		runTicker.unref?.();
+	};
+
+	/** Fold one thinking event into this run's state. */
+	const handleThinkingEvent = makeThinkingEventHandler(
+		() => currentResult.thinking,
+		(state) => {
+			currentResult.thinking = state;
+		},
+		emitUpdate,
+		() => Date.now(),
+	);
+
 	try {
 		// The child activates the agent + persona via flags; its before_agent_start
 		// then injects the profession body + persona itself (no temp prompt file).
+		startRunTicker();
 		args.push(`Task: ${task}`);
 		let wasAborted = false;
 
@@ -586,6 +691,11 @@ async function runSingleAgent(
 					toolCallIds.add(event.toolCallId);
 				}
 
+				if (event.type === "message_update" && event.assistantMessageEvent) {
+					const eventType = event.assistantMessageEvent.type;
+					if (isThinkingEventType(eventType)) handleThinkingEvent(eventType);
+				}
+
 				if (event.type === "message_end" && event.message) {
 					const msg = event.message as Message;
 					currentResult.messages.push(msg);
@@ -600,6 +710,9 @@ async function runSingleAgent(
 							currentResult.usage.cacheWrite += usage.cacheWrite || 0;
 							currentResult.usage.cost += usage.cost?.total || 0;
 							currentResult.usage.contextTokens = usage.totalTokens || 0;
+							if (typeof usage.reasoning === "number") {
+								currentResult.reasoningTokens = (currentResult.reasoningTokens ?? 0) + usage.reasoning;
+							}
 						}
 						if (!currentResult.model && msg.model) currentResult.model = msg.model;
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
@@ -673,7 +786,11 @@ async function runSingleAgent(
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {
-		/* nothing to clean up — the child activates agent/persona via flags */
+		// Finalize the run: close any open thinking stretch and stop the ticker.
+		stopRunTicker();
+		if (currentResult.thinking?.thinking) {
+			currentResult.thinking = reduceThinking(currentResult.thinking, "thinking_end", Date.now());
+		}
 	}
 }
 
@@ -906,6 +1023,7 @@ export default function (pi: ExtensionAPI) {
 						messages: [],
 						stderr: "",
 						usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+						thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
 					};
 				}
 
@@ -923,6 +1041,8 @@ export default function (pi: ExtensionAPI) {
 				};
 
 				const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
+					// The worker starts now; queue wait must not count as run time.
+					allResults[index].runStartedAt = Date.now();
 					const result = await runSingleAgent(
 						ctx.cwd,
 						dispatchDefaults,
@@ -1063,7 +1183,7 @@ export default function (pi: ExtensionAPI) {
 			const runDurationMs = (context as { durationMs?: number }).durationMs;
 			const runDuration =
 				typeof runDurationMs === "number" && Number.isFinite(runDurationMs)
-					? ` ${theme.fg("dim", formatToolDuration(runDurationMs))}`
+					? ` ${theme.fg("dim", formatDuration(runDurationMs))}`
 					: "";
 
 			const renderDisplayItems = (items: DisplayItem[], limit?: number) => {
@@ -1082,18 +1202,39 @@ export default function (pi: ExtensionAPI) {
 				return text.trimEnd();
 			};
 
+			// Thinking is shown as a status line, never as raw reasoning text.
+			const thinkingLines = (r: SingleResult): string[] => {
+				const raw = formatThinkingIndicator(r.thinking, r.reasoningTokens, Date.now());
+				return raw ? raw.split("\n") : [];
+			};
+			const thinkingText = (r: SingleResult): string => {
+				const lines = thinkingLines(r);
+				return lines.length > 0 ? `\n${lines.map((line) => theme.fg("dim", line)).join("\n")}` : "";
+			};
+			// Live elapsed while the run is active; empty once the run ends.
+			const liveElapsed = (r: SingleResult): string =>
+				r.exitCode === -1 && typeof r.runStartedAt === "number"
+					? theme.fg("dim", " · ⏱ " + formatDuration(Date.now() - r.runStartedAt))
+					: "";
+
 			if (details.mode === "single" && details.results.length === 1) {
 				const r = details.results[0];
-				const isError = isFailedResult(r);
-				const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
+				const running = r.exitCode === -1;
+				const isError = !running && isFailedResult(r);
+				const icon = running
+					? theme.fg("warning", "⏳")
+					: isError
+						? theme.fg("error", "✗")
+						: theme.fg("success", "✓");
 				const displayItems = getDisplayItems(r.messages);
 				const finalOutput = getFinalOutput(r.messages);
 
 				if (expanded) {
 					const container = new Container();
-					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}`;
+					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
 					if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 					container.addChild(new Text(header, 0, 0));
+					for (const line of thinkingLines(r)) container.addChild(new Text(theme.fg("dim", line), 0, 0));
 					if (isError && r.errorMessage)
 						container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
 					container.addChild(new Spacer(1));
@@ -1127,10 +1268,12 @@ export default function (pi: ExtensionAPI) {
 					return container;
 				}
 
-				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}`;
+				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
 				if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
+				text += thinkingText(r);
 				if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
-				else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
+				else if (displayItems.length === 0)
+					text += `\n${theme.fg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;
 				else {
 					text += `\n${renderDisplayItems(displayItems, COLLAPSED_ITEM_COUNT)}`;
 					if (displayItems.length > COLLAPSED_ITEM_COUNT) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
@@ -1155,7 +1298,12 @@ export default function (pi: ExtensionAPI) {
 
 			if (details.mode === "chain") {
 				const successCount = details.results.filter((r) => r.exitCode === 0).length;
-				const icon = successCount === details.results.length ? theme.fg("success", "✓") : theme.fg("error", "✗");
+				const anyRunning = details.results.some((r) => r.exitCode === -1);
+				const icon = anyRunning
+					? theme.fg("warning", "⏳")
+					: successCount === details.results.length
+						? theme.fg("success", "✓")
+						: theme.fg("error", "✗");
 
 				if (expanded) {
 					const container = new Container();
@@ -1172,18 +1320,24 @@ export default function (pi: ExtensionAPI) {
 					);
 
 					for (const r of details.results) {
-						const rIcon = r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
+						const rIcon =
+							r.exitCode === -1
+								? theme.fg("warning", "⏳")
+								: r.exitCode === 0
+									? theme.fg("success", "✓")
+									: theme.fg("error", "✗");
 						const displayItems = getDisplayItems(r.messages);
 						const finalOutput = getFinalOutput(r.messages);
 
 						container.addChild(new Spacer(1));
 						container.addChild(
 							new Text(
-								`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}`,
+								`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}${liveElapsed(r)}`,
 								0,
 								0,
 							),
 						);
+						for (const line of thinkingLines(r)) container.addChild(new Text(theme.fg("dim", line), 0, 0));
 						container.addChild(new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0));
 
 						// Show tool calls
@@ -1225,9 +1379,15 @@ export default function (pi: ExtensionAPI) {
 					theme.fg("accent", `${successCount}/${details.results.length} steps`) +
 					runDuration;
 				for (const r of details.results) {
-					const rIcon = r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
+					const rIcon =
+						r.exitCode === -1
+							? theme.fg("warning", "⏳")
+							: r.exitCode === 0
+								? theme.fg("success", "✓")
+								: theme.fg("error", "✗");
 					const displayItems = getDisplayItems(r.messages);
-					text += `\n\n${theme.fg("muted", `─── Step ${r.step}: `)}${theme.fg("accent", r.agent)} ${rIcon}`;
+					text += `\n\n${theme.fg("muted", `─── Step ${r.step}: `)}${theme.fg("accent", r.agent)} ${rIcon}${liveElapsed(r)}`;
+					text += thinkingText(r);
 					if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
 					else text += `\n${renderDisplayItems(displayItems, 5)}`;
 				}
@@ -1268,8 +1428,9 @@ export default function (pi: ExtensionAPI) {
 
 						container.addChild(new Spacer(1));
 						container.addChild(
-							new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0),
+							new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)} ${rIcon}${liveElapsed(r)}`, 0, 0),
 						);
+						for (const line of thinkingLines(r)) container.addChild(new Text(theme.fg("dim", line), 0, 0));
 						container.addChild(new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0));
 
 						// Show tool calls
@@ -1313,7 +1474,8 @@ export default function (pi: ExtensionAPI) {
 								? theme.fg("error", "✗")
 								: theme.fg("success", "✓");
 					const displayItems = getDisplayItems(r.messages);
-					text += `\n\n${theme.fg("muted", "─── ")}${theme.fg("accent", r.agent)} ${rIcon}`;
+					text += `\n\n${theme.fg("muted", "─── ")}${theme.fg("accent", r.agent)} ${rIcon}${liveElapsed(r)}`;
+					text += thinkingText(r);
 					if (displayItems.length === 0)
 						text += `\n${theme.fg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;
 					else text += `\n${renderDisplayItems(displayItems, 5)}`;
