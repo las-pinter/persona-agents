@@ -1230,72 +1230,85 @@ describe("pi: cp/mv/rsync wrapper boundaries", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Git tag doctrine: creation asks the orchestrator on pi/opencode and stays
-// unlisted (ask) on kiro. Deletion and force deny every agent. Read-only
+// Git tag doctrine: creation and force-move ask the orchestrator on pi/opencode
+// and stay unlisted (ask) on kiro. Deletion denies every agent. Read-only
 // listing stays allowed on pi. Every non-orchestrator must not create a tag.
 // ---------------------------------------------------------------------------
 
-const TAG_CREATE = ["git tag v3.0.0", "git -C /repo tag v3.0.0", "cd /repo && git tag v3.0.0"];
+const TAG_CREATE = [
+	"git tag v3.0.0",
+	"git -C /repo tag v3.0.0",
+	"cd /repo && git tag v3.0.0",
+	"git tag -am \"v3.0.0 release\" v3.0.0",
+	"git tag -a v1 -m x",
+];
 
 const TAG_CREATE_WRAPPED = ["env git tag v3.0.0", "echo $(git tag v3.0.0)"];
 
-const TAG_DESTRUCTIVE = [
+// Tag deletion denies every agent. A short cluster that contains `d` anywhere
+// is a delete, so DELETE wins over a force flag in the same cluster.
+const TAG_DELETE = [
 	"git tag -d v3.0.0",
 	"git tag --delete v3.0.0",
-	"git tag -f v3.0.0",
-	"git tag --force v3.0.0",
-];
-
-// Git accepts any unambiguous long-option prefix. `--for` is excluded because
-// it collides with `--format`.
-const TAG_ABBREVIATED_DESTRUCTIVE = ["git tag --forc v1", "git tag --delet v1"];
-
-// A tag NAME may contain `-d`/`-f`. These are not flags and must never deny.
-const TAG_NAME_FALSE_POSITIVES = ["git tag v1.0.0-final", "git tag v2.0.0-delta"];
-
-const TAG_DESTRUCTIVE_WRAPPED = [
-	"env git tag -d v3.0.0",
-	"env git tag --delete v3.0.0",
-	"env git tag -f v3.0.0",
-	"env git tag --force v3.0.0",
-	"echo $(git tag -d v3.0.0)",
-	"echo $(git tag --delete v3.0.0)",
-	"echo $(git tag -f v3.0.0)",
-	"echo $(git tag --force v3.0.0)",
-];
-
-// Destructive flags in a non-first position, including compact forms.
-const TAG_DESTRUCTIVE_ANYWHERE = [
-	"git tag -a -f v3.0.0 -m x",
-	"git tag -m release -f v3.0.0",
-	"git tag -af v3.0.0",
+	"git tag --delet v1",
 	"git tag -df v3.0.0",
+	"git tag -fd v3.0.0",
+	"git tag -fad v3.0.0",
 	"git tag -a -d v3.0.0 -m x",
 ];
 
-// Combined separator + `git -C`: the flag follows `tag` inside a wrapper.
-const TAG_DESTRUCTIVE_C = [
+const TAG_DELETE_WRAPPED = [
+	"env git tag -d v3.0.0",
+	"env git tag --delete v3.0.0",
+	"echo $(git tag -d v3.0.0)",
+	"echo $(git tag --delete v3.0.0)",
+];
+
+const TAG_DELETE_C = [
 	"echo $(git -C /repo tag -d v3.0.0)",
 	"echo `git -C /repo tag -d v3.0.0`",
 	"echo $(git -C /repo tag --delete v3.0.0)",
 	"echo `git -C /repo tag --delete v3.0.0`",
+];
+
+const TAG_DELETE_ALL = [...TAG_DELETE, ...TAG_DELETE_WRAPPED, ...TAG_DELETE_C];
+
+// Tag force-move asks the orchestrator on all three stacks. A short cluster
+// with force but no `d` is a force form. Git accepts any unambiguous long
+// option prefix, so `--forc` is force.
+const TAG_FORCE = [
+	"git tag -f v3.0.0",
+	"git tag --force v3.0.0",
+	"git tag --forc v1",
+	"git tag --for v1",
+	"git tag -af v3.0.0",
+	"git tag -fa v3.0.0",
+	"git tag -a -f v3.0.0 -m x",
+	"git tag -m release -f v3.0.0",
+];
+
+const TAG_FORCE_WRAPPED = [
+	"env git tag -f v3.0.0",
+	"env git tag --force v3.0.0",
+	"echo $(git tag -f v3.0.0)",
+	"echo $(git tag --force v3.0.0)",
+];
+
+const TAG_FORCE_C = [
 	"echo $(git -C /repo tag -f v3.0.0)",
 	"echo `git -C /repo tag -f v3.0.0`",
 	"echo $(git -C /repo tag --force v3.0.0)",
 	"echo `git -C /repo tag --force v3.0.0`",
 ];
 
-const TAG_DESTRUCTIVE_ALL = [
-	...TAG_DESTRUCTIVE,
-	...TAG_ABBREVIATED_DESTRUCTIVE,
-	...TAG_DESTRUCTIVE_ANYWHERE,
-	...TAG_DESTRUCTIVE_WRAPPED,
-	...TAG_DESTRUCTIVE_C,
-];
+const TAG_FORCE_ALL = [...TAG_FORCE, ...TAG_FORCE_WRAPPED, ...TAG_FORCE_C];
+
+// A tag NAME may contain `-d`/`-f`. These are not flags and must never deny.
+const TAG_NAME_FALSE_POSITIVES = ["git tag v1.0.0-final", "git tag v2.0.0-delta"];
 
 const TAG_LISTING = ["git tag", "git tag -l", "git tag --list", "git -C /repo tag -l"];
 
-const TAG_ALL = [...TAG_CREATE, ...TAG_CREATE_WRAPPED, ...TAG_DESTRUCTIVE_ALL];
+const TAG_ALL = [...TAG_CREATE, ...TAG_CREATE_WRAPPED, ...TAG_DELETE_ALL, ...TAG_FORCE_ALL];
 
 describe("pi: git tag doctrine", () => {
 	test("orchestrator: tag creation asks", () => {
@@ -1304,8 +1317,27 @@ describe("pi: git tag doctrine", () => {
 		}
 	});
 
-	test("orchestrator: destructive tag flags in any position deny", () => {
-		for (const command of TAG_DESTRUCTIVE_ALL) {
+	test("orchestrator: the tag force ask rule entry exists and is not an allow", () => {
+		const { mode, ruleSets } = loadAgentRules("orchestrator");
+		assert.equal(mode, "deny-by-default");
+		assert.ok(
+			ruleSetMatches(ruleSets.agentAsk, "git tag -f v3.0.0"),
+			"the orchestrator ask list must carry an explicit git tag rule that covers force",
+		);
+		assert.ok(
+			!ruleSetMatches(ruleSets.agentAllow, "git tag -f v3.0.0"),
+			"git tag force-move must not sit on the orchestrator allow list",
+		);
+	});
+
+	test("orchestrator: tag force-move asks in any position", () => {
+		for (const command of TAG_FORCE_ALL) {
+			assert.equal(verdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("orchestrator: tag delete denies in any position", () => {
+		for (const command of TAG_DELETE_ALL) {
 			assert.equal(verdict("orchestrator", command), "deny", command);
 		}
 	});
@@ -1320,13 +1352,17 @@ describe("pi: git tag doctrine", () => {
 		assert.notEqual(verdict("orchestrator", "git tag --format=%(refname) -l"), "deny");
 	});
 
+	test("orchestrator: --merged is not caught by the delete flag rule", () => {
+		assert.equal(verdict("orchestrator", "git tag --merged"), "ask");
+	});
+
 	test("orchestrator: read-only tag listing stays allowed", () => {
 		for (const command of TAG_LISTING) {
 			assert.equal(verdict("orchestrator", command), "allow", command);
 		}
 	});
 
-	test("non-orchestrators: tag creation and destructive forms default", () => {
+	test("non-orchestrators: tag creation, force, and delete forms default", () => {
 		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 			for (const command of TAG_ALL) {
 				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
@@ -1356,14 +1392,34 @@ describe("opencode: git tag doctrine", () => {
 		}
 	});
 
+	test("orchestrator: explicit tag delete deny rules exist", () => {
+		for (const resource of [
+			"git tag -d*",
+			"git tag --delete*",
+			"git tag * -d*",
+			"git tag * --delete*",
+			"*git tag -*d*",
+			"git -C * tag -d*",
+			"git -C * tag --delete*",
+		]) {
+			assert.ok(hasOpenCodeRule("orchestrator", resource, "deny"), `missing {shell, ${resource}, deny}`);
+		}
+	});
+
 	test("orchestrator: tag creation asks", () => {
 		for (const command of [...TAG_CREATE, ...TAG_CREATE_WRAPPED]) {
 			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
 		}
 	});
 
-	test("orchestrator: destructive tag flags in any position deny", () => {
-		for (const command of TAG_DESTRUCTIVE_ALL) {
+	test("orchestrator: tag force-move asks in any position", () => {
+		for (const command of TAG_FORCE_ALL) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("orchestrator: tag delete denies in any position", () => {
+		for (const command of TAG_DELETE_ALL) {
 			assert.equal(opencodeVerdict("orchestrator", command), "deny", command);
 		}
 	});
@@ -1380,7 +1436,7 @@ describe("opencode: git tag doctrine", () => {
 		}
 	});
 
-	test("non-orchestrators: tag creation and destructive forms deny", () => {
+	test("non-orchestrators: tag creation, force, and delete forms deny", () => {
 		for (const agent of OPENCODE_SHELL_AGENTS) {
 			for (const command of TAG_ALL) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
@@ -1396,8 +1452,28 @@ describe("kiro: git tag doctrine", () => {
 		}
 	});
 
-	test("orchestrator: destructive tag flags in any position deny", () => {
-		for (const command of TAG_DESTRUCTIVE_ALL) {
+	test("orchestrator: explicit tag delete deny entries exist", () => {
+		for (const pattern of [
+			"git tag -d*",
+			"git tag --delete*",
+			"git tag * -d*",
+			"git tag * --delete*",
+			"*git tag -*d*",
+			"git -C * tag -d*",
+			"git -C * tag --delete*",
+		]) {
+			assert.ok(hasKiroDeny("orchestrator", pattern), `missing deniedCommands ${pattern}`);
+		}
+	});
+
+	test("orchestrator: tag force-move asks in any position", () => {
+		for (const command of TAG_FORCE_ALL) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("orchestrator: tag delete denies in any position", () => {
+		for (const command of TAG_DELETE_ALL) {
 			assert.equal(kiroVerdict("orchestrator", command), "deny", command);
 		}
 	});
@@ -1414,7 +1490,7 @@ describe("kiro: git tag doctrine", () => {
 		}
 	});
 
-	test("non-orchestrators: tag creation and destructive forms deny", () => {
+	test("non-orchestrators: tag creation, force, and delete forms deny", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of TAG_ALL) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
@@ -1430,35 +1506,34 @@ describe("kiro: git tag doctrine", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Accepted trade-off: read-only tag long options are over-denied on
-// opencode/kiro. Their globs `*git tag -*d*` and `*git tag -*f*` cannot
-// separate the `-d`/`-f` flags from the long options `--merged` and
-// `--format=...`, so those read-only forms match the destructive deny rule.
-// The user chose fail-safe over-deny: a false deny is safer than a missed
-// force/delete. pi uses a real regex with word boundaries, so it stays precise
-// and returns `ask` for `--format`.
+// Accepted trade-off: the delete space-free glob `*git tag -*d*` cannot tell
+// the `-d` flag from a read-only long option that contains `d`, so `--merged`
+// is over-denied on opencode/kiro. The user chose fail-safe over-deny. pi uses
+// a real regex with word boundaries, so it stays precise and returns `ask`.
+// Removing the force space-free glob un-denied `--format=...`; it now asks on
+// every stack.
 // ---------------------------------------------------------------------------
 
-const TAG_READONLY_OVERDENIED = [
-	"git tag --format=%(refname) -l",
-	"git tag --merged",
-];
+const TAG_READONLY_DELETE_OVERDENIED = ["git tag --merged"];
+const TAG_READONLY_FORMAT = "git tag --format=%(refname) -l";
 
 describe("opencode/kiro: accepted over-deny for read-only tag long options", () => {
-	test("opencode orchestrator: read-only tag long options deny (accepted over-deny)", () => {
-		for (const command of TAG_READONLY_OVERDENIED) {
+	test("opencode orchestrator: --merged denies (accepted delete over-deny)", () => {
+		for (const command of TAG_READONLY_DELETE_OVERDENIED) {
 			assert.equal(opencodeVerdict("orchestrator", command), "deny", command);
 		}
 	});
 
-	test("kiro orchestrator: read-only tag long options deny (accepted over-deny)", () => {
-		for (const command of TAG_READONLY_OVERDENIED) {
+	test("kiro orchestrator: --merged denies (accepted delete over-deny)", () => {
+		for (const command of TAG_READONLY_DELETE_OVERDENIED) {
 			assert.equal(kiroVerdict("orchestrator", command), "deny", command);
 		}
 	});
 
-	test("pi orchestrator: --format is not over-denied; word boundaries keep it at ask", () => {
-		assert.equal(verdict("orchestrator", "git tag --format=%(refname) -l"), "ask");
+	test("orchestrators: --format asks on every stack", () => {
+		assert.equal(verdict("orchestrator", TAG_READONLY_FORMAT), "ask");
+		assert.equal(opencodeVerdict("orchestrator", TAG_READONLY_FORMAT), "ask");
+		assert.equal(kiroVerdict("orchestrator", TAG_READONLY_FORMAT), "ask");
 	});
 });
 

@@ -678,7 +678,9 @@ denied prompts the user. The repo doctrine holds by omission:
 - A gated git write never appears in a Kiro `allowedCommands` list. `git add`,
   `git commit`, `git push`, `git pull`, `git merge`, `git rebase`, `git tag`,
   `gh pr`, and `gh release` stay unlisted, so Kiro asks.
-- A destructive command stays in `deniedCommands`, so Kiro denies it.
+- A destructive command stays in `deniedCommands`, so Kiro denies it. One
+  case is the orchestrator tag force-move: Kiro asks by omission, while tag
+  delete stays denied.
 
 A gated git-write command in an `allowedCommands` list is a bug. A tool that is
 absent from `allowedTools` stays available, so it defaults to ask. The reviewer
