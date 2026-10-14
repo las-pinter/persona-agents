@@ -19,6 +19,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import {
+	compileRegex,
 	evaluateCommandRules,
 	type Decision,
 	type PermissionMode,
@@ -396,6 +397,11 @@ function loadKiroConfig(agent: string): KiroAgentConfig {
 
 function kiroDeniedCommands(agent: string): string[] {
 	return loadKiroConfig(agent).toolsSettings?.shell?.deniedCommands ?? [];
+}
+
+/** True when a kiro agent denies an exact command pattern. */
+function hasKiroDeny(agent: string, pattern: string): boolean {
+	return kiroDeniedCommands(agent).includes(pattern);
 }
 
 /** kiro grants the shell tool only when `tools` or `allowedTools` lists it. */
@@ -1463,7 +1469,57 @@ describe("opencode/kiro: accepted over-deny for read-only tag long options", () 
 // deny rules.
 // ---------------------------------------------------------------------------
 
-const MERGE_COMMANDS = ["git merge origin/main", "cd /repo && git merge origin/main"];
+const MERGE_COMMANDS = [
+	"git merge origin/main",
+	"git -C /repo merge main",
+	"git -C /repo merge",
+	"cd /repo && git merge origin/main",
+];
+
+// Separator-prefixed `-C` forms must not slip past the deny. On kiro the
+// `*git -C * merge` rule ends at the verb and covers the space-free form; the
+// opencode family carries the same space-free rule.
+const MERGE_SEPARATOR_COMMANDS = ["x;git -C /repo merge", "foo&&git -C /repo merge", "x|git -C /repo merge"];
+
+// The `-C` rule family each stack must carry. The shared entries exist on both
+// stacks; the bare start-anchored form is kiro-only. A missing entry fails the
+// presence test below, so one rule cannot hide behind another.
+const MERGE_C_RULES_SHARED = [
+	"git -C * merge *",
+	"* git -C * merge",
+	"* git -C * merge *",
+	"*git -C * merge *",
+	"*git -C * merge",
+];
+const MERGE_C_RULES_KIRO_ONLY = ["git -C * merge"];
+
+// Command-substitution and backtick forms mirror the tag family guard
+// (`*$(git tag*`, `*`git tag*`). Without these, `echo $(git -C /repo merge)`
+// falls through to ask on kiro/opencode. The trailing-separator rules keep a
+// bare verb followed by `;` denied while the literal `merge;` boundary leaves
+// the read-only `git merge-base` untouched.
+const MERGE_SUBSTITUTION_COMMANDS = [
+	"echo $(git merge main)",
+	"echo `git merge main`",
+	"echo $(git -C /repo merge)",
+	"echo `git -C /repo merge`",
+];
+
+const MERGE_TRAILING_SEPARATOR_COMMANDS = [
+	"git merge; git status",
+	"git -C /repo merge; git status",
+	"git merge;git status",
+	"git -C /repo merge;git status",
+];
+
+const MERGE_SUBSTITUTION_RULES_SHARED = [
+	"*$(git merge*",
+	"*`git merge*",
+	"*$(git -C * merge*",
+	"*`git -C * merge*",
+	"*git merge;*",
+	"*git -C * merge;*",
+];
 
 // A boundary slip in the merge rules could turn the read-only `git merge-base`
 // into an ask (opencode, where the last match wins) or a deny (kiro).
@@ -1556,6 +1612,382 @@ describe("git merge permission doctrine", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of MERGE_BASE_COMMANDS) {
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode non-orchestrators: separator-prefixed -C merge denies", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of MERGE_SEPARATOR_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: separator-prefixed -C merge denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of MERGE_SEPARATOR_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode non-orchestrators: every merge -C rule shape exists", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const resource of MERGE_C_RULES_SHARED) {
+				assert.ok(hasOpenCodeRule(agent, resource, "deny"), `${agent}: missing {shell, ${resource}, deny}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: every merge -C rule shape exists", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const pattern of [...MERGE_C_RULES_SHARED, ...MERGE_C_RULES_KIRO_ONLY]) {
+				assert.ok(hasKiroDeny(agent, pattern), `${agent}: missing deny ${pattern}`);
+			}
+		}
+	});
+
+	test("opencode/kiro non-orchestrators: space-free -C merge rule exists on both stacks", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			assert.ok(hasOpenCodeRule(agent, "*git -C * merge", "deny"), `${agent}: missing {shell, *git -C * merge, deny}`);
+		}
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.ok(hasKiroDeny(agent, "*git -C * merge"), `${agent}: missing deny *git -C * merge`);
+		}
+	});
+
+	test("opencode non-orchestrators: merge substitution and trailing-separator deny", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of [...MERGE_SUBSTITUTION_COMMANDS, ...MERGE_TRAILING_SEPARATOR_COMMANDS]) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: merge substitution and trailing-separator deny", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of [...MERGE_SUBSTITUTION_COMMANDS, ...MERGE_TRAILING_SEPARATOR_COMMANDS]) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator: merge substitution and trailing-separator ask", () => {
+		for (const command of [...MERGE_SUBSTITUTION_COMMANDS, ...MERGE_TRAILING_SEPARATOR_COMMANDS]) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("kiro orchestrator: merge substitution and trailing-separator ask", () => {
+		for (const command of [...MERGE_SUBSTITUTION_COMMANDS, ...MERGE_TRAILING_SEPARATOR_COMMANDS]) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("opencode non-orchestrators: every merge substitution/trailing rule shape exists", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const resource of MERGE_SUBSTITUTION_RULES_SHARED) {
+				assert.ok(hasOpenCodeRule(agent, resource, "deny"), `${agent}: missing {shell, ${resource}, deny}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: every merge substitution/trailing rule shape exists", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const pattern of MERGE_SUBSTITUTION_RULES_SHARED) {
+				assert.ok(hasKiroDeny(agent, pattern), `${agent}: missing deny ${pattern}`);
+			}
+		}
+	});
+
+	test("opencode/kiro non-orchestrators: git -C /repo merge-base main is not denied", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			assert.notEqual(opencodeVerdict(agent, "git -C /repo merge-base main"), "deny", agent);
+		}
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.notEqual(kiroVerdict(agent, "git -C /repo merge-base main"), "deny", agent);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Accepted trade-off: the space-free `-C` merge rule cannot separate the verb
+// from a later argument. A read-only `git -C /repo log --grep merge` ends in
+// the `merge` token, so `*git -C * merge` (kiro) and the trailing-optional
+// `*git -C * merge *` (opencode) both deny it. Same fail-safe over-deny as the
+// tag long options: a false deny is safer than a missed merge. pi uses a real
+// regex with word boundaries and stays precise.
+// ---------------------------------------------------------------------------
+
+const MERGE_READONLY_OVERDENIED = ["git -C /repo log --grep merge"];
+
+describe("opencode/kiro: accepted over-deny for a read-only argument ending in merge", () => {
+	test("opencode non-orchestrators: read-only --grep merge denies (accepted over-deny)", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of MERGE_READONLY_OVERDENIED) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: read-only --grep merge denies (accepted over-deny)", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of MERGE_READONLY_OVERDENIED) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Git rebase doctrine: a rebase rewrites history, so the orchestrator asks
+// (pi by an explicit rule; opencode and kiro by their shell defaults) and
+// every non-orchestrator denies, matching the `git merge` doctrine. The pi
+// ask rule entry itself is asserted, not just the engine default.
+// ---------------------------------------------------------------------------
+
+const REBASE_COMMANDS = [
+	"git rebase",
+	"git rebase -i",
+	"git rebase --interactive",
+	"git rebase --continue",
+	"git rebase --abort",
+	"git rebase --skip",
+	"git rebase --onto main topic",
+	"git rebase --autosquash main",
+	"git rebase --root",
+	"git rebase --exec 'true'",
+	"git -C /tmp rebase main",
+	"cd /repo && git rebase main",
+	"env git rebase main",
+];
+
+// Commands the mirrored non-orchestrator deny rules cover on kiro and opencode.
+// The mirror copies the merge block and adds the `git -C` family both commands
+// carry, so the directory-flag form cannot slip past the deny.
+const REBASE_GATED_COMMANDS = [
+	"git rebase origin/main",
+	"git -C /repo rebase main",
+	"git -C /repo rebase",
+	"cd /repo && git rebase origin/main",
+];
+
+// Separator-prefixed `-C` forms must not slip past the deny, mirroring the
+// merge separator matrix.
+const REBASE_SEPARATOR_COMMANDS = ["x;git -C /repo rebase", "foo&&git -C /repo rebase", "x|git -C /repo rebase"];
+
+// The rebase `-C` rule family each stack must carry. The shared entries exist
+// on both stacks; the bare start-anchored form is kiro-only.
+const REBASE_C_RULES_SHARED = [
+	"git -C * rebase *",
+	"* git -C * rebase",
+	"* git -C * rebase *",
+	"*git -C * rebase *",
+	"*git -C * rebase",
+];
+const REBASE_C_RULES_KIRO_ONLY = ["git -C * rebase"];
+
+// The rebase mirror of the merge substitution/trailing-separator matrix.
+const REBASE_SUBSTITUTION_COMMANDS = [
+	"echo $(git rebase -i)",
+	"echo `git rebase -i`",
+	"echo $(git -C /repo rebase)",
+	"echo `git -C /repo rebase`",
+];
+
+const REBASE_TRAILING_SEPARATOR_COMMANDS = [
+	"git rebase; git status",
+	"git -C /repo rebase; git status",
+	"git rebase;git status",
+	"git -C /repo rebase;git status",
+];
+
+const REBASE_SUBSTITUTION_RULES_SHARED = [
+	"*$(git rebase*",
+	"*`git rebase*",
+	"*$(git -C * rebase*",
+	"*`git -C * rebase*",
+	"*git rebase;*",
+	"*git -C * rebase;*",
+];
+
+// Compound separators must never turn a rebase into a silent allow.
+const COMPOUND_REBASE_COMMANDS = [
+	"git rebase -i; git push",
+	"git rebase -i | cat",
+	"echo $(git rebase -i)",
+	"echo `git rebase -i`",
+];
+
+/** True when an ask rule can match `command` for bash, as the engine compiles it. */
+function ruleSetMatches(rules: RawRule[], command: string): boolean {
+	return rules.some((rule) => {
+		const tool = rule.tool ?? "*";
+		return (tool === "*" || tool === "bash") && compileRegex(rule.match).test(command);
+	});
+}
+
+describe("git rebase permission doctrine", () => {
+	test("pi orchestrator: the rebase ask rule entry exists and is not an allow", () => {
+		const { mode, ruleSets } = loadAgentRules("orchestrator");
+		assert.equal(mode, "deny-by-default");
+		assert.ok(
+			ruleSetMatches(ruleSets.agentAsk, "git rebase main"),
+			"the orchestrator ask list must carry an explicit git rebase rule",
+		);
+		assert.ok(
+			!ruleSetMatches(ruleSets.agentAllow, "git rebase main"),
+			"git rebase must not sit on the orchestrator allow list",
+		);
+	});
+
+	test("pi orchestrator: bare rebase and every flag variant ask", () => {
+		for (const command of REBASE_COMMANDS) assert.equal(verdict("orchestrator", command), "ask", command);
+	});
+
+	test("pi orchestrator: --exec asks from the agent rebase rule", () => {
+		const { mode, ruleSets } = loadAgentRules("orchestrator");
+		const decision = evaluateCommandRules(
+			"git rebase --exec 'true'",
+			true,
+			ruleSets,
+			mode,
+			"bash",
+			"orchestrator",
+		);
+		assert.equal(decision.kind, "ask");
+		if (decision.kind === "ask") {
+			assert.equal(decision.source, "agent");
+			assert.equal(decision.rule.reason, "git rebase requires user approval");
+		}
+	});
+
+	test("pi non-orchestrators: git rebase defaults to deny", () => {
+		for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
+			for (const command of REBASE_GATED_COMMANDS) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator: git rebase asks", () => {
+		for (const command of REBASE_GATED_COMMANDS) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("opencode non-orchestrators: git rebase denies", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of REBASE_GATED_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro orchestrator: git rebase defaults to ask", () => {
+		for (const command of REBASE_GATED_COMMANDS) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("kiro non-orchestrators: git rebase denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of REBASE_GATED_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	for (const command of COMPOUND_REBASE_COMMANDS) {
+		test(`pi orchestrator: compound form never allows: ${command}`, () => {
+			const kind = verdict("orchestrator", command);
+			assert.notEqual(kind, "allow", command);
+			assert.ok(kind === "ask" || kind === "deny", `${command}: ${kind}`);
+		});
+	}
+
+	test("opencode non-orchestrators: separator-prefixed -C rebase denies", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of REBASE_SEPARATOR_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: separator-prefixed -C rebase denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of REBASE_SEPARATOR_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode non-orchestrators: every rebase -C rule shape exists", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const resource of REBASE_C_RULES_SHARED) {
+				assert.ok(hasOpenCodeRule(agent, resource, "deny"), `${agent}: missing {shell, ${resource}, deny}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: every rebase -C rule shape exists", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const pattern of [...REBASE_C_RULES_SHARED, ...REBASE_C_RULES_KIRO_ONLY]) {
+				assert.ok(hasKiroDeny(agent, pattern), `${agent}: missing deny ${pattern}`);
+			}
+		}
+	});
+
+	test("opencode/kiro non-orchestrators: space-free -C rebase rule exists on both stacks", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			assert.ok(hasOpenCodeRule(agent, "*git -C * rebase", "deny"), `${agent}: missing {shell, *git -C * rebase, deny}`);
+		}
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.ok(hasKiroDeny(agent, "*git -C * rebase"), `${agent}: missing deny *git -C * rebase`);
+		}
+	});
+
+	test("opencode non-orchestrators: rebase substitution and trailing-separator deny", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of [...REBASE_SUBSTITUTION_COMMANDS, ...REBASE_TRAILING_SEPARATOR_COMMANDS]) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: rebase substitution and trailing-separator deny", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of [...REBASE_SUBSTITUTION_COMMANDS, ...REBASE_TRAILING_SEPARATOR_COMMANDS]) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("opencode orchestrator: rebase substitution and trailing-separator ask", () => {
+		for (const command of [...REBASE_SUBSTITUTION_COMMANDS, ...REBASE_TRAILING_SEPARATOR_COMMANDS]) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("kiro orchestrator: rebase substitution and trailing-separator ask", () => {
+		for (const command of [...REBASE_SUBSTITUTION_COMMANDS, ...REBASE_TRAILING_SEPARATOR_COMMANDS]) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("opencode non-orchestrators: every rebase substitution/trailing rule shape exists", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const resource of REBASE_SUBSTITUTION_RULES_SHARED) {
+				assert.ok(hasOpenCodeRule(agent, resource, "deny"), `${agent}: missing {shell, ${resource}, deny}`);
+			}
+		}
+	});
+
+	test("kiro non-orchestrators: every rebase substitution/trailing rule shape exists", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const pattern of REBASE_SUBSTITUTION_RULES_SHARED) {
+				assert.ok(hasKiroDeny(agent, pattern), `${agent}: missing deny ${pattern}`);
 			}
 		}
 	});

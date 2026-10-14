@@ -2,9 +2,9 @@ name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, shared project notes, and studies
 # Not spawnable as a subagent: the orchestrator alone holds the gated
 # `git add`/`commit`/`push`/`pull`, `gh pr`, `gh release`, `git tag` (create),
-# and `git merge` operations. It shares the gated `cp`/`mv`/`rsync` asks with
-# the implementer. Every one prompts the user, so a dispatcher must never
-# escalate them by spawning one.
+# and `git merge`/`git rebase` operations. It shares the gated `cp`/`mv`/`rsync`
+# asks with the implementer. Every one prompts the user, so a dispatcher must
+# never escalate them by spawning one.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/project-notes", "common/simplified-technical-english", "common/journal-management-generic", "common/persona-free-documents"]
@@ -44,6 +44,9 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(push|pull)\\b", reason: "orchestrator push/pull requires user approval" }
     # git merge integrates history; gated per call like push/pull.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+merge(?=\\s|$)", reason: "git merge requires user approval" }
+    # git rebase rewrites history; gated per call like merge. `--exec` stays ASK
+    # so the human sees the payload; it is never a silent allow.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+rebase(?=\\s|$)", reason: "git rebase requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\s+(?!-d\\b|--(?:delete|delet|dele|del|de|d|force|forc)\\b|-f\\b|-l\\b|--list\\b)", reason: "tag creation requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b", reason: "pull request operations require user approval" }
     # Publishing a GitHub release is a user-visible write; gate it like `gh pr`.

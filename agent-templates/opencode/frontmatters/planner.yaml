@@ -179,6 +179,102 @@ permissions:
     resource: "*|git merge *"
     effect: deny
   - action: shell
+    resource: "git -C * merge *"
+    effect: deny
+  - action: shell
+    resource: "* git -C * merge"
+    effect: deny
+  - action: shell
+    resource: "* git -C * merge *"
+    effect: deny
+  - action: shell
+    resource: "*git -C * merge *"
+    effect: deny
+  - action: shell
+    resource: "*git -C * merge"
+    effect: deny
+  - action: shell
+    resource: "*$(git merge*"
+    effect: deny
+  - action: shell
+    resource: "*`git merge*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * merge*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * merge*"
+    effect: deny
+  - action: shell
+    resource: "*git merge;*"
+    effect: deny
+  - action: shell
+    resource: "*git -C * merge;*"
+    effect: deny
+  - action: shell
+    resource: "git rebase"
+    effect: deny
+  - action: shell
+    resource: "git rebase *"
+    effect: deny
+  - action: shell
+    resource: "* git rebase"
+    effect: deny
+  - action: shell
+    resource: "* git rebase *"
+    effect: deny
+  - action: shell
+    resource: "*;git rebase"
+    effect: deny
+  - action: shell
+    resource: "*&&git rebase"
+    effect: deny
+  - action: shell
+    resource: "*|git rebase"
+    effect: deny
+  - action: shell
+    resource: "*;git rebase *"
+    effect: deny
+  - action: shell
+    resource: "*&&git rebase *"
+    effect: deny
+  - action: shell
+    resource: "*|git rebase *"
+    effect: deny
+  - action: shell
+    resource: "git -C * rebase *"
+    effect: deny
+  - action: shell
+    resource: "* git -C * rebase"
+    effect: deny
+  - action: shell
+    resource: "* git -C * rebase *"
+    effect: deny
+  - action: shell
+    resource: "*git -C * rebase *"
+    effect: deny
+  - action: shell
+    resource: "*git -C * rebase"
+    effect: deny
+  - action: shell
+    resource: "*$(git rebase*"
+    effect: deny
+  - action: shell
+    resource: "*`git rebase*"
+    effect: deny
+  - action: shell
+    resource: "*$(git -C * rebase*"
+    effect: deny
+  - action: shell
+    resource: "*`git -C * rebase*"
+    effect: deny
+  - action: shell
+    resource: "*git rebase;*"
+    effect: deny
+  - action: shell
+    resource: "*git -C * rebase;*"
+    effect: deny
+  - action: shell
     resource: "git -C * add *"
     effect: deny
   - action: shell
