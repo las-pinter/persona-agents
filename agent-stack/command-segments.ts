@@ -589,7 +589,74 @@ function unique(values: string[]): string[] {
  * never an allowance.
  */
 function dequoteProbe(probe: string): string {
-	return probe.replace(/["']/g, "").replace(/\\(.)/g, "$1");
+	// `$"..."` is bash locale quoting; for the gate it behaves like `"..."`.
+	// Drop the `$` first, so the content (`--lost-found`, `-w`, `--output`)
+	// reaches the ask/deny guards that the quotes would otherwise split.
+	return probe.replace(/\$"/g, '"').replace(/["']/g, "").replace(/\\(.)/g, "$1");
+}
+
+/**
+ * True when `ch` can start a bash parameter expansion after a `$`: a name
+ * char (`$W`), a brace (`${W}`), or a positional/special parameter (`$1`,
+ * `$?`, `$$`). `$(` is excluded because the parser extracts and checks its
+ * payload, and `$'`/`$"` have their own handling below.
+ */
+function startsParameterExpansion(ch: string | undefined): boolean {
+	return ch !== undefined && /[A-Za-z_{0-9*@#$!-]/.test(ch);
+}
+
+/**
+ * True when a segment holds a shell expansion the gate cannot resolve at
+ * decision time. Bash expands `$W` / `${W}` / `$1` from the environment, so a
+ * read verb can turn into a write after the allow check; the gate fails closed
+ * instead. `$"..."` is resolvable (handled by `dequoteProbe`), `$'...'` is the
+ * parser's `ansi-c` fail-closed construct, and `$(...)` is extracted and
+ * checked by the parser, so none of those are reported here. A `$` that starts
+ * no expansion (a trailing `$`, a `$` before a space or a closing quote) is
+ * literal and passes.
+ */
+function hasUnresolvedExpansion(segment: string): boolean {
+	let i = 0;
+	const n = segment.length;
+	while (i < n) {
+		const c = segment[i];
+		if (c === "\\") {
+			i += 2;
+			continue;
+		}
+		if (c === "'") {
+			i = skipSingle(segment, i);
+			continue;
+		}
+		if (c === '"') {
+			// Inside double quotes, `$W` / `${W}` / `$1` still expand.
+			i++;
+			while (i < n && segment[i] !== '"') {
+				const d = segment[i];
+				if (d === "\\") {
+					i += 2;
+					continue;
+				}
+				if (d === "$" && startsParameterExpansion(segment[i + 1])) return true;
+				i++;
+			}
+			i++;
+			continue;
+		}
+		if (c === "$" && startsParameterExpansion(segment[i + 1])) return true;
+		i++;
+	}
+	return false;
+}
+
+/**
+ * A segment plus its dequoted variant. Ask rules test this list, so a
+ * quote/backslash-obfuscated escape guard sees the resolved form, mirroring the
+ * deny path. The raw segment stays first so a raw match wins.
+ */
+function askProbes(segment: string): string[] {
+	const dequoted = dequoteProbe(segment);
+	return dequoted === segment ? [segment] : [segment, dequoted];
 }
 
 interface RuleMatch {
@@ -630,7 +697,7 @@ function firstSpanningMatch(
 ): RuleMatch | null {
 	for (const r of rules) {
 		if (r.tool !== "*" && r.tool !== toolName) continue;
-		if (segments.some((s) => r.re.test(s))) continue;
+		if (segments.some((s) => askProbes(s).some((probe) => r.re.test(probe)))) continue;
 		for (const probe of probes) {
 			if (r.re.test(probe)) return { rule: r.rule, probe };
 		}
@@ -656,9 +723,10 @@ function findAsk(
 	for (let idx = 0; idx < segments.length; idx++) {
 		if (approved.has(idx)) continue;
 		const segment = segments[idx];
+		const probes = askProbes(segment);
 		for (const r of rules) {
 			if (r.tool !== "*" && r.tool !== toolName) continue;
-			if (!r.re.test(segment)) continue;
+			if (!probes.some((probe) => r.re.test(probe))) continue;
 			return {
 				kind: "ask",
 				rule: r.rule,
@@ -743,7 +811,10 @@ export function evaluateCommandRules(
 			if (approved.has(idx)) continue;
 			const segment = segments[idx];
 			const sessionApproved = sessionAskRules.some(
-				(r) => (r.tool === "*" || r.tool === toolName) && r.re.test(segment) && isSessionAllowed(r.rule),
+				(r) =>
+					(r.tool === "*" || r.tool === toolName) &&
+					askProbes(segment).some((probe) => r.re.test(probe)) &&
+					isSessionAllowed(r.rule),
 			);
 			if (sessionApproved) approved.add(idx);
 		}
@@ -757,7 +828,9 @@ export function evaluateCommandRules(
 	// After the first pass this never runs again, so a `segmentIndex: -1` choice
 	// cannot loop; it approves no real segment and the allow check fails closed.
 	if (!wholeProbeDone) {
-		const wholeProbes = unique([command, ...segments, ...rawSegments]);
+		const wholeProbes = unique(
+			[command, ...segments, ...rawSegments].flatMap((probe) => askProbes(probe)),
+		);
 		const globalWhole = firstSpanningMatch(compile(ruleSets.globalAsk), toolName, wholeProbes, segments);
 		if (globalWhole && !(isSessionAllowed?.(globalWhole.rule) ?? false)) {
 			return {
@@ -803,6 +876,16 @@ export function evaluateCommandRules(
 		for (let idx = 0; idx < segments.length; idx++) {
 			if (approved.has(idx)) continue;
 			const seg = segments[idx];
+			// An unresolved shell expansion can turn a read into a write after the
+			// gate runs, so it can never reach an allow rule. Fail closed.
+			if (hasUnresolvedExpansion(seg)) {
+				return {
+					kind: "default",
+					reason: agentName
+						? `Denied by default (agent "${agentName}" is deny-by-default; unresolved shell expansion in segment: \`${seg.slice(0, 120)}\`)`
+						: `Denied by default: unresolved shell expansion in \`${seg.slice(0, 120)}\``,
+				};
+			}
 			if (!firstMatch(allowed, toolName, [seg])) {
 				return {
 					kind: "default",
@@ -815,7 +898,15 @@ export function evaluateCommandRules(
 		return { kind: "allow" };
 	}
 
-	// allow-unless-matched: Pi's default, unchanged.
+	// allow-unless-matched: Pi's default. An unresolved shell expansion is the
+	// one exception; bash resolves it after the gate, so it cannot be allowed.
+	for (let idx = 0; idx < segments.length; idx++) {
+		if (approved.has(idx)) continue;
+		const seg = segments[idx];
+		if (hasUnresolvedExpansion(seg)) {
+			return { kind: "default", reason: `Denied: unresolved shell expansion in \`${seg.slice(0, 120)}\`` };
+		}
+	}
 	return { kind: "allow" };
 }
 
@@ -846,7 +937,10 @@ export function unallowedSegments(
 			if (approved.has(idx)) continue;
 			const segment = parsed.segments[idx];
 			const sessionApproved = sessionAskRules.some(
-				(r) => (r.tool === "*" || r.tool === toolName) && r.re.test(segment) && isSessionAllowed(r.rule),
+				(r) =>
+					(r.tool === "*" || r.tool === toolName) &&
+					askProbes(segment).some((probe) => r.re.test(probe)) &&
+					isSessionAllowed(r.rule),
 			);
 			if (sessionApproved) approved.add(idx);
 		}

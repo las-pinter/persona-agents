@@ -535,3 +535,114 @@ test("an approved -1 (spanning) marks no real segment", () => {
 	const after = evaluateCmd("foo && bar", spanOnly, "deny-by-default", new Set([-1]));
 	assert.equal(after.kind, "default");
 });
+
+// --- ask-probe dequote behavior ----------------------------------------------
+
+// Ask rules test the dequoted segment too, mirroring the deny path. A
+// quote-obfuscated escape guard must still ask.
+test("an ask rule matches the dequoted segment", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentAsk: [{ tool: "bash", match: "^git commit\\b" }],
+		agentAllow: [{ tool: "bash", match: "^git\\b" }],
+	};
+	assert.equal(evaluateCmd('git co"mmit" -m x', rules).kind, "ask");
+});
+
+// The raw probe stays first: a rule that matches only the raw segment still
+// fires, even when the dequoted form no longer matches.
+test("an ask rule still matches the raw segment", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentAsk: [{ tool: "bash", match: 'co"mmit"' }],
+		agentAllow: [{ tool: "bash", match: "^git\\b" }],
+	};
+	assert.equal(evaluateCmd('git co"mmit" -m x', rules).kind, "ask");
+});
+
+// The spanning probe skips a rule that already matches a segment's dequoted
+// form, so the per-segment ask handles it with a real segment index instead of
+// the `segmentIndex: -1` spanning shape.
+test("the spanning skip tests the dequoted segment", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentAsk: [{ tool: "bash", match: "foo\\s*&&\\s*bar" }],
+		agentAllow: [{ tool: "bash", match: "^bar\\b" }],
+	};
+	const decision = evaluateCmd('foo "&&" bar', rules);
+	assert.equal(decision.kind, "ask");
+	if (decision.kind !== "ask") return;
+	assert.equal(decision.segment, 'foo "&&" bar');
+	assert.equal(decision.segmentIndex, 0);
+});
+
+// The session-allow path tests the dequoted segment, so a session approval of
+// the ask rule also covers the obfuscated form.
+test("session-allow matches the dequoted segment", () => {
+	const rules: RuleSets = {
+		...plannerRules,
+		agentAsk: [{ tool: "bash", match: "^git commit\\b" }],
+		agentAllow: [{ tool: "bash", match: "^git\\b" }],
+	};
+	// Without a session allow the obfuscated form asks.
+	assert.equal(evaluateCmd('git co"mmit" -m x', rules).kind, "ask");
+	// With the ask rule session-allowed, the dequoted segment is approved.
+	const decision = evaluateCmd(
+		'git co"mmit" -m x',
+		rules,
+		"deny-by-default",
+		undefined,
+		(rule) => rule.match === "^git commit\\b",
+	);
+	assert.equal(decision.kind, "allow");
+});
+
+// --- unresolved shell expansions ---------------------------------------------
+
+// `$W` / `${W}` are resolved by bash after the gate runs, so a read allow must
+// never accept a segment that carries one. `$"..."` dequotes to its content; a
+// literal `$` (a regex anchor, a trailing `$`) is not an expansion.
+const expansionReadRules: RuleSets = {
+	globalDeny: [],
+	globalAsk: [],
+	agentDeny: [],
+	agentAsk: [],
+	agentAllow: [
+		{ tool: "bash", match: "^git\\s+fsck\\b" },
+		{ tool: "bash", match: "^git\\s+hash-object\\b" },
+		{ tool: "bash", match: "^git\\s+grep\\b" },
+	],
+};
+
+test("an unresolved shell variable never reaches a read allow", () => {
+	for (const command of ["git fsck $W", "git fsck ${W}", 'git fsck "$W"', "git hash-object $W"]) {
+		assert.notEqual(evaluateCmd(command, expansionReadRules).kind, "allow", command);
+	}
+});
+
+test("the same read verbs still allow without an expansion", () => {
+	for (const command of [
+		"git fsck",
+		"git fsck --connectivity-only",
+		"git hash-object --stdin",
+		"git hash-object f",
+		"git grep -n x",
+	]) {
+		assert.equal(evaluateCmd(command, expansionReadRules).kind, "allow", command);
+	}
+});
+
+test("a literal dollar in a read argument is not a false gate", () => {
+	// A `$` inside single quotes is literal.
+	assert.equal(evaluateCmd("git grep -n 'end$' -- .", expansionReadRules).kind, "allow");
+	// A trailing `$` before a space starts no expansion.
+	assert.equal(evaluateCmd("git grep -n end$ -- .", expansionReadRules).kind, "allow");
+});
+
+test("a locale-quoted flag resolves to its content and asks", () => {
+	const rules: RuleSets = {
+		...expansionReadRules,
+		agentAsk: [{ tool: "bash", match: "^git\\s+fsck\\b[^\\n]*\\s--l[a-zA-Z-]*" }],
+	};
+	assert.equal(evaluateCmd('git fsck $"--lost-found"', rules).kind, "ask");
+});

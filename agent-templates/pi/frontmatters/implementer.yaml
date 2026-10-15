@@ -31,6 +31,9 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(metadata|tree|locate-project|pkgid)\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(check|clippy|fmt|doc|build|test|nextest|bench|run|deny|audit|llvm-cov|geiger)(\\s|$)" }
   ask:
+    # `sed -i` edits a file in place. The allow probe is raw-only, so the fence
+    # lives here: the ask tier tests the dequoted probe, which catches `-"i"`.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?sed\\b[^\\n]*\\s(?:-[A-Za-z]*i[A-Za-z]*|--i[A-Za-z-]*)", reason: "sed in-place edit requires user approval" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(add|remove|update|upgrade|audit\\s+fix|deny\\s+init)\\b", reason: "dependency manifest or lockfile change requires user approval" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?uv\\s+(add|remove|lock|publish)\\b", reason: "dependency manifest or lockfile change requires user approval" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?uv\\s+sync\\b(?!\\s+--(?:frozen|offline)\\b)", reason: "dependency manifest or lockfile change requires user approval" }

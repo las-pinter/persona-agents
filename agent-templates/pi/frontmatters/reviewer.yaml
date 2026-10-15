@@ -23,6 +23,9 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(check|clippy|doc|test|nextest)(\\s|$)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+fmt\\s+--check\\b" }
   ask:
+    # `sed -i` edits a file in place. The allow probe is raw-only, so the fence
+    # lives here: the ask tier tests the dequoted probe, which catches `-"i"`.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?sed\\b[^\\n]*\\s(?:-[A-Za-z]*i[A-Za-z]*|--i[A-Za-z-]*)", reason: "sed in-place edit requires user approval" }
     # `git fetch` writes refs (tags, HEAD, prefetch/refmap); it prompts instead of running silently.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+fetch\\b", reason: "fetch writes refs; approve after review" }
   deny:

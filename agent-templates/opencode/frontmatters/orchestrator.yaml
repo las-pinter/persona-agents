@@ -140,13 +140,286 @@ permissions:
     resource: "git cat-file"
     effect: allow
   - action: shell
-    resource: "git merge-base *"
-    effect: allow
-  - action: shell
-    resource: "git -C * merge-base *"
-    effect: allow
-  - action: shell
     resource: "git rev-list"
+    effect: allow
+  # Tier A: pure read-only verbs. Only the bare form and the reviewed exact
+  # forms (below, after the tag asks) allow. A free argument would let the raw
+  # match ride an escape or a chain past the guards, so every argument-bearing
+  # form asks.
+  - action: shell
+    resource: "git grep"
+    effect: allow
+  - action: shell
+    resource: "git describe"
+    effect: allow
+  - action: shell
+    resource: "git blame"
+    effect: allow
+  - action: shell
+    resource: "git annotate"
+    effect: allow
+  - action: shell
+    resource: "git shortlog"
+    effect: allow
+  - action: shell
+    resource: "git whatchanged"
+    effect: allow
+  - action: shell
+    resource: "git ls-files"
+    effect: allow
+  - action: shell
+    resource: "git ls-tree"
+    effect: allow
+  - action: shell
+    resource: "git show-ref"
+    effect: allow
+  - action: shell
+    resource: "git for-each-ref"
+    effect: allow
+  - action: shell
+    resource: "git name-rev"
+    effect: allow
+  - action: shell
+    resource: "git check-ignore"
+    effect: allow
+  - action: shell
+    resource: "git check-attr"
+    effect: allow
+  - action: shell
+    resource: "git check-ref-format"
+    effect: allow
+  - action: shell
+    resource: "git diff-tree"
+    effect: allow
+  - action: shell
+    resource: "git diff-index"
+    effect: allow
+  - action: shell
+    resource: "git diff-files"
+    effect: allow
+  - action: shell
+    resource: "git cherry"
+    effect: allow
+  - action: shell
+    resource: "git range-diff"
+    effect: allow
+  - action: shell
+    resource: "git var"
+    effect: allow
+  - action: shell
+    resource: "git version"
+    effect: allow
+  - action: shell
+    resource: "git help"
+    effect: allow
+  - action: shell
+    resource: "git show-branch"
+    effect: allow
+  - action: shell
+    resource: "git get-tar-commit-id"
+    effect: allow
+  - action: shell
+    resource: "git check-mailmap"
+    effect: allow
+  - action: shell
+    resource: "git patch-id"
+    effect: allow
+  - action: shell
+    resource: "git stripspace"
+    effect: allow
+  - action: shell
+    resource: "git column"
+    effect: allow
+  - action: shell
+    resource: "git count-objects"
+    effect: allow
+  - action: shell
+    resource: "git verify-commit"
+    effect: allow
+  - action: shell
+    resource: "git verify-tag"
+    effect: allow
+  - action: shell
+    resource: "git verify-pack"
+    effect: allow
+  # fsck writes dangling objects only under `--lost-found`; hash-object writes
+  # only under `-w`/`--write`. Only exact read forms allow; the write forms ask.
+  - action: shell
+    resource: "git fsck"
+    effect: allow
+  - action: shell
+    resource: "git hash-object"
+    effect: allow
+  - action: shell
+    resource: "git hash-object --stdin"
+    effect: allow
+  - action: shell
+    resource: "git commit-graph verify"
+    effect: allow
+  - action: shell
+    resource: "git multi-pack-index verify"
+    effect: allow
+  # `git -C *` forms of the exact reads. Only fsck and the two verify verbs
+  # keep a `-C` form; the argument-bearing `-C * <verb> *` allows are gone.
+  - action: shell
+    resource: "git -C * fsck"
+    effect: allow
+  - action: shell
+    resource: "git -C * commit-graph verify"
+    effect: allow
+  - action: shell
+    resource: "git -C * multi-pack-index verify"
+    effect: allow
+  # Tier B: mutation-capable verbs. Only listing/inspection forms allow.
+  - action: shell
+    resource: "git branch"
+    effect: allow
+  - action: shell
+    resource: "git branch -l"
+    effect: allow
+  - action: shell
+    resource: "git branch --list"
+    effect: allow
+  - action: shell
+    resource: "git branch -v"
+    effect: allow
+  - action: shell
+    resource: "git branch -vv"
+    effect: allow
+  # A branch allow must not carry a free token after an option. opencode's
+  # last-match glob would swallow a trailing branch name, and
+  # `git branch --format=%(refname) newbranch` creates a branch. Every option
+  # that needs an argument (`--format`, `--contains`, `--merged`, and the
+  # `--no-*`/`--points-at` twins) asks by omission. Only the exact list forms
+  # above and the `-C` list forms below allow.
+  - action: shell
+    resource: "git -C * branch -l"
+    effect: allow
+  - action: shell
+    resource: "git -C * branch --list"
+    effect: allow
+  - action: shell
+    resource: "git reflog"
+    effect: allow
+  - action: shell
+    resource: "git reflog show"
+    effect: allow
+  - action: shell
+    resource: "git reflog show *"
+    effect: allow
+  - action: shell
+    resource: "git reflog exists"
+    effect: allow
+  - action: shell
+    resource: "git reflog exists *"
+    effect: allow
+  - action: shell
+    resource: "git remote"
+    effect: allow
+  - action: shell
+    resource: "git remote -v"
+    effect: allow
+  - action: shell
+    resource: "git remote --verbose"
+    effect: allow
+  - action: shell
+    resource: "git remote get-url"
+    effect: allow
+  - action: shell
+    resource: "git remote get-url *"
+    effect: allow
+  - action: shell
+    resource: "git config --get"
+    effect: allow
+  - action: shell
+    resource: "git config --get *"
+    effect: allow
+  - action: shell
+    resource: "git config --get-all"
+    effect: allow
+  - action: shell
+    resource: "git config --get-all *"
+    effect: allow
+  - action: shell
+    resource: "git config --get-regexp"
+    effect: allow
+  - action: shell
+    resource: "git config --get-regexp *"
+    effect: allow
+  - action: shell
+    resource: "git config --get-urlmatch"
+    effect: allow
+  - action: shell
+    resource: "git config --get-urlmatch *"
+    effect: allow
+  - action: shell
+    resource: "git config -l"
+    effect: allow
+  - action: shell
+    resource: "git config --list"
+    effect: allow
+  - action: shell
+    resource: "git config --show-origin"
+    effect: allow
+  - action: shell
+    resource: "git config --show-scope"
+    effect: allow
+  - action: shell
+    resource: "git symbolic-ref HEAD"
+    effect: allow
+  - action: shell
+    resource: "git symbolic-ref --short HEAD"
+    effect: allow
+  - action: shell
+    resource: "git symbolic-ref -q HEAD"
+    effect: allow
+  - action: shell
+    resource: "git stash list"
+    effect: allow
+  - action: shell
+    resource: "git stash list *"
+    effect: allow
+  - action: shell
+    resource: "git stash show"
+    effect: allow
+  - action: shell
+    resource: "git stash show *"
+    effect: allow
+  - action: shell
+    resource: "git notes list"
+    effect: allow
+  - action: shell
+    resource: "git notes list *"
+    effect: allow
+  - action: shell
+    resource: "git notes show"
+    effect: allow
+  - action: shell
+    resource: "git notes show *"
+    effect: allow
+  - action: shell
+    resource: "git worktree list"
+    effect: allow
+  - action: shell
+    resource: "git worktree list *"
+    effect: allow
+  - action: shell
+    resource: "git submodule status"
+    effect: allow
+  - action: shell
+    resource: "git submodule status *"
+    effect: allow
+  - action: shell
+    resource: "git submodule summary"
+    effect: allow
+  - action: shell
+    resource: "git submodule summary *"
+    effect: allow
+  - action: shell
+    resource: "git sparse-checkout list"
+    effect: allow
+  - action: shell
+    resource: "git sparse-checkout list *"
     effect: allow
   - action: shell
     resource: "gh --version"
@@ -331,6 +604,135 @@ permissions:
   - action: shell
     resource: "* git -C * tag *"
     effect: ask
+  # Tag listing is a read. It sits after the tag asks so it wins on opencode
+  # (last match wins); the tag delete denies stay at the end of the file.
+  - action: shell
+    resource: "git tag"
+    effect: allow
+  - action: shell
+    resource: "git tag -l*"
+    effect: allow
+  - action: shell
+    resource: "git tag --list*"
+    effect: allow
+  - action: shell
+    resource: "git -C * tag -l*"
+    effect: allow
+  - action: shell
+    resource: "git -C * tag --list*"
+    effect: allow
+  # Reviewed exact-flag read allows. Each form is literal (no `*`), so the raw
+  # command must match the whole form. The block sits after the tag asks (last
+  # match wins) and before the escape/chain guards, so a guard still wins. The
+  # remaining reviewed reads already have exact allows above: `git ls-files`,
+  # `git branch`, `git branch -a`, `git branch -r`,
+  # `git branch --show-current`, `git reflog`, `git remote -v`,
+  # `git config --list`, `git stash list`, `git notes list`,
+  # `git worktree list`, `git submodule status`, and `git commit-graph verify`.
+  - action: shell
+    resource: "git status -s"
+    effect: allow
+  - action: shell
+    resource: "git status --short"
+    effect: allow
+  - action: shell
+    resource: "git status --porcelain"
+    effect: allow
+  - action: shell
+    resource: "git log --oneline"
+    effect: allow
+  - action: shell
+    resource: "git log --stat"
+    effect: allow
+  - action: shell
+    resource: "git diff --stat"
+    effect: allow
+  - action: shell
+    resource: "git diff --cached"
+    effect: allow
+  - action: shell
+    resource: "git diff --name-only"
+    effect: allow
+  - action: shell
+    resource: "git show --stat"
+    effect: allow
+  - action: shell
+    resource: "git describe --tags"
+    effect: allow
+  - action: shell
+    resource: "git shortlog -s"
+    effect: allow
+  - action: shell
+    resource: "git tag -l"
+    effect: allow
+  - action: shell
+    resource: "git tag --list"
+    effect: allow
+  # Option-based execution or file writes on an allowed read verb. These carry
+  # no shell separator, so the chain guards cannot see them. The ask sits after
+  # the read allows (last match wins) so a normal read still allows.
+  - action: shell
+    resource: "*grep -O*"
+    effect: ask
+  - action: shell
+    resource: "*grep --open-files-in-pager*"
+    effect: ask
+  - action: shell
+    resource: "*--output=*"
+    effect: ask
+  - action: shell
+    resource: "*--output *"
+    effect: ask
+  - action: shell
+    resource: "*--ext-diff*"
+    effect: ask
+  - action: shell
+    resource: "*--textconv*"
+    effect: ask
+  - action: shell
+    resource: "*--filters*"
+    effect: ask
+  # Chain guards. opencode matches the raw command string and the last match
+  # wins, so a trailing-`*` read allow covers the whole chain (for example
+  # `git grep x && git rm -rf y`). Every guard sits after the read allows and
+  # before the explicit denies, so a plain read with no separator still allows,
+  # any chain falls to ask, and a chained tag delete still denies at the end.
+  - action: shell
+    resource: "*;*"
+    effect: ask
+  - action: shell
+    resource: "*&*"
+    effect: ask
+  - action: shell
+    resource: "*|*"
+    effect: ask
+  - action: shell
+    resource: "*>*"
+    effect: ask
+  - action: shell
+    resource: "*$(*"
+    effect: ask
+  - action: shell
+    resource: "*`*"
+    effect: ask
+  - action: shell
+    resource: "*\n*"
+    effect: ask
+  # Process substitution carries no guarded separator. `>(...)` is caught by
+  # the `*>*` guard; `<(...)` and zsh `=(...)` need their own guards.
+  - action: shell
+    resource: "*<(*"
+    effect: ask
+  - action: shell
+    resource: "*=(*"
+    effect: ask
+  # Force-move is never a silent allow, even after a listing flag such as -l.
+  - action: shell
+    resource: "*git*tag*-f*"
+    effect: ask
+  - action: shell
+    resource: "*git*tag*--force*"
+    effect: ask
   - action: shell
     resource: "git branch -f*"
     effect: ask
@@ -396,6 +798,53 @@ permissions:
     effect: ask
   - action: shell
     resource: "* git branch -C*"
+    effect: ask
+  # Branch creation by name asks by omission (no branch allow matches it, and
+  # the option-bearing branch allows no longer carry a free token). These
+  # explicit asks cover the upstream/tracking/edit flags.
+  - action: shell
+    resource: "git branch -u*"
+    effect: ask
+  - action: shell
+    resource: "git branch --set-upstream*"
+    effect: ask
+  - action: shell
+    resource: "git branch --unset-upstream*"
+    effect: ask
+  - action: shell
+    resource: "git branch -t*"
+    effect: ask
+  - action: shell
+    resource: "git branch --track*"
+    effect: ask
+  - action: shell
+    resource: "git branch --edit-description*"
+    effect: ask
+  - action: shell
+    resource: "* git branch -u*"
+    effect: ask
+  - action: shell
+    resource: "* git branch --set-upstream*"
+    effect: ask
+  # Space-before flag guards: an upstream flag after a listing value
+  # (`git branch --format=x -u y`) must still ask.
+  - action: shell
+    resource: "*git*branch* -u*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --set-upstream*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --unset-upstream*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* -t*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --track*"
+    effect: ask
+  - action: shell
+    resource: "*git*branch* --edit-description*"
     effect: ask
   - action: shell
     resource: "find * -exec *"
@@ -570,6 +1019,11 @@ permissions:
   - action: shell
     resource: "*git commit*"
     effect: ask
+  # The broad `*git commit*` ask above would otherwise swallow this read.
+  # Keep it exact so a chained write cannot ride it.
+  - action: shell
+    resource: "git commit-graph verify"
+    effect: allow
   - action: shell
     resource: "*gh -R * pr*"
     effect: ask
