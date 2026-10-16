@@ -30,7 +30,7 @@ const plannerRules: RuleSets = {
 		{ tool: "bash", match: "curl\\b.*\\|\\s*(ba)?sh\\b" },
 		{
 			tool: "bash",
-			match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+",
+			match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+",
 		},
 	],
 	agentAsk: [
@@ -53,7 +53,7 @@ const implementerRules: RuleSets = {
 		{ tool: "bash", match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" },
 		{
 			tool: "bash",
-			match: "(?:^|[;&|(\\s])\\s*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+",
+			match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+",
 		},
 	],
 	agentAsk: [],
@@ -304,7 +304,24 @@ test("keeps the whole-command deny rule for compound commands", () => {
 
 test("denies file-writing redirects but allows fd redirects", () => {
 	assert.equal(evaluateCmd("echo hi > out.txt", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("echo hi >> out.txt", implementerRules).kind, "deny");
+	// The widened `\w` delimiter is deliberately fail-closed: it catches a word
+	// character directly before the redirect operator. It also denies a quoted
+	// literal, because the gate dequotes the probe.
+	assert.equal(evaluateCmd("echo>out", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("cat>file", implementerRules).kind, "deny");
+	// A digit prefix is an fd redirect to a file, not an fd dup.
+	assert.equal(evaluateCmd("echo hi 2>out.txt", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("cargo deny check 2>/tmp/err", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("echo hi > file", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("echo hi >> file", implementerRules).kind, "deny");
 	assert.equal(evaluateCmd("echo hi 2>&1", implementerRules).kind, "allow");
+});
+
+// The over-deny is accepted and fail-closed: the gate dequotes `echo 'a>b'` to
+// `echo a>b`, and the widened `\w` delimiter reads it as a file write.
+test("accepts the over-deny for a quoted redirect literal", () => {
+	assert.equal(evaluateCmd("echo 'a>b'", implementerRules).kind, "deny");
 });
 
 // A `noDequote` deny examines the raw probes only. A denied word inside quoted

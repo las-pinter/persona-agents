@@ -3049,6 +3049,7 @@ const OPENCODE_RUST_ALLOWS: Record<RustAgent, string[]> = {
 		"cargo doc *",
 		"cargo test *",
 		"cargo nextest *",
+		"cargo deny check *",
 	],
 	researcher: [
 		"rustc --version",
@@ -3138,6 +3139,8 @@ const KIRO_RUST_ALLOWS: Record<RustAgent, string[]> = {
 		"cargo test *",
 		"cargo nextest",
 		"cargo nextest *",
+		"cargo deny check",
+		"cargo deny check *",
 		"rustc --version",
 		"rustup show",
 	],
@@ -3204,6 +3207,8 @@ const PI_RUST_ALLOWS: Record<RustAgent, string[]> = {
 		"cargo doc",
 		"cargo test",
 		"cargo nextest",
+		"cargo deny check",
+		"cargo deny check --all-features",
 	],
 	researcher: [
 		"rustc --version",
@@ -3384,6 +3389,57 @@ describe("rust toolchain permission doctrine", () => {
 		assert.notEqual(opencodeVerdict("reviewer", "cargo fmt"), "allow", "opencode reviewer fmt");
 		assert.equal(kiroVerdict("reviewer", "cargo fmt --check"), "allow", "kiro reviewer fmt --check");
 		assert.notEqual(kiroVerdict("reviewer", "cargo fmt"), "allow", "kiro reviewer fmt");
+	});
+
+	// A `cargo deny check` allow must stay narrow. `cargo deny init` writes a
+	// config file, so a widened `cargo deny *` rule would leak a mutation.
+	test("boundary: reviewer allows cargo deny check but not cargo deny init", () => {
+		const mutating = "cargo deny init";
+		const kiroAllowed = loadKiroConfig("reviewer").toolsSettings?.shell?.allowedCommands ?? [];
+		assert.notEqual(verdict("reviewer", mutating), "allow", "pi reviewer cargo deny init");
+		assert.notEqual(opencodeVerdict("reviewer", mutating), "allow", "opencode reviewer cargo deny init");
+		assert.ok(!hasOpenCodeRule("reviewer", "cargo deny *", "allow"), "opencode reviewer must not allow cargo deny *");
+		assert.ok(!kiroAllowed.includes(mutating), "kiro reviewer must not allow cargo deny init");
+		assert.notEqual(kiroVerdict("reviewer", mutating), "allow", "kiro reviewer cargo deny init");
+	});
+
+	// The redirect deny must beat the `cargo deny check` allow on every pi role,
+	// so a digit-prefixed write (`2>/tmp/err`) still denies.
+	test("pi: the redirect deny beats the cargo deny check allow on every role", () => {
+		for (const agent of ["orchestrator", "implementer", ...OTHER_AGENTS]) {
+			assert.equal(verdict(agent, "cargo deny check 2>/tmp/err"), "deny", `pi ${agent} redirect`);
+			assert.equal(verdict(agent, "echo hi 2>out.txt"), "deny", `pi ${agent} digit redirect`);
+		}
+	});
+
+	// kiro and opencode grant `cargo deny check`, but a redirect write must not
+	// ride that allow. Their glob deny cannot express the pi `(?![0-9&])`
+	// exception, so they also deny an fd dup. The extra strictness is accepted.
+	test("kiro and opencode: the redirect deny beats the cargo deny check allow", () => {
+		assert.equal(kiroVerdict("reviewer", "cargo deny check 2>/tmp/err"), "deny", "kiro reviewer file redirect");
+		assert.equal(kiroVerdict("reviewer", "cargo deny check 2>&1"), "deny", "kiro reviewer fd dup over-deny");
+		assert.equal(kiroVerdict("reviewer", "cargo deny check"), "allow", "kiro reviewer deny check");
+		assert.equal(
+			kiroVerdict("reviewer", "cargo deny check --all-features"),
+			"allow",
+			"kiro reviewer deny check args",
+		);
+		assert.equal(
+			opencodeVerdict("reviewer", "cargo deny check 2>/tmp/err"),
+			"deny",
+			"opencode reviewer file redirect",
+		);
+		assert.equal(
+			opencodeVerdict("reviewer", "cargo deny check 2>&1"),
+			"deny",
+			"opencode reviewer fd dup over-deny",
+		);
+		assert.equal(opencodeVerdict("reviewer", "cargo deny check"), "allow", "opencode reviewer deny check");
+		assert.equal(
+			opencodeVerdict("reviewer", "cargo deny check --all-features"),
+			"allow",
+			"opencode reviewer deny check args",
+		);
 	});
 
 	test("boundary: tester allows cargo build, reviewer denies it", () => {

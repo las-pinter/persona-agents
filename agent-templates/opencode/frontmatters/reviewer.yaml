@@ -479,6 +479,12 @@ permissions:
     resource: "cargo nextest *"
     effect: allow
   - action: shell
+    resource: "cargo deny check *"
+    effect: allow
+  - action: shell
+    resource: "cargo deny check *>*"
+    effect: deny
+  - action: shell
     resource: "cargo add *"
     effect: ask
   - action: shell

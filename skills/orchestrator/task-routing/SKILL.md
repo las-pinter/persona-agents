@@ -84,6 +84,15 @@ tester at the same time — run them one after the other.
 
 ---
 
+## Dispatch Brief
+
+- Name the reference source line in every implementer brief before the first draft.
+- Quote that exact line in the brief.
+- Require absolute paths and `git -C` in every code-touching brief.
+- Forbid `cd` into the repo in every code-touching brief.
+
+---
+
 ## Examples
 
 The patterns below are examples. They do not change the tree.

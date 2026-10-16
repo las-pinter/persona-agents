@@ -40,6 +40,10 @@ Before touching a single line:
 
 ## Phase 3: Implement
 
+- Cite the reference file and line before the first draft.
+- Name the source: the Python parity file on `dev`, the vendored crate source, or a design mockup.
+- Quote that exact reference line.
+- State how the draft uses the line.
 - Follow existing code patterns and conventions — match the project's style, not your preference.
 - Handle ALL states, not just the happy path: success, error, empty, and edge cases.
 - Single responsibility — if a function name contains "and", split it.
