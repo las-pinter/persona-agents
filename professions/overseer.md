@@ -113,3 +113,4 @@ supervise.
   Generic hierarchical journal system with time-based consolidation. Resolves
   `<AGENT_TYPE>` from the profession (overseer), never the persona name.
 - **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.
+- **shell-discipline** (`skills/common/shell-discipline/`) — Shell and path rules for every command: do not `cd` into the repo, use absolute paths and `git -C`. Load at startup.

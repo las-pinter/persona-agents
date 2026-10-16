@@ -10,8 +10,8 @@ description: Coordinates work by delegating to subagents; routes tasks, manages 
 # form of a mutation-capable verb still asks or denies.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
-skills: ["orchestrator/*", "common/project-notes", "common/simplified-technical-english", "common/journal-management-generic", "common/persona-free-documents"]
-alwaysLoad: ["orchestrator/journal-management", "common/project-notes", "orchestrator/task-routing", "common/simplified-technical-english"]
+skills: ["orchestrator/*", "common/project-notes", "common/simplified-technical-english", "common/journal-management-generic", "common/persona-free-documents", "common/shell-discipline"]
+alwaysLoad: ["orchestrator/journal-management", "common/project-notes", "orchestrator/task-routing", "common/simplified-technical-english", "common/shell-discipline"]
 permissions:
   mode: deny-by-default
   allow:

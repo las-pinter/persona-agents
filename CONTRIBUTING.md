@@ -235,6 +235,7 @@ persona-agents/
 │       ├── journal-management-generic/SKILL.md
 │       ├── persona-free-documents/SKILL.md
 │       ├── project-notes/SKILL.md
+│       ├── shell-discipline/SKILL.md
 │       ├── simplified-technical-english/SKILL.md
 │       └── skill-resolution/SKILL.md
 ├── prompts/                           # Pi prompt templates (slash commands)

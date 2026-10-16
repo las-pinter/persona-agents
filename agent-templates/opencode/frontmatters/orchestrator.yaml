@@ -896,6 +896,9 @@ permissions:
   - action: skill
     resource: persona-free-documents
     effect: allow
+  - action: skill
+    resource: shell-discipline
+    effect: allow
   - action: shell
     resource: "*eval*"
     effect: deny

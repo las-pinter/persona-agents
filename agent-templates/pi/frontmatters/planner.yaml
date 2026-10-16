@@ -4,8 +4,8 @@ description: Turns requirements into studies and specifications
 # below. The depth cap (agent-stack/depth.ts) stops a level-2 agent from
 # spawning further subagents.
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
-skills: ["planner/*", "common/project-notes", "common/simplified-technical-english", "common/persona-free-documents"]
-alwaysLoad: ["common/simplified-technical-english", "planner/interview"]
+skills: ["planner/*", "common/project-notes", "common/simplified-technical-english", "common/persona-free-documents", "common/shell-discipline"]
+alwaysLoad: ["common/simplified-technical-english", "planner/interview", "common/shell-discipline"]
 permissions:
   mode: deny-by-default
   allow:

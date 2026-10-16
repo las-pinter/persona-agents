@@ -1,8 +1,8 @@
 name: implementer
 description: "Implements code changes end to end: edits files, runs builds and tests"
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
-skills: ["implementer/*", "common/simplified-technical-english", "common/skill-resolution", "common/persona-free-documents"]
-alwaysLoad: ["common/simplified-technical-english", "common/skill-resolution"]
+skills: ["implementer/*", "common/simplified-technical-english", "common/skill-resolution", "common/persona-free-documents", "common/shell-discipline"]
+alwaysLoad: ["common/simplified-technical-english", "common/skill-resolution", "common/shell-discipline"]
 permissions:
   mode: deny-by-default
   allow:

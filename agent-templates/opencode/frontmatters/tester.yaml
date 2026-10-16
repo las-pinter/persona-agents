@@ -689,6 +689,9 @@ permissions:
     resource: persona-free-documents
     effect: allow
   - action: skill
+    resource: shell-discipline
+    effect: allow
+  - action: skill
     resource: skill-resolution
     effect: allow
   - action: skill
