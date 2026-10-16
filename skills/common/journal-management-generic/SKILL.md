@@ -189,6 +189,8 @@ Key rules:
    work already in the Work Log.
 5. Keep section names standard and plain. Do not rename them to match a
    persona voice.
+6. **Commit hash:** write the commit hash only after the commit exists. Never
+   write a placeholder hash.
 
 ---
 
