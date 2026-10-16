@@ -11,6 +11,12 @@ When a new version is released:
 2. Tag the release `v<new-version>`. Create the tag before the release, or
    select an already-added tag in the GitHub release form. Pi installs resolve
    by tag, so a release without the tag does not install.
+3. Before writing the install notes, run `git diff --name-only <prev-tag> HEAD`.
+   Check whether the kiro, opencode, or pi templates, professions, personas, or
+   skills changed. State the correct install step: reinstall
+   (`./install.sh --force`) for changed kiro or opencode templates, professions,
+   personas, or skills; `/reload` for pi-only changes. A change that touches both
+   pi and kiro or opencode needs both a reinstall and a `/reload`.
 
 Files that carry a version number but do NOT track the package release:
 
