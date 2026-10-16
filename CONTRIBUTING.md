@@ -17,6 +17,7 @@ welcome here.
 - [Working with Templates](#working-with-templates)
 - [Research and MCP Tool Names per Stack](#research-and-mcp-tool-names-per-stack)
 - [Adding Skills](#adding-skills)
+  - [Prompt Templates](#prompt-templates)
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
 - [Style Guide](#style-guide)
@@ -203,6 +204,7 @@ persona-agents/
 │   ├── orchestrator/
 │   │   ├── commit-hygiene/SKILL.md
 │   │   ├── journal-management/SKILL.md
+│   │   ├── retro/SKILL.md
 │   │   └── task-routing/SKILL.md
 │   ├── implementer/
 │   │   ├── code-implementation/SKILL.md
@@ -235,6 +237,8 @@ persona-agents/
 │       ├── project-notes/SKILL.md
 │       ├── simplified-technical-english/SKILL.md
 │       └── skill-resolution/SKILL.md
+├── prompts/                           # Pi prompt templates (slash commands)
+│   └── retro.md                       # `/retro` session retrospective command
 ├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
 │   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
 │   ├── permission-auditor.js          # Read-only permission audit logger
@@ -249,7 +253,7 @@ persona-agents/
 │   └── demo/
 │       └── personas.gif               # Demo animation referenced by README.md
 ├── install.sh                         # The installer — generates agents + installs plugins
-├── package.json                       # Pi package manifest (extensions/skills metadata; typecheck + test scripts)
+├── package.json                       # Pi package manifest (extensions/skills/prompts metadata; typecheck + test scripts)
 ├── tsconfig.json                      # TypeScript config for `npm run typecheck`
 ├── AGENTS.md                          # Agent rules: release ritual and commit doctrine
 ├── .editorconfig                      # Editor formatting rules
@@ -856,6 +860,37 @@ by looking for files named `SKILL.md` under the profession's skill directory.
    ```bash
    ./install.sh --dry-run --force --profession {profession}
    ```
+
+### Prompt Templates
+
+A pi prompt template turns a markdown file into a slash command. The template
+lives in `prompts/*.md` and is declared under the `pi.prompts` key in
+`package.json`:
+
+```json
+"pi": {
+  "extensions": ["./agent-stack/extension.ts"],
+  "skills": ["./skills/**/SKILL.md"],
+  "prompts": ["./prompts/*.md"]
+}
+```
+
+The filename is the command name, so `prompts/retro.md` becomes `/retro`. The
+`description` frontmatter shows in command completion. Run `/reload` in an
+active session after a template change.
+
+A prompt template adds no code. It loads a repo skill, and the skill holds the
+procedure. The template `prompts/retro.md` loads the **retro** skill
+(`skills/orchestrator/retro/`). This split keeps command discovery in the
+template and the full procedure in the skill.
+
+#### The `/retro` print-only model
+
+`/retro` reviews the current pi session and prints the result in chat. It
+writes no durable artifact: no report file, no skill file, no journal entry,
+and no permission rule. The orchestrator reads the printed findings and
+actions, then decides what to do next. A finding cites one external evidence
+item, so the review never rests on an agent self-grade.
 
 ## Testing
 

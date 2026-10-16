@@ -262,6 +262,7 @@ researcher, reviewer. Mascot and overseer are excluded. Each allowed agent lists
 - `/sidebar [on|off|width <n>]` — show or hide the right column, or set its width (10 to 120). A bare `/sidebar` toggles.
 - `/agents-tree` — open the live tree overlay. Up/down selects a node.
 - `/agent-inspect [runId|last]` — open one node's detail.
+- `/retro` — print-only blameless session retrospective; run `/reload` after install.
 
 The sidebar has no keyboard focus, so node details use these overlays.
 

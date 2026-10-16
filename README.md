@@ -53,6 +53,10 @@ Pi needs no `install.sh` run — it installs through the pi CLI (see below).
 `persona-agents` is also a **pi package**. One command installs the whole unit:
 the `agent-stack` extension, the 8 pi agents, the personas, and the skills.
 
+The package also installs the `/retro` command. Run `/retro` in a pi session
+for a print-only review of the session. It prints findings and actions in chat
+and writes no files.
+
 Full install steps live in [agent-stack/README.md](agent-stack/README.md).
 
 > ⚠️ Install only **one** source per package. A local path and a git clone both
