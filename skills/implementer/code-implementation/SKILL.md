@@ -51,6 +51,10 @@ Before touching a single line:
 - Search for existing helpers before writing new code (DRY).
 - Make minimal changes — do not refactor unrelated code in the same change.
 - Comment WHY, not WHAT. The code already says what it does.
+- Keep comments brief: one sentence and at most two lines, never long
+  explanatory blocks. Prefer code that explains itself; a long comment shows
+  the code needs a rewrite. See **simplified-technical-english**
+  (`skills/common/simplified-technical-english/`).
 - Repository artifacts stand alone: name no task, phase, milestone, decision-record ID, or ticket, or an outside-repo source. Follow **persona-free-documents** (`skills/common/persona-free-documents/`).
 
 **By task type:**

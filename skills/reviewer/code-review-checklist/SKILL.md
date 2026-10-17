@@ -105,6 +105,7 @@ severity-to-verdict authority. The **reviewer** profession references it.
 
 ### 10. Comments & Documentation
 - [ ] Comments explain **why**, not **what**
+- [ ] No long explanatory comment blocks; a long block is a design smell
 - [ ] No outdated comments or commented-out code
 - [ ] Comments and docs name no task, phase, milestone, decision-record ID, or audit/backlog number; no outside-repo citation
 - [ ] TODOs describe the missing work and name an owner; no ticket reference
