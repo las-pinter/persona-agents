@@ -10,6 +10,9 @@ description: Language-agnostic structure, naming conventions, and rules for writ
 1. **Describe behavior, not implementation.** Test names say WHAT the code does, not HOW.
 2. **Every test name answers three questions:** What context/input? What action? What outcome?
 3. **Readability over convention.** If a longer name is clearer, use it.
+4. **Name the behavior only.** Comments, docstrings, and test names name no
+   task, phase, milestone, decision-record ID, or ticket, or an outside-repo
+   source. Follow **persona-free-documents** (`skills/common/persona-free-documents/`).
 
 ### Good vs Bad Names
 

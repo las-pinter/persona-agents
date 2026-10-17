@@ -2,7 +2,7 @@ name: tester
 description: Designs and runs tests, isolates regressions, and flags production issues
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
 skills: ["tester/*", "common/simplified-technical-english", "common/skill-resolution", "common/persona-free-documents", "common/shell-discipline"]
-alwaysLoad: ["common/simplified-technical-english", "common/skill-resolution", "common/shell-discipline"]
+alwaysLoad: ["common/simplified-technical-english", "common/skill-resolution", "common/shell-discipline", "common/persona-free-documents"]
 permissions:
   mode: deny-by-default
   allow:

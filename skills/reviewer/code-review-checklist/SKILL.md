@@ -7,7 +7,7 @@ description: Structured checklist for reviewing code changes — severity taxono
 
 ## Review Methodology (6 Steps)
 
-1. **Scope** — Read PR title, description, linked ticket. Check which files and areas changed.
+1. **Scope** — Read the PR title and description. Check which files and areas changed.
 2. **High-level pass** — Does the overall approach make sense? Simpler alternative? Respects architecture?
 3. **Deep dive** — Read every changed line. Logic correct? Edge cases handled? Tests verify the right behavior?
 4. **Cross-cutting pass** — Security, performance, observability across the whole change.
@@ -51,9 +51,9 @@ severity-to-verdict authority. The **reviewer** profession references it.
 ### 1. PR Overview
 - [ ] Description explains **what** and **why** (not just how)
 - [ ] All changes logically belong in this PR
-- [ ] Matches the linked ticket/issue/spec
+- [ ] Matches the requested change or issue
 - [ ] README, docs, or API specs updated if behavior changed
-- [ ] Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) when reviewing documents and code comments; flag any theme word or roleplay address
+- [ ] Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) when reviewing documents and code comments; flag any theme word or roleplay address, or a plan, ticket, decision-record, or outside-repo reference
 
 ### 2. Design & Architecture
 - [ ] Overall approach makes sense for the problem
@@ -106,7 +106,8 @@ severity-to-verdict authority. The **reviewer** profession references it.
 ### 10. Comments & Documentation
 - [ ] Comments explain **why**, not **what**
 - [ ] No outdated comments or commented-out code
-- [ ] TODOs linked to tickets or have owners
+- [ ] Comments and docs name no task, phase, milestone, decision-record ID, or audit/backlog number; no outside-repo citation
+- [ ] TODOs describe the missing work and name an owner; no ticket reference
 
 ### 11. Style & Consistency
 - [ ] Follows team style guide and project conventions

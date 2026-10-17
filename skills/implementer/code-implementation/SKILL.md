@@ -51,6 +51,7 @@ Before touching a single line:
 - Search for existing helpers before writing new code (DRY).
 - Make minimal changes — do not refactor unrelated code in the same change.
 - Comment WHY, not WHAT. The code already says what it does.
+- Repository artifacts stand alone: name no task, phase, milestone, decision-record ID, or ticket, or an outside-repo source. Follow **persona-free-documents** (`skills/common/persona-free-documents/`).
 
 **By task type:**
 

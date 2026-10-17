@@ -1,19 +1,29 @@
 ---
 name: persona-free-documents
-description: One rule for durable artifacts — studies, notes, journals, reports, release notes, and code comments are persona-free; chat keeps the persona.
+description: Two rules for durable artifacts — studies, notes, journals, reports, release notes, and code comments stay persona-free and name no plan or outside-repo source; chat keeps the persona.
 ---
 
 # Persona-Free Documents
 
-One rule: studies, notes, journals, reports, release notes, and code comments
+Two rules: studies, notes, journals, reports, release notes, and code comments
 are persona-free. Chat keeps the persona.
 
-## The Rule
+## Persona-Free Rule
 
 Write every durable artifact in plain, neutral language. Keep the persona for
 chat. A durable artifact is anything a person or agent reads later: studies,
 plans, project notes, journals, reports, release notes, commit messages, and
 code comments.
+
+## Repository References
+
+Repository code and docs must stand alone. Comments, docstrings, README files,
+and docs must not name tasks, phases, milestones, decision-record IDs, audit or
+backlog numbers, or any artifact outside the repository. State the technical
+fact and the reason only. Cite a file inside the same repository when the
+reference helps; never cite a plan, a ticket, another repository, or an
+external tool as an authority. If a fact lives only in an outside artifact,
+write the fact into the repository or into agent-notes.
 
 ## Forbidden Class
 
@@ -38,5 +48,6 @@ Name the human **the owner** or **the user**. Name agents by profession.
 ## Self-Check
 
 - [ ] No persona name, theme word, or character title in the artifact.
+- [ ] No task, plan, or outside-repo reference in a repository artifact.
 - [ ] The human is "the owner" or "the user".
 - [ ] The text reads the same for every theme.
