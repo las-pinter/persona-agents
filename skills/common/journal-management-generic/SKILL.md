@@ -74,9 +74,8 @@ glob(pattern="YYYY-MM-DD.md",
 Pick the most recent by filename (YYYY-MM-DD sorts naturally). Read that file.
 
 **Fallback (if glob returns nothing):**
-```bash
-ls <USER_HOME>/agent-notes/<AGENT_TYPE>/journals/daily/ | sort | tail -1
-```
+Run the ls command on the daily directory. The listing sorts by name. Read the
+last line.
 
 ---
 
@@ -270,4 +269,4 @@ had it).
 
 - Journal file not found on read → normal, no work was done that period.
   Continue.
-- Directory missing on write → create with `mkdir -p <path>`, then write.
+- Directory missing on write → the write tool creates the directory.

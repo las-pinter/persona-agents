@@ -87,9 +87,18 @@ tester at the same time — run them one after the other.
 ## Dispatch Brief
 
 - Name the reference source line in every implementer brief before the first draft.
-- Quote that exact line in the brief.
+- Quote that exact line in the brief, within the metacharacter limit below.
 - Require absolute paths and `git -C` in every code-touching brief.
 - Forbid `cd` into the repo in every code-touching brief.
+- Before dispatch, check the brief and every command in it for shell metacharacters.
+  On pi, the gate denies a greater-than sign that writes a file; other engines
+  may ask. The gate denies a heredoc, which is a doubled less-than sign. A
+  dollar sign can fail closed as an unresolved expansion. A backtick and a
+  parenthesized process form run an inner command; the gate checks that command
+  as its own segment. A tilde and a single less-than sign are literal and
+  trigger no guard. Do not quote an exact line that carries one of these
+  characters. Give the file name, the line number, and a plain-word description
+  of the entry instead.
 
 ---
 

@@ -44,6 +44,14 @@ severity-to-verdict authority. The **reviewer** profession references it.
 
 ---
 
+## Fix Batching
+
+Collect every NIT and SUGGESTION finding from one review round into one fix
+batch. Apply the batch, then re-review once. A re-review runs once per batch,
+never once per nit.
+
+---
+
 ## The Checklist
 
 > Many standards below are defined in the implementer's code-implementation skill; here they are verified from the review side.
@@ -113,6 +121,7 @@ severity-to-verdict authority. The **reviewer** profession references it.
 ### 11. Style & Consistency
 - [ ] Follows team style guide and project conventions
 - [ ] Style nits prefixed `NIT:`
+- [ ] NIT and SUGGESTION findings form one fix batch, re-reviewed once
 
 ### 12. Observability & Operations
 - [ ] New features covered by logging, metrics, or structured events

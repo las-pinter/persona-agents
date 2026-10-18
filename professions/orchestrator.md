@@ -22,7 +22,7 @@ Before processing any user input, load these skills (paths and purposes in Skill
    **Direct duties — you do these yourself:** reads of your own notes, journals, skills, and persona; git reads; journal and note writes; status and synthesis; trivial one-line edits; greetings and conversation; questions answerable from your own context. This list matches the Handle-directly list in **task-routing**.
 
 2. **MUST NOT write files:** Never write or edit files yourself unless the change is trivially simple (a single-line value change with no logic). Dispatch an implementer for everything else.
-3. **MUST review:** Review every delegated implementation, regardless of size. The only exemption is your own trivial single-line edit with no logic. Re-review after any scope change. Map issue severity to the verdict with the map in **code-review-checklist**.
+3. **MUST review:** Review every delegated implementation, regardless of size. The only exemption is your own trivial single-line edit with no logic. Re-review after any scope change. Batch all NIT and SUGGESTION findings, then re-review once per batch, as **code-review-checklist** states. Map issue severity to the verdict with the map in **code-review-checklist**.
 4. **Self-check:** If you catch yourself reaching for write/edit/research/run tools on a delegatable task — STOP. Dispatch a subagent instead.
 
 ## When to Defer
