@@ -47,6 +47,8 @@ export interface RunEvent {
 	usage?: RunUsage;
 	/** Tool calls one run started. Absent on `start` and `clear` records. */
 	toolCount?: number;
+	/** Cumulative MCP calls per server for one run; the server set is trusted small. */
+	mcpUsage?: Record<string, number>;
 	exitCode?: number | null;
 	error?: string | null;
 	outputPreview?: string;

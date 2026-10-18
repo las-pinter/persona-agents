@@ -22,6 +22,7 @@ import {
 	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { ENV_TREE_LOG } from "./depth.ts";
+import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
 import { readEvents } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
@@ -86,6 +87,12 @@ interface InternalState {
 	lastOutputTokens: number;
 	mcpJsonServers: string[];
 	mcpJsonPath: string;
+	/** Root MCP tool starts, counted in this process. */
+	rootMcpUsage: Record<string, number>;
+	/** Root tool-call ids already counted, so a repeated start is ignored. */
+	rootCallIds: Set<string>;
+	/** Session-wide subagent MCP usage, folded from the shared tree log. */
+	mcpTally: McpTally;
 	unsubs: Array<() => void>;
 	timers: Array<ReturnType<typeof setInterval>>;
 }
@@ -243,6 +250,9 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		lastOutputTokens: 0,
 		mcpJsonServers: [],
 		mcpJsonPath: resolveMcpJsonPath(),
+		rootMcpUsage: {},
+		rootCallIds: new Set<string>(),
+		mcpTally: createMcpTally(),
 		unsubs: [],
 		timers: [],
 	};
@@ -391,15 +401,35 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		applyWorkspace();
 	}
 
+	/** Rebuild the MCP usage map from the root count plus the session tally. */
+	function applyMcpUsage(): void {
+		state.snapshot.mcpUsage = mergeMcpUsage(state.rootMcpUsage, state.mcpTally.usage());
+	}
+
+	/** Adopt the current log as already counted, then zero the session tally. */
+	function resetMcpUsage(): void {
+		const logPath = process.env[ENV_TREE_LOG];
+		if (logPath) {
+			for (const event of readEvents(logPath)) state.mcpTally.observe(event.runId, event.mcpUsage);
+		}
+		state.mcpTally.reset();
+		state.rootMcpUsage = {};
+		state.rootCallIds.clear();
+		applyMcpUsage();
+	}
+
 	/** Read the shared tree log into the snapshot. */
 	function refreshTree(): void {
 		const logPath = process.env[ENV_TREE_LOG];
 		if (!logPath) {
 			state.snapshot.tree = [];
+			applyMcpUsage();
 			return;
 		}
 		const events = readEvents(logPath);
 		state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
+		for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);
+		applyMcpUsage();
 	}
 
 	/** Poll git status and diff for changed files and per-file line stats. */
@@ -589,6 +619,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		const myGeneration = (generation += 1);
 
 		// Initial reads so the first paint has real data.
+		resetMcpUsage();
 		guard(() => refreshSession(ctx));
 		guard(() => refreshTodosFromEntries(ctx));
 		guard(() => {
@@ -602,6 +633,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		onPi(() =>
 			pi.on("session_start", (_event, eventCtx) =>
 				guard(() => {
+					// A new session zeroes the tally; the current log counts as seen.
+					resetMcpUsage();
 					refreshTodosFromEntries(eventCtx);
 					refreshSession(eventCtx);
 				}),
@@ -640,7 +673,17 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		onPi(() => pi.on("agent_start", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
 		onPi(() => pi.on("agent_end", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
 		onPi(() =>
-			pi.on("tool_execution_start", (_event, eventCtx) => guard(() => refreshSession(eventCtx))),
+			pi.on("tool_execution_start", (event, eventCtx) =>
+				guard(() => {
+					if (typeof event.toolCallId === "string") {
+						if (state.rootCallIds.has(event.toolCallId)) return;
+						state.rootCallIds.add(event.toolCallId);
+					}
+					state.rootMcpUsage = countMcpTool(state.rootMcpUsage, event.toolName);
+					applyMcpUsage();
+					refreshSession(eventCtx);
+				}),
+			),
 		);
 		onPi(() =>
 			pi.on("tool_execution_update", (_event, eventCtx) =>

@@ -13,8 +13,12 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
+import { unlinkSync } from "node:fs";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createSidebarData } from "./sidebar-data.ts";
+import { TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
+import { appendEvent, createRootLogPath } from "./tree-log.ts";
+import { findNode } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, TODOS_TURN_ENTRY } from "./todo-tool.ts";
 import type { McpSnapshot, SessionSnapshot, WorkspaceFileSnapshot } from "./sidebar-render.ts";
 
@@ -474,5 +478,166 @@ test("agent_end does not clear the turn marker", () => {
 		assert.equal(data.snapshot().todosTurnMarker, true, "the marker survives the end of the turn");
 	} finally {
 		data.dispose();
+	}
+});
+
+// --- MCP usage counting ------------------------------------------------------
+
+test("a root MCP tool start increments that server's count", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.({ toolName: "mcp__context7__search" }, makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.({ toolName: "mcp__context7__find" }, makeFakeCtx());
+		assert.equal(data.snapshot().mcpUsage?.context7, 2);
+	} finally {
+		data.dispose();
+	}
+});
+
+test("a repeated root MCP tool call id counts once", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		const start = { toolName: "mcp__context7__search", toolCallId: "call-1" };
+		piHandlers.get("tool_execution_start")?.(start, makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.(start, makeFakeCtx());
+		assert.equal(data.snapshot().mcpUsage?.context7, 1, "the duplicate start is ignored");
+	} finally {
+		data.dispose();
+	}
+});
+
+test("a non-MCP tool start does not increment any count", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.({ toolName: "read" }, makeFakeCtx());
+		assert.deepEqual(data.snapshot().mcpUsage, {});
+	} finally {
+		data.dispose();
+	}
+});
+
+test("an errored tool end does not change the MCP count", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.({ toolName: "mcp__context7__search" }, makeFakeCtx());
+		assert.equal(data.snapshot().mcpUsage?.context7, 1, "the count is set before the end");
+
+		piHandlers.get("tool_execution_end")?.(
+			{ toolName: "mcp__context7__search", error: "boom" },
+			makeFakeCtx(),
+		);
+		assert.equal(data.snapshot().mcpUsage?.context7, 1, "a failed call stays counted");
+	} finally {
+		data.dispose();
+	}
+});
+
+test("a new session resets the MCP usage counts", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.({ toolName: "mcp__context7__search" }, makeFakeCtx());
+		assert.equal(data.snapshot().mcpUsage?.context7, 1, "the count is set before the reset");
+
+		piHandlers.get("session_start")?.({}, makeFakeCtx());
+		assert.deepEqual(data.snapshot().mcpUsage, {}, "the new session starts at zero");
+	} finally {
+		data.dispose();
+	}
+});
+
+test("a re-subscribe clears the MCP usage counts", () => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx());
+		piHandlers.get("tool_execution_start")?.({ toolName: "mcp__context7__search" }, makeFakeCtx());
+		assert.equal(data.snapshot().mcpUsage?.context7, 1, "the count is set before the re-subscribe");
+
+		data.subscribe(makeFakeCtx());
+		assert.deepEqual(data.snapshot().mcpUsage, {}, "the re-subscribe starts at zero");
+	} finally {
+		data.dispose();
+	}
+});
+
+/** Write a temp tree log that holds one finished subagent, and return its path. */
+function writeFinishedSubagentLog(usage: Record<string, number>, clear: boolean): string {
+	const logPath = createRootLogPath();
+	const at = new Date().toISOString();
+	appendEvent(logPath, { v: 1, type: "start", runId: "root", parentRunId: null, depth: 0, agent: "orchestrator", persona: null, status: "idle", at });
+	appendEvent(logPath, { v: 1, type: "start", runId: "child", parentRunId: "root", depth: 1, agent: "implementer", persona: null, status: "running", at });
+	appendEvent(logPath, { v: 1, type: "end", runId: "child", parentRunId: "root", depth: 1, agent: "implementer", persona: null, status: "done", at, mcpUsage: usage });
+	if (clear) {
+		const clearAt = new Date(Date.parse(at) + 1000).toISOString();
+		appendEvent(logPath, { v: 1, type: "clear", runId: "root", parentRunId: null, depth: 0, agent: "orchestrator", persona: null, status: "running", at: clearAt });
+	}
+	return logPath;
+}
+
+/** Remove a temp log, ignoring a missing file. */
+function removeLog(path: string): void {
+	try {
+		unlinkSync(path);
+	} catch {
+		/* the temp file may be gone */
+	}
+}
+
+/** Restore the tree-log env after a test. */
+function restoreTreeLogEnv(previous: string | undefined): void {
+	if (previous === undefined) delete process.env[ENV_TREE_LOG];
+	else process.env[ENV_TREE_LOG] = previous;
+}
+
+test("a clear after a finished subagent does not drop its MCP count", (t) => {
+	const { pi } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	const previous = process.env[ENV_TREE_LOG];
+	delete process.env[ENV_TREE_LOG];
+	const logPath = writeFinishedSubagentLog({ context7: 2 }, true);
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	try {
+		data.subscribe(makeFakeCtx());
+		process.env[ENV_TREE_LOG] = logPath;
+		t.mock.timers.tick(TREE_POLL_MS);
+		assert.equal(findNode(data.snapshot().tree, "child"), undefined, "the clear prunes the finished child");
+		assert.equal(data.snapshot().mcpUsage?.context7, 2, "the finished subagent stays counted");
+	} finally {
+		data.dispose();
+		t.mock.timers.reset();
+		restoreTreeLogEnv(previous);
+		removeLog(logPath);
+	}
+});
+
+test("a session start stays at zero through a later tree refresh", (t) => {
+	const { pi, piHandlers } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	const previous = process.env[ENV_TREE_LOG];
+	delete process.env[ENV_TREE_LOG];
+	const logPath = writeFinishedSubagentLog({ context7: 2 }, false);
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	try {
+		data.subscribe(makeFakeCtx());
+		process.env[ENV_TREE_LOG] = logPath;
+		piHandlers.get("session_start")?.({}, makeFakeCtx());
+		assert.deepEqual(data.snapshot().mcpUsage, {}, "the reset is immediate");
+		t.mock.timers.tick(TREE_POLL_MS);
+		assert.deepEqual(data.snapshot().mcpUsage, {}, "the later refresh does not resurrect the count");
+	} finally {
+		data.dispose();
+		t.mock.timers.reset();
+		restoreTreeLogEnv(previous);
+		removeLog(logPath);
 	}
 });

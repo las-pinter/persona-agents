@@ -10,6 +10,7 @@
  */
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
 
 /** Changed names shown inline in WORKSPACE before the `… +N more` mark. */
@@ -123,6 +124,8 @@ export interface SidebarSnapshot {
 	session: SessionSnapshot;
 	workspace: WorkspaceSnapshot;
 	mcp: McpSnapshot;
+	/** Session-wide MCP tool-call count per server. Absent means usage is not tracked. */
+	mcpUsage?: Record<string, number>;
 	todos: TodoSnapshot;
 	/** True when the TODOS panel paints the last turn boundary. */
 	todosTurnMarker?: boolean;
@@ -544,11 +547,12 @@ function mcpStatusDot(
 	return { glyph: "◐", token: "warning" };
 }
 
-/** The MCP panel: header plus a summary line and server lines. */
+/** The MCP panel: header plus a summary line, server rows, and a usage total. */
 export function renderMcpPanel(
 	mcp: McpSnapshot | null | undefined,
 	width: number,
 	theme: SidebarTheme,
+	usage?: Record<string, number>,
 ): string[] {
 	const lines: string[] = [header(theme, " MCP ")];
 	// The built-in API has no live connection state; `connected` is inferred.
@@ -566,10 +570,16 @@ export function renderMcpPanel(
 	const shown = servers.slice(0, MCP_SERVERS_SHOWN);
 	for (const server of shown) {
 		const { glyph, token } = mcpStatusDot(server.status, server.connected);
-		lines.push(`${color(theme, token, glyph)} ${server.name}`);
+		// An absent usage map means the caller does not track usage at all.
+		const badge = usage !== undefined ? ` ${styleDim(theme, `x${lookupMcpCount(usage, server.name)}`)}` : "";
+		lines.push(`${color(theme, token, glyph)} ${server.name}${badge}`);
 	}
 	if (servers.length > shown.length) {
 		lines.push(styleDim(theme, `… +${servers.length - shown.length} more`));
+	}
+	if (usage !== undefined) {
+		// The total spans every server, including the rows beyond the visible cap.
+		lines.push(styleDim(theme, `total x${totalMcpCount(usage)}`));
 	}
 	return lines.map((line) => clipLine(line, width));
 }
@@ -727,6 +737,7 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		session,
 		workspace,
 		mcp,
+		mcpUsage: snapshot.mcpUsage ?? {},
 		todos,
 		todosTurnMarker: snapshot.todosTurnMarker === true,
 		tps: snapshot.tps,
@@ -799,7 +810,7 @@ export function renderSidebarPanel(
 	const treePanel = renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now);
 	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
 	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
-	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme);
+	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage);
 	const upper = [treePanel, sessionPanel, workspacePanel, mcpPanel];
 	// The +upper.length counts the section rules, including the rule before TODOS.
 	const usedByUpper = upper.reduce((sum, panel) => sum + panel.length, 0) + upper.length;

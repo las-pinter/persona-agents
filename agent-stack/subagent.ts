@@ -51,6 +51,7 @@ import {
 	parseDepth,
 	planSpawn,
 } from "./depth.ts";
+import { createSubagentMcpCounter, type SubagentMcpCounter } from "./mcp-usage.ts";
 import { type RunEvent, appendEvent } from "./tree-log.ts";
 
 const MAX_PARALLEL_TASKS = 8;
@@ -372,10 +373,10 @@ function truncateUtf8(value: string, maxBytes: number): string {
 }
 
 /** Append one tree event when the shared log is enabled. Best-effort. */
-function appendTreeEvent(event: RunEvent): void {
+function appendTreeEvent(event: RunEvent, mcp?: SubagentMcpCounter): void {
 	const logPath = process.env[ENV_TREE_LOG];
 	if (!logPath) return;
-	appendEvent(logPath, event);
+	appendEvent(logPath, mcp ? { ...event, mcpUsage: mcp.usage() } : event);
 }
 
 type DisplayItem =
@@ -570,9 +571,8 @@ async function runSingleAgent(
 	let lastTreeUpdateAt = Date.now();
 	const taskBytes = Buffer.byteLength(task, "utf8");
 	let bytesOut = 0;
-	// Tool calls this child started. A `tool_execution_start` carries a unique
-	// `toolCallId`, so the set counts each call exactly once.
-	const toolCallIds = new Set<string>();
+	// One pass counts distinct tool calls and per-server MCP calls.
+	const mcp = createSubagentMcpCounter();
 	appendTreeEvent({
 		v: 1,
 		type: "start",
@@ -602,14 +602,14 @@ async function runSingleAgent(
 			at: new Date().toISOString(),
 			bytesIn: taskBytes,
 			bytesOut,
-			toolCount: toolCallIds.size,
+			toolCount: mcp.toolCount(),
 			usage: {
 				input: currentResult.usage.input,
 				output: currentResult.usage.output,
 				cost: currentResult.usage.cost,
 				turns: currentResult.usage.turns,
 			},
-		});
+		}, mcp);
 	};
 
 	const emitUpdate = () => {
@@ -687,9 +687,7 @@ async function runSingleAgent(
 					return;
 				}
 
-				if (event.type === "tool_execution_start" && typeof event.toolCallId === "string") {
-					toolCallIds.add(event.toolCallId);
-				}
+				mcp.count(event);
 
 				if (event.type === "message_update" && event.assistantMessageEvent) {
 					const eventType = event.assistantMessageEvent.type;
@@ -772,7 +770,7 @@ async function runSingleAgent(
 			at: new Date().toISOString(),
 			bytesIn: taskBytes,
 			bytesOut,
-			toolCount: toolCallIds.size,
+			toolCount: mcp.toolCount(),
 			usage: {
 				input: currentResult.usage.input,
 				output: currentResult.usage.output,
@@ -782,7 +780,7 @@ async function runSingleAgent(
 			exitCode,
 			error: currentResult.errorMessage ?? null,
 			outputPreview: truncateUtf8(getResultOutput(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
-		});
+		}, mcp);
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {
