@@ -12,6 +12,7 @@
  */
 export function parseMcpServerName(toolName: unknown): string | null {
 	if (typeof toolName !== "string") return null;
+	// The server name is the first double-underscore segment; a name with a double underscore is not supported.
 	const match = /^mcp__(.+?)__/.exec(toolName);
 	return match ? match[1] : null;
 }

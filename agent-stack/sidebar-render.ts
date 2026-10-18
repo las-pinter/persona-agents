@@ -564,18 +564,17 @@ export function renderMcpPanel(
 
 	if (servers.length === 0) {
 		lines.push("(no servers)");
-		return lines.map((line) => clipLine(line, width));
-	}
-
-	const shown = servers.slice(0, MCP_SERVERS_SHOWN);
-	for (const server of shown) {
-		const { glyph, token } = mcpStatusDot(server.status, server.connected);
-		// An absent usage map means the caller does not track usage at all.
-		const badge = usage !== undefined ? ` ${styleDim(theme, `x${lookupMcpCount(usage, server.name)}`)}` : "";
-		lines.push(`${color(theme, token, glyph)} ${server.name}${badge}`);
-	}
-	if (servers.length > shown.length) {
-		lines.push(styleDim(theme, `… +${servers.length - shown.length} more`));
+	} else {
+		const shown = servers.slice(0, MCP_SERVERS_SHOWN);
+		for (const server of shown) {
+			const { glyph, token } = mcpStatusDot(server.status, server.connected);
+			// An absent usage map means the caller does not track usage at all.
+			const badge = usage !== undefined ? ` ${styleDim(theme, `x${lookupMcpCount(usage, server.name)}`)}` : "";
+			lines.push(`${color(theme, token, glyph)} ${server.name}${badge}`);
+		}
+		if (servers.length > shown.length) {
+			lines.push(styleDim(theme, `… +${servers.length - shown.length} more`));
+		}
 	}
 	if (usage !== undefined) {
 		// The total spans every server, including the rows beyond the visible cap.

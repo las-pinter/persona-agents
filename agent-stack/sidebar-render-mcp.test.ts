@@ -128,6 +128,46 @@ test("totalMcpCount sums every server", () => {
 	assert.equal(totalMcpCount({ a: 1, b: 2, c: 4 }), 7);
 });
 
+// --- ambiguous and near-miss tool names ------------------------------------
+
+test("parseMcpServerName returns null when the server segment is missing or empty", () => {
+	for (const name of ["mcp__", "mcp__x", "mcp_tool", "mcp____tool", "Mcp__a__b"]) {
+		assert.equal(parseMcpServerName(name), null, name);
+	}
+});
+
+test("parseMcpServerName keeps an underscore inside the server name", () => {
+	assert.equal(parseMcpServerName("mcp__my_server__lookup"), "my_server");
+});
+
+test("countMcpTool ignores an mcp-like name with no server segment", () => {
+	const counts = { context7: 1 };
+	for (const name of ["mcp__", "mcp__x", "mcp_tool", "mcp____tool"]) {
+		assert.equal(countMcpTool(counts, name), counts, name);
+	}
+});
+
+test("the subagent counter dedupes a call id even when the tool name changes", () => {
+	const counter = createSubagentMcpCounter();
+	counter.count({ type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__exa__search" });
+	counter.count({ type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__context7__search" });
+	assert.deepEqual(counter.usage(), { exa: 1 });
+});
+
+test("the subagent counter counts every start that has no call id", () => {
+	const counter = createSubagentMcpCounter();
+	counter.count({ type: "tool_execution_start", toolName: "mcp__exa__search" });
+	counter.count({ type: "tool_execution_start", toolName: "mcp__exa__find" });
+	assert.deepEqual(counter.usage(), { exa: 2 });
+});
+
+test("the subagent counter keeps a count after a failed tool end", () => {
+	const counter = createSubagentMcpCounter();
+	counter.count({ type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__exa__search" });
+	counter.count({ type: "tool_execution_end", toolCallId: "call-1", toolName: "mcp__exa__search", error: "boom" });
+	assert.deepEqual(counter.usage(), { exa: 1 });
+});
+
 // --- MCP badge and total ----------------------------------------------------
 
 test("an MCP server row shows an x-prefixed usage badge", () => {
@@ -186,6 +226,53 @@ test("the MCP total row fits the column width", () => {
 	}
 });
 
+test("a large usage count renders every digit in a wide panel", () => {
+	const mcp: McpSnapshot = [{ name: "exa", configured: true, connected: true, status: "connected" }];
+	const lines = content(renderMcpPanel(mcp, 60, theme, { exa: 123456789 }));
+	assert.ok(lines.some((line) => line.includes("● exa x123456789")));
+});
+
+test("a long server name and a large count clip cleanly to a narrow width", () => {
+	const name = "a-very-long-server-name-that-will-not-fit";
+	const mcp: McpSnapshot = [{ name, configured: true, connected: true, status: "connected" }];
+	const width = 24;
+	const lines = renderMcpPanel(mcp, width, theme, { [name]: 123456789 });
+
+	for (const line of lines) {
+		assert.ok(visibleWidth(line) <= width, `line exceeds ${width}: ${JSON.stringify(line)}`);
+	}
+	const row = lines.find((line) => line.includes("a-very-long"));
+	assert.ok(row, "the row keeps the start of the server name");
+	assert.ok(row.includes("…"), "the row clips with an ellipsis");
+});
+
+test("the total counts usage that belongs only to hidden servers", () => {
+	const mcp: McpSnapshot = Array.from({ length: 6 }, (_, index) => ({
+		name: `s${index}`,
+		configured: true,
+		connected: true,
+		status: "connected" as const,
+	}));
+	const lines = content(renderMcpPanel(mcp, 60, theme, { s4: 7, s5: 2 }));
+
+	assert.equal(lines.filter((line) => line.includes("● s")).length, 4, "only four server rows show");
+	assert.ok(lines.includes("… +2 more"));
+	assert.ok(lines.includes("total x9"));
+	assert.ok(!lines.some((line) => line.includes("● s4") || line.includes("● s5")));
+});
+
+test("the total includes usage for a server with no configured row", () => {
+	const mcp: McpSnapshot = [{ name: "exa", configured: true, connected: true, status: "connected" }];
+	const lines = content(renderMcpPanel(mcp, 60, theme, { exa: 1, orphan: 4 }));
+	assert.ok(lines.includes("total x5"));
+});
+
+test("the total shows for an empty server list when a usage map is supplied", () => {
+	const lines = content(renderMcpPanel([], 60, theme, { ghost: 3 }));
+	assert.ok(lines.includes("(no servers)"));
+	assert.ok(lines.includes("total x3"));
+});
+
 // --- repaint signature ------------------------------------------------------
 
 test("treeSignature changes when the MCP usage map changes", () => {
@@ -227,4 +314,12 @@ test("a session reset zeroes the total but keeps counted runs from re-adding", (
 	assert.deepEqual(tally.usage(), {}, "a seen run does not re-add after a reset");
 	tally.observe("child", { context7: 5 });
 	assert.deepEqual(tally.usage(), { context7: 3 }, "only the post-reset delta counts");
+});
+
+test("a reset followed by a new run counts only the new run", () => {
+	const tally = createMcpTally();
+	tally.observe("old", { context7: 3 });
+	tally.reset();
+	tally.observe("new", { context7: 2 });
+	assert.deepEqual(tally.usage(), { context7: 2 });
 });

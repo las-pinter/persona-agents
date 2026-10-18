@@ -63,6 +63,11 @@ function markingTheme(): { fg: (token: string, text: string) => string } {
 	return { fg: (token, text) => `<${token}>${text}</${token}>` };
 }
 
+/** A theme that emits a real ANSI dim escape, to prove it is not used. */
+function ansiTheme(): { fg: (token: string, text: string) => string } {
+	return { fg: (_token, text) => `\u001b[2m${text}\u001b[0m` };
+}
+
 interface StatusCall {
 	key: string;
 	text: string | undefined;
@@ -164,6 +169,56 @@ test("extension: agent and persona footer text is plain without a theme", async 
 	assert.deepEqual(calls, [
 		{ key: "agent", text: "agent: status-test-agent" },
 		{ key: "persona", text: "persona: status-test-theme/status-test-persona" },
+	]);
+});
+
+test("extension: footer text stays plain with no escape codes in rpc and json modes", async () => {
+	for (const mode of ["rpc", "json"]) {
+		const harness = makePi();
+		extension(harness.pi);
+		setActiveAgent(makeAgent());
+		setActivePersona(makePersona());
+
+		const calls: StatusCall[] = [];
+		const ctx = {
+			cwd: tmpRoot,
+			mode,
+			ui: { setStatus: recorder(calls), theme: ansiTheme() },
+		};
+		for (const handler of harness.handlers.get("before_agent_start") ?? []) {
+			await handler({ systemPrompt: "BASE" }, ctx);
+		}
+
+		assert.deepEqual(calls, [
+			{ key: "agent", text: "agent: status-test-agent" },
+			{ key: "persona", text: "persona: status-test-theme/status-test-persona" },
+		]);
+		assert.ok(calls.every((call) => !String(call.text).includes("\u001b")), `${mode} has no escape codes`);
+	}
+});
+
+test("extension: a cleared agent status stays cleared on the next agent run", async () => {
+	const harness = makePi();
+	extension(harness.pi);
+	setActiveAgent(makeAgent());
+	setActivePersona(makePersona());
+
+	const calls: StatusCall[] = [];
+	const ctx = {
+		cwd: tmpRoot,
+		mode: "tui",
+		ui: { setStatus: recorder(calls), theme: markingTheme(), notify: () => {} },
+	};
+	await harness.commands.get("agents")!.handler("off", ctx);
+
+	calls.length = 0;
+	for (const handler of harness.handlers.get("before_agent_start") ?? []) {
+		await handler({ systemPrompt: "BASE" }, ctx);
+	}
+
+	assert.deepEqual(calls, [
+		{ key: "agent", text: undefined },
+		{ key: "persona", text: "<dim>persona: status-test-theme/status-test-persona</dim>" },
 	]);
 });
 
