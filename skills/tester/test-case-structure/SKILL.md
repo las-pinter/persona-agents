@@ -183,3 +183,11 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 1. Move to a non-blocking quarantine suite
 2. Assign owner + two-week deadline to fix
 3. If not fixed in deadline: delete it — an untrusted test is a liability
+
+---
+
+## File Length
+
+Test files follow the common **file-length-policy** skill
+(`skills/common/file-length-policy/`). It owns the tiers, the exemptions, and
+the counting rule.

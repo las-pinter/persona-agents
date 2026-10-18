@@ -763,6 +763,12 @@ permissions:
     resource: skill-resolution
     effect: allow
   - action: skill
+    resource: simplified-technical-english
+    effect: allow
+  - action: skill
+    resource: file-length-policy
+    effect: allow
+  - action: skill
     resource: rust-best-practices
     effect: allow
   - action: skill

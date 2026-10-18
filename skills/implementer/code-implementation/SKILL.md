@@ -124,7 +124,7 @@ order; follow it inside Phase 4.
 - Names reveal intent: `calculateInvoiceTotal()` not `calc()`.
 - Booleans read naturally: `isActive`, `hasPermission`, `canDelete`.
 - No magic numbers — extract to named constants.
-- Functions under ~40 lines; files under ~300 lines.
+- Functions under ~40 lines. Follow the **file-length-policy** skill (`skills/common/file-length-policy/`) for file length.
 
 ---
 

@@ -81,6 +81,7 @@ never once per nit.
 - [ ] A new developer could understand this within a minute
 - [ ] No over-engineering (YAGNI)
 - [ ] Cyclomatic complexity reasonable — deep nesting extracted into helpers
+- [ ] File length follows the **file-length-policy** skill (`skills/common/file-length-policy/`).
 
 ### 5. Security
 - [ ] All user/input data validated and sanitized at trust boundaries
