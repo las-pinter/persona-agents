@@ -216,6 +216,7 @@ import {
 	skillScriptsDir,
 } from "./resolver.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
+import { dimText, type StatusUi } from "./status-text.ts";
 import registerSubagentTool from "./subagent.ts";
 import { registerTodoTool } from "./todo-tool.ts";
 import { disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
@@ -310,14 +311,24 @@ export default function (pi: ExtensionAPI): void {
 	applyDefaults(undefined);
 
 	/** Reflect the active agent/persona in the footer status bar. */
-	const syncStatus = (ctx: { ui?: { setStatus?: (key: string, text: string | undefined) => void } } | undefined) => {
+	const syncStatus = (
+		ctx:
+			| { mode?: string; ui?: StatusUi & { setStatus?: (key: string, text: string | undefined) => void } }
+			| undefined,
+	) => {
 		if (!ctx?.ui?.setStatus) return;
 		const agent = getActiveAgent();
 		const persona = getActivePersona();
-		ctx.ui.setStatus("agent", agent ? `agent: ${agent.name}` : undefined);
+		ctx.ui.setStatus("agent", agent ? dimText(ctx.ui, `agent: ${agent.name}`, ctx.mode) : undefined);
 		ctx.ui.setStatus(
 			"persona",
-			persona ? `persona: ${persona.theme ? `${persona.theme}/${persona.name}` : persona.name}` : undefined,
+			persona
+				? dimText(
+						ctx.ui,
+						`persona: ${persona.theme ? `${persona.theme}/${persona.name}` : persona.name}`,
+						ctx.mode,
+					)
+				: undefined,
 		);
 	};
 

@@ -21,6 +21,7 @@ import {
 	resolvePersonaForAgent,
 } from "./resolver.ts";
 import { getActiveAgent, setActiveAgent, setActivePersona } from "./state.ts";
+import { dimText } from "./status-text.ts";
 
 /** Parse "/agents <name> [-persona <id|off>]" into its parts. */
 function parseAgentArgs(args: string): { agentArg: string; personaArg?: string } {
@@ -54,7 +55,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 
 			if (agentArg === "off") {
 				setActiveAgent(null);
-				ctx.ui?.setStatus?.("agent", undefined);
+				ctx.ui?.setStatus?.("agent", dimText(ctx.ui, undefined, ctx.mode));
 				ctx.ui?.notify?.("Agent deactivated.", "info");
 				return;
 			}
@@ -73,19 +74,19 @@ export function registerCommands(pi: ExtensionAPI): void {
 			const effectivePersonaArg = personaArg ?? resolvedTarget?.theme;
 
 			setActiveAgent(agent);
-			ctx.ui?.setStatus?.("agent", `agent: ${agent.name}`);
+			ctx.ui?.setStatus?.("agent", dimText(ctx.ui, `agent: ${agent.name}`, ctx.mode));
 
 			// Persona handling: explicit -persona flag (or alias theme) wins; otherwise
 			// the agent's declared default persona applies.
 			if (effectivePersonaArg !== undefined) {
 				if (effectivePersonaArg === "off" || effectivePersonaArg === "none") {
 					setActivePersona(null);
-					ctx.ui?.setStatus?.("persona", undefined);
+					ctx.ui?.setStatus?.("persona", dimText(ctx.ui, undefined, ctx.mode));
 				} else {
 					const persona = resolvePersonaForAgent(discovery.personas, effectivePersonaArg, agent.name);
 					if (persona) {
 						setActivePersona(persona);
-						ctx.ui?.setStatus?.("persona", `persona: ${formatPersonaId(persona)}`);
+						ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${formatPersonaId(persona)}`, ctx.mode));
 					} else {
 						ctx.ui?.notify?.(`Unknown persona "${effectivePersonaArg}".`, "warning");
 					}
@@ -94,7 +95,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 				const persona = resolvePersonaForAgent(discovery.personas, agent.persona, agent.name);
 				if (persona) {
 					setActivePersona(persona);
-					ctx.ui?.setStatus?.("persona", `persona: ${formatPersonaId(persona)}`);
+					ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${formatPersonaId(persona)}`, ctx.mode));
 				}
 			}
 
@@ -132,7 +133,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 
 			if (arg === "off" || arg === "none") {
 				setActivePersona(null);
-				ctx.ui?.setStatus?.("persona", undefined);
+				ctx.ui?.setStatus?.("persona", dimText(ctx.ui, undefined, ctx.mode));
 				ctx.ui?.notify?.("Persona removed.", "info");
 				return;
 			}
@@ -144,7 +145,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 			}
 
 			setActivePersona(persona);
-			ctx.ui?.setStatus?.("persona", `persona: ${formatPersonaId(persona)}`);
+			ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${formatPersonaId(persona)}`, ctx.mode));
 			ctx.ui?.notify?.(
 				`Persona activated: ${formatPersonaId(persona)}\nTip: run /new first — in a long session earlier plain replies can outvote the persona.`,
 				"info",
