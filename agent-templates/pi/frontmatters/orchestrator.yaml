@@ -51,6 +51,9 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+(--version|auth\\s+status)\\s*$" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
+    # The implementer, the tester, the reviewer, and the orchestrator may run these Rust verification commands.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+nextest(\\s|$)" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+deny\\s+check(\\s|$)", reason: "cargo deny check is a read-only dependency policy gate" }
   ask:
     # Option-based execution or file writes on an allowed read verb. These carry
     # no shell separator, so the chain guards cannot see them.
@@ -105,11 +108,12 @@ permissions:
   deny:
     - { tool: bash, match: "^eval\\b" }
     - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\b(?:\"[^\"]*\"|'[^']*'|[^;&|\\n])*--config\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "(?:>>|>)(?!&\\d(?=$|[\\s;&|()<>]))|(?:^|[;&|(\\s])\\s*tee\\s+" }
     - { tool: bash, match: "\\bmkfs|\\bdd\\b.*\\bof=/dev/" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }

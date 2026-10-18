@@ -18,7 +18,8 @@ permissions:
     - { tool: grep, match: "." }
     - { tool: write, match: "(^|/)agent-notes/project-notes/" }
     - { tool: edit, match: "(^|/)agent-notes/project-notes/" }
-    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|pwd|date|echo|diff|mkdir|which|command -v|jq|bash -n)\\b" }
+    # `sort` and `mkdir` write or run a program by option; no allow, so the default decides.
+    - { tool: bash, match: "^(cat|head|tail|wc|grep|rg|ls|stat|pwd|date|echo|diff|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
   ask:
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
@@ -39,7 +40,16 @@ permissions:
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "(?:>>|>)(?!&\\d(?=$|[\\s;&|()<>]))|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    # A read-only role must not create a directory or write a stream to a file.
+    - { tool: bash, match: "^mkdir\\b" }
+    - { tool: bash, match: "^sort\\b[^\\n]*\\s(?:-[A-Za-z]*o[A-Za-z]*|--o[A-Za-z-]*)" }
+    - { tool: bash, match: "^uniq\\b[^\\n]*(?:\\s--(?:\\s|$)|[^\\n]*\\s[^-\\s]\\S*\\s+\\S+\\s*$)" }
+    # The rg --pre option runs an external command.
+    # The rg -z option runs an external decompression program.
+    - { tool: bash, match: "^rg\\b[^\\n]*\\s(?:--pre(?:\\s|=)|-[A-Za-z]*z[A-Za-z]*\\b|--search-zip\\b)" }
+    # `date -s` sets the system clock.
+    - { tool: bash, match: "^date\\b[^\\n]*\\s(?:-s[A-Za-z]*|--s[A-Za-z-]*)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
     - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }

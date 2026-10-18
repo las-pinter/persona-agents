@@ -128,7 +128,11 @@
         "uniq",
         "wc",
         "which",
-        "whoami"
+        "whoami",
+        "cargo nextest",
+        "cargo nextest *",
+        "cargo deny check",
+        "cargo deny check *"
       ],
       "deniedCommands": [
         "*eval*",
@@ -138,6 +142,8 @@
         "zsh -c *",
         "bash -n *;*",
         "bash -n *>*",
+        "cargo deny check *>*",
+        "cargo nextest *>*",
         "find * -exec *",
         "git tag -d*",
         "* git tag -d*",
@@ -176,7 +182,9 @@
         "*&&git -C * tag --delete*",
         "*|git -C * tag --delete*",
         "*git tag -*d*",
-        "*git -C * tag -*d*"
+        "*git -C * tag -*d*",
+        "*cargo *--config*",
+        "*cargo *>*"
       ],
       "autoAllowReadonly": false
     },

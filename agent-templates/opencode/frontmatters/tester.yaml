@@ -589,6 +589,14 @@ permissions:
   - action: shell
     resource: "cargo nextest *"
     effect: allow
+  # A redirect must not ride the cargo nextest allow.
+  # The engine takes the last match, so the deny must follow the allow.
+  - action: shell
+    resource: "cargo nextest *>*"
+    effect: deny
+  - action: shell
+    resource: "cargo deny check *"
+    effect: allow
   - action: shell
     resource: "cargo bench *"
     effect: allow
@@ -654,6 +662,11 @@ permissions:
   # obfuscated `--config` is an accepted residual on this engine.
   - action: shell
     resource: "*cargo *--config*"
+    effect: deny
+  # A trailing cargo allow would carry an output redirect into a file. This broad
+  # glob also denies an innocent command whose text holds cargo; accept this.
+  - action: shell
+    resource: "*cargo *>*"
     effect: deny
   - action: shell
     resource: "*CARGO_HOME*"

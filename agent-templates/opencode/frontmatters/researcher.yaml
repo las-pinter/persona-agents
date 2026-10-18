@@ -71,9 +71,6 @@ permissions:
     resource: "git show"
     effect: allow
   - action: shell
-    resource: "git branch"
-    effect: allow
-  - action: shell
     resource: "git rev-parse"
     effect: allow
   - action: shell
@@ -81,9 +78,6 @@ permissions:
     effect: allow
   - action: shell
     resource: "git tag --list"
-    effect: allow
-  - action: shell
-    resource: "git grep"
     effect: allow
   - action: shell
     resource: "git rev-list"
@@ -101,31 +95,10 @@ permissions:
     resource: "ls"
     effect: allow
   - action: shell
-    resource: "mkdir"
-    effect: allow
-  - action: shell
     resource: "od"
     effect: allow
   - action: shell
     resource: "pwd"
-    effect: allow
-  - action: shell
-    resource: "python -m pytest"
-    effect: allow
-  - action: shell
-    resource: "python3 -m pytest"
-    effect: allow
-  - action: shell
-    resource: "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest"
-    effect: allow
-  - action: shell
-    resource: "PYTHONDONTWRITEBYTECODE=1 python -m pytest"
-    effect: allow
-  - action: shell
-    resource: ".venv/bin/python -m pytest"
-    effect: allow
-  - action: shell
-    resource: "sort"
     effect: allow
   - action: shell
     resource: "tail"
@@ -222,6 +195,11 @@ permissions:
   # obfuscated `--config` is an accepted residual on this engine.
   - action: shell
     resource: "*cargo *--config*"
+    effect: deny
+  # A trailing cargo allow would carry an output redirect into a file. This broad
+  # glob also denies an innocent command whose text holds cargo; accept this.
+  - action: shell
+    resource: "*cargo *>*"
     effect: deny
   - action: shell
     resource: "*CARGO_HOME*"
@@ -1037,4 +1015,66 @@ permissions:
     effect: deny
   - action: shell
     resource: "*git -C * tag -*f*"
+    effect: deny
+  # A read-only role may run no command that creates or writes a file.
+  - action: shell
+    resource: "*mkdir*"
+    effect: deny
+  - action: shell
+    resource: "*sort*-o*"
+    effect: deny
+  - action: shell
+    resource: "*uniq* * ?*"
+    effect: deny
+  - action: shell
+    resource: "*rg*--pre*"
+    effect: deny
+  - action: shell
+    resource: "*rg*-z*"
+    effect: deny
+  - action: shell
+    resource: "*date*-s*"
+    effect: deny
+  - action: shell
+    resource: "*xxd* * ?*"
+    effect: deny
+  - action: shell
+    resource: "*git*--output*"
+    effect: deny
+  - action: shell
+    resource: "*git*--ext-diff*"
+    effect: deny
+  - action: shell
+    resource: "*git*--textconv*"
+    effect: deny
+  - action: shell
+    resource: "*git*--filters*"
+    effect: deny
+  - action: shell
+    resource: "*git*grep*-O*"
+    effect: deny
+  - action: shell
+    resource: "*git*grep*--open-files-in-pager*"
+    effect: deny
+  - action: shell
+    resource: "*git*branch*-u*"
+    effect: deny
+  - action: shell
+    resource: "*git*branch*-t ?*"
+    effect: deny
+  - action: shell
+    resource: "*git*branch*--track*"
+    effect: deny
+  - action: shell
+    resource: "*git*branch*--edit-description*"
+    effect: deny
+  - action: shell
+    resource: "*git*branch*--format*=* ?*"
+    effect: deny
+  - action: shell
+    resource: "*git*branch*--contains * ?*"
+    effect: deny
+  # A blanket redirect deny also denies the fd-dup form; accept this fail-safe over-deny.
+  - action: shell
+    resource: "*>*"
     effect: deny

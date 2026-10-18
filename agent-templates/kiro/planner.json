@@ -45,9 +45,7 @@
         "head",
         "jq",
         "ls",
-        "mkdir",
         "pwd",
-        "sort",
         "tail",
         "tr",
         "uniq",
@@ -317,7 +315,14 @@
         "*&&git -C * tag --force*",
         "*|git -C * tag --force*",
         "*git -C * tag -*d*",
-        "*git -C * tag -*f*"
+        "*git -C * tag -*f*",
+        "*mkdir*",
+        "*sort*-o*",
+        "*uniq* * ?*",
+        "*rg*--pre*",
+        "*rg*-z*",
+        "*date*-s*",
+        "*>*"
       ],
       "autoAllowReadonly": true
     },

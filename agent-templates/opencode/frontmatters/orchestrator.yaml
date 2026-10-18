@@ -467,6 +467,16 @@ permissions:
     resource: "which"
     effect: allow
   - action: shell
+    resource: "cargo nextest *"
+    effect: allow
+  - action: shell
+    resource: "cargo deny check *"
+    effect: allow
+  # A cargo config override can redirect the toolchain; deny it after the allows.
+  - action: shell
+    resource: "*cargo *--config*"
+    effect: deny
+  - action: shell
     resource: "xargs *"
     effect: ask
   - action: shell
@@ -1257,4 +1267,13 @@ permissions:
     effect: deny
   - action: shell
     resource: "*git -C * tag -*d*"
+    effect: deny
+  # The chain redirection guard asks, so this deny must come after it.
+  - action: shell
+    resource: "cargo nextest *>*"
+    effect: deny
+  # A trailing cargo allow would carry an output redirect into a file. This broad
+  # glob also denies an innocent command whose text holds cargo; accept this.
+  - action: shell
+    resource: "*cargo *>*"
     effect: deny

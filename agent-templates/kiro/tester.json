@@ -105,6 +105,8 @@
         "cargo test *",
         "cargo nextest",
         "cargo nextest *",
+        "cargo deny check",
+        "cargo deny check *",
         "cargo bench",
         "cargo bench *",
         "rustc --version",
@@ -118,6 +120,8 @@
         "zsh -c *",
         "bash -n *;*",
         "bash -n *>*",
+        "cargo deny check *>*",
+        "cargo nextest *>*",
         "find * -exec *",
         "cp",
         "cp *",
@@ -405,6 +409,7 @@
         "rustup which",
         "rustup which *",
         "*cargo *--config*",
+        "*cargo *>*",
         "*CARGO_HOME*"
       ],
       "autoAllowReadonly": true

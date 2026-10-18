@@ -25,14 +25,12 @@ permissions:
     # The uv allow covers only the quality-gate tools and the read-only sync forms.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?uv\\s+(build|sync\\s+--(?:frozen|offline)|run\\s+(pytest|ruff|mypy|bandit|pip-audit))(\\s|$)" }
     - { tool: bash, match: "^(\\.venv/bin/(python -m pytest|pre-commit))\\b" }
-    - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?(rustc|cargo|rustup)\\s+(--version|-V)\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rustup\\s+show\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(metadata|tree|locate-project|pkgid)\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(check|clippy|fmt|doc|build|test|nextest|bench|run|deny|audit|llvm-cov|geiger)(\\s|$)" }
   ask:
-    # `sed -i` edits a file in place. The allow probe is raw-only, so the fence
-    # lives here: the ask tier tests the dequoted probe, which catches `-"i"`.
+    # `sed -i` edits a file in place; the ask tier prompts before it runs.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?sed\\b[^\\n]*\\s(?:-[A-Za-z]*i[A-Za-z]*|--i[A-Za-z-]*)", reason: "sed in-place edit requires user approval" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(add|remove|update|upgrade|audit\\s+fix|deny\\s+init)\\b", reason: "dependency manifest or lockfile change requires user approval" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?uv\\s+(add|remove|lock|publish)\\b", reason: "dependency manifest or lockfile change requires user approval" }
@@ -57,11 +55,13 @@ permissions:
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+reflog\\s+(?:expire|delete|drop)\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+fetch\\b[^\\n]*:" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+remote\\s+(?:add|remove|rm|rename|set-url|set-branches|set-head|prune|update)\\b" }
+    # The ls-remote upload-pack and exec options run a program.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+ls-remote\\b[^\\n]*\\s(?:--upload-pack|--exec)\\b" }
     - { tool: bash, match: "^find\\b.*-exec\\b" }
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "(?:>>|>)(?!&\\d(?=$|[\\s;&|()<>]))|(?:^|[;&|(\\s])\\s*tee\\s+" }
     - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }

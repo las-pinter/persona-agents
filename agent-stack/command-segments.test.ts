@@ -22,16 +22,19 @@ import {
 
 // --- representative rule sets (trimmed from the shipped frontmatters) --------
 
+// The redirect deny shipped in every pi frontmatter. The pattern tests the
+// redirect operator directly, so a preceding character cannot bypass it; only
+// an fd-dup form allows.
+const REDIRECT_DENY_PATTERN =
+	"(?:>>|>)(?!&\\d(?=$|[\\s;&|()<>]))|(?:^|[;&|(\\s])\\s*tee\\s+";
+
 const plannerRules: RuleSets = {
 	globalDeny: [],
 	globalAsk: [],
 	agentDeny: [
 		{ tool: "bash", match: "^find\\b.*-exec\\b" },
 		{ tool: "bash", match: "curl\\b.*\\|\\s*(ba)?sh\\b" },
-		{
-			tool: "bash",
-			match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+",
-		},
+		{ tool: "bash", match: REDIRECT_DENY_PATTERN },
 	],
 	agentAsk: [
 		{ tool: "bash", match: "\\brm\\s+-[rf]{1,2}\\b" },
@@ -51,10 +54,7 @@ const implementerRules: RuleSets = {
 	globalAsk: [],
 	agentDeny: [
 		{ tool: "bash", match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(push|pull)\\b" },
-		{
-			tool: "bash",
-			match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+",
-		},
+		{ tool: "bash", match: REDIRECT_DENY_PATTERN },
 	],
 	agentAsk: [],
 	agentAllow: [
@@ -305,13 +305,19 @@ test("keeps the whole-command deny rule for compound commands", () => {
 test("denies file-writing redirects but allows fd redirects", () => {
 	assert.equal(evaluateCmd("echo hi > out.txt", implementerRules).kind, "deny");
 	assert.equal(evaluateCmd("echo hi >> out.txt", implementerRules).kind, "deny");
-	// The widened `\w` delimiter is deliberately fail-closed: it catches a word
-	// character directly before the redirect operator. It also denies a quoted
-	// literal, because the gate dequotes the probe.
+	// The operator itself is tested, so any `>` denies unless it starts an fd
+	// dup. A glued form and a quoted redirect literal both deny.
 	assert.equal(evaluateCmd("echo>out", implementerRules).kind, "deny");
 	assert.equal(evaluateCmd("cat>file", implementerRules).kind, "deny");
+	// A character before the operator cannot bypass the guard.
+	assert.equal(evaluateCmd("echo hi)>out.txt", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("echo hi=>out.txt", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("echo hi%>out.txt", implementerRules).kind, "deny");
 	// A digit prefix is an fd redirect to a file, not an fd dup.
 	assert.equal(evaluateCmd("echo hi 2>out.txt", implementerRules).kind, "deny");
+	// A target that starts with a digit is a write, not an fd dup.
+	assert.equal(evaluateCmd("echo hi >1file", implementerRules).kind, "deny");
+	assert.equal(evaluateCmd("echo hi >>1file", implementerRules).kind, "deny");
 	assert.equal(evaluateCmd("cargo deny check 2>/tmp/err", implementerRules).kind, "deny");
 	assert.equal(evaluateCmd("echo hi > file", implementerRules).kind, "deny");
 	assert.equal(evaluateCmd("echo hi >> file", implementerRules).kind, "deny");
@@ -319,7 +325,7 @@ test("denies file-writing redirects but allows fd redirects", () => {
 });
 
 // The over-deny is accepted and fail-closed: the gate dequotes `echo 'a>b'` to
-// `echo a>b`, and the widened `\w` delimiter reads it as a file write.
+// `echo a>b`, and the operator test reads it as a file write.
 test("accepts the over-deny for a quoted redirect literal", () => {
 	assert.equal(evaluateCmd("echo 'a>b'", implementerRules).kind, "deny");
 });

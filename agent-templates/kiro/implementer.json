@@ -144,6 +144,7 @@
         "zsh -c *",
         "bash -n *;*",
         "bash -n *>*",
+        "cargo nextest *>*",
         "find * -exec *",
         "git pull *",
         "git merge",
@@ -420,6 +421,7 @@
         "rustup which",
         "rustup which *",
         "*cargo *--config*",
+        "*cargo *>*",
         "*CARGO_HOME*"
       ],
       "autoAllowReadonly": true

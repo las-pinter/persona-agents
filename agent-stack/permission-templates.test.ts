@@ -1585,9 +1585,7 @@ describe("pi: object-write fences live in the ask tier", () => {
 	});
 });
 
-// `sed -i` edits a file in place. The allow probe is raw-only, so the fence
-// must live in the ask tier. opencode already asks for `sed -i` on every
-// shell agent, including the read-only agents.
+// A sed script can run a shell command, so no sed allow exists; `sed -i` asks.
 const PI_SED_IN_PLACE_NOT_ALLOW = [
 	"sed -i 's/a/b/' README.md",
 	`sed -"i" 's/a/b/' README.md`,
@@ -1595,7 +1593,15 @@ const PI_SED_IN_PLACE_NOT_ALLOW = [
 	"sed --in-place README.md",
 ];
 
-const PI_SED_READS_ALLOW = ["sed 's/a/b/' README.md", "sed -n '1p' README.md"];
+// The sed `e` command and the `s///e` flag run a shell command.
+const PI_SED_EXECUTE_NOT_ALLOW = [
+	"sed '1e id' README.md",
+	"sed 's/a/b/e' README.md",
+	"sed -n '1e id' README.md",
+];
+
+// No sed allow exists, so a read-only filter falls to the default verdict.
+const PI_SED_READS_FALL_THROUGH = ["sed 's/a/b/' README.md", "sed -n '1p' README.md"];
 
 describe("pi: sed in-place edits ask, never allow", () => {
 	for (const agent of ["implementer", "tester", "reviewer", "researcher"]) {
@@ -1605,9 +1611,15 @@ describe("pi: sed in-place edits ask, never allow", () => {
 			}
 		});
 
-		test(`pi ${agent}: read-only sed still allows`, () => {
-			for (const command of PI_SED_READS_ALLOW) {
-				assert.equal(verdict(agent, command), "allow", `${agent}: ${command}`);
+		test(`pi ${agent}: sed execute forms deny`, () => {
+			for (const command of PI_SED_EXECUTE_NOT_ALLOW) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
+			}
+		});
+
+		test(`pi ${agent}: read-only sed falls to the default verdict`, () => {
+			for (const command of PI_SED_READS_FALL_THROUGH) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
 			}
 		});
 	}
@@ -1778,6 +1790,539 @@ describe("silent escapes never allow (no shell separator)", () => {
 	test("opencode orchestrator: every silent escape asks or denies, never allows", () => {
 		for (const command of SILENT_ESCAPE_COMMANDS) {
 			assert.notEqual(opencodeVerdict("orchestrator", command), "allow", command);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Read-only roles: an allowed read verb must not carry a write option or a
+// command-execution option. The plain read form stays allowed. The roles differ
+// in which verbs they allow, so the cases are grouped by the verb set.
+// ---------------------------------------------------------------------------
+
+const PI_READ_ONLY_COMMON_WRITES_AND_EXECS = [
+	"mkdir foo",
+	"sort -o out in",
+	"sort --output=out in",
+	"uniq in out",
+	"rg --pre 'cmd' x",
+	"rg --pre=cmd x",
+	"rg -z x",
+	"date -s '2020-01-01'",
+];
+
+const PI_READ_ONLY_GIT_WRITES = [
+	"git log --output=/tmp/x",
+	"git diff --output=/tmp/x",
+	"git show --output=/tmp/x HEAD",
+	"git grep -O'touch /tmp/x' TODO",
+	"git grep --open-files-in-pager=touch TODO",
+	"git branch newbranch",
+	"git branch -u origin/main",
+	"git branch --format=%(refname) newbranch",
+	"git branch --contains HEAD newbranch",
+];
+
+const PI_READ_ONLY_READS = [
+	"rg -n x",
+	"date -Iseconds",
+];
+
+describe("read-only roles: an allowed read never carries a write or an exec", () => {
+	for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+		test(`pi ${agent}: common file writes deny`, () => {
+			for (const command of PI_READ_ONLY_COMMON_WRITES_AND_EXECS) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`pi ${agent}: common read forms stay allowed`, () => {
+			for (const command of PI_READ_ONLY_READS) {
+				assert.equal(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
+	}
+
+	for (const agent of ["reviewer", "researcher", "overseer"]) {
+		test(`pi ${agent}: git write options deny`, () => {
+			for (const command of PI_READ_ONLY_GIT_WRITES) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`pi ${agent}: plain git reads allow`, () => {
+			for (const command of ["git status", "git log --oneline", "git diff HEAD"]) {
+				assert.equal(verdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
+		test(`pi ${agent}: removed git verbs fall to the default verdict`, () => {
+			for (const command of [
+				"git grep -n x",
+				"git branch -a",
+				"git cat-file -p HEAD",
+				"git ls-remote origin",
+			]) {
+				assert.equal(verdict(agent, command), "default", `${agent}: ${command}`);
+			}
+		});
+	}
+
+	for (const agent of ["reviewer", "researcher"]) {
+		test(`pi ${agent}: xxd outfile and cat-file filters deny`, () => {
+			for (const command of [
+				"xxd in out",
+				"git cat-file --filters HEAD",
+				"git cat-file --textconv HEAD",
+			]) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`pi ${agent}: the xxd read is no longer allowed`, () => {
+			assert.equal(verdict(agent, "xxd in"), "default", `${agent}: xxd in`);
+		});
+		test(`pi ${agent}: the cat-file read falls to the default verdict`, () => {
+			assert.equal(verdict(agent, "git cat-file -p HEAD"), "default", `${agent}: git cat-file`);
+		});
+	}
+
+	test("pi reviewer: the no-emit type check allows, the emitting form denies", () => {
+		for (const command of ["tsc", "tsc --build"]) {
+			assert.equal(verdict("reviewer", command), "deny", command);
+		}
+		for (const command of ["tsc --noEmit", "tsc -p . --noEmit"]) {
+			assert.equal(verdict("reviewer", command), "allow", command);
+		}
+	});
+
+	test("pi reviewer: the project gate forms allow", () => {
+		for (const command of ["npm test", "npm run typecheck", "npm run lint", "tsc --noEmit"]) {
+			assert.equal(verdict("reviewer", command), "allow", command);
+			assert.ok(piAllowMatches("reviewer", command), `allow missing: ${command}`);
+		}
+	});
+
+	test("pi reviewer: the emitting and fixing forms still deny", () => {
+		assert.equal(verdict("reviewer", "tsc"), "deny");
+		assert.equal(verdict("reviewer", "tsc --build"), "deny");
+		for (const command of ["pytest --junitxml=out.xml", "mypy .", "ruff check --fix", "ruff format"]) {
+			assert.notEqual(verdict("reviewer", command), "allow", command);
+		}
+	});
+
+	test("pi read-only roles: the uniq option terminator and dash operand forms deny", () => {
+		for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+			for (const command of ["uniq -- in out", "uniq in -- out", "uniq in -out"]) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+				assert.ok(!piAllowMatches(agent, command), `allow re-added: ${command}`);
+			}
+		}
+	});
+
+	test("pi reviewer and researcher: the xxd option terminator and dash operand forms deny", () => {
+		for (const agent of ["reviewer", "researcher"]) {
+			for (const command of ["xxd -- in out", "xxd in -- out", "xxd in -out"]) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+				assert.ok(!piAllowMatches(agent, command), `allow re-added: ${command}`);
+			}
+		}
+	});
+
+	test("pi implementer and tester: the ls-remote upload and exec options deny", () => {
+		for (const agent of ["implementer", "tester"]) {
+			for (const command of ["git ls-remote --upload-pack=cmd origin", "git ls-remote --exec=cmd origin"]) {
+				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+			assert.equal(verdict(agent, "git ls-remote origin"), "allow", `${agent}: plain ls-remote`);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Read-only roles on kiro and opencode. Both engines match the raw command
+// string with globs, so each write class is fenced by an explicit deny entry.
+// The common, git, and xxd classes follow the pi per-role split. A blanket
+// redirect deny also denies the harmless fd-dup form; that fail-safe over-deny
+// is pinned here.
+// ---------------------------------------------------------------------------
+
+// A bare `git branch NAME` cannot be fenced by a glob without also denying a
+// listing, so the branch-create option forms carry the class on these engines.
+const RAW_READ_ONLY_GIT_WRITES = [
+	"git log --output=/tmp/x",
+	"git diff --output=/tmp/x",
+	"git show --output=/tmp/x HEAD",
+	"git grep -O'touch /tmp/x' TODO",
+	"git grep --open-files-in-pager=touch TODO",
+	"git branch -u origin/main",
+	"git branch --format=%(refname) newbranch",
+	"git branch --contains HEAD newbranch",
+];
+
+const RAW_READ_ONLY_XXD_WRITES = [
+	"xxd in out",
+	"git cat-file --filters HEAD",
+	"git cat-file --textconv HEAD",
+];
+
+const RAW_READ_ONLY_COMMON_READS = ["cat", "date", "uniq"];
+const RAW_READ_ONLY_GIT_READS = ["git status", "git log", "git diff"];
+const RAW_READ_ONLY_GIT_NOT_DENIED = ["git branch -a", "git grep -n x"];
+const RAW_READ_ONLY_OTHER_READS = ["rg -n x", "date -Iseconds"];
+
+const RAW_READ_ONLY_COMMON_DENIES = [
+	"*mkdir*",
+	"*sort*-o*",
+	"*uniq* * ?*",
+	"*rg*--pre*",
+	"*rg*-z*",
+	"*date*-s*",
+	"*>*",
+];
+
+const RAW_READ_ONLY_GIT_DENIES = [
+	"*git*--output*",
+	"*git*--ext-diff*",
+	"*git*--textconv*",
+	"*git*--filters*",
+	"*git*grep*-O*",
+	"*git*grep*--open-files-in-pager*",
+	"*git*branch*-u*",
+	"*git*branch*-t ?*",
+	"*git*branch*--track*",
+	"*git*branch*--edit-description*",
+	"*git*branch*--format*=* ?*",
+	"*git*branch*--contains * ?*",
+];
+
+describe("kiro: read-only roles deny writes and keep the read forms", () => {
+	for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+		test(`kiro ${agent}: common write paths deny`, () => {
+			for (const command of PI_READ_ONLY_COMMON_WRITES_AND_EXECS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`kiro ${agent}: common read forms allow`, () => {
+			for (const command of RAW_READ_ONLY_COMMON_READS) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
+		test(`kiro ${agent}: a redirect denies and the fd-dup form is over-denied`, () => {
+			assert.equal(kiroVerdict(agent, "echo hi > out.txt"), "deny", "file redirect");
+			assert.equal(kiroVerdict(agent, "echo hi 2>&1"), "deny", "fd-dup over-deny");
+		});
+		test(`kiro ${agent}: common and redirect deny entries exist`, () => {
+			for (const pattern of RAW_READ_ONLY_COMMON_DENIES) {
+				assert.ok(hasKiroDeny(agent, pattern), `missing deniedCommands ${pattern}`);
+			}
+		});
+		test(`kiro ${agent}: the search and date reads are not denied`, () => {
+			for (const command of RAW_READ_ONLY_OTHER_READS) {
+				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+	}
+
+	for (const agent of ["researcher", "reviewer", "overseer"]) {
+		test(`kiro ${agent}: git write options deny`, () => {
+			for (const command of RAW_READ_ONLY_GIT_WRITES) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`kiro ${agent}: git reads allow and listings are not denied`, () => {
+			for (const command of RAW_READ_ONLY_GIT_READS) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+			for (const command of RAW_READ_ONLY_GIT_NOT_DENIED) {
+				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`kiro ${agent}: git deny entries exist`, () => {
+			for (const pattern of RAW_READ_ONLY_GIT_DENIES) {
+				assert.ok(hasKiroDeny(agent, pattern), `missing deniedCommands ${pattern}`);
+			}
+		});
+	}
+
+	for (const agent of ["researcher", "reviewer"]) {
+		test(`kiro ${agent}: xxd second output and cat-file filters deny`, () => {
+			for (const command of RAW_READ_ONLY_XXD_WRITES) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`kiro ${agent}: the xxd read is not denied and the deny entry exists`, () => {
+			assert.notEqual(kiroVerdict(agent, "xxd in"), "deny", `${agent}: xxd in`);
+			assert.ok(hasKiroDeny(agent, "*xxd* * ?*"), "missing deniedCommands *xxd* * ?*");
+		});
+	}
+
+	test("kiro reviewer: bare tsc denies, the no-emit form is not denied", () => {
+		for (const command of ["tsc", "tsc --build"]) {
+			assert.equal(kiroVerdict("reviewer", command), "deny", command);
+		}
+		assert.ok(hasKiroDeny("reviewer", "tsc"), "missing deniedCommands tsc");
+		assert.ok(hasKiroDeny("reviewer", "tsc --build*"), "missing deniedCommands tsc --build*");
+		for (const command of ["tsc --noEmit", "tsc -p . --noEmit"]) {
+			assert.notEqual(kiroVerdict("reviewer", command), "deny", command);
+		}
+	});
+});
+
+describe("opencode: read-only roles deny writes and keep the read forms", () => {
+	for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+		test(`opencode ${agent}: common write paths deny`, () => {
+			for (const command of PI_READ_ONLY_COMMON_WRITES_AND_EXECS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`opencode ${agent}: common read forms allow`, () => {
+			for (const command of RAW_READ_ONLY_COMMON_READS) {
+				assert.equal(opencodeVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
+		test(`opencode ${agent}: a redirect denies and the fd-dup form is over-denied`, () => {
+			assert.equal(opencodeVerdict(agent, "echo hi > out.txt"), "deny", "file redirect");
+			assert.equal(opencodeVerdict(agent, "echo hi 2>&1"), "deny", "fd-dup over-deny");
+		});
+		test(`opencode ${agent}: common and redirect deny entries exist`, () => {
+			for (const pattern of RAW_READ_ONLY_COMMON_DENIES) {
+				assert.ok(hasOpenCodeRule(agent, pattern, "deny"), `missing {shell, ${pattern}, deny}`);
+			}
+		});
+		test(`opencode ${agent}: the search and date reads are not denied`, () => {
+			for (const command of RAW_READ_ONLY_OTHER_READS) {
+				assert.notEqual(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+	}
+
+	for (const agent of ["researcher", "reviewer", "overseer"]) {
+		test(`opencode ${agent}: git write options deny`, () => {
+			for (const command of RAW_READ_ONLY_GIT_WRITES) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`opencode ${agent}: git reads allow and listings are not denied`, () => {
+			for (const command of RAW_READ_ONLY_GIT_READS) {
+				assert.equal(opencodeVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+			for (const command of RAW_READ_ONLY_GIT_NOT_DENIED) {
+				assert.notEqual(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`opencode ${agent}: git deny entries exist`, () => {
+			for (const pattern of RAW_READ_ONLY_GIT_DENIES) {
+				assert.ok(hasOpenCodeRule(agent, pattern, "deny"), `missing {shell, ${pattern}, deny}`);
+			}
+		});
+	}
+
+	for (const agent of ["researcher", "reviewer"]) {
+		test(`opencode ${agent}: xxd second output and cat-file filters deny`, () => {
+			for (const command of RAW_READ_ONLY_XXD_WRITES) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+		test(`opencode ${agent}: the xxd read is not denied and the deny entry exists`, () => {
+			assert.notEqual(opencodeVerdict(agent, "xxd in"), "deny", `${agent}: xxd in`);
+			assert.ok(hasOpenCodeRule(agent, "*xxd* * ?*", "deny"), "missing xxd deny");
+		});
+	}
+
+	test("opencode reviewer: bare tsc denies, the no-emit form is not denied", () => {
+		for (const command of ["tsc", "tsc --build"]) {
+			assert.equal(opencodeVerdict("reviewer", command), "deny", command);
+		}
+		assert.ok(hasOpenCodeRule("reviewer", "tsc", "deny"), "missing tsc deny");
+		assert.ok(hasOpenCodeRule("reviewer", "tsc --build*", "deny"), "missing tsc --build deny");
+		for (const command of ["tsc --noEmit", "tsc -p . --noEmit"]) {
+			assert.notEqual(opencodeVerdict("reviewer", command), "deny", command);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Read-only allow-list shrink. Every entry that can write a file or run a
+// command is removed from the allow list. With no allow, pi falls to its
+// deny-by-default verdict and kiro/opencode fall to ask. These pins fail if a
+// removal is undone.
+// ---------------------------------------------------------------------------
+
+const READ_ONLY_ROLES = ["reviewer", "researcher", "planner", "overseer"];
+
+// The abbreviated long option and the glued flag value close by removal.
+const REMOVED_PI_HOLE_FORMS = [
+	"mkdir foo",
+	"sort --compress-program=cat in",
+	"sort -T /tmp in",
+	"git ls-remote --upload-pack=cmd origin",
+	"git ls-remote --exec=cmd origin",
+	"git cat-file --fil HEAD",
+	"git grep --open TODO",
+	"git branch -uorigin/main",
+	"git branch --track=origin/main",
+];
+
+// A read form the removed reviewer test and lint tools would have admitted.
+const REMOVED_REVIEWER_TOOL_FORMS = [
+	"pytest --junitxml=out.xml",
+	"python -m pytest --junit-xml=out.xml",
+	"mypy .",
+	"ruff check --fix",
+	"ruff format",
+];
+
+// A read form the removed researcher test tools would have admitted.
+const REMOVED_RESEARCHER_TOOL_FORMS = [
+	"pytest --junitxml=out.xml",
+	"python -m pytest --junit-xml=out.xml",
+	"PYTHONDONTWRITEBYTECODE=1 python3 -m pytest",
+	".venv/bin/python -m pytest",
+];
+
+const REMOVED_KIRO_ALLOWS: Record<string, string[]> = {
+	researcher: ["sort", "git branch"],
+	reviewer: ["sort", "git branch", "mypy", "ruff"],
+	planner: ["sort", "mkdir"],
+	overseer: ["sort", "mkdir"],
+};
+
+const REMOVED_OPENCODE_ALLOWS: Record<string, string[]> = {
+	researcher: [
+		"sort",
+		"mkdir",
+		"git branch",
+		"git grep",
+		"python -m pytest",
+		"python3 -m pytest",
+		"PYTHONDONTWRITEBYTECODE=1 python3 -m pytest",
+		"PYTHONDONTWRITEBYTECODE=1 python -m pytest",
+		".venv/bin/python -m pytest",
+	],
+	reviewer: [
+		"sort",
+		"git branch",
+		"mypy",
+		"ruff",
+		"tsc",
+		"pytest",
+		"python -m pytest",
+		"python3 -m pytest",
+		".venv/bin/python -m pytest",
+		".venv/bin/pre-commit",
+	],
+	planner: ["sort", "mkdir", "git branch"],
+	overseer: [
+		"sort",
+		"mkdir",
+		"git ls-remote",
+		"git remote -v",
+		"git branch -a",
+		"git branch -vv",
+		"git branch --show-current",
+	],
+};
+
+/** True when any pi allow rule matches the command text. */
+function piAllowMatches(agent: string, command: string): boolean {
+	const { ruleSets } = loadAgentRules(agent);
+	return ruleSets.agentAllow.some(
+		(rule) =>
+			(rule.tool === "bash" || rule.tool === undefined) && compileRegex(rule.match).test(command),
+	);
+}
+
+/** True when a kiro agent's allowedCommands carries the exact pattern. */
+function hasKiroAllow(agent: string, pattern: string): boolean {
+	return (loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? []).includes(pattern);
+}
+
+describe("read-only roles: the allow shrink closes the known holes", () => {
+	for (const agent of READ_ONLY_ROLES) {
+		test(`pi ${agent}: removed write and exec allows never match`, () => {
+			for (const command of REMOVED_PI_HOLE_FORMS) {
+				assert.notEqual(verdict(agent, command), "allow", `${agent}: ${command}`);
+				assert.ok(!piAllowMatches(agent, command), `allow re-added: ${command}`);
+			}
+		});
+		test(`kiro ${agent}: removed allows stay off the list`, () => {
+			for (const pattern of REMOVED_KIRO_ALLOWS[agent] ?? []) {
+				assert.ok(!hasKiroAllow(agent, pattern), `allow re-added: ${pattern}`);
+			}
+		});
+		test(`opencode ${agent}: removed allows stay off the list`, () => {
+			for (const pattern of REMOVED_OPENCODE_ALLOWS[agent] ?? []) {
+				assert.ok(!hasOpenCodeRule(agent, pattern, "allow"), `allow re-added: ${pattern}`);
+			}
+		});
+	}
+
+	test("pi reviewer: removed test and lint tools never match", () => {
+		for (const command of REMOVED_REVIEWER_TOOL_FORMS) {
+			assert.notEqual(verdict("reviewer", command), "allow", command);
+			assert.ok(!piAllowMatches("reviewer", command), `allow re-added: ${command}`);
+		}
+	});
+
+	test("pi researcher: removed test tools never match", () => {
+		for (const command of REMOVED_RESEARCHER_TOOL_FORMS) {
+			assert.notEqual(verdict("researcher", command), "allow", command);
+			assert.ok(!piAllowMatches("researcher", command), `allow re-added: ${command}`);
+		}
+	});
+
+	test("kiro reviewer: the project gate forms allow", () => {
+		for (const command of ["npm test", "npm run typecheck", "npm run lint", "tsc --noEmit"]) {
+			assert.equal(kiroVerdict("reviewer", command), "allow", command);
+		}
+		for (const pattern of ["npm test", "npm run typecheck", "npm run lint", "tsc *--noEmit*"]) {
+			assert.ok(hasKiroAllow("reviewer", pattern), `missing allowedCommands ${pattern}`);
+		}
+	});
+
+	// The fixing forms ask on kiro and opencode; this assertion requires only not-allow.
+	test("kiro reviewer: the emitting forms deny and the fixing forms ask", () => {
+		for (const command of ["tsc", "tsc --build"]) {
+			assert.equal(kiroVerdict("reviewer", command), "deny", command);
+		}
+		for (const command of ["mypy .", "ruff check --fix", "pytest --junitxml=out.xml"]) {
+			assert.notEqual(kiroVerdict("reviewer", command), "allow", command);
+		}
+	});
+
+	test("opencode reviewer: the project gate forms allow", () => {
+		for (const command of ["npm test", "npm run typecheck", "npm run lint", "tsc --noEmit"]) {
+			assert.equal(opencodeVerdict("reviewer", command), "allow", command);
+		}
+		for (const pattern of ["npm test", "npm run typecheck", "npm run lint", "tsc *--noEmit*"]) {
+			assert.ok(hasOpenCodeRule("reviewer", pattern, "allow"), `missing allow ${pattern}`);
+		}
+	});
+
+	test("opencode reviewer: the emitting forms deny and the fixing forms ask", () => {
+		for (const command of ["tsc", "tsc --build"]) {
+			assert.equal(opencodeVerdict("reviewer", command), "deny", command);
+		}
+		for (const command of ["mypy .", "ruff check --fix"]) {
+			assert.notEqual(opencodeVerdict("reviewer", command), "allow", command);
+		}
+	});
+
+	test("pi: the abbreviated and glued forms fall to the default verdict", () => {
+		for (const command of ["git cat-file --fil HEAD", "git grep --open TODO", "git branch -uorigin/main"]) {
+			assert.equal(verdict("reviewer", command), "default", `pi: ${command}`);
+		}
+	});
+
+	test("kiro and opencode: the abbreviated forms are never allowed", () => {
+		for (const command of ["git cat-file --fil HEAD", "git grep --open TODO"]) {
+			assert.notEqual(kiroVerdict("researcher", command), "allow", `kiro: ${command}`);
+			assert.notEqual(opencodeVerdict("researcher", command), "allow", `opencode: ${command}`);
+		}
+	});
+
+	test("kept read forms still allow on every engine", () => {
+		for (const command of ["git status", "git log", "git diff"]) {
+			assert.equal(verdict("reviewer", command), "allow", `pi: ${command}`);
+			assert.equal(kiroVerdict("reviewer", command), "allow", `kiro: ${command}`);
+			assert.equal(opencodeVerdict("reviewer", command), "allow", `opencode: ${command}`);
 		}
 	});
 });
@@ -3220,6 +3765,24 @@ const PI_RUST_ALLOWS: Record<RustAgent, string[]> = {
 	],
 };
 
+// A cargo allow that takes a trailing argument can carry an output redirect
+// into a file. The broad `*cargo *>*` deny fences the whole cargo class on kiro
+// and opencode. pi denies every redirect by default.
+const WIDE_CARGO_REDIRECTS = [
+	"cargo check 2>/tmp/err",
+	"cargo clippy 2>/tmp/err",
+	"cargo build 2>/tmp/err",
+	"cargo test 2>/tmp/err",
+	"cargo nextest 2>/tmp/err",
+	"cargo run 2>/tmp/err",
+	"cargo metadata 2>/tmp/err",
+	"cargo tree 2>/tmp/err",
+	"cargo locate-project 2>/tmp/err",
+	"cargo deny check 2>/tmp/err",
+];
+const WIDE_CARGO_KIRO_OPENCODE_AGENTS = ["implementer", "tester", "reviewer", "researcher", "orchestrator"];
+const WIDE_CARGO_PI_AGENTS = ["implementer", "tester", "reviewer", "orchestrator"];
+
 // Engine residual: pi normalizes quotes and backslash escapes in its deny
 // probes, so an obfuscated `--config` is still caught there. opencode and kiro
 // are external engines that match literal text only; they deny the literal
@@ -3413,33 +3976,164 @@ describe("rust toolchain permission doctrine", () => {
 	});
 
 	// kiro and opencode grant `cargo deny check`, but a redirect write must not
-	// ride that allow. Their glob deny cannot express the pi `(?![0-9&])`
-	// exception, so they also deny an fd dup. The extra strictness is accepted.
+	// ride that allow. Their glob deny cannot express the pi fd-dup exception,
+	// so they also deny an fd dup. The extra strictness is accepted.
 	test("kiro and opencode: the redirect deny beats the cargo deny check allow", () => {
-		assert.equal(kiroVerdict("reviewer", "cargo deny check 2>/tmp/err"), "deny", "kiro reviewer file redirect");
-		assert.equal(kiroVerdict("reviewer", "cargo deny check 2>&1"), "deny", "kiro reviewer fd dup over-deny");
-		assert.equal(kiroVerdict("reviewer", "cargo deny check"), "allow", "kiro reviewer deny check");
-		assert.equal(
-			kiroVerdict("reviewer", "cargo deny check --all-features"),
-			"allow",
-			"kiro reviewer deny check args",
-		);
-		assert.equal(
-			opencodeVerdict("reviewer", "cargo deny check 2>/tmp/err"),
-			"deny",
-			"opencode reviewer file redirect",
-		);
-		assert.equal(
-			opencodeVerdict("reviewer", "cargo deny check 2>&1"),
-			"deny",
-			"opencode reviewer fd dup over-deny",
-		);
-		assert.equal(opencodeVerdict("reviewer", "cargo deny check"), "allow", "opencode reviewer deny check");
-		assert.equal(
-			opencodeVerdict("reviewer", "cargo deny check --all-features"),
-			"allow",
-			"opencode reviewer deny check args",
-		);
+		for (const agent of ["reviewer", "tester", "orchestrator"]) {
+			assert.equal(
+				kiroVerdict(agent, "cargo deny check 2>/tmp/err"),
+				"deny",
+				`kiro ${agent}: file redirect`,
+			);
+			assert.equal(
+				kiroVerdict(agent, "cargo deny check 2>&1"),
+				"deny",
+				`kiro ${agent}: fd dup over-deny`,
+			);
+			assert.equal(kiroVerdict(agent, "cargo deny check"), "allow", `kiro ${agent}: deny check`);
+			assert.equal(
+				kiroVerdict(agent, "cargo deny check --all-features"),
+				"allow",
+				`kiro ${agent}: deny check args`,
+			);
+			assert.equal(
+				opencodeVerdict(agent, "cargo deny check 2>/tmp/err"),
+				"deny",
+				`opencode ${agent}: file redirect`,
+			);
+			assert.equal(
+				opencodeVerdict(agent, "cargo deny check 2>&1"),
+				"deny",
+				`opencode ${agent}: fd dup over-deny`,
+			);
+			assert.equal(
+				opencodeVerdict(agent, "cargo deny check"),
+				"allow",
+				`opencode ${agent}: deny check`,
+			);
+			assert.equal(
+				opencodeVerdict(agent, "cargo deny check --all-features"),
+				"allow",
+				`opencode ${agent}: deny check args`,
+			);
+		}
+	});
+
+	// The cargo nextest allow takes an arbitrary argument, so a redirect write
+	// must deny. Every role here carries the allow and its guard fence. Removing
+	// any fence drops the verdict to allow and fails this test.
+	test("kiro and opencode: the redirect deny beats the cargo nextest allow", () => {
+		const fileRedirect = "cargo nextest 2>/tmp/err";
+		const kiroNextestRoles = ["implementer", "tester", "reviewer", "orchestrator"];
+		for (const agent of kiroNextestRoles) {
+			assert.ok(hasKiroDeny(agent, "cargo nextest *>*"), `kiro ${agent}: missing fence`);
+			assert.equal(kiroVerdict(agent, fileRedirect), "deny", `kiro ${agent}: file redirect`);
+			assert.equal(kiroVerdict(agent, "cargo nextest 2>&1"), "deny", `kiro ${agent}: fd dup`);
+			assert.equal(kiroVerdict(agent, "cargo nextest"), "allow", `kiro ${agent}: nextest`);
+			assert.equal(kiroVerdict(agent, "cargo nextest run"), "allow", `kiro ${agent}: nextest run`);
+		}
+		// A kiro role without the allow must not allow the redirect either.
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.notEqual(kiroVerdict(agent, fileRedirect), "allow", `kiro ${agent}: redirect`);
+		}
+		const opencodeNextestRoles = ["implementer", "tester", "reviewer", "orchestrator"];
+		for (const agent of opencodeNextestRoles) {
+			assert.ok(
+				hasOpenCodeRule(agent, "cargo nextest *>*", "deny"),
+				`opencode ${agent}: missing fence`,
+			);
+			assert.equal(opencodeVerdict(agent, fileRedirect), "deny", `opencode ${agent}: file redirect`);
+			assert.equal(
+				opencodeVerdict(agent, "cargo nextest 2>&1"),
+				"deny",
+				`opencode ${agent}: fd dup`,
+			);
+			assert.equal(opencodeVerdict(agent, "cargo nextest"), "allow", `opencode ${agent}: nextest`);
+			assert.equal(
+				opencodeVerdict(agent, "cargo nextest run"),
+				"allow",
+				`opencode ${agent}: nextest run`,
+			);
+		}
+	});
+
+	// The whole cargo class carries a leading-star deny. Any cargo redirect
+	// denies on kiro and opencode. The entry check fails when a fence is removed.
+	test("kiro and opencode: the whole cargo class denies an output redirect", () => {
+		for (const agent of WIDE_CARGO_KIRO_OPENCODE_AGENTS) {
+			assert.ok(hasKiroDeny(agent, "*cargo *>*"), `kiro ${agent}: missing fence`);
+			assert.ok(hasOpenCodeRule(agent, "*cargo *>*", "deny"), `opencode ${agent}: missing fence`);
+			for (const command of WIDE_CARGO_REDIRECTS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `kiro ${agent}: ${command}`);
+				assert.equal(opencodeVerdict(agent, command), "deny", `opencode ${agent}: ${command}`);
+			}
+		}
+	});
+
+	// The four pi cargo roles carry a redirect deny. An output redirect on a
+	// wide cargo verb denies instead of riding the allow.
+	test("pi: the four cargo roles deny an output redirect", () => {
+		for (const agent of WIDE_CARGO_PI_AGENTS) {
+			for (const command of WIDE_CARGO_REDIRECTS) {
+				assert.equal(verdict(agent, command), "deny", `pi ${agent}: ${command}`);
+			}
+		}
+	});
+
+	// The redirect deny must cover the stream-join ampersand form as well as the
+	// plain file-create forms. The fd-dup form stays allowed.
+	const PI_REDIRECT_AGENTS = [
+		"orchestrator",
+		"implementer",
+		"tester",
+		"reviewer",
+		"researcher",
+		"planner",
+		"overseer",
+		"mascot",
+	];
+	// A target that starts with a digit is a write, not a file-descriptor copy.
+	const PI_REDIRECT_DENY = [
+		"cat notes.txt > out.txt",
+		"cat notes.txt >> out.txt",
+		"cat notes.txt >& out.txt",
+		"cat notes.txt >&out.txt",
+		"cat notes.txt >1file",
+		"cat notes.txt >>1file",
+	];
+	test("pi: every redirect role denies the file-create and ampersand forms", () => {
+		for (const agent of PI_REDIRECT_AGENTS) {
+			for (const command of PI_REDIRECT_DENY) {
+				assert.equal(verdict(agent, command), "deny", `pi ${agent}: ${command}`);
+			}
+		}
+		// The shell roles carry the read allow, so the fd-dup form reaches allow.
+		for (const agent of PI_REDIRECT_AGENTS.filter((name) => name !== "mascot")) {
+			assert.equal(verdict(agent, "cat notes.txt 2>&1"), "allow", `pi ${agent}: fd dup must stay allowed`);
+		}
+		// Mascot has no bash tool, so the fd-dup form falls to deny-by-default.
+		assert.equal(verdict("mascot", "cat notes.txt 2>&1"), "default", "pi mascot: fd dup");
+	});
+
+	// The opencode write path on cat, echo, and printf had no coverage. The last
+	// matching rule is the redirect ask.
+	test("opencode implementer: cat, echo, and printf redirects ask", () => {
+		for (const command of [
+			"cat notes.txt > out.txt",
+			"echo hello > out.txt",
+			"printf hi > out.txt",
+		]) {
+			assert.equal(opencodeVerdict("implementer", command), "ask", command);
+		}
+	});
+
+	// One fence for the whole cargo class is simpler than per-verb fences; it
+	// over-denies a benign write whose text mentions cargo.
+	test("opencode: the broad cargo redirect fence over-denies a benign write", () => {
+		const command = 'echo "cargo notes" > out.txt';
+		for (const agent of ["orchestrator", "implementer", "tester", "reviewer", "researcher"]) {
+			assert.equal(opencodeVerdict(agent, command), "deny", `opencode ${agent}: ${command}`);
+		}
 	});
 
 	test("boundary: tester allows cargo build, reviewer denies it", () => {
@@ -3449,6 +4143,96 @@ describe("rust toolchain permission doctrine", () => {
 		assert.equal(opencodeVerdict("reviewer", "cargo build"), "deny", "opencode reviewer build");
 		assert.equal(kiroVerdict("tester", "cargo build"), "allow", "kiro tester build");
 		assert.equal(kiroVerdict("reviewer", "cargo build"), "deny", "kiro reviewer build");
+	});
+
+	test("boundary: tester allows cargo fmt --check but not cargo fmt", () => {
+		const { ruleSets } = loadAgentRules("tester");
+		const kiroAllowed = loadKiroConfig("tester").toolsSettings?.shell?.allowedCommands ?? [];
+		assert.ok(
+			ruleSetMatches(ruleSets.agentAllow, "cargo fmt --check"),
+			"pi tester: missing allow entry for cargo fmt --check",
+		);
+		assert.ok(
+			kiroAllowed.includes("cargo fmt --check"),
+			"kiro tester: missing allowedCommands cargo fmt --check",
+		);
+		assert.equal(verdict("tester", "cargo fmt --check"), "allow", "pi tester fmt --check");
+		assert.notEqual(verdict("tester", "cargo fmt"), "allow", "pi tester fmt");
+		assert.ok(hasOpenCodeRule("tester", "cargo fmt --check *", "allow"), "opencode tester fmt --check allow");
+		assert.equal(opencodeVerdict("tester", "cargo fmt --check"), "allow", "opencode tester fmt --check");
+		assert.notEqual(opencodeVerdict("tester", "cargo fmt"), "allow", "opencode tester fmt");
+		assert.equal(kiroVerdict("tester", "cargo fmt --check"), "allow", "kiro tester fmt --check");
+		assert.notEqual(kiroVerdict("tester", "cargo fmt"), "allow", "kiro tester fmt");
+	});
+
+	// The implementer, the tester, the reviewer, and the orchestrator may run
+	// cargo nextest and the read-only cargo deny check. Assert the rule entry
+	// itself exists on each engine: on kiro and opencode an unmatched command
+	// would otherwise fall to ask.
+	test("pi orchestrator: cargo nextest and cargo deny check allow entries exist", () => {
+		const { ruleSets } = loadAgentRules("orchestrator");
+		assert.ok(
+			ruleSetMatches(ruleSets.agentAllow, "cargo nextest run"),
+			"pi orchestrator must allow cargo nextest",
+		);
+		assert.ok(
+			ruleSetMatches(ruleSets.agentAllow, "cargo deny check"),
+			"pi orchestrator must allow cargo deny check",
+		);
+		assert.equal(verdict("orchestrator", "cargo nextest run"), "allow", "pi orchestrator nextest");
+		assert.equal(verdict("orchestrator", "cargo deny check"), "allow", "pi orchestrator deny check");
+	});
+
+	test("pi tester: cargo deny check allow entry exists", () => {
+		const { ruleSets } = loadAgentRules("tester");
+		assert.ok(
+			ruleSetMatches(ruleSets.agentAllow, "cargo deny check --all-features"),
+			"pi tester must allow cargo deny check",
+		);
+		assert.equal(verdict("tester", "cargo deny check"), "allow", "pi tester deny check");
+	});
+
+	test("kiro orchestrator: cargo nextest and cargo deny check allowedCommands exist", () => {
+		const allowed = loadKiroConfig("orchestrator").toolsSettings?.shell?.allowedCommands ?? [];
+		for (const entry of ["cargo nextest", "cargo nextest *", "cargo deny check", "cargo deny check *"]) {
+			assert.ok(allowed.includes(entry), `missing allowedCommands ${entry}`);
+		}
+		assert.equal(kiroVerdict("orchestrator", "cargo nextest run"), "allow", "kiro orchestrator nextest");
+		assert.equal(kiroVerdict("orchestrator", "cargo deny check"), "allow", "kiro orchestrator deny check");
+	});
+
+	test("kiro tester: cargo deny check allowedCommands exist", () => {
+		const allowed = loadKiroConfig("tester").toolsSettings?.shell?.allowedCommands ?? [];
+		for (const entry of ["cargo deny check", "cargo deny check *"]) {
+			assert.ok(allowed.includes(entry), `missing allowedCommands ${entry}`);
+		}
+		assert.equal(kiroVerdict("tester", "cargo deny check"), "allow", "kiro tester deny check");
+	});
+
+	test("opencode orchestrator: cargo nextest and cargo deny check allow rules exist", () => {
+		for (const resource of ["cargo nextest *", "cargo deny check *"]) {
+			assert.ok(hasOpenCodeRule("orchestrator", resource, "allow"), `missing {shell, ${resource}, allow}`);
+		}
+		assert.equal(opencodeVerdict("orchestrator", "cargo nextest run"), "allow", "opencode orchestrator nextest");
+		assert.equal(opencodeVerdict("orchestrator", "cargo deny check"), "allow", "opencode orchestrator deny check");
+	});
+
+	test("opencode tester: cargo deny check allow rule exists", () => {
+		assert.ok(
+			hasOpenCodeRule("tester", "cargo deny check *", "allow"),
+			"missing {shell, cargo deny check *, allow}",
+		);
+		assert.equal(opencodeVerdict("tester", "cargo deny check"), "allow", "opencode tester deny check");
+	});
+
+	// The orchestrator carries cargo nextest allows, so a config override must
+	// still deny on every engine. Without this, a dropped orchestrator deny would
+	// keep the suite green.
+	test("orchestrator: a cargo nextest config override denies on every engine", () => {
+		const command = "cargo nextest run --config net.offline=true";
+		assert.equal(verdict("orchestrator", command), "deny", "pi orchestrator nextest config override");
+		assert.equal(kiroVerdict("orchestrator", command), "deny", "kiro orchestrator nextest config override");
+		assert.equal(opencodeVerdict("orchestrator", command), "deny", "opencode orchestrator nextest config override");
 	});
 });
 

@@ -12,11 +12,16 @@ permissions:
     - { tool: find, match: "." }
     - { tool: ls, match: "." }
     - { tool: grep, match: "." }
-    - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|xxd|pwd|date|diff|echo|cut|seq|which|command -v|jq|bash -n|mkdir)\\b" }
+    # `sort` and `mkdir` write or run a program by option; no allow, so the default decides.
+    - { tool: bash, match: "^(cat|head|tail|wc|grep|rg|ls|stat|od|pwd|date|diff|echo|cut|seq|which|command -v|jq|bash -n)\\b" }
     - { tool: bash, match: "^find\\b" }
-    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|branch|rev-parse|cat-file|merge-base|rev-list|remote|ls-remote|tag\\s+(-l|--list)|grep|check-ignore|ls-files|reflog)\\b" }
-    - { tool: bash, match: "^(pytest\\b|mypy\\b|ruff\\b|npm\\s+(?:test|run)|tsc\\b|docker\\s+(ps|logs|inspect)|python3?\\s+-m\\s+(pytest|mypy)|(\\.venv/bin/)?python -m pytest)\\b" }
-    - { tool: bash, match: "^sed\\b(?!\\s+-i\\b)" }
+    # `branch`, `cat-file`, `grep`, and `ls-remote` write refs or run a filter, pager, or upload program.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+-C\\s+\\S+)?\\s+(status|log|diff|show|rev-parse|merge-base|rev-list|remote|tag\\s+(-l|--list)|check-ignore|ls-files|reflog)\\b" }
+    # The package gate scripts and the docker reads stay.
+    - { tool: bash, match: "^npm\\s+(?:test|run\\s+(?:typecheck|lint))\\b" }
+    - { tool: bash, match: "^(docker\\s+(ps|logs|inspect))\\b" }
+    # A no-emit type check writes nothing; the emitting form stays denied.
+    - { tool: bash, match: "^tsc\\b(?=[^\\n]*--noEmit\\b)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?(rustc|cargo|rustup)\\s+(--version|-V)\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?rustup\\s+show\\b" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+(metadata|tree|locate-project|pkgid)\\b" }
@@ -24,8 +29,7 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+deny\\s+check(\\s|$)", reason: "cargo deny check is a read-only dependency policy gate" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+fmt\\s+--check\\b" }
   ask:
-    # `sed -i` edits a file in place. The allow probe is raw-only, so the fence
-    # lives here: the ask tier tests the dequoted probe, which catches `-"i"`.
+    # `sed -i` edits a file in place; the ask tier prompts before it runs.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?sed\\b[^\\n]*\\s(?:-[A-Za-z]*i[A-Za-z]*|--i[A-Za-z-]*)", reason: "sed in-place edit requires user approval" }
     # `git fetch` writes refs (tags, HEAD, prefetch/refmap); it prompts instead of running silently.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|(?:timeout|chrt)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+\\S+\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+fetch\\b", reason: "fetch writes refs; approve after review" }
@@ -45,7 +49,27 @@ permissions:
     - { tool: bash, match: "^find\\b.*-(?:delete|execdir|ok|okdir|fls|fprint(?:0|f)?)(?=[\\s;|&()]|$)" }
     - { tool: bash, match: "(?:^|[;&|(\\s])\\s*xargs(?:\\s+-[^\\s]+)*\\s(?:rm|sh|bash|zsh|mv|cp)(?:[\\s;|&()]|$)" }
     - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\s\\w])\\s*\\d*(?:>>|>)(?![0-9&])\\s*[^0-9&\\s]|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    - { tool: bash, match: "(?:>>|>)(?!&\\d(?=$|[\\s;&|()<>]))|(?:^|[;&|(\\s])\\s*tee\\s+" }
+    # A read-only role must not create a directory or write a stream to a file.
+    - { tool: bash, match: "^mkdir\\b" }
+    - { tool: bash, match: "^sort\\b[^\\n]*\\s(?:-[A-Za-z]*o[A-Za-z]*|--o[A-Za-z-]*)" }
+    - { tool: bash, match: "^uniq\\b[^\\n]*(?:\\s--(?:\\s|$)|[^\\n]*\\s[^-\\s]\\S*\\s+\\S+\\s*$)" }
+    # The rg --pre option runs an external command.
+    # The rg -z option runs an external decompression program.
+    - { tool: bash, match: "^rg\\b[^\\n]*\\s(?:--pre(?:\\s|=)|-[A-Za-z]*z[A-Za-z]*\\b|--search-zip\\b)" }
+    # `date -s` sets the system clock.
+    - { tool: bash, match: "^date\\b[^\\n]*\\s(?:-s[A-Za-z]*|--s[A-Za-z-]*)" }
+    # `xxd` with a second positional argument writes that file.
+    - { tool: bash, match: "^xxd\\b[^\\n]*(?:\\s--(?:\\s|$)|[^\\n]*\\s[^-\\s]\\S*\\s+\\S+\\s*$)" }
+    # A bare `tsc` emits files; only the no-emit form is read-only.
+    - { tool: bash, match: "^tsc\\b(?![^\\n]*--noEmit\\b)" }
+    # `--output` writes a file.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+(?:log|rev-list|diff-tree|diff-index|diff-files|diff|show|whatchanged|cat-file|grep|blame|shortlog)\\b[^\\n]*\\s(?:--output(?:=\\S+)?|--ext-diff|--textconv|--filters)\\b" }
+    # `git grep -O` / `--open-files-in-pager` runs the pager as a command.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+grep\\b[^\\n]*?\\s(?:-O\\S*|--open-files-in-pager(?:=\\S*)?)\\b" }
+    # A branch create writes a ref; only the listing forms are read-only.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+branch\\b(?:[^\\n]*\\s(?:-(?:u|t)\\b|--(?:set-upstream(?:-to)?|unset-upstream|track|edit-description|tra|edit-descr)\\b)|\\s+(?!-)[^\\s;&|()]+)" }
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+branch\\b[^\\n]*\\s--(?:format|(?:no-)?contains|(?:no-)?merged|points-at)\\b(?:=\\S+\\s+[^-\\s]\\S+|\\s+\\S+\\s+[^-\\s]\\S+)" }
     - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }

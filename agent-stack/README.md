@@ -65,14 +65,12 @@ The pi templates were translated from `agent-templates/opencode/frontmatters`
   `find -exec/-execdir/-delete/-ok/-okdir/-fls/-fprint(0|f)`, `curl|sh`,
   `xargs → rm|sh|bash|zsh|mv|cp` (first non-option token after xargs options),
   `rm -r/-f/-rf/-fr`, `sudo`, mkfs/dd).
-- The bash redirection deny is narrowed: real file-writing redirections (`>`, `>>`,
-  `tee`) with whitespace or a command separator before the redirect are denied —
-  including the space-form `> /dev/null` idiom (fail-closed); fd-touching forms (`2>`,
-  `2>&1`) and glued `>` inside code/strings are allowed, and glued redirects
-  (`cmd>file`) are an accepted residual gap. The gate only denies bare-token
-  forms — absolute paths (`/bin/rm`), backslash obfuscation (`te\e`), fd `1>`
-  redirects, and `$(...)`-splices of keywords are known residual evasions
-  (inherent flat-regex limitation; full hardening deferred).
+- The bash redirection deny tests the operator itself: any `>` or `>>` is a
+  write and denies, whatever character precedes it. The only allowed form is
+  file-descriptor duplication, a `>` followed by an ampersand and one digit at
+  the end of the command or before a separator (`2>&1`, `>&2`). The `tee` form
+  also denies. A digit-leading target (`>1file`) is a write, not a duplication.
+  A `>` inside a quoted literal over-denies; the fail-closed choice is kept.
 - The `cd X && …` / `git -C X …` forms (pi permits the first token only) are
   folded into the git regexes so delegates don't get stuck on command prefixes.
   A leading `cd X` before any separator folds the segment to `cd X && …`, so a
