@@ -6,7 +6,7 @@
  * No real TTY, no real `process.stdout` writes, and no write to the real
  * `~/.pi/agent/persona-agents-sidebar.json` (each config test uses a temp path).
  *
- *   npm run test:permissions -- agent-stack/sidebar.test.ts
+ *   npm test -- agent-stack/sidebar.test.ts
  */
 
 import { test } from "node:test";

@@ -11,9 +11,8 @@
  *
  * Uses JSON mode to capture structured output from subagents.
  *
- * This module owns the public tool definition: the schema, the mode dispatch,
- * and the renderers; the child runner, result helpers, tree events, and thinking
- * state live in the sibling `subagent-*.ts` modules.
+ * This module owns the tool definition and mode dispatch; the schema, the
+ * renderers, child runner, result helpers, tree writer, and thinking state live in sibling modules.
  */
 
 import * as path from "node:path";

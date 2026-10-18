@@ -2,7 +2,7 @@
  * Offline regression harness for the permission gate's pure core.
  *
  * Runs under plain Node (type stripping) with no dependencies:
- *   npm run test:permissions
+ *   npm test -- agent-stack/command-segments.test.ts
  *
  * Covers the splitter edge-case table and the decision core, including the
  * "Always allow" segment-approval shape.

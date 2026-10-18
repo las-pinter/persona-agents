@@ -2,7 +2,7 @@
  * Offline regression harness for the pure sidebar panel renderers.
  *
  * Runs under plain Node (type stripping):
- *   npm run test:permissions -- agent-stack/sidebar-render.test.ts
+ *   npm test -- agent-stack/sidebar-render.test.ts
  *
  * Covers the tree, session, workspace, MCP, and todos panel renderers.
  */
@@ -13,9 +13,7 @@ import {
 	type McpSnapshot,
 	type SidebarTheme,
 	type TodoSnapshot,
-	AGENTS_PAD_MIN,
 	CONTEXT_BAR_CELLS,
-	SECTION_RULE_CHAR,
 	SESSION_LABEL_WIDTH,
 	contextBar,
 	contextBarColor,
@@ -26,23 +24,17 @@ import {
 	renderMcpPanel,
 	renderNodeDetail,
 	renderSessionPanel,
-	renderSidebarPanel,
 	renderTodosPanel,
 	renderTreeLines,
 	renderWorkspacePanel,
-	selectNext,
-	selectPrev,
 	shortenHome,
 	statusGlyph,
-	statusIcon,
-	treeSignature,
 } from "./sidebar-render.ts";
 import {
 	assertFits,
 	content,
 	makeNode,
 	makeSession,
-	makeSnapshot,
 	makeWorkspace,
 	theme,
 } from "./sidebar-render-fixtures.ts";

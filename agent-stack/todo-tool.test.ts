@@ -2,11 +2,9 @@
  * Offline regression harness for the pure `todo` tool core.
  *
  * Runs under plain Node (type stripping) with no pi runtime:
- *   npm run test:permissions -- agent-stack/todo-tool.test.ts
+ *   npm test -- agent-stack/todo-tool.test.ts
  *
- * Covers the todo-tool cases: add, toggle, remove, clear, list,
- * session-entry reconstruction, error results (never throws), and the `details`
- * shape.
+ * Covers todo add, toggle, remove, clear, list, reconstruction, and error cases.
  */
 
 import { test } from "node:test";

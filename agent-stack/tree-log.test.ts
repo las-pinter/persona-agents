@@ -2,12 +2,9 @@
  * Offline regression harness for the shared append-only tree log.
  *
  * Runs under plain Node (type stripping) with no dependencies:
- *   npm run test:permissions -- agent-stack/tree-log.test.ts
+ *   npm test -- agent-stack/tree-log.test.ts
  *
- * Covers the tree-log cases: round-trip append/read, malformed
- * line skipping, byte-cap truncation, a missing file, root path uniqueness,
- * the capped read tail, compaction, lone update/end handling, concurrent roots,
- * and interleaved appends to one shared log path.
+ * Covers tree-log append/read, truncation, compaction, and concurrency cases.
  */
 
 import { test, after } from "node:test";

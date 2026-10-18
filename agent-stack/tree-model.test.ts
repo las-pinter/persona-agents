@@ -2,7 +2,7 @@
  * Offline regression harness for the pure agent tree model.
  *
  * Runs under plain Node (type stripping) with no dependencies:
- *   npm run test:permissions -- agent-stack/tree-model.test.ts
+ *   npm test -- agent-stack/tree-model.test.ts
  *
  * Covers the tree-model cases: two-level trees, order
  * independence, the root node, orphans, staleness, and independent logs.
