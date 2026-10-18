@@ -4,7 +4,7 @@
  * Runs under plain Node (type stripping) with no pi runtime:
  *   npm run test:permissions -- agent-stack/todo-tool.test.ts
  *
- * Covers the plan's Task 19 todo-tool cases: add, toggle, remove, clear, list,
+ * Covers the todo-tool cases: add, toggle, remove, clear, list,
  * session-entry reconstruction, error results (never throws), and the `details`
  * shape.
  */

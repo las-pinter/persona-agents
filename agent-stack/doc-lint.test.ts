@@ -1,5 +1,5 @@
 /**
- * Structural doc-lint for the persona-agents contracts (study finding F17).
+ * Structural doc-lint for the persona-agents contracts.
  *
  * Runs under plain Node (type stripping) with no extra dependencies:
  *   node --experimental-strip-types --test agent-stack/doc-lint.test.ts
@@ -34,7 +34,7 @@ const kiroTemplatesDir = path.join(repoRoot, "agent-templates", "kiro");
 
 /**
  * The one named constant for the expected profession count per theme.
- * T7 retired the two specialist implementers, so each theme has 8.
+ * Each theme has 8 professions after the two specialist implementers retired.
  */
 const EXPECTED_PROFESSIONS_PER_THEME = 8;
 
@@ -544,9 +544,8 @@ describe("condition 5: pi alwaysLoad matches the profession Startup list", () =>
 		});
 	}
 
-	// T28 tailored rule: the overseer Startup is a numbered procedure, so exact
-	// list parity does not apply. Every alwaysLoad entry must still be a skill the
-	// frontmatter declares.
+	// Tailored rule: every alwaysLoad entry for the numbered overseer Startup must
+	// still be a skill the frontmatter declares, since exact list parity does not apply.
 	test("pi overseer alwaysLoad is a subset of its declared skills", () => {
 		const frontmatterFile = path.join(piFrontmattersDir, "overseer.yaml");
 		assert.ok(fs.existsSync(frontmatterFile), "missing pi frontmatter for overseer");

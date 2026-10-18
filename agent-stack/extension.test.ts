@@ -1,5 +1,5 @@
 /**
- * Extension skill-injection tests (study task T12, finding F18).
+ * Extension skill-injection tests.
  *
  * The pi `before_agent_start` handler injects two payloads:
  *   - `alwaysLoad` — the full skill body (mandatory, budgeted); and

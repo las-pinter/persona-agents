@@ -4,7 +4,7 @@
  * Runs under plain Node (type stripping) with no dependencies:
  *   npm run test:permissions -- agent-stack/tree-log.test.ts
  *
- * Covers the plan's Task 19 tree-log cases: round-trip append/read, malformed
+ * Covers the tree-log cases: round-trip append/read, malformed
  * line skipping, byte-cap truncation, a missing file, root path uniqueness,
  * the capped read tail, compaction, lone update/end handling, concurrent roots,
  * and interleaved appends to one shared log path.
