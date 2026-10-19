@@ -245,6 +245,8 @@ function restoreEnv(saved: Map<string, string | undefined>): void {
 	}
 }
 
+// This test must stay last in the file. It leaves the tree-root module state
+// set, and it needs that state empty at the start.
 test("the compaction call site keeps a quiet live run outside the read window", async () => {
 	const logFile = path.join(tmpRoot, "call-site-log.ndjson");
 	// The quiet run has only `update` records, so a capped read drops it.

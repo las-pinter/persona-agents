@@ -210,6 +210,22 @@ test("an old child start and end and the newest clear survive outside the tail",
 	);
 });
 
+test("the newest of two clear records outside the tail survives", () => {
+	const path = logPath();
+	const base = 1_700_000_000_000;
+	const stamp = (offsetMs: number): string => new Date(base + offsetMs).toISOString();
+	appendEvent(path, makeEvent({ runId: "root", type: "clear", status: "running", at: stamp(0) }));
+	appendEvent(path, makeEvent({ runId: "root", type: "clear", status: "running", at: stamp(1) }));
+	const fillerCount = MAX_EVENTS_READ + 5;
+	for (let index = 0; index < fillerCount; index++) {
+		appendEvent(path, makeEvent({ runId: "root", type: "update", status: "running", at: stamp(2 + index) }));
+	}
+
+	const clears = readEvents(path).filter((event) => event.type === "clear");
+	assert.equal(clears.length, 1, "only one clear record survives");
+	assert.equal(clears[0]?.at, stamp(1), "the kept clear is the newer one");
+});
+
 interface EdgeMaxCase {
 	name: string;
 	max: number;

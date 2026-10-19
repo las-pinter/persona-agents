@@ -64,7 +64,7 @@ export const MAX_EVENT_BYTES = 4096;
 export const MAX_LOG_BYTES = 1 << 20;
 /**
  * Cap for the record tail one read returns. Each run keeps its `start` and
- * `end` record and the newest `clear` record outside this tail.
+ * `end` records and the newest `clear` record outside this tail.
  */
 export const MAX_EVENTS_READ = 2000;
 
@@ -193,8 +193,8 @@ export function readAllEvents(logPath: string): RunEvent[] {
  *
  * The cap `min(max ?? MAX_EVENTS_READ, MAX_EVENTS_READ)` covers the tail only.
  * Every run also keeps its `start` and `end` records, and the newest `clear`
- * record stays. An old run with an `end` record therefore neither orphans its
- * children nor rebuilds as a stale node. The extra records grow with the run
+ * record stays. An old `start` keeps the children attached. An old `end` stops
+ * a stale rebuild. The extra records grow with the run
  * count, which compaction bounds. The result keeps the file order. A `max` of
  * zero or less reads nothing.
  */
@@ -238,7 +238,7 @@ function liveRunIds(events: RunEvent[]): Set<string> {
 
 /**
  * The live run ids for one compaction pass, plus `keepRunId` when it is set.
- * A live run outside the capped read window is still live.
+ * Uses the uncapped read; see `readAllEvents`.
  */
 export function compactionLiveRuns(logPath: string, keepRunId?: string): Set<string> {
 	const live = liveRunIds(readAllEvents(logPath));
