@@ -426,6 +426,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			applyMcpUsage();
 			return;
 		}
+		// readEvents keeps each run's start and end record and the newest clear,
+		// so an old root start keeps its children attached through this refresh.
 		const events = readEvents(logPath);
 		state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
 		for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);

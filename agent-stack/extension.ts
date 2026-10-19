@@ -17,7 +17,7 @@ import * as fs from "node:fs";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts";
-import { MAX_LOG_BYTES, appendEvent, compactLog, createRootLogPath, readEvents } from "./tree-log.ts";
+import { MAX_LOG_BYTES, appendEvent, compactLog, compactionLiveRuns, createRootLogPath } from "./tree-log.ts";
 
 function debugLog(...parts: unknown[]): void {
 	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
@@ -91,11 +91,7 @@ function initTreeRoot(): void {
 function compactIfNeeded(logPath: string, keepRunId: string): void {
 	try {
 		if (fs.statSync(logPath).size <= MAX_LOG_BYTES) return;
-		const events = readEvents(logPath);
-		const ended = new Set(events.filter((event) => event.type === "end").map((event) => event.runId));
-		const live = new Set(events.filter((event) => !ended.has(event.runId)).map((event) => event.runId));
-		live.add(keepRunId);
-		compactLog(logPath, live);
+		compactLog(logPath, compactionLiveRuns(logPath, keepRunId));
 	} catch {
 		// A missing file means there is nothing to compact.
 	}

@@ -1,10 +1,13 @@
 /**
  * Offline regression harness for the shared append-only tree log.
  *
- * Runs under plain Node (type stripping) with no dependencies:
+ * Runs under plain Node (type stripping). It imports only node built-ins and
+ * local modules, so it needs no installed package:
  *   npm test -- agent-stack/tree-log.test.ts
  *
- * Covers tree-log append/read, truncation, compaction, and concurrency cases.
+ * Covers append/read round-trips, a malformed line, the byte cap of one record,
+ * the read cap with the `start`, `end`, and newest `clear` keep rules, the
+ * `max` edge values, compaction by live run and by tail, and concurrency.
  */
 
 import { test, after } from "node:test";
@@ -17,11 +20,13 @@ import {
 	MAX_EVENTS_READ,
 	appendEvent,
 	compactLog,
+	compactionLiveRuns,
 	createRootLogPath,
+	readAllEvents,
 	readEvents,
 	type RunEvent,
 } from "./tree-log.ts";
-import { assembleTree, findNode } from "./tree-model.ts";
+import { assembleTree, findNode, flattenTree } from "./tree-model.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "tree-log-test-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -139,6 +144,178 @@ test("readEvents returns exactly the capped tail when the log is longer", () => 
 	assert.equal(events.length, MAX_EVENTS_READ);
 	assert.equal(events[0]?.runId, "run-5");
 	assert.equal(events[events.length - 1]?.runId, `run-${total - 1}`);
+});
+
+test("a start record older than the cap survives with one capped tail", () => {
+	const path = logPath();
+	appendEvent(path, makeEvent({ runId: "root", type: "start", at: new Date(0).toISOString() }));
+	const total = MAX_EVENTS_READ + 5;
+	for (let index = 0; index < total; index++) {
+		appendEvent(path, makeEvent({ runId: `run-${index}`, type: "update", at: new Date(index + 1).toISOString() }));
+	}
+
+	const events = readEvents(path);
+	assert.equal(events.length, MAX_EVENTS_READ + 1, "the old start plus one capped tail");
+	assert.equal(events[0]?.runId, "root", "the old start comes first");
+	assert.equal(events[1]?.runId, "run-5", "the oldest record over the cap is dropped");
+	assert.equal(events[events.length - 1]?.runId, `run-${total - 1}`, "the newest record comes last");
+
+	const times = events.map((event) => Date.parse(event.at));
+	assert.deepEqual(times, [...times].sort((a, b) => a - b), "the kept records stay in file order");
+});
+
+test("an old child start and end and the newest clear survive outside the tail", () => {
+	const path = logPath();
+	const base = 1_700_000_000_000;
+	const stamp = (offsetMs: number): string => new Date(base + offsetMs).toISOString();
+	appendEvent(path, makeEvent({ runId: "root", type: "start", status: "idle", at: stamp(0) }));
+	appendEvent(
+		path,
+		makeEvent({ runId: "child", type: "start", parentRunId: "root", depth: 1, agent: "implementer", at: stamp(1) }),
+	);
+	appendEvent(
+		path,
+		makeEvent({
+			runId: "child",
+			type: "end",
+			parentRunId: "root",
+			depth: 1,
+			agent: "implementer",
+			status: "done",
+			at: stamp(2),
+		}),
+	);
+	appendEvent(path, makeEvent({ runId: "root", type: "clear", status: "running", at: stamp(3) }));
+	const fillerCount = MAX_EVENTS_READ + 5;
+	for (let index = 0; index < fillerCount; index++) {
+		appendEvent(path, makeEvent({ runId: "root", type: "update", status: "running", at: stamp(4 + index) }));
+	}
+
+	const events = readEvents(path);
+	assert.ok(
+		events.some((event) => event.runId === "child" && event.type === "end"),
+		"the child end record survives",
+	);
+	assert.ok(
+		events.some((event) => event.type === "clear"),
+		"the newest clear record survives",
+	);
+
+	const roots = assembleTree(events, base + fillerCount + 6, 1000);
+	assert.equal(findNode(roots, "child"), undefined, "the clear drops the finished child");
+	assert.deepEqual(
+		flattenTree(roots).filter((node) => node.status === "stale").map((node) => node.runId),
+		[],
+		"no node rebuilds as stale",
+	);
+});
+
+interface EdgeMaxCase {
+	name: string;
+	max: number;
+	write: (path: string) => void;
+	/** The kept records as `type:runId`, in file order. */
+	expected: string[];
+}
+
+const edgeMaxCases: EdgeMaxCase[] = [
+	{
+		name: "max 0 keeps no record",
+		max: 0,
+		write: (path) => {
+			appendEvent(path, makeEvent({ runId: "a", type: "start" }));
+			appendEvent(path, makeEvent({ runId: "a", type: "end", status: "done" }));
+		},
+		expected: [],
+	},
+	{
+		name: "a negative max keeps no record",
+		max: -5,
+		write: (path) => {
+			appendEvent(path, makeEvent({ runId: "a", type: "start" }));
+			appendEvent(path, makeEvent({ runId: "a", type: "end", status: "done" }));
+		},
+		expected: [],
+	},
+	{
+		name: "max 2 over start records only keeps all 3 start records",
+		max: 2,
+		write: (path) => {
+			for (const runId of ["a", "b", "c"]) {
+				appendEvent(path, makeEvent({ runId, type: "start" }));
+			}
+		},
+		expected: ["start:a", "start:b", "start:c"],
+	},
+	{
+		name: "max 1 below 3 start records keeps all 3 start records plus the tail",
+		max: 1,
+		write: (path) => {
+			for (const runId of ["a", "b", "c"]) {
+				appendEvent(path, makeEvent({ runId, type: "start" }));
+			}
+			appendEvent(path, makeEvent({ runId: "c", type: "update" }));
+		},
+		expected: ["start:a", "start:b", "start:c", "update:c"],
+	},
+];
+
+for (const item of edgeMaxCases) {
+	test(item.name, () => {
+		const path = logPath();
+		item.write(path);
+		const kept = readEvents(path, item.max).map((event) => `${event.type}:${event.runId}`);
+		assert.deepEqual(kept, item.expected);
+	});
+}
+
+test("compaction drops a finished run that sits outside the read window", () => {
+	const path = logPath();
+	const base = 1_700_000_000_000;
+	const stamp = (offsetMs: number): string => new Date(base + offsetMs).toISOString();
+	appendEvent(path, makeEvent({ runId: "old", type: "start", at: stamp(0) }));
+	appendEvent(path, makeEvent({ runId: "old", type: "end", status: "done", at: stamp(1) }));
+	const fillerCount = MAX_EVENTS_READ + 5;
+	for (let index = 0; index < fillerCount; index++) {
+		appendEvent(path, makeEvent({ runId: "root", type: "update", status: "idle", at: stamp(2 + index) }));
+	}
+
+	const live = compactionLiveRuns(path, "root");
+	assert.equal(live.has("old"), false, "an ended run is not live");
+	compactLog(path, live);
+
+	const runIds = readAllEvents(path).map((event) => event.runId);
+	assert.equal(runIds.includes("old"), false, "the finished run outside the window is gone");
+	assert.ok(runIds.includes("root"), "the live root stays");
+	assert.ok(
+		readEvents(path).some((event) => event.runId === "root"),
+		"the tree still reads the live root",
+	);
+});
+
+test("compaction keeps a live run that has only update records outside the read window", () => {
+	const path = logPath();
+	// Only `update` records: no start and no end, so the capped read drops them.
+	for (let index = 0; index < 3; index++) {
+		appendEvent(path, makeEvent({ runId: "quiet", type: "update" }));
+	}
+	const fillerCount = MAX_EVENTS_READ + 5;
+	for (let index = 0; index < fillerCount; index++) {
+		appendEvent(path, makeEvent({ runId: "root", type: "update" }));
+	}
+
+	assert.ok(
+		readEvents(path).every((event) => event.runId !== "quiet"),
+		"the capped read drops every quiet record",
+	);
+
+	const live = compactionLiveRuns(path, "root");
+	assert.equal(live.has("quiet"), true, "a run with no end record is live");
+	compactLog(path, live);
+
+	const runIds = readAllEvents(path).map((event) => event.runId);
+	assert.ok(runIds.includes("quiet"), "the live run outside the window stays");
+	assert.ok(runIds.includes("root"), "the live root stays");
 });
 
 test("compactLog keeps requested run ids and the recent tail, drops the rest", () => {

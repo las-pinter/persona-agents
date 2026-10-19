@@ -62,7 +62,10 @@ export interface RunEvent {
 export const MAX_EVENT_BYTES = 4096;
 /** Cap for the whole log. Only the root compacts over this size. */
 export const MAX_LOG_BYTES = 1 << 20;
-/** Cap for one read. Older events are dropped. */
+/**
+ * Cap for the record tail one read returns. Each run keeps its `start` and
+ * `end` record and the newest `clear` record outside this tail.
+ */
 export const MAX_EVENTS_READ = 2000;
 
 /** Records kept at the tail by `compactLog`. */
@@ -156,11 +159,13 @@ function isRunEvent(value: unknown): value is RunEvent {
 }
 
 /**
- * Parse every record in the file with no read cap. Malformed lines are skipped
- * silently and a missing file returns an empty list. `compactLog` uses this so
- * it never drops a live run that sits outside the capped read window.
+ * Read every record with no read cap. Malformed lines are skipped silently and
+ * a missing file returns an empty list.
+ *
+ * A capped display read drops a run that has only `update` records, so that
+ * run looks absent. A liveness check must use this uncapped read.
  */
-function readAllEventsRaw(logPath: string): RunEvent[] {
+export function readAllEvents(logPath: string): RunEvent[] {
 	let raw: string;
 	try {
 		raw = readFileSync(logPath, "utf8");
@@ -183,15 +188,62 @@ function readAllEventsRaw(logPath: string): RunEvent[] {
 }
 
 /**
- * Read the last events from the log. Malformed lines are skipped silently.
- * A missing file returns an empty list. The result is capped at
- * `min(max ?? MAX_EVENTS_READ, MAX_EVENTS_READ)`.
+ * Read the tail of the log plus the records that keep the tree correct.
+ * Malformed lines are skipped silently. A missing file returns an empty list.
+ *
+ * The cap `min(max ?? MAX_EVENTS_READ, MAX_EVENTS_READ)` covers the tail only.
+ * Every run also keeps its `start` and `end` records, and the newest `clear`
+ * record stays. An old run with an `end` record therefore neither orphans its
+ * children nor rebuilds as a stale node. The extra records grow with the run
+ * count, which compaction bounds. The result keeps the file order. A `max` of
+ * zero or less reads nothing.
  */
 export function readEvents(logPath: string, max?: number): RunEvent[] {
-	const events = readAllEventsRaw(logPath);
+	const events = readAllEvents(logPath);
 	const limit = Math.min(max ?? MAX_EVENTS_READ, MAX_EVENTS_READ);
 	if (limit <= 0) return [];
-	return events.slice(-limit);
+
+	const keep = new Set<number>();
+	// The newest clear is the last one, because the log is append-only.
+	let newestClear = -1;
+	for (let index = events.length - 1; index >= 0; index--) {
+		const event = events[index];
+		if (events.length - index <= limit) keep.add(index);
+		if (event.type === "start" || event.type === "end") {
+			keep.add(index);
+			continue;
+		}
+		if (event.type === "clear" && newestClear < 0) newestClear = index;
+	}
+	if (newestClear >= 0) keep.add(newestClear);
+
+	return events.filter((_event, index) => keep.has(index));
+}
+
+/**
+ * The run ids that have a record but no `end` record. Pass the uncapped read
+ * from `readAllEvents`.
+ */
+function liveRunIds(events: RunEvent[]): Set<string> {
+	const ended = new Set<string>();
+	for (const event of events) {
+		if (event.type === "end") ended.add(event.runId);
+	}
+	const live = new Set<string>();
+	for (const event of events) {
+		if (!ended.has(event.runId)) live.add(event.runId);
+	}
+	return live;
+}
+
+/**
+ * The live run ids for one compaction pass, plus `keepRunId` when it is set.
+ * A live run outside the capped read window is still live.
+ */
+export function compactionLiveRuns(logPath: string, keepRunId?: string): Set<string> {
+	const live = liveRunIds(readAllEvents(logPath));
+	if (keepRunId !== undefined) live.add(keepRunId);
+	return live;
 }
 
 let rootPathCounter = 0;
@@ -211,9 +263,7 @@ export function createRootLogPath(): string {
 export function compactLog(logPath: string, keepRunIds: Set<string> | string[]): void {
 	try {
 		const keep = keepRunIds instanceof Set ? keepRunIds : new Set(keepRunIds);
-		// Uncapped parse: a live run must survive even when its records fall
-		// outside the 2000-record read window.
-		const events = readAllEventsRaw(logPath);
+		const events = readAllEvents(logPath);
 		if (events.length === 0) return;
 
 		const keepIndexes = new Set<number>();

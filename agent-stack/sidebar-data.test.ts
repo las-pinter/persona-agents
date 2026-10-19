@@ -17,10 +17,17 @@ import { unlinkSync } from "node:fs";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { appendEvent, createRootLogPath } from "./tree-log.ts";
+import { appendEvent, createRootLogPath, MAX_EVENTS_READ } from "./tree-log.ts";
 import { findNode } from "./tree-model.ts";
+import {
+	renderTreeLines,
+	statusGlyph,
+	type McpSnapshot,
+	type SessionSnapshot,
+	type WorkspaceFileSnapshot,
+} from "./sidebar-render.ts";
+import { theme } from "./sidebar-render-fixtures.ts";
 import { TODOS_EVENT_CHANNEL, TODOS_TURN_ENTRY } from "./todo-tool.ts";
-import type { McpSnapshot, SessionSnapshot, WorkspaceFileSnapshot } from "./sidebar-render.ts";
 
 /** A scripted response for the two git calls the collector makes. */
 interface GitScript {
@@ -612,6 +619,50 @@ test("a clear after a finished subagent does not drop its MCP count", (t) => {
 		t.mock.timers.tick(TREE_POLL_MS);
 		assert.equal(findNode(data.snapshot().tree, "child"), undefined, "the clear prunes the finished child");
 		assert.equal(data.snapshot().mcpUsage?.context7, 2, "the finished subagent stays counted");
+	} finally {
+		data.dispose();
+		t.mock.timers.reset();
+		restoreTreeLogEnv(previous);
+		removeLog(logPath);
+	}
+});
+
+/** Write a temp log whose root start sits before the read window, then a clear. */
+function writeOldRootStartLog(): string {
+	const logPath = createRootLogPath();
+	const base = Date.now() - 100_000;
+	const stamp = (offsetMs: number): string => new Date(base + offsetMs).toISOString();
+	appendEvent(logPath, { v: 1, type: "start", runId: "root", parentRunId: null, depth: 0, agent: "orchestrator", persona: null, status: "idle", at: stamp(0) });
+	for (let index = 0; index < MAX_EVENTS_READ + 5; index++) {
+		appendEvent(logPath, { v: 1, type: "update", runId: "root", parentRunId: null, depth: 0, agent: "orchestrator", persona: null, status: "idle", at: stamp(index + 1) });
+	}
+	appendEvent(logPath, { v: 1, type: "clear", runId: "root", parentRunId: null, depth: 0, agent: "orchestrator", persona: null, status: "running", at: stamp(3000) });
+	appendEvent(logPath, { v: 1, type: "start", runId: "child", parentRunId: "root", depth: 1, agent: "implementer", persona: null, status: "running", at: stamp(3001) });
+	appendEvent(logPath, { v: 1, type: "update", runId: "child", parentRunId: "root", depth: 1, agent: "implementer", persona: null, status: "running", at: stamp(3002), toolCount: 2 });
+	return logPath;
+}
+
+test("an old root start keeps a fresh child on its branch after a clear", (t) => {
+	const { pi } = makeCapturingPi();
+	const data = createSidebarData(pi);
+	const previous = process.env[ENV_TREE_LOG];
+	delete process.env[ENV_TREE_LOG];
+	const logPath = writeOldRootStartLog();
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	try {
+		data.subscribe(makeFakeCtx());
+		process.env[ENV_TREE_LOG] = logPath;
+		t.mock.timers.tick(TREE_POLL_MS);
+
+		const child = findNode(data.snapshot().tree, "child");
+		assert.ok(child, "the fresh child is in the tree");
+		assert.equal(child?.orphan, false, "the old root start keeps the child attached");
+
+		const childLine = renderTreeLines(data.snapshot().tree, theme, 0).find((line) =>
+			line.includes("implementer"),
+		);
+		assert.ok(childLine?.startsWith("└─ "), "the child line starts with the branch glyph");
+		assert.notEqual(statusGlyph(theme, child, 0), "?", "the child icon is not the orphan mark");
 	} finally {
 		data.dispose();
 		t.mock.timers.reset();
