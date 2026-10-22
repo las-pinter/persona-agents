@@ -1,13 +1,14 @@
 ---
 name: retro
-description: Print-only blameless retrospective of the current pi session with the AAR spine, a 14-dimension sweep, and routed actions.
+description: Print-only blameless retrospective of the current session with the AAR spine, a 14-dimension sweep, and routed actions. Runs on pi, kiro, OpenCode, and Claude Code.
+disable-model-invocation: true
 ---
 
 # Retro
 
 ## Purpose
 
-Review the current pi session and print the result in chat. Write nothing
+Review the current session and print the result in chat. Write nothing
 durable.
 
 The spine is the After Action Review (AAR). It has four parts:
@@ -22,15 +23,54 @@ condition to change, not a person to blame.
 
 ## When to Run
 
-Run this skill when the user types `/retro`, or when the user asks for a
-session retrospective.
+Run this skill when the user starts the retro command, or when the user asks
+for a session retrospective. The command name depends on the platform:
+
+| Platform | Command |
+|----------|---------|
+| pi | `/retro` |
+| kiro | `/retro` |
+| OpenCode | `/retro` |
+| Claude Code | `/persona-agents:retro` |
+
+The agent that the user talks to runs the retro. Do not hand it to a
+subagent.
+
+## Step 0: Find the Platform
+
+Find the platform that runs this session. Check the signals in order. The
+first signal that matches wins:
+
+| Signal | Platform |
+|--------|----------|
+| This `SKILL.md` is under `~/.kiro/skills/` | kiro |
+| This `SKILL.md` is under `~/.config/opencode/skills/` | OpenCode |
+| The user typed `/persona-agents:retro`, or this `SKILL.md` is under `~/.claude/plugins/` | Claude Code |
+| This `SKILL.md` is under a pi package, or under a `content/skills/` folder | pi |
+
+If no signal matches, ask the user which platform runs the session.
+
+Then read the one reference file for that platform. The file is in the
+`references/` folder next to this `SKILL.md`:
+
+| Platform | Reference file |
+|----------|----------------|
+| pi | `references/pi.md` |
+| kiro | `references/kiro.md` |
+| OpenCode | `references/opencode.md` |
+| Claude Code | `references/claude.md` |
+
+Do not read the reference files of the other platforms. The reference file
+gives the session transcript, the permission rules, the audit log status, and
+the cost source.
 
 ## Review Scope
 
 Review these sources only:
 
-- The current pi session.
-- The latest orchestrator journal entry.
+- The current session.
+- The latest journal entry of the agent that runs the retro, if that agent
+  keeps a journal.
 - The project `summary.md`.
 
 Do not scan earlier sessions. For a repeated-mistake check, use the latest
@@ -55,15 +95,15 @@ Collect evidence from these sources:
 | Source | Location | Holds |
 |--------|----------|-------|
 | Session context | Live context | Messages, tool calls, denials, user turns |
-| Session file | `~/.pi/agent/sessions/<cwd-slug>/*.jsonl` | Per-message `usage` (cost, totalTokens), tool calls, timestamps |
+| Session transcript | See the platform reference file | Tool calls, timestamps, and usage where the platform records it |
 | Journals | `~/agent-notes/<agent-type>/journals/daily/` | Work log, decisions, issues, lessons |
 | Project notes | `~/agent-notes/project-notes/<project>/` | `summary.md`, studies |
 | Git history | Repo working tree | `git log`, `git diff`, `git status` |
-| Permission config | `~/.pi/agent/permissions.json` | Current allow/ask/deny rules |
-| Usage cache | `~/.pi/agent/cache/opencode-go-usage.json` | Account quota, not per-session |
+| Permission rules | See the platform reference file | Current allow, ask, and deny rules |
+| Permission audit log | See the platform reference file | Recorded permission decisions, only where the platform has a log |
 
-For a large session file, read the `usage` fields only. Do not load the whole
-file into context.
+For a large transcript file, read only the fields you need. Do not load the
+whole file into context.
 
 ## Step 2: Sweep the 14 Dimensions
 
@@ -86,6 +126,12 @@ sweep internal. Print only a dimension with evidence.
 | 12 | Repeated mistakes | Which mistake appeared before in journals or git history? |
 | 13 | Update-surface routing | For each lesson, which surface should change? |
 | 14 | Delegation and routing | Which task went to the wrong agent type, and why? |
+
+### Cost Data
+
+Use cost data if the platform records it. The platform reference file names
+the cost source. If the platform has no cost source, skip dimension 6. Then
+state in the output that the platform records no cost data for the session.
 
 ## Step 3: Print Findings
 
@@ -138,11 +184,12 @@ route every lesson to a skill.
 
 ### Permissions Evidence Limit
 
-The permissions dimension uses transcript denials and
-`~/.pi/agent/permissions.json`. State this limit when the dimension prints.
+The permissions dimension uses the evidence that the platform reference file
+names. State this limit when the dimension prints.
 
-pi has no durable permission audit log. Do not claim one. An audit log exists
-for OpenCode only, and it does not record pi decisions.
+Claim a permission audit log only when the platform reference file says the
+platform has one. An audit log of one platform does not record the decisions
+of a different platform.
 
 ## Step 4: Print Actions
 
@@ -175,6 +222,8 @@ Findings (3-5):
 
 Actions (1-3):
 1. Owner: ... - Next step: ...
+
+Cost: <the session cost or the token totals, or "no cost data on this platform">
 ```
 
 ## Never Do
@@ -182,8 +231,9 @@ Actions (1-3):
 - Never write a durable artifact.
 - Never anchor a finding to a self-grade.
 - Never claim one decisive cause.
-- Never claim a durable pi permission audit log.
+- Never claim a permission audit log on a platform that has none.
 - Never print a finding without external evidence.
 - Never route a finding to more than one surface.
 - Never dispatch an implementer, reviewer, or commit.
 - Never run a cross-session scan.
+- Never read the reference file of a different platform.

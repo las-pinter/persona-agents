@@ -705,6 +705,9 @@ permissions:
     resource: shell-discipline
     effect: allow
   - action: skill
+    resource: retro
+    effect: allow
+  - action: skill
     resource: skill-resolution
     effect: allow
   - action: skill

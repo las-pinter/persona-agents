@@ -898,6 +898,9 @@ permissions:
   - action: skill
     resource: shell-discipline
     effect: allow
+  - action: skill
+    resource: retro
+    effect: allow
   - action: shell
     resource: "*eval*"
     effect: deny

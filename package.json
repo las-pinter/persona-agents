@@ -8,7 +8,7 @@
   "pi": {
     "extensions": ["./platforms/pi/extension/extension.ts"],
     "skills": ["./content/skills/**/SKILL.md"],
-    "prompts": ["./platforms/pi/prompts/*.md"]
+    "prompts": ["./content/commands/*.md"]
   },
   "scripts": {
     "lint": "shellcheck install.sh",

@@ -17,7 +17,7 @@ welcome here.
 - [Working with Templates](#working-with-templates)
 - [Research and MCP Tool Names per Stack](#research-and-mcp-tool-names-per-stack)
 - [Adding Skills](#adding-skills)
-  - [Prompt Templates](#prompt-templates)
+  - [Commands](#commands)
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
 - [Style Guide](#style-guide)
@@ -166,6 +166,8 @@ inside professions and skills stay valid both in the repo and when installed.
 persona-agents/
 ├── content/                           # Platform-neutral sources of truth, shared by every target
 │   ├── agents.json                    # Themes → professions → personas
+│   ├── commands/                      # Shared slash commands for pi, kiro, and OpenCode
+│   │   └── retro.md                   # `/retro` session retrospective command
 │   ├── personas/
 │   │   ├── goblin/                    # Goblin Horde persona files
 │   │   │   ├── bossnik-chief.md
@@ -194,7 +196,6 @@ persona-agents/
 │       ├── orchestrator/
 │       │   ├── commit-hygiene/SKILL.md
 │       │   ├── journal-management/SKILL.md
-│       │   ├── retro/SKILL.md
 │       │   └── task-routing/SKILL.md
 │       ├── implementer/
 │       │   ├── code-implementation/SKILL.md
@@ -219,6 +220,7 @@ persona-agents/
 │           ├── journal-management-generic/SKILL.md
 │           ├── persona-free-documents/SKILL.md
 │           ├── project-notes/SKILL.md
+│           ├── retro/                 # SKILL.md plus references/<platform>.md
 │           ├── shell-discipline/SKILL.md
 │           ├── simplified-technical-english/SKILL.md
 │           └── skill-resolution/SKILL.md
@@ -262,8 +264,6 @@ persona-agents/
 │   │   │   ├── tester.yaml
 │   │   │   ├── researcher.yaml
 │   │   │   └── mascot.yaml
-│   │   └── prompts/                   # Pi prompt templates (slash commands)
-│   │       └── retro.md               # `/retro` session retrospective command
 │   ├── kiro/
 │   │   ├── cli.json.example           # Example Kiro CLI config
 │   │   └── templates/                 # Kiro JSON templates per profession
@@ -926,36 +926,59 @@ by looking for files named `SKILL.md` under the profession's skill directory.
    ./install.sh --dry-run --force --profession {profession}
    ```
 
-### Prompt Templates
+### Commands
 
-A pi prompt template turns a markdown file into a slash command. The template
-lives in `platforms/pi/prompts/*.md` and is declared under the `pi.prompts` key in
-`package.json`:
+A command is a markdown file in `content/commands/`. The filename is the
+command name, so `content/commands/retro.md` becomes `/retro` on pi, kiro, and
+OpenCode. The `description` frontmatter shows in command completion. One file
+serves three platforms:
+
+- pi ships it through the `pi.prompts` key in `package.json`. Run `/reload` in
+  an active session after a change.
+- `install.sh` copies it to `~/.config/opencode/commands/` for OpenCode. The
+  file sets no `agent` key, so the current agent runs the command.
+- `install.sh` copies it to `~/.kiro/prompts/` for kiro without the
+  frontmatter, because kiro documents no frontmatter for file prompts. kiro
+  runs a file prompt as `/<name>`. A file with an unclosed frontmatter block
+  installs unchanged, with a warning.
+- A command change needs `./install.sh --force` for kiro and OpenCode, and
+  `/reload` for pi.
 
 ```json
 "pi": {
   "extensions": ["./platforms/pi/extension/extension.ts"],
-  "skills": ["./skills/**/SKILL.md"],
-  "prompts": ["./prompts/*.md"]
+  "skills": ["./content/skills/**/SKILL.md"],
+  "prompts": ["./content/commands/*.md"]
 }
 ```
 
-The filename is the command name, so `platforms/pi/prompts/retro.md` becomes `/retro`. The
-`description` frontmatter shows in command completion. Run `/reload` in an
-active session after a template change.
+Claude Code gets no command file. A plugin skill is a slash command there, so
+the retro skill gives `/persona-agents:retro`.
 
-A prompt template adds no code. It loads a repo skill, and the skill holds the
-procedure. The template `platforms/pi/prompts/retro.md` loads the **retro** skill
-(`content/skills/orchestrator/retro/`). This split keeps command discovery in the
-template and the full procedure in the skill.
+A command adds no code. It loads a repo skill, and the skill holds the
+procedure. `content/commands/retro.md` loads the **retro** skill
+(`content/skills/common/retro/`). This split keeps command discovery in the
+command file and the full procedure in the skill.
 
-#### The `/retro` print-only model
+#### The retro print-only model
 
-`/retro` reviews the current pi session and prints the result in chat. It
-writes no durable artifact: no report file, no skill file, no journal entry,
-and no permission rule. The orchestrator reads the printed findings and
-actions, then decides what to do next. A finding cites one external evidence
-item, so the review never rests on an agent self-grade.
+The retro command reviews the current session and prints the result in chat. The agent
+that the user talks to runs it. It writes no durable artifact: no report file,
+no skill file, no journal entry, and no permission rule. The user reads the
+printed findings and actions, then decides what to do next. A finding cites
+one external evidence item, so the review never rests on an agent self-grade.
+
+The skill sets `disable-model-invocation: true`, so only the user starts it.
+The pi agents list `common/retro` in `skills:`. The pi extension puts a skill
+with that key in a separate "User-invoked skills" list, not in the on-demand
+index, so the agent has the path for the command but does not load the skill
+on a task match.
+The core `SKILL.md` holds the shared method. One reference file per platform
+(`references/pi.md`, `kiro.md`, `opencode.md`, `claude.md`) names the session
+transcript, the permission rules, the audit log status, and the cost source.
+The agent reads only the reference file of its own platform. A new platform
+needs a new reference file; `tests/prompt-templates.test.ts` checks that each
+one exists.
 
 ## Testing
 

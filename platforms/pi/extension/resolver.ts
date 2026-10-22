@@ -602,18 +602,25 @@ export interface SkillRef {
 	path: string;
 	body: string;
 	description?: string;
+	/** `disable-model-invocation: true`: only the user starts the skill, through its command. */
+	userInvokedOnly?: boolean;
 }
 
 function readSkillFile(filePath: string, group: string | undefined, name: string): SkillRef | null {
 	try {
 		const content = fs.readFileSync(filePath, "utf-8");
-		const { frontmatter, body } = parseFrontmatter<{ name?: unknown; description?: unknown }>(content);
+		const { frontmatter, body } = parseFrontmatter<{
+			name?: unknown;
+			description?: unknown;
+			"disable-model-invocation"?: unknown;
+		}>(content);
 		return {
 			name: (typeof frontmatter.name === "string" && frontmatter.name) || name,
 			group,
 			path: filePath,
 			body,
 			description: typeof frontmatter.description === "string" ? frontmatter.description : undefined,
+			userInvokedOnly: frontmatter["disable-model-invocation"] === true,
 		};
 	} catch {
 		return null;

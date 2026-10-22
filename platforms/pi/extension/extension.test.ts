@@ -121,6 +121,13 @@ const multilineSkillPath = writeRawSkill(
 	"MULTILINE_BODY_MARKER",
 );
 
+// `disable-model-invocation: true` marks a skill that only the user starts.
+const userOnlySkillPath = writeRawSkill(
+	"fixture-user-only",
+	"description: User-only fixture description.\ndisable-model-invocation: true",
+	"USER_ONLY_BODY_MARKER",
+);
+
 after(() => {
 	fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
@@ -138,6 +145,34 @@ test("skills: injects an on-demand index of name, description, and path", async 
 	assert.match(prompt, /- fixture-index: Index fixture description\./);
 	assert.ok(prompt.includes(`path: ${indexSkillPath}`), "the index must carry the skill path");
 	assert.doesNotMatch(prompt, /INDEX_BODY_MARKER/, "the skill body must not be injected");
+});
+
+test("skills: a user-invoked skill is listed apart from the on-demand index", async () => {
+	const harness = makePi();
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ skills: ["fixture-index", "fixture-user-only"] }));
+
+	const prompt = await promptFor(harness, tmpRoot);
+
+	const userSection = prompt.indexOf('## User-invoked skills for "test-agent"');
+	assert.ok(userSection > prompt.indexOf("(on-demand index)"), "the user-invoked list must follow the index");
+	assert.match(prompt, /only when the user runs its command\. Never load one on your own\./);
+	assert.ok(prompt.indexOf("- fixture-user-only:") > userSection, "the user-only skill must sit in its own list");
+	assert.ok(prompt.includes(`path: ${userOnlySkillPath}`), "the user-only skill keeps its path for its command");
+	assert.doesNotMatch(prompt, /USER_ONLY_BODY_MARKER/, "the skill body must not be injected");
+});
+
+test("skills: only user-invoked skills print no on-demand index", async () => {
+	const harness = makePi();
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ skills: ["fixture-user-only"] }));
+
+	const prompt = await promptFor(harness, tmpRoot);
+
+	assert.doesNotMatch(prompt, /on-demand index/);
+	assert.match(prompt, /## User-invoked skills for "test-agent"/);
 });
 
 test("skills: a block-scalar description collapses to one index line", async () => {

@@ -14,10 +14,12 @@ When a new version is released:
 3. Before writing the install notes, run `git diff --name-only <prev-tag> HEAD`.
    Check whether the kiro, opencode, or pi templates (`platforms/kiro/`,
    `platforms/opencode/`, `platforms/pi/`) or the shared professions, personas,
-   or skills (`content/`) changed. State the correct install step: reinstall
-   (`./install.sh --force`) for changed kiro or opencode templates, professions,
-   personas, or skills; `/reload` for pi-only changes. A change that touches both
-   pi and kiro or opencode needs both a reinstall and a `/reload`. A change to
+   skills, or commands (`content/`) changed. State the correct install step:
+   reinstall (`./install.sh --force`) for changed kiro or opencode templates,
+   professions, personas, skills, or commands; `/reload` for pi-only changes. A
+   command change (`content/commands/`) needs both a reinstall for kiro and
+   opencode and a `/reload` for pi. A change that touches both pi and kiro or
+   opencode needs both a reinstall and a `/reload`. A change to
    `content/`, `platforms/claude/`, or `.claude-plugin/` also needs the Claude
    Code update: `claude plugin marketplace update persona-agents`, then
    `claude plugin update persona-agents@persona-agents`, then a restart.

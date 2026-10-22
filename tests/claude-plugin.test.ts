@@ -28,9 +28,7 @@ const contextScript = path.join(repoRoot, "platforms", "claude", "scripts", "con
 const HOOK_STRING_CAP = 10_000;
 
 /** Skills the plugin leaves out on purpose, with the reason. */
-const EXCLUDED_SKILLS: Record<string, string> = {
-	"orchestrator/retro": "reads pi session files only",
-};
+const EXCLUDED_SKILLS: Record<string, string> = {};
 
 interface Manifest {
 	name: string;
@@ -169,6 +167,12 @@ describe("claude plugin: skills", () => {
 			Object.keys(EXCLUDED_SKILLS).filter((rel) => listed.has(rel)),
 			[],
 		);
+	});
+
+	test("the retro skill is listed and user-invoked only", () => {
+		assert.ok(listed.has("common/retro"), "plugin.json skills must list common/retro");
+		const text = fs.readFileSync(path.join(contentDir, "skills", "common", "retro", "SKILL.md"), "utf8");
+		assert.match(text, /^---\n[\s\S]*?^disable-model-invocation: true$[\s\S]*?^---$/m);
 	});
 
 	test("every listed skill folder holds a SKILL.md", () => {

@@ -14,7 +14,9 @@
  *   4. the trailing-comma repair must not touch a comma inside a string;
  *   5. the MCP merge must never overwrite an entry the user already has;
  *   6. a config jq cannot read must not stop the install halfway;
- *   7. the installer must not touch the shell rc files.
+ *   7. the installer must not touch the shell rc files;
+ *   8. every shared command must install for kiro and OpenCode;
+ *   9. a command with an unclosed frontmatter block must not install empty.
  *
  * Run: npm test
  */
@@ -30,6 +32,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const installScript = path.join(repoRoot, "install.sh");
 const mcpExampleFile = path.join(repoRoot, "config", "mcp.json.example");
+const commandsDir = path.join(repoRoot, "content", "commands");
 
 /** The tools install.sh probes on PATH. */
 const stubBin = fs.mkdtempSync(path.join(os.tmpdir(), "install-sh-stub-"));
@@ -98,8 +101,8 @@ interface RunResult {
 }
 
 /** Run install.sh against a throw-away HOME and a stubbed PATH. */
-function runInstaller(home: string, args: string[]): RunResult {
-	const result = spawnSync("bash", [installScript, ...args], {
+function runInstaller(home: string, args: string[], script = installScript): RunResult {
+	const result = spawnSync("bash", [script, ...args], {
 		env: {
 			...process.env,
 			HOME: home,
@@ -337,5 +340,85 @@ describe("install.sh leaves the shell alone", () => {
 		assert.equal(fs.readFileSync(path.join(home, ".bashrc"), "utf8"), "# test rc\n");
 		assert.equal(fs.readFileSync(path.join(home, ".zshrc"), "utf8"), "# test zshrc\n");
 		assert.ok(!fs.existsSync(path.join(home, ".bash_aliases")), "no ~/.bash_aliases may be created");
+	});
+});
+
+describe("install.sh installs the shared commands", () => {
+	const commands = fs.readdirSync(commandsDir).filter((name) => name.endsWith(".md")).sort();
+
+	test("content/commands holds at least one command", () => {
+		assert.ok(commands.length > 0, "content/commands must hold a command file");
+	});
+
+	test("each command installs for OpenCode unchanged and for kiro without frontmatter", () => {
+		const home = makeHome();
+		const result = runInstaller(home, ["--theme", "goblin", "--profession", "orchestrator"]);
+		assert.equal(result.status, 0, result.stderr);
+		for (const name of commands) {
+			const source = fs.readFileSync(path.join(commandsDir, name), "utf8");
+			const opencode = path.join(home, ".config", "opencode", "commands", name);
+			assert.equal(fs.readFileSync(opencode, "utf8"), source, `${name}: the OpenCode command must match the source`);
+
+			const kiro = fs.readFileSync(path.join(home, ".kiro", "prompts", name), "utf8");
+			const body = source.replace(/^---\n[\s\S]*?\n---\n\n?/, "");
+			assert.equal(kiro, body, `${name}: the kiro prompt must be the body without frontmatter`);
+		}
+	});
+
+	test("an existing command is kept without --force and replaced with --force", () => {
+		const home = makeHome();
+		const opencode = path.join(home, ".config", "opencode", "commands", commands[0]);
+		const kiro = path.join(home, ".kiro", "prompts", commands[0]);
+		for (const file of [opencode, kiro]) {
+			fs.mkdirSync(path.dirname(file), { recursive: true });
+			fs.writeFileSync(file, "mine\n");
+		}
+		const args = ["--theme", "goblin", "--profession", "orchestrator"];
+
+		assert.equal(runInstaller(home, args).status, 0);
+		assert.equal(fs.readFileSync(opencode, "utf8"), "mine\n", "a re-run must keep the OpenCode command");
+		assert.equal(fs.readFileSync(kiro, "utf8"), "mine\n", "a re-run must keep the kiro prompt");
+
+		assert.equal(runInstaller(home, [...args, "--force"]).status, 0);
+		assert.notEqual(fs.readFileSync(opencode, "utf8"), "mine\n", "--force must replace the OpenCode command");
+		assert.notEqual(fs.readFileSync(kiro, "utf8"), "mine\n", "--force must replace the kiro prompt");
+	});
+
+	test("a dry run reports the commands and creates neither command folder", () => {
+		const home = makeHome();
+		const result = runInstaller(home, ["--theme", "goblin", "--profession", "orchestrator", "--dry-run"]);
+		assert.equal(result.status, 0, result.stderr);
+		for (const name of commands) {
+			assert.match(result.stdout, new RegExp(`would install: \\S+/\\.kiro/prompts/${name}`));
+			assert.match(result.stdout, new RegExp(`would install: \\S+/\\.config/opencode/commands/${name}`));
+		}
+		assert.ok(!fs.existsSync(path.join(home, ".kiro", "prompts")), "a dry run must not create ~/.kiro/prompts");
+		assert.ok(
+			!fs.existsSync(path.join(home, ".config", "opencode", "commands")),
+			"a dry run must not create the OpenCode commands folder",
+		);
+	});
+
+	test("a command with an unclosed frontmatter block installs unchanged for kiro, with a warning", () => {
+		// A copy of the repo whose commands folder holds one broken file; the rest links to the real content.
+		const repo = makeHome();
+		fs.copyFileSync(installScript, path.join(repo, "install.sh"));
+		for (const dir of ["platforms", "config"]) fs.symlinkSync(path.join(repoRoot, dir), path.join(repo, dir));
+		fs.mkdirSync(path.join(repo, "content", "commands"), { recursive: true });
+		for (const entry of ["agents.json", "personas", "professions", "skills"]) {
+			fs.symlinkSync(path.join(repoRoot, "content", entry), path.join(repo, "content", entry));
+		}
+		const broken = "---\ndescription: no closing line\n\nLoad the skill.\n";
+		fs.writeFileSync(path.join(repo, "content", "commands", "broken.md"), broken);
+
+		const home = makeHome();
+		const result = runInstaller(
+			home,
+			["--target", "kiro", "--theme", "goblin", "--profession", "orchestrator"],
+			path.join(repo, "install.sh"),
+		);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stderr, /broken\.md has no closing frontmatter line, installed unchanged/);
+		assert.equal(fs.readFileSync(path.join(home, ".kiro", "prompts", "broken.md"), "utf8"), broken);
 	});
 });

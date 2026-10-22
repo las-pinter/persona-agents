@@ -54,10 +54,6 @@ Pi needs no `install.sh` run — it installs through the pi CLI (see below).
 `persona-agents` is also a **pi package**. One command installs the whole unit:
 the `agent-stack` extension, the 7 pi agents, the personas, and the skills.
 
-The package also installs the `/retro` command. Run `/retro` in a pi session
-for a print-only review of the session. It prints findings and actions in chat
-and writes no files.
-
 Full install steps live in [platforms/pi/README.md](platforms/pi/README.md).
 
 > ⚠️ Install only **one** source per package. A local path and a git clone both
@@ -87,6 +83,23 @@ agents are still there to delegate to.
 
 Update with `claude plugin marketplace update persona-agents`, then
 `claude plugin update persona-agents@persona-agents`, and restart.
+
+### The retro command
+
+Every platform gets a retro command for a print-only review of the current
+session. The agent you talk to runs it. It prints findings and actions in chat
+and writes no files.
+
+| Platform | Command | Comes from |
+|----------|---------|------------|
+| pi | `/retro` | the pi package; run `/reload` after install |
+| kiro | `/retro` | `install.sh` (`~/.kiro/prompts/retro.md`) |
+| OpenCode | `/retro` | `install.sh` (`~/.config/opencode/commands/retro.md`) |
+| Claude Code | `/persona-agents:retro` | the plugin skill |
+
+The retro reads the session transcript and the permission rules of its own
+platform. It reports the session cost from pi and Claude Code session files,
+and says that no cost data exists on kiro and OpenCode.
 
 ## Agents
 

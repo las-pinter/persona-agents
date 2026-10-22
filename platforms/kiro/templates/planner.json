@@ -8,7 +8,8 @@
     "skill://~/.kiro/skills/common/project-notes/SKILL.md",
     "skill://~/.kiro/skills/common/simplified-technical-english/SKILL.md",
     "skill://~/.kiro/skills/common/persona-free-documents/SKILL.md",
-    "skill://~/.kiro/skills/common/shell-discipline/SKILL.md"
+    "skill://~/.kiro/skills/common/shell-discipline/SKILL.md",
+    "skill://~/.kiro/skills/common/retro/SKILL.md"
   ],
   "welcomeMessage": "{{WELCOME_MESSAGE}}",
   "tools": [

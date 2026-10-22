@@ -1,9 +1,10 @@
 /**
- * Structural checks for the pi prompt templates declared in `package.json`.
+ * Structural checks for the shared commands in `content/commands/`.
  *
- * The `pi.prompts` globs decide which templates ship. Pi turns the filename
- * into the slash command, so a broken glob or a dead skill reference removes a
- * command with no other signal. No other test reads `package.json`.
+ * The `pi.prompts` globs in `package.json` decide which commands pi ships.
+ * install.sh copies the same files to kiro and OpenCode. Each platform turns
+ * the filename into the slash command, so a broken glob or a dead skill
+ * reference removes a command with no other signal.
  *
  * Run: npm test
  */
@@ -16,6 +17,11 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const skillsRoot = path.join(repoRoot, "content", "skills");
+const commandsDir = path.join(repoRoot, "content", "commands");
+const installScript = path.join(repoRoot, "install.sh");
+
+/** The platforms a skill reference file can target, one file name each. */
+const PLATFORMS = ["pi", "kiro", "opencode", "claude"];
 
 function readText(file: string): string {
 	return fs.readFileSync(file, "utf-8");
@@ -95,6 +101,80 @@ describe("pi prompt templates: manifest ships each command", () => {
 	for (const pattern of promptPatterns) {
 		test(`pi.prompts glob ${pattern} matches at least one template`, () => {
 			assert.ok(matchesForPattern(pattern).length > 0, `pi.prompts glob ${pattern} matched no file`);
+		});
+	}
+});
+
+describe("shared commands: pi ships every command", () => {
+	test("pi.prompts ships every file in content/commands", () => {
+		const commands = fs
+			.readdirSync(commandsDir)
+			.filter((name) => name.endsWith(".md"))
+			.map((name) => `content/commands/${name}`)
+			.sort();
+		assert.ok(commands.length > 0, "content/commands must hold a command file");
+		assert.deepEqual(matched, commands);
+	});
+});
+
+describe("shared commands: install.sh copies them for kiro and OpenCode", () => {
+	const installer = readText(installScript);
+
+	test("the kiro block installs content/commands into ~/.kiro/prompts", () => {
+		assert.match(installer, /for f in "\$CONTENT_DIR"\/commands\/\*\.md; do[\s\S]*?"\$KIRO_DEST\/prompts\//);
+	});
+
+	test("the OpenCode block installs content/commands into commands/", () => {
+		assert.match(installer, /for f in "\$CONTENT_DIR"\/commands\/\*\.md; do[\s\S]*?"\$OPENCODE_DEST\/commands\//);
+	});
+});
+
+describe("shared commands: a skill with platform references covers every platform", () => {
+	const withReferences = fs
+		.readdirSync(skillsRoot)
+		.flatMap((group) => fs.readdirSync(path.join(skillsRoot, group)).map((name) => path.join(skillsRoot, group, name)))
+		.filter((dir) => fs.existsSync(path.join(dir, "references")));
+
+	test("the retro skill has platform references", () => {
+		assert.ok(withReferences.includes(path.join(skillsRoot, "common", "retro")));
+	});
+
+	for (const dir of withReferences) {
+		const rel = path.relative(skillsRoot, dir);
+		for (const platform of PLATFORMS) {
+			test(`${rel} has references/${platform}.md`, () => {
+				assert.ok(fs.existsSync(path.join(dir, "references", `${platform}.md`)), `${rel}: references/${platform}.md is missing`);
+			});
+		}
+	}
+});
+
+describe("retro reach: every agent with tools can load the retro skill", () => {
+	const platformsDir = path.join(repoRoot, "platforms");
+	/** Mascot has no tools, so it cannot read a transcript. */
+	const professions = ["orchestrator", "planner", "researcher", "implementer", "reviewer", "tester"];
+
+	for (const profession of professions) {
+		test(`pi ${profession} lists common/retro in skills`, () => {
+			const text = readText(path.join(platformsDir, "pi", "frontmatters", `${profession}.yaml`));
+			assert.match(text, /^skills: \[.*"common\/retro".*\]$/m);
+		});
+
+		test(`kiro ${profession} attaches the retro skill`, () => {
+			const template = JSON.parse(readText(path.join(platformsDir, "kiro", "templates", `${profession}.json`))) as {
+				resources: string[];
+			};
+			assert.ok(template.resources.includes("skill://~/.kiro/skills/common/retro/SKILL.md"));
+		});
+
+		test(`OpenCode ${profession} allows the retro skill`, () => {
+			const text = readText(path.join(platformsDir, "opencode", "frontmatters", `${profession}.yaml`));
+			const allow = text.search(/- action: skill\n\s+resource: retro\n\s+effect: allow/);
+			const askAll = text.search(/- action: skill\n\s+resource: "\*"\n\s+effect: ask/);
+			assert.ok(allow >= 0, "the retro allow rule is missing");
+			assert.ok(askAll >= 0, 'the skill "*" ask rule is missing');
+			// OpenCode applies the last matching rule, so the allow must follow the catch-all ask.
+			assert.ok(allow > askAll, 'the retro allow rule must come after the skill "*" ask rule');
 		});
 	}
 });

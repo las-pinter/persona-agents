@@ -425,19 +425,26 @@ export default function (pi: ExtensionAPI): void {
 			// of the startup prompt, so this branch has no body budget.
 			const skills = matchSkills(agent.skills, discoveredSkills);
 			const indexed: string[] = [];
+			// A user-invoked skill keeps its path in reach for its command, but the task match must not load it.
+			const userInvoked: string[] = [];
 			for (const s of skills) {
 				const id = s.group ? `${s.group}/${s.name}` : s.name;
 				if (seen.has(id)) continue;
 				seen.add(id);
 				const description = (s.description ?? "").replace(/\s+/g, " ").trim() || "(no description)";
-				indexed.push(`\n\n- ${id}: ${description}\n  path: ${s.path}`);
+				(s.userInvokedOnly ? userInvoked : indexed).push(`\n\n- ${id}: ${description}\n  path: ${s.path}`);
 			}
 			if (indexed.length > 0) {
 				extra += `\n\n## Agent skills for "${agent.name}" (on-demand index)`;
 				extra += `\nRead a skill file when the task matches its description, then follow it.`;
 				extra += indexed.join("");
-				debugLog("skills indexed:", Array.from(seen).join(","));
 			}
+			if (userInvoked.length > 0) {
+				extra += `\n\n## User-invoked skills for "${agent.name}"`;
+				extra += `\nRead one of these skill files only when the user runs its command. Never load one on your own.`;
+				extra += userInvoked.join("");
+			}
+			if (indexed.length + userInvoked.length > 0) debugLog("skills indexed:", Array.from(seen).join(","));
 
 			// P3: bind the agent's `resources:` globs relative to the cwd.
 			const resources = resolveResources(agent.resources, ctx.cwd);

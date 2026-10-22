@@ -261,7 +261,7 @@ researcher, reviewer. Mascot is excluded. Each allowed agent lists
 - `/sidebar [on|off|width <n>]` — show or hide the right column, or set its width (10 to 120). A bare `/sidebar` toggles.
 - `/agents-tree` — open the live tree overlay. Up/down selects a node.
 - `/agent-inspect [runId|last]` — open one node's detail.
-- `/retro` — print-only blameless session retrospective; run `/reload` after install.
+- `/retro` — print-only blameless session retrospective; run `/reload` after install. The same command runs as `/retro` on kiro and OpenCode, and as `/persona-agents:retro` in Claude Code.
 
 The sidebar has no keyboard focus, so node details use these overlays.
 

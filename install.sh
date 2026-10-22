@@ -242,6 +242,34 @@ copy_file() {
     report "installed: $dest"
 }
 
+# Copy a command file without its YAML frontmatter. kiro documents no
+# frontmatter for file prompts, so the installed prompt is the body only.
+copy_body() {
+    local src="$1" dest="$2"
+    if [[ -f "$dest" && "$FORCE" != true ]]; then
+        report "skipped (exists): $dest"
+        return
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        report "would install: $dest"
+        return
+    fi
+    mkdir -p "$(dirname "$dest")"
+    # An unclosed block would strip the whole file, so keep the file as it is.
+    if [[ "$(head -n 1 "$src")" == "---" ]] && ! tail -n +2 "$src" | grep -qx -- '---'; then
+        echo "  warning: $src has no closing frontmatter line, installed unchanged" >&2
+        cp "$src" "$dest"
+        report "installed: $dest"
+        return
+    fi
+    awk 'NR == 1 && $0 == "---" { fm = 1; next }
+         fm && $0 == "---" { fm = 0; skip = 1; next }
+         fm { next }
+         skip && $0 == "" { skip = 0; next }
+         { skip = 0; print }' "$src" >"$dest"
+    report "installed: $dest"
+}
+
 copy_if_missing() {
     local src="$1" dest="$2"
     if [[ -f "$dest" ]]; then
@@ -378,6 +406,12 @@ if target_available kiro; then
         fi
     done
 
+    # Commands: the file name is the prompt name, so retro.md becomes /retro.
+    for f in "$CONTENT_DIR"/commands/*.md; do
+        [[ -f "$f" ]] || continue
+        copy_body "$f" "$KIRO_DEST/prompts/$(basename "$f")"
+    done
+
     # Settings: only install if not already present — never overwrite user customizations
     copy_if_missing "$PLATFORMS_DIR/kiro/cli.json.example" "$KIRO_DEST/settings/cli.json"
     copy_if_missing "$MCP_EXAMPLE" "$KIRO_DEST/settings/mcp.json"
@@ -400,6 +434,12 @@ if target_available opencode; then
                 copy_file "$f" "$OPENCODE_DEST/$rel"
             done < <(find "$CONTENT_DIR/$dir" -type f -print0)
         fi
+    done
+
+    # -- Install commands; no agent key, so the current agent runs each one --
+    for f in "$CONTENT_DIR"/commands/*.md; do
+        [[ -f "$f" ]] || continue
+        copy_file "$f" "$OPENCODE_DEST/commands/$(basename "$f")"
     done
 
     # -- Generate OpenCode agents as markdown files with YAML frontmatter --
