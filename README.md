@@ -57,7 +57,7 @@ The package also installs the `/retro` command. Run `/retro` in a pi session
 for a print-only review of the session. It prints findings and actions in chat
 and writes no files.
 
-Full install steps live in [agent-stack/README.md](agent-stack/README.md).
+Full install steps live in [platforms/pi/README.md](platforms/pi/README.md).
 
 > ⚠️ Install only **one** source per package. A local path and a git clone both
 > register the same extension tools, commands, and flags, which pi reports as
@@ -186,8 +186,8 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 
 Edit files directly in `~/.kiro/` or `~/.config/opencode/`. Running `install.sh`
 without `--force` never overwrites your changes. Pi agents are edited in the
-repo itself (`agent-templates/pi/frontmatters/` + `professions/`) and picked
-up on `/reload`.
+repo itself (`platforms/pi/frontmatters/` + `content/professions/`) and
+picked up on `/reload`.
 
 Pull the latest and re-apply: `cd ~/persona-agents && git pull && ./install.sh --force`
 

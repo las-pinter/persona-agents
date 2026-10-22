@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true
   },
-  "include": ["agent-stack"]
+  "include": ["platforms/pi/extension", "tests"]
 }

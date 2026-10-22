@@ -15,7 +15,13 @@ set -euo pipefail
 # ============================================================================
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-AGENTS_JSON="$REPO_DIR/agents.json"
+# Shared content (personas, professions, skills, agents.json) and the
+# per-platform files. Content installs relative to CONTENT_DIR, so the
+# installed layout keeps personas/, professions/, and skills/ at the top.
+CONTENT_DIR="$REPO_DIR/content"
+PLATFORMS_DIR="$REPO_DIR/platforms"
+MCP_EXAMPLE="$REPO_DIR/config/mcp.json.example"
+AGENTS_JSON="$CONTENT_DIR/agents.json"
 KIRO_DEST="$HOME/.kiro"
 OPENCODE_DEST="$HOME/.config/opencode"
 OPENCODE_CONFIG="$OPENCODE_DEST/opencode.json"
@@ -321,7 +327,7 @@ if target_available kiro; then
         for profession in $(get_professions "$theme"); do
             [[ -n "$PROFESSION" && "$profession" != "$PROFESSION" ]] && continue
 
-            template="$REPO_DIR/agent-templates/kiro/${profession}.json"
+            template="$PLATFORMS_DIR/kiro/templates/${profession}.json"
             agent_file="$KIRO_AGENTS_DIR/${theme}-${profession}.json"
 
             if [[ ! -f "$template" ]]; then
@@ -364,17 +370,17 @@ if target_available kiro; then
     echo "Installing kiro resource files to $KIRO_DEST ..."
 
     for dir in personas professions skills; do
-        if [[ -d "$REPO_DIR/$dir" ]]; then
+        if [[ -d "$CONTENT_DIR/$dir" ]]; then
             while IFS= read -r -d '' f; do
-                rel="${f#"$REPO_DIR"/}"
+                rel="${f#"$CONTENT_DIR"/}"
                 copy_file "$f" "$KIRO_DEST/$rel"
-            done < <(find "$REPO_DIR/$dir" -type f -print0)
+            done < <(find "$CONTENT_DIR/$dir" -type f -print0)
         fi
     done
 
     # Settings: only install if not already present — never overwrite user customizations
-    copy_if_missing "$REPO_DIR/settings/kiro-cli.json.example" "$KIRO_DEST/settings/cli.json"
-    copy_if_missing "$REPO_DIR/settings/mcp.json.example" "$KIRO_DEST/settings/mcp.json"
+    copy_if_missing "$PLATFORMS_DIR/kiro/cli.json.example" "$KIRO_DEST/settings/cli.json"
+    copy_if_missing "$MCP_EXAMPLE" "$KIRO_DEST/settings/mcp.json"
 fi
 
 # ---------------------------------------------------------------------------
@@ -388,11 +394,11 @@ if target_available opencode; then
     echo "Installing OpenCode resource files to $OPENCODE_DEST ..."
 
     for dir in personas professions skills; do
-        if [[ -d "$REPO_DIR/$dir" ]]; then
+        if [[ -d "$CONTENT_DIR/$dir" ]]; then
             while IFS= read -r -d '' f; do
-                rel="${f#"$REPO_DIR"/}"
+                rel="${f#"$CONTENT_DIR"/}"
                 copy_file "$f" "$OPENCODE_DEST/$rel"
-            done < <(find "$REPO_DIR/$dir" -type f -print0)
+            done < <(find "$CONTENT_DIR/$dir" -type f -print0)
         fi
     done
 
@@ -410,10 +416,10 @@ if target_available opencode; then
         for profession in $(get_professions "$theme"); do
             [[ -n "$PROFESSION" && "$profession" != "$PROFESSION" ]] && continue
 
-            frontmatter_template="$REPO_DIR/agent-templates/opencode/frontmatters/${profession}.yaml"
-            profession_file="$REPO_DIR/professions/${profession}.md"
+            frontmatter_template="$PLATFORMS_DIR/opencode/frontmatters/${profession}.yaml"
+            profession_file="$CONTENT_DIR/professions/${profession}.md"
             persona_file_path=$(get_agent_field "$theme" "$profession" "personaFile")
-            persona_file="$REPO_DIR/personas/${theme}/${persona_file_path}"
+            persona_file="$CONTENT_DIR/personas/${theme}/${persona_file_path}"
             agent_file="$OPENCODE_AGENTS_DIR/${theme}-${profession}.md"
 
             # Check required files
@@ -465,7 +471,7 @@ if target_available opencode; then
         echo ""
         echo "Merging MCP settings into OpenCode config..."
 
-        mcp_example="$REPO_DIR/settings/mcp.json.example"
+        mcp_example="$MCP_EXAMPLE"
         if [[ -f "$mcp_example" ]]; then
             # Transform in both modes: a dry run must report the same outcome
             # the real run prints, and the transform can fail.
@@ -487,10 +493,10 @@ if target_available opencode; then
 
     # -- Install persona-agents plugin (self-contained, auto-discovered) --
     PLUGINS_DIR="$OPENCODE_DEST/plugins"
-    copy_file "$REPO_DIR/plugins/persona-agents.js" "$PLUGINS_DIR/persona-agents.js"
+    copy_file "$PLATFORMS_DIR/opencode/plugins/persona-agents.js" "$PLUGINS_DIR/persona-agents.js"
 
     # -- Install permission-auditor plugin (self-contained, auto-discovered) --
-    copy_file "$REPO_DIR/plugins/permission-auditor.js" "$PLUGINS_DIR/permission-auditor.js"
+    copy_file "$PLATFORMS_DIR/opencode/plugins/permission-auditor.js" "$PLUGINS_DIR/permission-auditor.js"
 fi
 
 # ---------------------------------------------------------------------------
