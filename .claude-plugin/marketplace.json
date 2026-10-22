@@ -1,0 +1,12 @@
+{
+  "name": "persona-agents",
+  "owner": { "name": "Las Pinter" },
+  "description": "Personified profession agents for Claude Code",
+  "plugins": [
+    {
+      "name": "persona-agents",
+      "source": "./",
+      "description": "Profession agents (orchestrator, implementer, and more) that speak in the voice of a switchable persona theme"
+    }
+  ]
+}

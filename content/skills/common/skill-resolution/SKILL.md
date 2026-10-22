@@ -31,12 +31,13 @@ The common roots are:
 - `$HOME/.pi/agent/skills`
 - `$HOME/.kiro/skills`
 - `$HOME/.config/opencode/skills`
+- `$HOME/.claude/skills`
 
 Use the shell for the test. Do not use the file read, glob, or grep tools on
 these paths. Run one command per candidate:
 
 ```sh
-ls "$HOME/.agents/skills/<name>/SKILL.md" "$HOME/.pi/agent/skills/<name>/SKILL.md" "$HOME/.kiro/skills/<name>/SKILL.md" "$HOME/.config/opencode/skills/<name>/SKILL.md" 2>/dev/null
+ls "$HOME/.agents/skills/<name>/SKILL.md" "$HOME/.pi/agent/skills/<name>/SKILL.md" "$HOME/.kiro/skills/<name>/SKILL.md" "$HOME/.config/opencode/skills/<name>/SKILL.md" "$HOME/.claude/skills/<name>/SKILL.md" 2>/dev/null
 ```
 
 The candidates come from the domain:

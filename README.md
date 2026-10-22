@@ -4,7 +4,8 @@
 
 Tired of AI agents with all the personality of a loading spinner? Same.
 `persona-agents` is a collection of personified agents for
-[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), and [pi](https://pi.dev) — each
+[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), [pi](https://pi.dev), and
+[Claude Code](https://claude.com/claude-code) — each
 one with its own voice, quirks, and attitude — because AI-assisted
 development shouldn't feel like filing taxes.
 Swap out the bland, drop in a character, and actually enjoy the thing helping
@@ -63,9 +64,30 @@ Full install steps live in [platforms/pi/README.md](platforms/pi/README.md).
 > register the same extension tools, commands, and flags, which pi reports as
 > conflicts. Remove the dev entry before installing the git one.
 
+### Claude Code (plugin)
+
+`persona-agents` is also a **Claude Code plugin**: 7 profession agents
+(`persona-agents:orchestrator`, `persona-agents:implementer`, …), the skills,
+and a switchable persona theme. No `install.sh` run is needed.
+
+```bash
+claude plugin marketplace add las-pinter/persona-agents
+claude plugin install persona-agents@persona-agents --config theme=goblin
+claude --agent persona-agents:orchestrator
+```
+
+The last command starts a session as the orchestrator. It delegates to the
+other `persona-agents:` agents, and every agent speaks as the theme's persona.
+Change the theme any time in `/config` (**Persona theme**), then start a new
+session. A plain `claude` session stays normal; the agents are still there to
+delegate to.
+
+Update with `claude plugin marketplace update persona-agents`, then
+`claude plugin update persona-agents@persona-agents`, and restart.
+
 ## Agents
 
-All agents work with Kiro CLI, OpenCode, and pi.
+All agents work with Kiro CLI, OpenCode, pi, and Claude Code.
 
 ![Themed agents answering the same prompt](docs/demo/personas.gif)
 

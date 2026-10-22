@@ -17,7 +17,10 @@ When a new version is released:
    or skills (`content/`) changed. State the correct install step: reinstall
    (`./install.sh --force`) for changed kiro or opencode templates, professions,
    personas, or skills; `/reload` for pi-only changes. A change that touches both
-   pi and kiro or opencode needs both a reinstall and a `/reload`.
+   pi and kiro or opencode needs both a reinstall and a `/reload`. A change to
+   `content/`, `platforms/claude/`, or `.claude-plugin/` also needs the Claude
+   Code update: `claude plugin marketplace update persona-agents`, then
+   `claude plugin update persona-agents@persona-agents`, then a restart.
 
 Files that carry a version number but do NOT track the package release:
 

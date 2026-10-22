@@ -1,0 +1,42 @@
+{
+  "description": "Give persona-agents agents their profession rules and the selected theme's persona",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "profession"],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "persona"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "^persona-agents:",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "profession"],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "persona"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
