@@ -330,33 +330,8 @@ test("accepts the over-deny for a quoted redirect literal", () => {
 	assert.equal(evaluateCmd("echo 'a>b'", implementerRules).kind, "deny");
 });
 
-// A `noDequote` deny examines the raw probes only. A denied word inside quoted
-// argument text is not a command, so it must not fire; the real command and a
-// compound tail still match the raw probes.
-test("a noDequote deny ignores a denied word inside quoted argument text", () => {
-	const rules: RuleSets = {
-		...plannerRules,
-		agentDeny: [
-			{
-				tool: "bash",
-				match: "herdr\\b[^;\"']*(?:\\bserver\\b|\\bplugin\\b|--machine\\b)",
-				noDequote: true,
-			},
-		],
-		agentAllow: [{ tool: "bash", match: "^herdr\\b" }],
-	};
-	assert.equal(
-		evaluateCmd('herdr agent prompt reviewer "explain the plugin system"', rules).kind,
-		"allow",
-	);
-	assert.equal(evaluateCmd("herdr plugin install x", rules).kind, "deny");
-	assert.equal(evaluateCmd("herdr server stop", rules).kind, "deny");
-	assert.equal(evaluateCmd("herdr agent prompt reviewer ok; herdr server stop", rules).kind, "deny");
-});
-
-// The dequote defense stays active for every other deny: a mid-token quote
-// still resolves to the denied flag.
-test("a deny without noDequote still catches a dequoted flag", () => {
+// The dequote defense: a mid-token quote still resolves to the denied flag.
+test("a deny catches a dequoted flag", () => {
 	const rules: RuleSets = {
 		...plannerRules,
 		agentDeny: [{ tool: "bash", match: "cargo.*--config" }],

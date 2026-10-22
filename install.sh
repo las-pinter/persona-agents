@@ -494,36 +494,6 @@ if target_available opencode; then
 fi
 
 # ---------------------------------------------------------------------------
-# herdr plugin (overseer-herald)
-# ---------------------------------------------------------------------------
-
-# The herald serves the overseer on every platform, so it belongs to no single
-# --target. A run narrowed to one target, or to another profession, skips it.
-if [[ "$TARGET" != "all" || (-n "$PROFESSION" && "$PROFESSION" != "overseer") ]]; then
-    :
-elif command -v herdr &>/dev/null; then
-    echo ""
-    echo "Installing overseer-herald herdr plugin ..."
-
-    # Copy to a stable location outside the repo/worktree — linked repo paths
-    # must not be load-bearing: a prune once broke a worktree link.
-    HERDR_PLUGIN_DIR="$HOME/.local/share/herdr/plugins/overseer-herald"
-    for f in herdr-plugin.toml herald.sh README.md; do
-        copy_file "$REPO_DIR/plugins/herdr/overseer-herald/$f" "$HERDR_PLUGIN_DIR/$f"
-    done
-
-    # herdr plugin link is an idempotent upsert that re-points stale entries on
-    # every run; plugin files refresh only with --force.
-    if [[ "$DRY_RUN" == true ]]; then
-        report "would run: herdr plugin link \"$HERDR_PLUGIN_DIR\""
-    else
-        herdr plugin link "$HERDR_PLUGIN_DIR" || echo "WARNING: herdr plugin link failed — inspect herdr manually (herdr plugin list)" >&2
-    fi
-else
-    echo "WARNING: herdr not found — skipping herdr plugin install (install herdr, then re-run install.sh)" >&2
-fi
-
-# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 

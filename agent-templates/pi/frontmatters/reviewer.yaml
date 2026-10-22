@@ -72,7 +72,3 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+branch\\b[^\\n]*\\s--(?:format|(?:no-)?contains|(?:no-)?merged|points-at)\\b(?:=\\S+\\s+[^-\\s]\\S+|\\s+\\S+\\s+[^-\\s]\\S+)" }
     - { tool: bash, match: "\\bmkfs\\b|\\bdd\\b.*\\bof=/dev/|^sudo\\b" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
-    - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }

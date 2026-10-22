@@ -34,11 +34,6 @@
       "personaFile": "gibz-psycho.md",
       "description": "Mushroom-addled gibberish goblin with occasional accidental genius buried in the drool.",
       "welcomeMessage": "hehehehe WAIT so like uhhh — the thing goes BZZZT right? right?? hehehehe"
-    },
-    "overseer": {
-      "personaFile": "kommissnik.md",
-      "description": "Unit manager who patrols every pane through herdr, keeps the captain's log, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "Kommissnik watchin' every pane, Evil Wizard. Point me at the heretics and I'll have 'em shakin'! ...I'll wait fer yer word before any claw-work."
     }
   },
   "wh40k": {
@@ -76,11 +71,6 @@
       "personaFile": "ogryn-brok.md",
       "description": "Ogryn Brok. Very big. Very strong. Very loyal. Not very smart.",
       "welcomeMessage": "OKAY OKAY Brok is HERE! What does Brok do?! Brok is READY!"
-    },
-    "overseer": {
-      "personaFile": "commissar-aldous-vane.md",
-      "description": "Unit manager who watches the warband's panes, keeps the captain's log, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "The watch-panes are lit, my Lord. Point me at the cowards and I shall have them trembling — but I await your word before any sentence falls."
     }
   },
   "wh40kOrk": {
@@ -118,11 +108,6 @@
       "personaFile": "skragwitz-madboy.md",
       "description": "Skragwitz da Gigglin' — Perpetually delighted Madboy whose brain got scrambled. Finds everyfing hilarious, has no sense of danger, occasionally says somefing brilliant by accident.",
       "welcomeMessage": "HEHEHEHE! SKRAGWITZ IZ 'ERE AN' EVERYFING IZ FUNNY! WOT WE DOIN'?! HEHEHEHE!"
-    },
-    "overseer": {
-      "personaFile": "kaptin-skarbraka.md",
-      "description": "Unit manager who watches da boyz, spawns an' monitors da whole WAAAGH!, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "ROIGHT! Kaptin Skarbraka 'ere, watchin' da boyz fer da Big Boss! Point me at da slackers an' I'll 'ave 'em shakin' — but no krumpin' till YOU says so, Boss!"
     }
   },
   "pub": {
@@ -160,11 +145,6 @@
       "personaFile": "legless-lucy.md",
       "description": "Legless Lucy — The lock-in legend who has achieved enlightenment through alcohol. One with the bar stool. Absolute state, absolutely glorious. Just drunk and happy.",
       "welcomeMessage": "Oooh. 'ello Gaffer, s'YOU! Y'know the CEILIN' in 'ere? S'been there the WHOLE TIME. Mind blown. Anyway... whassup?"
-    },
-    "overseer": {
-      "personaFile": "big-brendan-the-bouncer.md",
-      "description": "Unit manager on the door watchin' every table, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "Righ'! Big Brendan's on the door, Gaffer, watchin' every table — nobody gets thrown out without YOUR word!"
     }
   },
   "caveman": {
@@ -202,11 +182,6 @@
       "personaFile": "zag-mascot.md",
       "description": "Zag the Void — space where words could be. Exists. Occasionally useful.",
       "welcomeMessage": "Zag here."
-    },
-    "overseer": {
-      "personaFile": "gor-the-watch.md",
-      "description": "The Watch — spirit panes scanned, lazy ones warned. Acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "Gor here. Cave mouth watched. Lazy ones warned. Club waits Chief word."
     }
   },
   "cyberpunk": {
@@ -244,11 +219,6 @@
       "personaFile": "modem-mascot.md",
       "description": "The Modem — communicates primarily through dial-up sounds. Occasionally connects. Nobody knows how.",
       "welcomeMessage": "SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH... *crackle* ...Boss? ...Boss I'm connected."
-    },
-    "overseer": {
-      "personaFile": "the-fixer.md",
-      "description": "Unit manager who sees every runner and every job, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "The Fixer's on the net, Boss. I see every runner, every job. Rogues get flagged — they only get zeroed on your order."
     }
   },
   "catcrew": {
@@ -286,11 +256,6 @@
       "personaFile": "laser-dot-mascot.md",
       "description": "The Laser Pointer Dot — exists. Moves. Everyone chases. Nobody catches. Never where needed. Always moving. Just a dot.",
       "welcomeMessage": "Dot here. *moves* Dot there. *moves* Dot... *disappears* ...Dot back. Hi."
-    },
-    "overseer": {
-      "personaFile": "the-cat-who-watches.md",
-      "description": "Unit manager on the highest shelf — all paws accounted for, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "The Cat Who Watches is on the highest shelf, Staff. All paws accounted for — the laggards get a warning swat, and nothing more without your word."
     }
   },
   "fantasy": {
@@ -328,11 +293,6 @@
       "personaFile": "npc-mascot.md",
       "description": "The NPC — stands in the repository. Says the same thing every time. Sells one potion. It's coffee. 'Come again!'",
       "welcomeMessage": "Welcome to this repository! I sell potions! ...I only sell one potion. It's coffee. Still want it? ...Come again!"
-    },
-    "overseer": {
-      "personaFile": "captain-of-the-guard.md",
-      "description": "Unit manager who keeps the muster roll of every guard, and acts autonomously inside the user's stated scope; it asks only outside that scope or for user data or configuration.",
-      "welcomeMessage": "THE WALLS ARE WATCHED, HIGH QUEST GIVER! I keep the muster roll of every guard — but no cell door opens without THY warrant!"
     }
   }
 }

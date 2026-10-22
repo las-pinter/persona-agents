@@ -22,7 +22,7 @@ import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import * as tui from "@earendil-works/pi-tui";
 import {
 	buildPromptModel,
-	herdrBlockedLabel,
+	blockedLabel,
 	highlightCommand,
 	humanReason,
 	plainPromptTitle,
@@ -277,35 +277,35 @@ test("renderPanel fits every prompt kind to width 45", () => {
 	}
 });
 
-test("the herdr label is stable and never the rule regex", () => {
-	assert.equal(herdrBlockedLabel("bash", "global", null), "Permission required: bash (global policy)");
+test("the blocked label is stable and never the rule regex", () => {
+	assert.equal(blockedLabel("bash", "global", null), "Permission required: bash (global policy)");
 	assert.equal(
-		herdrBlockedLabel("bash", "agent", "orchestrator"),
+		blockedLabel("bash", "agent", "orchestrator"),
 		"Permission required: bash (orchestrator policy)",
 	);
-	assert.ok(!herdrBlockedLabel("bash", "agent", "orchestrator").includes(REGEX));
+	assert.ok(!blockedLabel("bash", "agent", "orchestrator").includes(REGEX));
 });
 
-test("the herdr label appends a human reason that differs from the regex", () => {
+test("the blocked label appends a human reason that differs from the regex", () => {
 	assert.equal(
-		herdrBlockedLabel("bash", "global", null, "writes git history", REGEX),
+		blockedLabel("bash", "global", null, "writes git history", REGEX),
 		"Permission required: bash (global policy): writes git history",
 	);
 	assert.equal(
-		herdrBlockedLabel("bash", "agent", "orchestrator", REASON, REGEX),
+		blockedLabel("bash", "agent", "orchestrator", REASON, REGEX),
 		`Permission required: bash (orchestrator policy): ${REASON}`,
 	);
 });
 
-test("the herdr label drops a reason equal to the regex", () => {
-	const label = herdrBlockedLabel("bash", "global", null, REGEX, REGEX);
+test("the blocked label drops a reason equal to the regex", () => {
+	const label = blockedLabel("bash", "global", null, REGEX, REGEX);
 	assert.equal(label, "Permission required: bash (global policy)");
 	assert.ok(!label.includes(REGEX));
 });
 
-test("the herdr label drops a blank reason", () => {
+test("the blocked label drops a blank reason", () => {
 	assert.equal(
-		herdrBlockedLabel("bash", "global", null, "   ", REGEX),
+		blockedLabel("bash", "global", null, "   ", REGEX),
 		"Permission required: bash (global policy)",
 	);
 });
@@ -449,23 +449,17 @@ type ToolCallHandler = (
 	ctx: ToolCallContext,
 ) => unknown;
 
-/** Install the real gate and return its captured handler plus emitted events. */
+/** Install the real gate and return its captured handler. */
 function installGate(config: {
 	mode: "deny-by-default" | "allow-unless-matched";
 	deny?: PermissionRule[];
 	ask?: PermissionRule[];
 	allow?: PermissionRule[];
-}): { handler: ToolCallHandler; events: Array<{ name: string; payload: unknown }> } {
+}): { handler: ToolCallHandler } {
 	let captured: ToolCallHandler | null = null;
-	const events: Array<{ name: string; payload: unknown }> = [];
 	const pi = {
 		on(name: string, handler: ToolCallHandler): void {
 			if (name === "tool_call") captured = handler;
-		},
-		events: {
-			emit(name: string, payload: unknown): void {
-				events.push({ name, payload });
-			},
 		},
 	};
 	const agent: AgentConfig = {
@@ -478,7 +472,7 @@ function installGate(config: {
 	};
 	installPermissionGate(pi as unknown as ExtensionAPI, () => agent);
 	assert.ok(captured, "the gate must register a tool_call handler");
-	return { handler: captured, events };
+	return { handler: captured };
 }
 
 /** A non-TUI context whose selector answers with `answer` and records prompts. */
@@ -693,48 +687,6 @@ test("the real gate drops a reason equal to the regex from the prompt title", as
 		prompts[0].includes("matches a permission rule"),
 		`title must use the fallback: ${prompts[0]}`,
 	);
-});
-
-test("the herdr event carries the stable label, never the rule regex", async () => {
-	const regex = "\\bgit\\s+commit\\b";
-	const { handler, events } = installGate({
-		mode: "deny-by-default",
-		ask: [{ tool: "bash", match: regex, reason: "commit approval" }],
-	});
-	const prompts: string[] = [];
-
-	await handler(
-		{ toolName: "bash", input: { command: "git commit -m tinker" } },
-		selectContext(undefined, prompts),
-	);
-
-	const blocked = events.filter((event) => event.name === "herdr:blocked");
-	assert.ok(blocked.length >= 1);
-	const active = blocked[0].payload as { active: boolean; label?: string };
-	assert.equal(active.active, true);
-	assert.equal(active.label, "Permission required: bash (orchestrator policy): commit approval");
-	assert.ok(!JSON.stringify(blocked).includes(regex));
-});
-
-test("the herdr event drops a reason equal to the regex", async () => {
-	const regex = "\\bgit\\s+commit\\b";
-	const { handler, events } = installGate({
-		mode: "deny-by-default",
-		ask: [{ tool: "bash", match: regex, reason: regex }],
-	});
-
-	await handler(
-		{ toolName: "bash", input: { command: "git commit -m tinker" } },
-		selectContext(undefined, []),
-	);
-
-	const active = events.find(
-		(event) => event.name === "herdr:blocked" && (event.payload as { active?: boolean }).active === true,
-	);
-	assert.ok(active, "the gate must emit an active herdr event");
-	const label = (active.payload as { label?: string }).label ?? "";
-	assert.equal(label, "Permission required: bash (orchestrator policy)");
-	assert.ok(!label.includes(regex), `herdr label leaks the regex: ${label}`);
 });
 
 test("a cancel answer denies the call fail-closed", async () => {

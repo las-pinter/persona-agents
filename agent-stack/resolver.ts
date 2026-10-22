@@ -26,8 +26,6 @@ export interface PermissionRule {
 	tool?: string;
 	match: string;
 	reason?: string;
-	/** Deny-only: see `RawRule.noDequote` in command-segments. */
-	noDequote?: boolean;
 }
 
 export interface PermissionConfig {
@@ -54,9 +52,9 @@ export interface AgentConfig {
 	permissions?: PermissionConfig;
 	/**
 	 * Whether this agent may be spawned as a subagent via the subagent tool.
-	 * Defaults to true when frontmatter omits `spawnable`. The orchestrator and
-	 * overseer templates ship `spawnable: false` — they run as the main session
-	 * only, so a dispatcher cannot escalate by spawning a commit-capable agent.
+	 * Defaults to true when frontmatter omits `spawnable`. The orchestrator
+	 * template ships `spawnable: false` — it runs as the main session only, so
+	 * a dispatcher cannot escalate by spawning a commit-capable agent.
 	 */
 	spawnable?: boolean;
 	systemPrompt: string;
@@ -143,7 +141,6 @@ function parsePermissionConfig(value: unknown): PermissionConfig | undefined {
 				tool: typeof r.tool === "string" ? r.tool : undefined,
 				match: r.match,
 				reason: typeof r.reason === "string" ? r.reason : undefined,
-				noDequote: r.noDequote === true ? true : undefined,
 			});
 		}
 		return out.length > 0 ? out : undefined;

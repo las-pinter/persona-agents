@@ -30,21 +30,21 @@ agent of the same profession shares one stable operational memory.
 
 This skill is agent-agnostic and lives in the shared `skills/common/` folder:
 `<AGENT_TYPE>` comes from the profession that DECLARES it (for this repo's
-overseer: `overseer`), never from a persona name in a system prompt.
+orchestrator: `orchestrator`), never from a persona name in a system prompt.
 
 **How to resolve `<AGENT_TYPE>` (in priority order):**
 
 1. **Profession / agent type (preferred, always used in this repo)** —
    `<AGENT_TYPE>` is the profession this skill ships with, set once per
-   deployment. In this repo it is `overseer`. It comes from the profession /
+   deployment. In this repo it is `orchestrator`. It comes from the profession /
    agent type, NOT from anything in a system prompt.
 2. **NEVER resolve it from a persona name** — a system prompt opening like
    "You are <PersonaName> the <RoleTitle>..." is theme flavor only and varies
    per theme. Personas are decoration; the profession's operational memory must
-   be stable across themes. Every theme's Overseer journals to
-   `<USER_HOME>/agent-notes/overseer/`, never to a persona-named directory.
+   be stable across themes. Every theme's Orchestrator journals to
+   `<USER_HOME>/agent-notes/orchestrator/`, never to a persona-named directory.
 
-Format the value lowercase with hyphens (e.g. `overseer`). Use the same value
+Format the value lowercase with hyphens (e.g. `orchestrator`). Use the same value
 every session so the journal history stays in one place.
 
 ## Folder Structure

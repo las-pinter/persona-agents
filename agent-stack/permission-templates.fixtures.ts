@@ -56,7 +56,7 @@ export function verdict(agent: string, command: string): Decision["kind"] {
 }
 
 
-export const OTHER_AGENTS = ["researcher", "reviewer", "tester", "planner", "overseer", "mascot"];
+export const OTHER_AGENTS = ["researcher", "reviewer", "tester", "planner", "mascot"];
 // Mascot has no bash tool. Bash behavior matrices skip it: deny-by-default still
 // denies it, but the kind is `default`, not an explicit `deny` rule.
 export const PI_SHELL_AGENTS = OTHER_AGENTS.filter((agent) => agent !== "mascot");
@@ -91,7 +91,7 @@ export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)
  * Mirror of opencode's `Wildcard.match`: escape regex specials, `*` -> `.*`,
  * `?` -> `.`, and a trailing " .*" becomes optional. Anchored, dotall.
  */
-export function opencodeGlob(pattern: string, value: string): boolean {
+function opencodeGlob(pattern: string, value: string): boolean {
 	let body = pattern
 		.replaceAll("\\", "/")
 		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -211,7 +211,6 @@ export const OPENCODE_AGENTS = [
 	"reviewer",
 	"tester",
 	"planner",
-	"overseer",
 	"mascot",
 ];
 export const KIRO_AGENTS = [...OPENCODE_AGENTS];

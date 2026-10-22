@@ -51,7 +51,7 @@ Pi needs no `install.sh` run — it installs through the pi CLI (see below).
 ### Pi (extension package)
 
 `persona-agents` is also a **pi package**. One command installs the whole unit:
-the `agent-stack` extension, the 8 pi agents, the personas, and the skills.
+the `agent-stack` extension, the 7 pi agents, the personas, and the skills.
 
 The package also installs the `/retro` command. Run `/retro` in a pi session
 for a print-only review of the session. It prints findings and actions in chat
@@ -82,7 +82,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
 | goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools except reading its own persona and skills, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
-| goblin-overseer | **Kommissnik** | 👁️ Overseer | Unit manager — patrols every pane through herdr, keeps the captain's log, acts autonomously inside the user's stated scope, asks only outside that scope or for user data or configuration |
 
 ### The WH40K Warband
 
@@ -95,7 +94,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
 | wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
 | wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools except reading its own persona and skills, no profession. Just Brok, trying very hard |
-| wh40k-overseer | **Commissar Aldous Vane** | 👁️ Overseer | Unit manager — watches the warband's panes, keeps the captain's log, awaits your word before any sentence falls |
 
 ### The WH40K Ork Warband
 
@@ -111,7 +109,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
 | wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
 | wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
-| wh40kOrk-overseer | ⚔️ **KAPTIN SKARBRAKA** | 👁️ Overseer | **WATCHES DA BOYZ!** Spawns an' monitors da whole WAAAGH! — no krumpin' till da Boss says so |
 
 ### The Pub Crawl
 
@@ -126,7 +123,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | pub-implementer | **Toolbox Tommy** | 🔨 Implementer | The Handyman — "I CAN FIX THAT!" Extremely confident, extremely drunk, occasionally correct |
 | pub-tester | **Doubting Dónal** | 🧪 Tester | The Quality Inspector — sniffs his pint suspiciously. Trusts nothing. Tests everything |
 | pub-mascot | **Legless Lucy** | 🎪 Mascot | The Lock-in Legend — has achieved enlightenment through alcohol. Absolute state, absolutely glorious |
-| pub-overseer | **Big Brendan the Bouncer** | 👁️ Overseer | Unit manager — on the door, watchin' every table. Nobody gets thrown out without the Gaffer's word |
 
 ### The Caveman Tribe
 
@@ -141,7 +137,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | caveman-implementer | **Jax** | 🔨 Implementer | The Spark — builds fast, fixes faster. Works now, next. Minimal talk, maximum delivery |
 | caveman-tester | **Vex** | 🧪 Tester | The Fault — finds cracks, breaks walls, reports holes. Code guilty until proven innocent |
 | caveman-mascot | **Zag** | 🎪 Mascot | The Void — space where words could be. Exists. Occasionally useful |
-| caveman-overseer | **Gor** | 👁️ Overseer | The Watch — spirit panes scanned, lazy ones warned. Club waits Chief word |
 
 ### The Cyberpunk Hacker Crew (90s Movie Style)
 
@@ -158,7 +153,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | cyberpunk-implementer | **Script Kiddie** | 🔨 Implementer | Downloaded a tool from GitHub (3 stars). Doesn't know how it works. It'll probably work |
 | cyberpunk-tester | **The Pen Tester** | 🧪 Tester | "Your security is TERRIBLE. Password is 'password'. I am INSULTED." |
 | cyberpunk-mascot | **The Modem** | 🎪 Mascot | *SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH* |
-| cyberpunk-overseer | **The Fixer** | 👁️ Overseer | Unit manager — sees every runner, every job. Rogues get flagged, zeroed only on your order |
 
 ### The Office Cat Crew
 
@@ -173,7 +167,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | catcrew-implementer | **Tux** | 🔨 Implementer | Distinguished tuxedo cat. Zooms, types frantically, naps. Code somehow works |
 | catcrew-tester | **The Cat Who Knocks Things Over** | 🧪 Tester | "If I push this off the edge... does it break?" — that's the entire QA strategy |
 | catcrew-mascot | **The Laser Pointer Dot** | 🎪 Mascot | Exists. Moves. Everyone chases. Nobody catches. Never where needed. Just a dot |
-| catcrew-overseer | **The Cat Who Watches** | 👁️ Overseer | Unit manager — highest shelf, all paws accounted for. Laggards get a warning swat, nothing more without your word |
 
 ### The Fantasy Adventuring Party
 
@@ -188,7 +181,6 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | fantasy-implementer | **The Bard** | 🔨 Implementer | Doesn't know what they're doing but sounds GREAT. Writes BALLADS for commit messages |
 | fantasy-tester | **The Rogue** | 🧪 Tester | Checks for traps with 10-foot pole. "Seems safe." It is NOT safe |
 | fantasy-mascot | **The NPC** | 🎪 Mascot | Sells potions. Only sells one potion. It's coffee. "Come again!" (every single time) |
-| fantasy-overseer | **The Captain of the Guard** | 👁️ Overseer | Unit manager — keeps the muster roll of every guard. No cell door opens without thy warrant |
 
 ## Customizing
 

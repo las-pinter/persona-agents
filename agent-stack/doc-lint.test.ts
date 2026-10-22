@@ -34,19 +34,16 @@ const kiroTemplatesDir = path.join(repoRoot, "agent-templates", "kiro");
 
 /**
  * The one named constant for the expected profession count per theme.
- * Each theme has 8 professions after the two specialist implementers retired.
+ * Each theme has 7 professions.
  */
-const EXPECTED_PROFESSIONS_PER_THEME = 8;
+const EXPECTED_PROFESSIONS_PER_THEME = 7;
 
 /**
  * Agents whose pi `alwaysLoad` must equal the profession Startup skill list.
  *
  * Exact list parity applies only to a list-style Startup. The orchestrator's
  * Startup is one sentence of bold skill names, so its alwaysLoad and Startup
- * list must match one-for-one. The overseer's Startup is a numbered procedure,
- * not a skill list (its one bold name, `**herdr**`, is resolved by condition
- * 1), so exact parity is meaningless there. Its tailored rule below instead
- * requires every alwaysLoad entry to be a skill the frontmatter declares.
+ * list must match one-for-one.
  */
 const STARTUP_PARITY_AGENTS = ["orchestrator"];
 
@@ -319,7 +316,7 @@ function skillListNames(text: string): string[] {
 	return boldNamesInSection(text, /^##\s+Skills\s*$/m);
 }
 
-/** Bold skill names in a profession's `## Startup` section (for example `**herdr**`). */
+/** Bold skill names in a profession's `## Startup` section (for example `**task-routing**`). */
 function startupSkillNames(text: string): string[] {
 	return boldNamesInSection(text, /^##\s+Startup\s*$/m);
 }
@@ -544,21 +541,6 @@ describe("condition 5: pi alwaysLoad matches the profession Startup list", () =>
 		});
 	}
 
-	// Tailored rule: every alwaysLoad entry for the numbered overseer Startup must
-	// still be a skill the frontmatter declares, since exact list parity does not apply.
-	test("pi overseer alwaysLoad is a subset of its declared skills", () => {
-		const frontmatterFile = path.join(piFrontmattersDir, "overseer.yaml");
-		assert.ok(fs.existsSync(frontmatterFile), "missing pi frontmatter for overseer");
-		const text = readText(frontmatterFile);
-		const skills = parseInlineArray(text, "skills") ?? [];
-		const alwaysLoad = parseInlineArray(text, "alwaysLoad") ?? [];
-		const skillNames = new Set(skills.map((ref) => ref.split("/").pop() ?? ref));
-		const undeclared = alwaysLoad
-			.map((ref) => ref.split("/").pop() ?? ref)
-			.filter((name) => !skillNames.has(name))
-			.sort();
-		assert.deepEqual(undeclared, [], "overseer alwaysLoad names a skill it does not declare in skills");
-	});
 });
 
 // --- condition 6: study and note line caps ------------------------------------

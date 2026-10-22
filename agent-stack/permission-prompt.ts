@@ -81,11 +81,11 @@ export function humanReason(reason: string | undefined, match: string | undefine
 }
 
 /**
- * Stable courier label for the herdr event and the headless block reason. It is
- * built from the tool name and the rule source, plus the rule's human reason
- * when that reason exists and differs from the regex. The regex never appears.
+ * Stable label for the headless block reason. It is built from the tool name
+ * and the rule source, plus the rule's human reason when that reason exists
+ * and differs from the regex. The regex never appears.
  */
-export function herdrBlockedLabel(
+export function blockedLabel(
 	toolName: string,
 	source: "global" | "agent",
 	agentName: string | null,

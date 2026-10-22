@@ -223,7 +223,7 @@ const PI_READ_ONLY_READS = [
 ];
 
 describe("read-only roles: an allowed read never carries a write or an exec", () => {
-	for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+	for (const agent of ["reviewer", "researcher", "planner"]) {
 		test(`pi ${agent}: common file writes deny`, () => {
 			for (const command of PI_READ_ONLY_COMMON_WRITES_AND_EXECS) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
@@ -236,7 +236,7 @@ describe("read-only roles: an allowed read never carries a write or an exec", ()
 		});
 	}
 
-	for (const agent of ["reviewer", "researcher", "overseer"]) {
+	for (const agent of ["reviewer", "researcher"]) {
 		test(`pi ${agent}: git write options deny`, () => {
 			for (const command of PI_READ_ONLY_GIT_WRITES) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
@@ -302,7 +302,7 @@ describe("read-only roles: an allowed read never carries a write or an exec", ()
 	});
 
 	test("pi read-only roles: the uniq option terminator and dash operand forms deny", () => {
-		for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+		for (const agent of ["reviewer", "researcher", "planner"]) {
 			for (const command of ["uniq -- in out", "uniq in -- out", "uniq in -out"]) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 				assert.ok(!piAllowMatches(agent, command), `allow re-added: ${command}`);
@@ -387,7 +387,7 @@ const RAW_READ_ONLY_GIT_DENIES = [
 ];
 
 describe("kiro: read-only roles deny writes and keep the read forms", () => {
-	for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+	for (const agent of ["reviewer", "researcher", "planner"]) {
 		test(`kiro ${agent}: common write paths deny`, () => {
 			for (const command of PI_READ_ONLY_COMMON_WRITES_AND_EXECS) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
@@ -414,7 +414,7 @@ describe("kiro: read-only roles deny writes and keep the read forms", () => {
 		});
 	}
 
-	for (const agent of ["researcher", "reviewer", "overseer"]) {
+	for (const agent of ["researcher", "reviewer"]) {
 		test(`kiro ${agent}: git write options deny`, () => {
 			for (const command of RAW_READ_ONLY_GIT_WRITES) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
@@ -460,7 +460,7 @@ describe("kiro: read-only roles deny writes and keep the read forms", () => {
 });
 
 describe("opencode: read-only roles deny writes and keep the read forms", () => {
-	for (const agent of ["reviewer", "researcher", "planner", "overseer"]) {
+	for (const agent of ["reviewer", "researcher", "planner"]) {
 		test(`opencode ${agent}: common write paths deny`, () => {
 			for (const command of PI_READ_ONLY_COMMON_WRITES_AND_EXECS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
@@ -487,7 +487,7 @@ describe("opencode: read-only roles deny writes and keep the read forms", () => 
 		});
 	}
 
-	for (const agent of ["researcher", "reviewer", "overseer"]) {
+	for (const agent of ["researcher", "reviewer"]) {
 		test(`opencode ${agent}: git write options deny`, () => {
 			for (const command of RAW_READ_ONLY_GIT_WRITES) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
@@ -539,7 +539,7 @@ describe("opencode: read-only roles deny writes and keep the read forms", () => 
 // removal is undone.
 // ---------------------------------------------------------------------------
 
-const READ_ONLY_ROLES = ["reviewer", "researcher", "planner", "overseer"];
+const READ_ONLY_ROLES = ["reviewer", "researcher", "planner"];
 
 // The abbreviated long option and the glued flag value close by removal.
 const REMOVED_PI_HOLE_FORMS = [
@@ -575,7 +575,6 @@ const REMOVED_KIRO_ALLOWS: Record<string, string[]> = {
 	researcher: ["sort", "git branch"],
 	reviewer: ["sort", "git branch", "mypy", "ruff"],
 	planner: ["sort", "mkdir"],
-	overseer: ["sort", "mkdir"],
 };
 
 const REMOVED_OPENCODE_ALLOWS: Record<string, string[]> = {
@@ -603,15 +602,6 @@ const REMOVED_OPENCODE_ALLOWS: Record<string, string[]> = {
 		".venv/bin/pre-commit",
 	],
 	planner: ["sort", "mkdir", "git branch"],
-	overseer: [
-		"sort",
-		"mkdir",
-		"git ls-remote",
-		"git remote -v",
-		"git branch -a",
-		"git branch -vv",
-		"git branch --show-current",
-	],
 };
 
 /** True when any pi allow rule matches the command text. */

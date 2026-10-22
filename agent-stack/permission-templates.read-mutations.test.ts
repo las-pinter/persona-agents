@@ -280,9 +280,9 @@ describe("pi: mutating read-only git forms are gated", () => {
 // `git remote update` runs a fetch and writes remote-tracking refs. The bare
 // read-only allow `remote\b` let it through, and the remote deny alternation
 // omitted `update`. `update` now sits next to the other remote mutations on the
-// five non-orchestrator pi agents; the plain read forms still allow.
+// four non-orchestrator pi agents; the plain read forms still allow.
 const REMOTE_UPDATE_FORMS = ["git remote update", "git remote update --prune"];
-const PI_REMOTE_UPDATE_AGENTS = ["implementer", "researcher", "tester", "reviewer", "overseer"];
+const PI_REMOTE_UPDATE_AGENTS = ["implementer", "researcher", "tester", "reviewer"];
 
 const REMOTE_READ_FORMS = ["git remote", "git remote -v", "git remote show"];
 
@@ -316,7 +316,7 @@ describe("pi: fetch is gated, never a silent allow", () => {
 	});
 
 	test("pi: fetch never allows on the other shell agents or the orchestrator", () => {
-		for (const agent of ["orchestrator", "planner", "overseer"]) {
+		for (const agent of ["orchestrator", "planner"]) {
 			for (const command of [...FETCH_ARG_FORMS, ...FETCH_ARG_WRITE_FORMS, ...FETCH_WRAPPER_FORMS]) {
 				assert.notEqual(verdict(agent, command), "allow", `${agent}: ${command}`);
 			}

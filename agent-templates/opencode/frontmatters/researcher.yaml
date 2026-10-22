@@ -219,23 +219,6 @@ permissions:
   - action: shell
     resource: "systemctl --user list-units"
     effect: allow
-  # Anchor at the command start. A leading `*` would let `cp`/`mv` to that
-  # path match this allow and override the earlier deny.
-  - action: shell
-    resource: "herdr --help"
-    effect: allow
-  - action: shell
-    resource: "herdr"
-    effect: allow
-  - action: shell
-    resource: "herdr --version"
-    effect: allow
-  - action: shell
-    resource: "herdr api schema"
-    effect: allow
-  - action: shell
-    resource: "herdr plugin config-dir"
-    effect: allow
   - action: shell
     resource: "git add *"
     effect: deny

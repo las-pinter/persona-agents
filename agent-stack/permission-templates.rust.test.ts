@@ -586,7 +586,6 @@ describe("rust toolchain permission doctrine", () => {
 		"reviewer",
 		"researcher",
 		"planner",
-		"overseer",
 		"mascot",
 	];
 	// A target that starts with a digit is a write, not a file-descriptor copy.

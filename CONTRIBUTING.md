@@ -152,8 +152,7 @@ persona-agents/
 │   │   ├── reviewer.json
 │   │   ├── tester.json
 │   │   ├── researcher.json
-│   │   ├── mascot.json
-│   │   └── overseer.json
+│   │   └── mascot.json
 │   ├── opencode/
 │   │   └── frontmatters/              # OpenCode YAML frontmatter per profession
 │   │       ├── orchestrator.yaml
@@ -162,8 +161,7 @@ persona-agents/
 │   │       ├── reviewer.yaml
 │   │       ├── tester.yaml
 │   │       ├── researcher.yaml
-│   │       ├── mascot.yaml
-│   │       └── overseer.yaml
+│   │       └── mascot.yaml
 │   └── pi/
 │       └── frontmatters/              # Pi YAML frontmatter per profession
 │           ├── orchestrator.yaml
@@ -172,8 +170,7 @@ persona-agents/
 │           ├── reviewer.yaml
 │           ├── tester.yaml
 │           ├── researcher.yaml
-│           ├── mascot.yaml
-│           └── overseer.yaml
+│           └── mascot.yaml
 ├── personas/
 │   ├── goblin/                        # Goblin Horde persona files
 │   │   ├── bossnik-chief.md
@@ -182,8 +179,7 @@ persona-agents/
 │   │   ├── trakk-planner.md
 │   │   ├── grubnik-tinkerer.md
 │   │   ├── frettnik-tester.md
-│   │   ├── gibz-psycho.md
-│   │   └── kommissnik.md
+│   │   └── gibz-psycho.md
 │   ├── wh40k/                         # WH40K Warband persona files
 │   ├── wh40kOrk/                      # WH40K Ork Warband persona files
 │   ├── pub/                           # Pub persona files
@@ -198,8 +194,7 @@ persona-agents/
 │   ├── reviewer.md
 │   ├── tester.md
 │   ├── researcher.md
-│   ├── mascot.md
-│   └── overseer.md
+│   └── mascot.md
 ├── skills/                            # Skill documents organized by profession
 │   ├── orchestrator/
 │   │   ├── commit-hygiene/SKILL.md
@@ -224,13 +219,6 @@ persona-agents/
 │   ├── planner/
 │   │   ├── interview/SKILL.md
 │   │   └── study/SKILL.md
-│   ├── overseer/
-│   │   └── herdr/
-│   │       ├── SKILL.md
-│   │       └── references/
-│   │           ├── cli.md
-│   │           ├── remote.md
-│   │           └── pi-launch.md
 │   └── common/
 │       ├── file-length-policy/SKILL.md
 │       ├── journal-management-generic/SKILL.md
@@ -243,11 +231,7 @@ persona-agents/
 │   └── retro.md                       # `/retro` session retrospective command
 ├── plugins/                           # Self-contained OpenCode plugins (plain JS, no build)
 │   ├── persona-agents.js              # Stub-marker swap + on-demand prompt loading
-│   ├── permission-auditor.js          # Read-only permission audit logger
-│   └── herdr/overseer-herald/         # Herdr plugin for the overseer
-│       ├── herdr-plugin.toml          # Plugin manifest (independent version)
-│       ├── herald.sh                  # Plugin entry script
-│       └── README.md                  # Plugin usage notes
+│   └── permission-auditor.js          # Read-only permission audit logger
 ├── settings/
 │   ├── kiro-cli.json.example          # Example Kiro CLI config
 │   └── mcp.json.example               # Example MCP server config
@@ -370,9 +354,7 @@ AT LOAD TIME (extension factory / session start):
 
 5. (Optional) Preview generated output without touching your real config.
    `install.sh` writes generated agent files to `~/.kiro/` and
-   `~/.config/opencode/`. A full install (`--target all`) also copies the herdr
-   plugin to `~/.local/share/herdr/plugins/overseer-herald`. `--dry-run` writes
-   nothing:
+   `~/.config/opencode/`. `--dry-run` writes nothing:
 
    ```bash
    ./install.sh --dry-run --target all
@@ -388,7 +370,7 @@ AT LOAD TIME (extension factory / session start):
 
 Adding a new theme means creating a whole new cast of characters (e.g., a
 cyberpunk crew, a fantasy guild, a team of kitchen appliances). Each theme
-needs a persona mapping for every profession. A theme has 8 professions and 8
+needs a persona mapping for every profession. A theme has 7 professions and 7
 distinct persona files, one per profession.
 
 > **Note:** The OpenCode plugin is fully data-driven — adding a new theme
@@ -401,7 +383,7 @@ distinct persona files, one per profession.
 
 1. **Add the theme to `agents.json`:**
 
-   Add a new top-level key with all 8 professions. Follow the existing format:
+   Add a new top-level key with all 7 professions. Follow the existing format:
 
    ```json
    {
@@ -416,18 +398,13 @@ distinct persona files, one per profession.
        "reviewer": { ... },
        "tester": { ... },
        "researcher": { ... },
-       "mascot": { ... },
-       "overseer": {
-         "personaFile": "watchman-example.md",
-         "description": "Unit manager who spawns and monitors agents through herdr, keeps the captain's log, and acts autonomously inside the user's stated scope; asks only outside that scope or for user data or configuration.",
-         "welcomeMessage": "Watchman on duty. What's the word?"
-       }
+       "mascot": { ... }
      }
    }
    ```
 
 2. **Create the persona markdown files** under `personas/{new-theme}/`.
-   The theme needs 8 `agents.json` entries and 8 distinct persona
+   The theme needs 7 `agents.json` entries and 7 distinct persona
    files, one per profession.
 
    Each file should follow the [persona format](#adding-or-modifying-personas).
@@ -452,7 +429,7 @@ distinct persona files, one per profession.
 
 ### What you get
 
-The installer will generate 8 agents (one per profession) for both Kiro and
+The installer will generate 7 agents (one per profession) for both Kiro and
 OpenCode targets, each combining the template, profession rules, and your new
 persona. For OpenCode, the generated `.md` files will contain the YAML
 frontmatter plus a stub comment for runtime injection. Your theme's agents are
@@ -593,10 +570,9 @@ role in the theme.]
 Additional lore or backstory.
 
 > **Note:** Journals are handled by the orchestrator's
-> `skills/orchestrator/journal-management/SKILL.md` skill, or by the superset
-> `skills/common/journal-management-generic` skill for non-orchestrator
-> agents (used by the overseer). Do not duplicate journal/data-log writing
-> protocols inside persona files.
+> `skills/orchestrator/journal-management/SKILL.md` skill, which builds on the
+> shared `skills/common/journal-management-generic` skill. Do not duplicate
+> journal/data-log writing protocols inside persona files.
 ```
 
 ### Key rules
@@ -968,7 +944,7 @@ Once the dry run looks correct, run for real:
 
 After running, verify:
 
-- **All 64 agents generated** — 8 themes × 8 professions = 64 agents per
+- **All 56 agents generated** — 8 themes × 7 professions = 56 agents per
   target. Use `ls ~/.kiro/agents/ | wc -l` or
   `ls ~/.config/opencode/agents/ | wc -l`.
 - **Valid JSON** (Kiro): `jq . ~/.kiro/agents/*.json > /dev/null`
@@ -1019,7 +995,7 @@ After running, verify:
 
    ```bash
    git add .
-   git commit -m "feat: add cyberpunk theme with 8 professions"
+   git commit -m "feat: add cyberpunk theme with 7 professions"
    ```
 
    Human contributors should follow the conventional commits format:
@@ -1056,7 +1032,7 @@ Before submitting, check:
 - [ ] `node --check plugins/persona-agents.js` parses (plugin syntax)
 - [ ] Persona-agents plugin is installed (`~/.config/opencode/plugins/persona-agents.js` exists)
 - [ ] `./install.sh --dry-run --force` completes without errors
-- [ ] All 64 agents generate (for both targets)
+- [ ] All 56 agents generate (for both targets)
 - [ ] No `{{...}}` placeholders remain unsubstituted in generated output
 - [ ] OpenCode agent `.md` files contain valid stub comments
       (`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`)
@@ -1066,7 +1042,7 @@ Before submitting, check:
       `## Core Behavior`, `## When to Defer`, `## Failure Modes`,
       `## Output Format`, `## Skills`)
 - [ ] Templates include proper tool permissions (not too permissive)
-- [ ] New themes are added to ALL 8 professions
+- [ ] New themes are added to ALL 7 professions
 - [ ] New professions are added to ALL existing themes in `agents.json`
 - [ ] New files have no hardcoded theme/profession values (use placeholders)
 
@@ -1209,10 +1185,7 @@ release:
    select it in the GitHub release form. Pi installs resolve by tag, so a
    release without the tag does not install.
 
-Do not bump the herdr plugin version
-(`plugins/herdr/overseer-herald/herdr-plugin.toml`, line 3) unless the plugin
-itself changes — it has its own independent version. Do not touch the
-`package.json` dependency pins on release. No `README.md` in this repository
+Do not touch the `package.json` dependency pins or `engines.node` on release. No `README.md` in this repository
 may contain a version number.
 
 The full release ritual lives in `AGENTS.md`.

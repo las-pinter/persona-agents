@@ -50,7 +50,3 @@ permissions:
     - { tool: bash, match: "^rg\\b[^\\n]*\\s(?:--pre(?:\\s|=)|-[A-Za-z]*z[A-Za-z]*\\b|--search-zip\\b)" }
     # `date -s` sets the system clock.
     - { tool: bash, match: "^date\\b[^\\n]*\\s(?:-s[A-Za-z]*|--s[A-Za-z-]*)" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)|(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+))*(?:(?:timeout|chrt)\\s+\\S+\\s+)*(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)" }
-    - { tool: bash, match: "(?:\\$\\(|`)[\\s\\S]*?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:bash|sh|zsh|dash|ksh)\\s+[^\\n]*?herdr\\b" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|eval|command|sudo)\\s+)*(?:xargs(?:\\s+-[^\\s;&|]+(?:\\s+[0-9]+)?)*)\\s+[\"']?(?:[^\\s;|&()]*/\\.local/bin/)?herdr\\b(?=(?:[^']*'[^']*')*[^']*$)" }

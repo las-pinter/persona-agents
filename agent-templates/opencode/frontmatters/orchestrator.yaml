@@ -865,17 +865,6 @@ permissions:
   - action: shell
     resource: "whoami"
     effect: allow
-  # Anchor at the command start. A leading `*` would let `mv x .../herdr`
-  # match this allow and override the earlier cp/mv ask.
-  - action: shell
-    resource: "herdr"
-    effect: allow
-  - action: shell
-    resource: "HERDR_ENV=1 herdr agent list"
-    effect: allow
-  - action: shell
-    resource: "HERDR_ENV=1 herdr plugin list"
-    effect: allow
   - action: subagent
     resource: "*"
     effect: deny

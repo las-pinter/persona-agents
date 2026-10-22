@@ -2,10 +2,9 @@
  * Regression tests for install.sh.
  *
  * The installer writes into $HOME, so every test runs against a throw-away
- * HOME under os.tmpdir(). install.sh also probes PATH for kiro-cli, opencode,
- * and herdr, so the tests prepend a stub bin dir: the stubs satisfy the
- * probes, and the herdr stub replaces `herdr plugin link`, so the real herdr
- * plugin registry is never touched.
+ * HOME under os.tmpdir(). install.sh also probes PATH for kiro-cli and
+ * opencode, so the tests prepend a stub bin dir whose stubs satisfy the
+ * probes.
  *
  * The covered defects:
  *   1. a dry run must not create a file or a directory;
@@ -15,8 +14,7 @@
  *   4. the trailing-comma repair must not touch a comma inside a string;
  *   5. the MCP merge must never overwrite an entry the user already has;
  *   6. a config jq cannot read must not stop the install halfway;
- *   7. the installer must not touch the shell rc files;
- *   8. a run narrowed by --target or --profession must skip the herdr plugin.
+ *   7. the installer must not touch the shell rc files.
  *
  * Run: npm test
  */
@@ -33,9 +31,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const installScript = path.join(repoRoot, "install.sh");
 const mcpExampleFile = path.join(repoRoot, "settings", "mcp.json.example");
 
-/** The tools install.sh probes on PATH. The herdr stub replaces `herdr plugin link`. */
+/** The tools install.sh probes on PATH. */
 const stubBin = fs.mkdtempSync(path.join(os.tmpdir(), "install-sh-stub-"));
-for (const tool of ["kiro-cli", "opencode", "herdr"]) {
+for (const tool of ["kiro-cli", "opencode"]) {
 	const stub = path.join(stubBin, tool);
 	fs.writeFileSync(stub, "#!/bin/sh\nexit 0\n");
 	fs.chmodSync(stub, 0o755);
@@ -340,33 +338,4 @@ describe("install.sh leaves the shell alone", () => {
 		assert.equal(fs.readFileSync(path.join(home, ".zshrc"), "utf8"), "# test zshrc\n");
 		assert.ok(!fs.existsSync(path.join(home, ".bash_aliases")), "no ~/.bash_aliases may be created");
 	});
-});
-
-describe("install.sh herdr plugin scope", () => {
-	const herdrLink = /herdr plugin link/;
-
-	test("a full install links the herdr plugin", () => {
-		const result = runInstaller(makeHome(), ["--dry-run"]);
-		assert.equal(result.status, 0, result.stderr);
-		assert.match(result.stdout, herdrLink);
-	});
-
-	test("an overseer-only install links the herdr plugin", () => {
-		const result = runInstaller(makeHome(), ["--dry-run", "--profession", "overseer"]);
-		assert.equal(result.status, 0, result.stderr);
-		assert.match(result.stdout, herdrLink);
-	});
-
-	for (const args of [
-		["--target", "opencode"],
-		["--target", "kiro"],
-		["--profession", "reviewer"],
-	]) {
-		test(`${args.join(" ")} skips the herdr plugin`, () => {
-			const result = runInstaller(makeHome(), ["--dry-run", ...args]);
-			assert.equal(result.status, 0, result.stderr);
-			assert.doesNotMatch(result.stdout, herdrLink);
-			assert.doesNotMatch(result.stderr, /herdr not found/, "a skipped plugin must not warn about herdr");
-		});
-	}
 });

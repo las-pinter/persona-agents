@@ -57,7 +57,7 @@ import {
 } from "./command-segments.ts";
 import {
 	buildPromptModel,
-	herdrBlockedLabel,
+	blockedLabel,
 	humanReason,
 	renderPermissionPrompt,
 	type PermissionChoice,
@@ -331,7 +331,7 @@ export function installPermissionGate(
 				// Fail closed. The label is stable and never the rule regex.
 				return {
 					block: true,
-					reason: herdrBlockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
+					reason: blockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
 				};
 			}
 
@@ -344,17 +344,7 @@ export function installPermissionGate(
 				reason: humanReason(rule.reason, rule.match),
 				isSpanning: decision.segmentIndex === -1,
 			});
-			// The herdr courier clears only on active:false, so every prompt outcome must emit it.
-			pi.events.emit("herdr:blocked", {
-				active: true,
-				label: herdrBlockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
-			});
-			let choice: PermissionChoice;
-			try {
-				choice = await renderPermissionPrompt(ctx, promptModel);
-			} finally {
-				pi.events.emit("herdr:blocked", { active: false });
-			}
+			const choice: PermissionChoice = await renderPermissionPrompt(ctx, promptModel);
 
 			if (choice === "always-allow") {
 				sessionAllow.add(key); // remembered for the rest of the session

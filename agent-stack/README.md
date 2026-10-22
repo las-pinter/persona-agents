@@ -49,7 +49,7 @@ Agents are **modular**, mirroring the opencode split:
 The resolver composes them at load time (`parseFrontmatter` wraps the bare YAML,
 so no extra YAML dependency is needed). No generated files, no drift: edit the
 profession, add a template for a new profession, and it appears in `/agents`
-immediately. All 8 professions ship pi templates; a profession without a
+immediately. All 7 professions ship pi templates; a profession without a
 frontmatter template is simply not exposed as a pi agent.
 
 The pi templates were translated from `agent-templates/opencode/frontmatters`
@@ -106,7 +106,7 @@ Template fields (YAML):
 |---|---|---|
 | `name` | string | required — invoked as `/agents <name>` or `agent: "name"` |
 | `description` | string | required — shown in listings |
-| `spawnable` | boolean | optional — `false` marks the agent as **not dispatchable as a subagent**: the `subagent` tool rejects it (alias or direct name) before spawning. Defaults to `true`. Use the **unquoted boolean** (`spawnable: false`); the resolver also treats a quoted `"false"` string as disabled, but the boolean is the documented form. The `orchestrator` and `overseer` templates ship `spawnable: false` |
+| `spawnable` | boolean | optional — `false` marks the agent as **not dispatchable as a subagent**: the `subagent` tool rejects it (alias or direct name) before spawning. Defaults to `true`. Use the **unquoted boolean** (`spawnable: false`); the resolver also treats a quoted `"false"` string as disabled, but the boolean is the documented form. The `orchestrator` template ships `spawnable: false` |
 | `tools` | string[] | tool-name allowlist for subagent spawns (`--tools`) |
 | `model` | string | optional `provider/model` override for subagent spawns |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
@@ -252,7 +252,7 @@ entries, with an in-memory cache. Each change publishes the
 `persona-agents/todos/v1` event for the TODOS panel.
 
 These agents may call `todo`: orchestrator, planner, implementer, tester,
-researcher, reviewer. Mascot and overseer are excluded. Each allowed agent lists
+researcher, reviewer. Mascot is excluded. Each allowed agent lists
 `todo` in `tools:` and has a `{ tool: todo, match: "." }` allow rule.
 
 ### Commands
@@ -295,7 +295,6 @@ denied-by-default):
 |---|---|
 | orchestrator | `agent-notes/orchestrator/**`, `agent-notes/project-notes/**` |
 | planner | `agent-notes/project-notes/**` |
-| overseer | `agent-notes/overseer/**` |
 | researcher | `agent-notes/researcher/**` |
 | implementer / tester | workspace files (edit/write everywhere) |
 | reviewer / mascot | none (read-only) |
@@ -357,19 +356,3 @@ resolved in the order flag > settings > env. Alternatives:
   subagent** — "off" explicitly clears them. The child's own `before_agent_start` injects
   the profession body + persona (no temp prompt file), and because the child has a real
   active agent, its frontmatter permissions are enforced by the gate there too.
-- **Spawned subagents are isolated from herdr control**: `buildChildEnv()` in `subagent.ts`
-  removes `HERDR_ENV` from the child env, so herdr access does not inherit. The
-  per-template deny rules block direct calls. A subagent with code execution (an
-  interpreter or a script) can still set `HERDR_ENV` and call the binary by absolute
-  path — a documented residual. herdr's own access check is the final boundary. The
-  overseer main session is launched via the pi CLI and never passes through this spawn
-  site, so it is unaffected.
-- **Guard limits (honest)**: the per-template herdr rules block command-position `herdr`
-  (bare, absolute path, and behind `env`/`time`/`nice`/…/`sudo`/`VAR=…` prefixes),
-  `$( … )` and backtick command substitution, and shell `-c` payloads
-  (`bash -c '…herdr…'`, `sh -c`, `bash <path>/herdr`). They do **not** catch
-  interpreter/encoder paths (`python3 -c '…herdr…'`, `perl -e`, `base64 -d | sh`),
-  absolute-path calls from agents whose interpreters are allowed, or backslash-split
-  binary names (`te\e` class): those are documented residuals of a flat-regex gate.
-  For spawned subagents the `HERDR_ENV` strip covers these residuals too — unless the
-  subagent sets `HERDR_ENV` itself.

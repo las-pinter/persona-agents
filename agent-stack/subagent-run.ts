@@ -64,7 +64,6 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
  * the parent `--tools` strip is the real control. */
 function buildChildEnv(childDepthValue: number, childRunId: string, parentRunId: string | null): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env };
-	delete env.HERDR_ENV;
 	env[ENV_AGENT_DEPTH] = String(childDepthValue);
 	env[ENV_RUN_ID] = childRunId;
 	// Overwrite any inherited parent id: this child's parent is THIS process.

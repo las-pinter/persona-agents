@@ -4,7 +4,7 @@
  * Loads the shipped pi agent frontmatters and asserts the verdict matrix:
  *   orchestrator                                -> ASK for add/commit/push/pull and `gh pr`/`gh release`
  *   implementer                                 -> DENY for add/commit/push/pull and `gh pr`/`gh release`
- *   researcher/reviewer/tester/planner/overseer -> DENY for push/pull and `gh pr`/`gh release`
+ *   researcher/reviewer/tester/planner          -> DENY for push/pull and `gh pr`/`gh release`
  *
  * Also checks the live global file does not keep a push/pull or `gh pr` deny.
  * That check skips when the file is absent, because the file is outside the repo.
