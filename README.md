@@ -78,11 +78,12 @@ claude --agent persona-agents:orchestrator
 
 The last command starts a session as the orchestrator. It delegates to the
 other `persona-agents:` agents, and every agent speaks as the theme's persona.
-Change the theme any time in `/config` (**Persona theme**), then start a new
-session. The commit doctrine holds here too: only the orchestrator may write
-git history (you approve each time), and the read-only agents cannot edit
-files. A plain `claude` session stays normal; the agents are still there to
-delegate to.
+Change the theme any time in `/config` (**Persona theme**). No restart is
+needed: new subagents get the new theme at once, and the main session gets it
+after `/clear` or in a new session. The commit doctrine holds here too: only
+the orchestrator may write git history (you approve each time), and the
+read-only agents cannot edit files. A plain `claude` session stays normal; the
+agents are still there to delegate to.
 
 Update with `claude plugin marketplace update persona-agents`, then
 `claude plugin update persona-agents@persona-agents`, and restart.

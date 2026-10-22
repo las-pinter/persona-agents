@@ -14,13 +14,22 @@
 // Any other agent, or a session without one, gets no output.
 //
 // Set PERSONA_AGENTS_DEBUG=1 to append each hook input to
-// $CLAUDE_PLUGIN_DATA/hook-input.log.
+// $CLAUDE_PLUGIN_DATA/hook-input.log. PERSONA_AGENTS_MANAGED_SETTINGS replaces
+// the managed settings path; the tests use it to keep away from the system file.
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 const PREFIX = "persona-agents:";
+// Another marketplace name gives another key, so the lookup misses it and falls back to the env var.
+const PLUGIN_ID = "persona-agents@persona-agents";
 const DEFAULT_THEME = "goblin";
+const MANAGED_SETTINGS = {
+	linux: "/etc/claude-code/managed-settings.json",
+	darwin: "/Library/Application Support/ClaudeCode/managed-settings.json",
+	win32: "C:\\Program Files\\ClaudeCode\\managed-settings.json",
+};
 
 const part = process.argv[2];
 const root = process.env.CLAUDE_PLUGIN_ROOT;
@@ -41,9 +50,33 @@ function professionContext() {
 	return readFileSync(join(content, "professions", `${profession}.md`), "utf8").trim();
 }
 
+/** The theme option from one settings file, or "" when the file or key is missing or bad. */
+function settingsTheme(file) {
+	try {
+		const theme = JSON.parse(readFileSync(file, "utf8"))?.pluginConfigs?.[PLUGIN_ID]?.options?.theme;
+		return typeof theme === "string" ? theme : "";
+	} catch {
+		return "";
+	}
+}
+
+/** The selected theme: managed settings, then user settings, then the env var, then the default. */
+function selectedTheme() {
+	// Claude Code sets CLAUDE_PLUGIN_OPTION_THEME once at start, so read the live settings files first.
+	const managed = process.env.PERSONA_AGENTS_MANAGED_SETTINGS || MANAGED_SETTINGS[process.platform];
+	const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+	// Project settings are skipped: Claude Code reads pluginConfigs from user and managed settings only.
+	return (
+		(managed && settingsTheme(managed)) ||
+		settingsTheme(join(configDir, "settings.json")) ||
+		process.env.CLAUDE_PLUGIN_OPTION_THEME ||
+		DEFAULT_THEME
+	);
+}
+
 /** The Claude Code note plus the theme's persona, or null when none is mapped. */
 function personaContext() {
-	const theme = process.env.CLAUDE_PLUGIN_OPTION_THEME || DEFAULT_THEME;
+	const theme = selectedTheme();
 	const registry = JSON.parse(readFileSync(join(content, "agents.json"), "utf8"));
 	const entry = registry[theme]?.[profession];
 	if (!entry) {

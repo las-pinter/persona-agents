@@ -12,8 +12,9 @@
 
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,17 +64,57 @@ interface HookRun {
 	status: number;
 }
 
-/** Run the context hook the way Claude Code does: JSON on stdin, options in env. */
-function runContext(part: string, input: Record<string, unknown>, theme?: string): HookRun {
-	const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_PLUGIN_ROOT: repoRoot };
-	delete env.CLAUDE_PLUGIN_OPTION_THEME;
-	delete env.PERSONA_AGENTS_DEBUG;
-	if (theme !== undefined) env.CLAUDE_PLUGIN_OPTION_THEME = theme;
-	const result = spawnSync(process.execPath, [contextScript, part], {
-		input: JSON.stringify(input),
-		env,
-		encoding: "utf8",
-	});
+/** Raw text for the settings files of one hook run; a missing entry means no file. */
+interface SettingsFiles {
+	user?: string;
+	managed?: string;
+	/** Leave CLAUDE_CONFIG_DIR unset, so the hook uses the .claude folder under HOME. */
+	noConfigDir?: boolean;
+}
+
+/** A settings file body that selects a theme, the way /config writes it. */
+function themeSettings(theme: string): string {
+	return JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { theme } } } });
+}
+
+/**
+ * Run the context hook the way Claude Code does: JSON on stdin, options in env.
+ * The home, config dir, and managed file point into a temp dir, so the real settings never leak in.
+ */
+function runContext(
+	part: string,
+	input: Record<string, unknown>,
+	theme?: string,
+	settings: SettingsFiles = {},
+): HookRun {
+	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-context-"));
+	let result: SpawnSyncReturns<string>;
+	try {
+		const managedFile = path.join(tmp, "managed-settings.json");
+		// The default config dir under HOME, so a run without CLAUDE_CONFIG_DIR finds the same file.
+		const configDir = path.join(tmp, ".claude");
+		fs.mkdirSync(configDir);
+		if (settings.user !== undefined) fs.writeFileSync(path.join(configDir, "settings.json"), settings.user);
+		if (settings.managed !== undefined) fs.writeFileSync(managedFile, settings.managed);
+		const env: NodeJS.ProcessEnv = {
+			...process.env,
+			CLAUDE_PLUGIN_ROOT: repoRoot,
+			HOME: tmp,
+			CLAUDE_CONFIG_DIR: configDir,
+			PERSONA_AGENTS_MANAGED_SETTINGS: managedFile,
+		};
+		delete env.CLAUDE_PLUGIN_OPTION_THEME;
+		delete env.PERSONA_AGENTS_DEBUG;
+		if (settings.noConfigDir) delete env.CLAUDE_CONFIG_DIR;
+		if (theme !== undefined) env.CLAUDE_PLUGIN_OPTION_THEME = theme;
+		result = spawnSync(process.execPath, [contextScript, part], {
+			input: JSON.stringify(input),
+			env,
+			encoding: "utf8",
+		});
+	} finally {
+		fs.rmSync(tmp, { recursive: true, force: true });
+	}
 	const stdout = result.stdout ?? "";
 	const output = stdout.trim()
 		? (JSON.parse(stdout) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } })
@@ -204,6 +245,80 @@ describe("claude plugin: context hook", () => {
 				assert.equal(run.context, null, `${part}: ${JSON.stringify(input)}`);
 			}
 		}
+	});
+
+	describe("theme lookup at hook run time", () => {
+		const [themeA, themeB] = themes.filter((theme) => theme !== manifest.userConfig.theme.default);
+		const themeOf = (run: HookRun) => /persona theme: ([^)]+)\)/.exec(run.context ?? "")?.[1];
+
+		test("there are two non-default themes to tell apart", () => {
+			assert.ok(themeA && themeB);
+		});
+
+		test("the user settings theme wins over the env var", () => {
+			const run = runContext("persona", subagentInput("implementer"), themeB, { user: themeSettings(themeA) });
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("the env var applies when no settings file exists", () => {
+			assert.equal(themeOf(runContext("persona", subagentInput("implementer"), themeB)), themeB);
+		});
+
+		test("a settings file with bad JSON falls back to the env var", () => {
+			const run = runContext("persona", subagentInput("implementer"), themeB, { user: "{ not json" });
+			assert.equal(run.status, 0);
+			assert.equal(themeOf(run), themeB);
+		});
+
+		const wrongTypeBodies: Record<string, unknown> = {
+			"theme is a number": { pluginConfigs: { "persona-agents@persona-agents": { options: { theme: 7 } } } },
+			"options is null": { pluginConfigs: { "persona-agents@persona-agents": { options: null } } },
+			"pluginConfigs is an array": { pluginConfigs: [] },
+			"the file holds JSON null": null,
+		};
+		for (const [label, body] of Object.entries(wrongTypeBodies)) {
+			test(`a wrong-type settings body falls back to the env var: ${label}`, () => {
+				const run = runContext("persona", subagentInput("implementer"), themeB, { user: JSON.stringify(body) });
+				assert.equal(run.status, 0);
+				assert.equal(themeOf(run), themeB);
+			});
+		}
+
+		test("a bad managed file falls through to the user settings theme", () => {
+			const run = runContext("persona", subagentInput("implementer"), themeB, {
+				managed: "{ not json",
+				user: themeSettings(themeA),
+			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("without CLAUDE_CONFIG_DIR the hook reads .claude/settings.json under HOME", () => {
+			const run = runContext("persona", subagentInput("implementer"), themeB, {
+				user: themeSettings(themeA),
+				noConfigDir: true,
+			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a settings file without the plugin key falls back to the default", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, { user: "{}" });
+			assert.equal(themeOf(run), manifest.userConfig.theme.default);
+		});
+
+		test("the managed settings theme wins over the user settings theme", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				managed: themeSettings(themeB),
+				user: themeSettings(themeA),
+			});
+			assert.equal(themeOf(run), themeB);
+		});
+
+		test("an unknown theme from the settings file still warns", () => {
+			const run = runContext("persona", subagentInput("tester"), themeA, { user: themeSettings("nosuch") });
+			assert.equal(run.status, 0);
+			assert.equal(run.context, null);
+			assert.match(run.stderr, /no nosuch persona for tester/);
+		});
 	});
 
 	test("an unknown theme warns and still sends the profession", () => {
