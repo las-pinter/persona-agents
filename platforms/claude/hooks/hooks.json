@@ -1,5 +1,5 @@
 {
-  "description": "Give persona-agents agents their profession rules and the selected theme's persona",
+  "description": "Give persona-agents agents their profession rules and the selected theme's persona, and enforce the commit and file doctrine",
   "hooks": {
     "SessionStart": [
       {
@@ -7,13 +7,19 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "profession"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
+              "profession"
+            ],
             "timeout": 10
           },
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "persona"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
+              "persona"
+            ],
             "timeout": 10
           }
         ]
@@ -26,13 +32,36 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "profession"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
+              "profession"
+            ],
             "timeout": 10
           },
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs", "persona"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
+              "persona"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|Edit|Write|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/doctrine.ts"
+            ],
             "timeout": 10
           }
         ]

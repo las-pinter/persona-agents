@@ -142,6 +142,17 @@ content:
 - **Skills** load in place from `content/skills/`. `plugin.json` lists each
   skill folder; a pi-only skill is left out and named in `EXCLUDED_SKILLS` in
   the test, with the reason.
+- **Doctrine** is one `PreToolUse` hook, `platforms/claude/scripts/doctrine.ts`,
+  keyed on the calling agent. Git history (`add`, `commit`, `push`, `pull`,
+  `merge`, `rebase`, `tag`) and every `gh pr` / `gh release` command ask for the
+  orchestrator and deny the rest. `cp`, `mv`, and `rsync` ask for the
+  orchestrator and the implementer and deny the rest. Edits outside an agent's
+  `agent-notes/` zone ask for the orchestrator and deny the planner,
+  researcher, reviewer, and mascot. A hook deny wins over a user allow rule. It
+  reuses the pi gate's shell parser and unwraps `cd x &&`, `sudo`/`env`/`xargs`
+  prefixes, and `bash -c` payloads; an unreadable command that names a gated
+  program fails closed. Sessions without a persona-agents agent are left alone.
+  `tests/claude-doctrine.test.ts` holds the matrix.
 
 ## Repository Structure
 
@@ -217,8 +228,10 @@ persona-agents/
 ├── platforms/                         # Everything specific to one target
 │   ├── claude/
 │   │   ├── agents/                    # Frontmatter-only agent files, one per profession
-│   │   ├── hooks/hooks.json           # SessionStart + SubagentStart → context.mjs (profession, persona)
-│   │   └── scripts/context.mjs        # Reads content/ and returns it as hook context
+│   │   ├── hooks/hooks.json           # Start hooks → context.mjs; PreToolUse → doctrine.ts
+│   │   └── scripts/
+│   │       ├── context.mjs            # Reads content/ and returns it as hook context
+│   │       └── doctrine.ts            # Commit and file doctrine: ask or deny per agent
 │   ├── pi/
 │   │   ├── README.md                  # Pi install steps and extension architecture notes
 │   │   ├── extension/                 # Pi extension ("agent-stack"): subagent + todo tools, permission gate, sidebar

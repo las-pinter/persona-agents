@@ -42,8 +42,9 @@ Rules:
 Only the orchestrator writes git history. Every commit it makes starts with
 the prefix `ai:`. The implementer never commits. It suggests a commit.
 
-The doctrine lives in the permission templates and the live global file
-`~/.pi/agent/permissions.json`. The orchestrator gets an ASK verdict for
+The doctrine lives in the permission templates, the live global file
+`~/.pi/agent/permissions.json`, and, for Claude Code, the PreToolUse hook
+`platforms/claude/scripts/doctrine.ts`. The orchestrator gets an ASK verdict for
 `git add`, `git commit`, `git push`, `git pull`, `git merge`, `git rebase`,
 `git tag`, and every `gh pr` and `gh release` command. Every other agent gets a
 DENY for these. `cp`, `mv`, and `rsync` also ASK for the orchestrator and the
