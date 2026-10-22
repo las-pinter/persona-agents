@@ -72,11 +72,13 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --target)
-        if [[ -z "$2" || "$2" == --* ]]; then
+        # ${2-} keeps set -u quiet when the option value is missing.
+        opt_value="${2-}"
+        if [[ -z "$opt_value" || "$opt_value" == --* ]]; then
             echo "Error: --target requires a value (kiro, opencode, or all)." >&2
             exit 1
         fi
-        TARGET="$2"
+        TARGET="$opt_value"
         shift 2
         ;;
     --profession=*)
@@ -84,11 +86,13 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --profession)
-        if [[ -z "$2" || "$2" == --* ]]; then
+        # ${2-} keeps set -u quiet when the option value is missing.
+        opt_value="${2-}"
+        if [[ -z "$opt_value" || "$opt_value" == --* ]]; then
             echo "Error: --profession requires a value." >&2
             exit 1
         fi
-        PROFESSION="$2"
+        PROFESSION="$opt_value"
         shift 2
         ;;
     --theme=*)
@@ -96,11 +100,13 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --theme)
-        if [[ -z "$2" || "$2" == --* ]]; then
+        # ${2-} keeps set -u quiet when the option value is missing.
+        opt_value="${2-}"
+        if [[ -z "$opt_value" || "$opt_value" == --* ]]; then
             echo "Error: --theme requires a value." >&2
             exit 1
         fi
-        THEME="$2"
+        THEME="$opt_value"
         shift 2
         ;;
     --help | -h)
@@ -195,34 +201,54 @@ run() {
     fi
 }
 
+# Print one outcome line for a file, an alias, or a merge.
+# In dry-run mode the "(dry-run)" marker is added to the same message a real
+# run prints, so a dry run and a real run report the same outcome.
+report() {
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  (dry-run) $1"
+    else
+        echo "  $1"
+    fi
+}
+
+# Escape a value for use as the replacement text of a sed 's|...|...|'
+# expression. A sed replacement expands & to the matched text, so & must
+# become \&. The delimiter (|) and a backslash must be escaped too.
+# A newline would end the s command, so it becomes a space. Every substituted
+# field is one line, and a space keeps the install complete.
+sed_escape() {
+    printf '%s' "$1" | tr '\n' ' ' | sed 's/[&|\\]/\\&/g'
+}
+
 copy_file() {
     local src="$1" dest="$2"
+    if [[ -f "$dest" && "$FORCE" != true ]]; then
+        report "skipped (exists): $dest"
+        return
+    fi
     if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would install: $dest"
+        report "would install: $dest"
         return
     fi
     mkdir -p "$(dirname "$dest")"
-    if [[ -f "$dest" && "$FORCE" != true ]]; then
-        echo "  skipped (exists): $dest"
-        return
-    fi
     cp "$src" "$dest"
-    echo "  installed: $dest"
+    report "installed: $dest"
 }
 
 copy_if_missing() {
     local src="$1" dest="$2"
-    if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would create if missing: $dest"
+    if [[ -f "$dest" ]]; then
+        report "skipped (customize locally): $dest"
         return
     fi
-    if [[ -f "$dest" ]]; then
-        echo "  skipped (customize locally): $dest"
+    if [[ "$DRY_RUN" == true ]]; then
+        report "would create if missing: $dest"
         return
     fi
     mkdir -p "$(dirname "$dest")"
     cp "$src" "$dest"
-    echo "  created: $dest"
+    report "created: $dest"
 }
 
 # Install a shell alias into a rc file, skipping if already present.
@@ -230,21 +256,23 @@ install_alias() {
     local name="$1" cmd="$2" rc="$3"
     local line="alias ${name}='${cmd}'"
     if grep -qF "$line" "$rc" 2>/dev/null; then
-        echo "  skipped (exists): $name in $rc"
-    else
-        if [[ "$DRY_RUN" == true ]]; then
-            echo "  (dry-run) would add alias $name to $rc"
-        else
-            printf '\n%s\n' "$line" >>"$rc"
-            echo "  installed alias: $name in $rc"
-        fi
+        report "skipped (exists): $name in $rc"
+        return
     fi
+    if [[ "$DRY_RUN" == true ]]; then
+        report "would add alias $name to $rc"
+        return
+    fi
+    printf '\n%s\n' "$line" >>"$rc"
+    report "installed alias: $name in $rc"
 }
 
 # Merge a JSON file into a destination JSON file at a given top-level key.
 # Handles trailing commas in the destination (jq is strict about those).
+# The optional fourth argument names the source for the user. A temp file
+# hides the real source, so the caller can pass the file the user knows.
 merge_json_into() {
-    local src_file="$1" dest_file="$2" dest_key="$3"
+    local src_file="$1" dest_file="$2" dest_key="$3" src_label="${4:-$1}"
 
     if [[ ! -s "$dest_file" ]]; then
         echo "  warning: $dest_file not found or empty, skipping merge into .${dest_key}" >&2
@@ -255,7 +283,7 @@ merge_json_into() {
         return
     fi
     if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would merge $src_file into $dest_file at key '.${dest_key}'"
+        report "would merge $src_label into $dest_file at key '.${dest_key}'"
         return
     fi
 
@@ -266,8 +294,10 @@ merge_json_into() {
     # jq is strict about valid JSON — if the existing config has trailing
     # commas (which OpenCode tolerates but jq doesn't), strip them first.
     # Only do this if jq can't parse the file, to avoid corrupting strings.
+    # The scan is string-aware: a quoted string is matched first and left
+    # untouched, so a comma inside a string value is never a separator.
     if ! jq . "$dest_file" >/dev/null 2>&1; then
-        perl -0777 -pe 's/,\s*([}\]])/$1/g' "$dest_file" >"$tmp"
+        perl -0777 -pe 's/"(?:[^"\\]|\\.)*"|,\s*([}\]])/defined $1 ? $1 : $&/ge' "$dest_file" >"$tmp"
     else
         cp "$dest_file" "$tmp"
     fi
@@ -280,7 +310,7 @@ merge_json_into() {
         return 1
     fi
     mv "${tmp}.merged" "$dest_file"
-    echo "  merged into $dest_file (.${dest_key})"
+    report "merged into $dest_file (.${dest_key})"
 }
 
 # ---------------------------------------------------------------------------
@@ -293,7 +323,9 @@ if target_available kiro; then
     echo "Generating kiro agents from templates..."
 
     KIRO_AGENTS_DIR="$KIRO_DEST/agents"
-    mkdir -p "$KIRO_AGENTS_DIR"
+    if [[ "$DRY_RUN" != true ]]; then
+        mkdir -p "$KIRO_AGENTS_DIR"
+    fi
 
     for theme in $(get_themes); do
         [[ -n "$THEME" && "$theme" != "$THEME" ]] && continue
@@ -309,12 +341,12 @@ if target_available kiro; then
             fi
 
             if [[ -f "$agent_file" && "$FORCE" != true ]]; then
-                echo "  skipped (exists): ${theme}-${profession}.json"
+                report "skipped (exists): ${theme}-${profession}.json"
                 continue
             fi
 
             if [[ "$DRY_RUN" == true ]]; then
-                echo "  (dry-run) would generate: ${theme}-${profession}.json"
+                report "would generate: ${theme}-${profession}.json"
                 continue
             fi
 
@@ -322,16 +354,20 @@ if target_available kiro; then
             persona_file=$(get_agent_field "$theme" "$profession" "personaFile")
             welcome_message=$(get_agent_field "$theme" "$profession" "welcomeMessage")
 
-            # Escape sed special chars in welcome message (&, /, \, |)
-            welcome_escaped=$(printf '%s\n' "$welcome_message" | sed 's|[\/&|]|\\&|g')
+            # Escape sed special chars (&, |, \) in every substituted value
+            description_escaped=$(sed_escape "$description")
+            theme_escaped=$(sed_escape "$theme")
+            persona_file_escaped=$(sed_escape "$persona_file")
+            welcome_escaped=$(sed_escape "$welcome_message")
+            profession_escaped=$(sed_escape "$profession")
 
-            sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
-                -e "s|{{THEME}}|${theme}|g" \
-                -e "s|{{PERSONA_FILE}}|${persona_file}|g" \
+            sed -e "s|{{AGENT_DESCRIPTION}}|${description_escaped}|g" \
+                -e "s|{{THEME}}|${theme_escaped}|g" \
+                -e "s|{{PERSONA_FILE}}|${persona_file_escaped}|g" \
                 -e "s|{{WELCOME_MESSAGE}}|${welcome_escaped}|g" \
-                -e "s|{{PROFESSION}}|${profession}|g" \
+                -e "s|{{PROFESSION}}|${profession_escaped}|g" \
                 "$template" >"$agent_file"
-            echo "  generated: ${theme}-${profession}.json"
+            report "generated: ${theme}-${profession}.json"
         done
     done
 
@@ -376,7 +412,9 @@ if target_available opencode; then
     echo "Generating OpenCode agents..."
 
     OPENCODE_AGENTS_DIR="$OPENCODE_DEST/agents"
-    mkdir -p "$OPENCODE_AGENTS_DIR"
+    if [[ "$DRY_RUN" != true ]]; then
+        mkdir -p "$OPENCODE_AGENTS_DIR"
+    fi
 
     for theme in $(get_themes); do
         [[ -n "$THEME" && "$theme" != "$THEME" ]] && continue
@@ -400,23 +438,27 @@ if target_available opencode; then
             fi
 
             if [[ -f "$agent_file" && "$FORCE" != true ]]; then
-                echo "  skipped (exists): ${theme}-${profession}.md"
+                report "skipped (exists): ${theme}-${profession}.md"
                 continue
             fi
 
             if [[ "$DRY_RUN" == true ]]; then
-                echo "  (dry-run) would generate: ${theme}-${profession}.md"
+                report "would generate: ${theme}-${profession}.md"
                 continue
             fi
 
             description=$(get_agent_field "$theme" "$profession" "description")
 
+            # Escape sed special chars (&, |, \) in every substituted value
+            description_escaped=$(sed_escape "$description")
+            theme_escaped=$(sed_escape "$theme")
+
             # Build agent markdown: YAML frontmatter + stub comment
             # (prompt content provided at runtime by persona-agents plugin)
             {
                 echo "---"
-                sed -e "s|{{AGENT_DESCRIPTION}}|${description}|g" \
-                    -e "s|{{THEME}}|${theme}|g" \
+                sed -e "s|{{AGENT_DESCRIPTION}}|${description_escaped}|g" \
+                    -e "s|{{THEME}}|${theme_escaped}|g" \
                     "$frontmatter_template"
                 # The template may lack a trailing newline; guarantee the
                 # closing delimiter starts on its own line.
@@ -425,7 +467,7 @@ if target_available opencode; then
                 echo ""
                 echo "<!-- persona-agents:${theme}-${profession}:${persona_file_path} -->"
             } >"$agent_file"
-            echo "  generated: ${theme}-${profession}.md"
+            report "generated: ${theme}-${profession}.md"
         done
     done
 
@@ -436,20 +478,18 @@ if target_available opencode; then
 
         mcp_example="$REPO_DIR/settings/mcp.json.example"
         if [[ -f "$mcp_example" ]]; then
-            if [[ "$DRY_RUN" == true ]]; then
-                echo "  (dry-run) would merge MCP settings from $mcp_example"
+            # Transform in both modes: a dry run must report the same outcome
+            # the real run prints, and the transform can fail.
+            mcp_tmp=$(mktemp)
+            CLEANUP_FILES+=("$mcp_tmp")
+            # Transform mcpServers format → opencode mcp format
+            # Handle both remote (url-based) and local/stdio (command-based) transports
+            if ! jq '.mcpServers | to_entries | map({key: .key, value: (.value | if .url != null then {type: "remote", url: .url, enabled: true} elif .command != null then {type: "local", command: .command, args: (.args // []), enabled: true} else {type: "unknown", enabled: true} end)}) | from_entries' \
+                "$mcp_example" >"$mcp_tmp"; then
+                echo "  warning: failed to parse mcpServers from $mcp_example, skipping" >&2
+                rm -f "$mcp_tmp"
             else
-                mcp_tmp=$(mktemp)
-                CLEANUP_FILES+=("$mcp_tmp")
-                # Transform mcpServers format → opencode mcp format
-                # Handle both remote (url-based) and local/stdio (command-based) transports
-                if ! jq '.mcpServers | to_entries | map({key: .key, value: (.value | if .url != null then {type: "remote", url: .url, enabled: true} elif .command != null then {type: "local", command: .command, args: (.args // []), enabled: true} else {type: "unknown", enabled: true} end)}) | from_entries' \
-                    "$mcp_example" >"$mcp_tmp"; then
-                    echo "  warning: failed to parse mcpServers from $mcp_example, skipping" >&2
-                    rm -f "$mcp_tmp"
-                else
-                    merge_json_into "$mcp_tmp" "$OPENCODE_CONFIG" "mcp"
-                fi
+                merge_json_into "$mcp_tmp" "$OPENCODE_CONFIG" "mcp" "MCP settings from $mcp_example"
             fi
         else
             echo "  warning: MCP example file not found at $mcp_example" >&2
@@ -569,7 +609,7 @@ if command -v herdr &>/dev/null; then
     # herdr plugin link is an idempotent upsert that re-points stale entries on
     # every run; plugin files refresh only with --force.
     if [[ "$DRY_RUN" == true ]]; then
-        echo "  (dry-run) would run: herdr plugin link \"$HERDR_PLUGIN_DIR\""
+        report "would run: herdr plugin link \"$HERDR_PLUGIN_DIR\""
     else
         herdr plugin link "$HERDR_PLUGIN_DIR" || echo "WARNING: herdr plugin link failed — inspect herdr manually (herdr plugin list)" >&2
     fi

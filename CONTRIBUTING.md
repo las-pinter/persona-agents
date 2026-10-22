@@ -263,7 +263,6 @@ persona-agents/
 │   └── workflows/
 │       └── ci.yml                     # CI: typecheck, tests, jq validation, shellcheck, executable-bit check
 ├── .gitignore                         # Git ignore rules (dist/, node_modules/)
-├── .mdlrc                             # Markdown lint configuration
 ├── README.md
 ├── CONTRIBUTING.md                    # You are here
 └── LICENSE                            # MIT License
