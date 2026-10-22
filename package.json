@@ -36,5 +36,8 @@
   "overrides": {
     "@earendil-works/pi-codemode": "1.1.0"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "engines": {
+    "node": ">=22.6"
+  }
 }

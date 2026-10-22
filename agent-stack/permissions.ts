@@ -162,7 +162,9 @@ function resolvesInsideScriptDir(candidate: string, dirs: string[]): boolean {
  * interpreter look-alike (`/tmp/x/bash`) denies the segment. Interpreter flags
  * are NOT skipped, so `bash -c ...` and `bash -x ...` stay denied. The script
  * token must be a plain path, contain a `/`, and end in `.sh`; `rm script.sh`
- * has first token `rm`, so it never passes.
+ * has first token `rm`, so it never passes. A redirect (`<` or `>`) anywhere
+ * after the script denies the segment: the exception covers running the
+ * script, never a file write or read the redirect adds.
  */
 export function isAllowedSkillScript(segment: string, skillScriptsDirs: string[], cwd: string): boolean {
 	let base = cwd;
@@ -173,10 +175,12 @@ export function isAllowedSkillScript(segment: string, skillScriptsDirs: string[]
 		rest = rest.slice(cd[0].length).trim();
 	}
 	const tokens = rest.split(/\s+/);
-	let token = tokens[0] ?? "";
-	const interpreter = classifyInterpreterToken(token);
+	let scriptIndex = 0;
+	const interpreter = classifyInterpreterToken(tokens[0] ?? "");
 	if (interpreter === "untrusted") return false;
-	if (interpreter === "trusted") token = tokens[1] ?? "";
+	if (interpreter === "trusted") scriptIndex = 1;
+	const token = tokens[scriptIndex] ?? "";
+	if (tokens.slice(scriptIndex + 1).some((arg) => /[<>]/.test(arg))) return false;
 	if (!PLAIN_PATH_RE.test(token)) return false;
 	if (!token.includes("/") || !token.endsWith(".sh")) return false;
 	return resolvesInsideScriptDir(path.resolve(base, token), skillScriptsDirs);

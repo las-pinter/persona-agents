@@ -201,7 +201,7 @@ run() {
     fi
 }
 
-# Print one outcome line for a file, an alias, or a merge.
+# Print one outcome line for a file or a merge.
 # In dry-run mode the "(dry-run)" marker is added to the same message a real
 # run prints, so a dry run and a real run report the same outcome.
 report() {
@@ -251,24 +251,12 @@ copy_if_missing() {
     report "created: $dest"
 }
 
-# Install a shell alias into a rc file, skipping if already present.
-install_alias() {
-    local name="$1" cmd="$2" rc="$3"
-    local line="alias ${name}='${cmd}'"
-    if grep -qF "$line" "$rc" 2>/dev/null; then
-        report "skipped (exists): $name in $rc"
-        return
-    fi
-    if [[ "$DRY_RUN" == true ]]; then
-        report "would add alias $name to $rc"
-        return
-    fi
-    printf '\n%s\n' "$line" >>"$rc"
-    report "installed alias: $name in $rc"
-}
-
 # Merge a JSON file into a destination JSON file at a given top-level key.
+# Only missing entries are added: an entry the user already has under the key
+# wins, so a re-run never overwrites a user customization.
 # Handles trailing commas in the destination (jq is strict about those).
+# A destination jq cannot read (for example one with comments) is left
+# untouched with a warning; a failed merge never stops the install.
 # The optional fourth argument names the source for the user. A temp file
 # hides the real source, so the caller can pass the file the user knows.
 merge_json_into() {
@@ -302,12 +290,13 @@ merge_json_into() {
         cp "$dest_file" "$tmp"
     fi
 
-    # Merge: update the dest_key object with new data (new overwrites old at top level)
+    # Merge: add the new entries under dest_key; an existing entry wins.
     if ! jq --argjson data "$(cat "$src_file")" \
-        ".${dest_key} = ((.${dest_key} // {}) + \$data)" \
-        "$tmp" >"${tmp}.merged"; then
-        echo "Error: jq merge failed for .${dest_key}" >&2
-        return 1
+        ".${dest_key} = (\$data + (.${dest_key} // {}))" \
+        "$tmp" >"${tmp}.merged" 2>/dev/null; then
+        echo "  warning: cannot parse $dest_file (comments or invalid JSON?), left unchanged." >&2
+        echo "  Merge $src_label under .${dest_key} manually." >&2
+        return 0
     fi
     mv "${tmp}.merged" "$dest_file"
     report "merged into $dest_file (.${dest_key})"
@@ -505,97 +494,14 @@ if target_available opencode; then
 fi
 
 # ---------------------------------------------------------------------------
-# Shell aliases (kiro)
-# ---------------------------------------------------------------------------
-
-if target_available kiro; then
-    echo ""
-    echo "Installing kiro-cli aliases ..."
-
-    ALIAS_ENTRIES=(
-        "kiro-goblin:kiro-cli chat --agent goblin-orchestrator"
-        "kiro-wh40k:kiro-cli chat --agent wh40k-orchestrator"
-        "kiro-wh40kOrk:kiro-cli chat --agent wh40kOrk-orchestrator"
-        "kiro-pub:kiro-cli chat --agent pub-orchestrator"
-        "kiro-caveman:kiro-cli chat --agent caveman-orchestrator"
-        "kiro-cyberpunk:kiro-cli chat --agent cyberpunk-orchestrator"
-        "kiro-catcrew:kiro-cli chat --agent catcrew-orchestrator"
-        "kiro-fantasy:kiro-cli chat --agent fantasy-orchestrator"
-    )
-
-    install_kiro_aliases() {
-        local rc="$1"
-        for entry in "${ALIAS_ENTRIES[@]}"; do
-            local name="${entry%%:*}"
-            local cmd="${entry#*:}"
-            install_alias "$name" "$cmd" "$rc"
-        done
-    }
-
-    if [[ -f "$HOME/.zshrc" ]]; then
-        install_kiro_aliases "$HOME/.zshrc"
-    fi
-
-    if [[ -f "$HOME/.bashrc" ]]; then
-        if [[ "$DRY_RUN" != true ]]; then
-            touch "$HOME/.bash_aliases"
-        fi
-        install_kiro_aliases "$HOME/.bash_aliases"
-        if [[ "$DRY_RUN" != true ]] && ! grep -qs "bash_aliases" "$HOME/.bashrc"; then
-            echo "  warning: ~/.bashrc may not source ~/.bash_aliases — check your shell config" >&2
-        fi
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# Shell aliases (opencode)
-# ---------------------------------------------------------------------------
-
-if target_available opencode; then
-    echo ""
-    echo "Installing opencode aliases ..."
-
-    # top-level opencode rejects --agent in V2; persona chosen in-TUI
-    OPENCODE_ALIAS_ENTRIES=(
-        "opencode-goblin:opencode"
-        "opencode-wh40k:opencode"
-        "opencode-wh40kOrk:opencode"
-        "opencode-pub:opencode"
-        "opencode-caveman:opencode"
-        "opencode-cyberpunk:opencode"
-        "opencode-catcrew:opencode"
-        "opencode-fantasy:opencode"
-    )
-
-    install_opencode_aliases() {
-        local rc="$1"
-        for entry in "${OPENCODE_ALIAS_ENTRIES[@]}"; do
-            local name="${entry%%:*}"
-            local cmd="${entry#*:}"
-            install_alias "$name" "$cmd" "$rc"
-        done
-    }
-
-    if [[ -f "$HOME/.zshrc" ]]; then
-        install_opencode_aliases "$HOME/.zshrc"
-    fi
-
-    if [[ -f "$HOME/.bashrc" ]]; then
-        if [[ "$DRY_RUN" != true ]]; then
-            touch "$HOME/.bash_aliases"
-        fi
-        install_opencode_aliases "$HOME/.bash_aliases"
-        if [[ "$DRY_RUN" != true ]] && ! grep -qs "bash_aliases" "$HOME/.bashrc"; then
-            echo "  warning: ~/.bashrc may not source ~/.bash_aliases — check your shell config" >&2
-        fi
-    fi
-fi
-
-# ---------------------------------------------------------------------------
 # herdr plugin (overseer-herald)
 # ---------------------------------------------------------------------------
 
-if command -v herdr &>/dev/null; then
+# The herald serves the overseer on every platform, so it belongs to no single
+# --target. A run narrowed to one target, or to another profession, skips it.
+if [[ "$TARGET" != "all" || (-n "$PROFESSION" && "$PROFESSION" != "overseer") ]]; then
+    :
+elif command -v herdr &>/dev/null; then
     echo ""
     echo "Installing overseer-herald herdr plugin ..."
 

@@ -7,12 +7,16 @@
  * probes, and the herdr stub replaces `herdr plugin link`, so the real herdr
  * plugin registry is never touched.
  *
- * The four covered defects:
+ * The covered defects:
  *   1. a dry run must not create a file or a directory;
  *   2. a dry run must report the outcome the next real run produces;
  *   3. an option without a value must print a friendly error, not a raw
  *      shell "unbound variable" failure;
- *   4. the trailing-comma repair must not touch a comma inside a string.
+ *   4. the trailing-comma repair must not touch a comma inside a string;
+ *   5. the MCP merge must never overwrite an entry the user already has;
+ *   6. a config jq cannot read must not stop the install halfway;
+ *   7. the installer must not touch the shell rc files;
+ *   8. a run narrowed by --target or --profession must skip the herdr plugin.
  *
  * Run: npm test
  */
@@ -54,9 +58,8 @@ function makeHome(): string {
 
 /**
  * A HOME that already holds an OpenCode config and both shell rc files.
- * The config makes the installer take the merge path, and the rc files make
- * it take the alias path. `~/.bash_aliases` is absent, so an alias append
- * shows up as a new file.
+ * The config makes the installer take the merge path. The rc files must stay
+ * untouched: the installer adds no shell aliases.
  */
 function populatedHome(): string {
 	const home = makeHome();
@@ -115,7 +118,7 @@ const FOCUSED = ["--target", "opencode", "--theme", "goblin", "--profession", "o
 interface Outcome {
 	/** What happens to the subject: it is written, left alone, or merged. */
 	kind: "write" | "skip" | "merge";
-	/** The file, alias, or merge target the outcome applies to. */
+	/** The file or merge target the outcome applies to. */
 	subject: string;
 }
 
@@ -138,12 +141,6 @@ function parseOutcome(line: string): Outcome | null {
 	if ((match = /^skipped \(customize locally\): (.+)$/.exec(text))) return { kind: "skip", subject: match[1] };
 	if ((match = /^generated: (.+)$/.exec(text))) return { kind: "write", subject: match[1] };
 	if ((match = /^would generate: (.+)$/.exec(text))) return { kind: "write", subject: match[1] };
-	if ((match = /^installed alias: (\S+) in (.+)$/.exec(text))) {
-		return { kind: "write", subject: `alias ${match[1]} in ${match[2]}` };
-	}
-	if ((match = /^would add alias (\S+) to (.+)$/.exec(text))) {
-		return { kind: "write", subject: `alias ${match[1]} in ${match[2]}` };
-	}
 	if ((match = /^merged into (.+) \(\.(.+)\)$/.exec(text))) {
 		return { kind: "merge", subject: `${match[1]}.${match[2]}` };
 	}
@@ -182,8 +179,7 @@ describe("install.sh dry run", () => {
 		const home = populatedHome();
 
 		// The dry run comes first, while every write path is still unexercised:
-		// a created file, a touched alias file, an appended alias, or a rewritten
-		// config would each change this snapshot.
+		// a created file or a rewritten config would each change this snapshot.
 		const before = listTree(home);
 		const dry = runInstaller(home, [...FOCUSED, "--dry-run"]);
 		assert.equal(dry.status, 0, dry.stderr);
@@ -291,4 +287,86 @@ describe("install.sh config merge", () => {
 			assert.ok(mcp[key], `the merged mcp entry ${key} must be present`);
 		}
 	});
+});
+
+describe("install.sh MCP merge keeps user entries", () => {
+	test("an MCP entry the user already has wins over the example", () => {
+		const home = makeHome();
+		const configDir = path.join(home, ".config", "opencode");
+		fs.mkdirSync(configDir, { recursive: true });
+		const config = path.join(configDir, "opencode.json");
+		const mine = {
+			type: "remote",
+			url: "https://mcp.exa.ai/mcp",
+			headers: { "x-api-key": "SECRET" },
+			enabled: false,
+		};
+		fs.writeFileSync(config, JSON.stringify({ mcp: { exa: mine } }));
+
+		const result = runInstaller(home, FOCUSED);
+		assert.equal(result.status, 0, result.stderr);
+
+		const mcp = (JSON.parse(fs.readFileSync(config, "utf8")) as { mcp: Record<string, unknown> }).mcp;
+		assert.deepEqual(mcp.exa, mine, "the user's exa entry must survive unchanged");
+		assert.ok(mcp.context7, "a missing example entry must still be added");
+	});
+
+	test("a config with comments is left unchanged and the install completes", () => {
+		const home = makeHome();
+		const configDir = path.join(home, ".config", "opencode");
+		fs.mkdirSync(configDir, { recursive: true });
+		const config = path.join(configDir, "opencode.json");
+		const original = '{\n  // my model\n  "model": "x",\n  "mcp": {}\n}\n';
+		fs.writeFileSync(config, original);
+
+		const result = runInstaller(home, FOCUSED);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stderr, /cannot parse .*opencode\.json/, "the user must be told the merge was skipped");
+		assert.equal(fs.readFileSync(config, "utf8"), original, "an unreadable config must not be rewritten");
+		assert.ok(
+			fs.existsSync(path.join(configDir, "plugins", "persona-agents.js")),
+			"the plugins after the merge must still install",
+		);
+		assert.match(result.stdout, /Done!/);
+	});
+});
+
+describe("install.sh leaves the shell alone", () => {
+	test("a real run does not touch the shell rc files", () => {
+		const home = populatedHome();
+		const result = runInstaller(home, ["--theme", "goblin", "--profession", "orchestrator"]);
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(fs.readFileSync(path.join(home, ".bashrc"), "utf8"), "# test rc\n");
+		assert.equal(fs.readFileSync(path.join(home, ".zshrc"), "utf8"), "# test zshrc\n");
+		assert.ok(!fs.existsSync(path.join(home, ".bash_aliases")), "no ~/.bash_aliases may be created");
+	});
+});
+
+describe("install.sh herdr plugin scope", () => {
+	const herdrLink = /herdr plugin link/;
+
+	test("a full install links the herdr plugin", () => {
+		const result = runInstaller(makeHome(), ["--dry-run"]);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, herdrLink);
+	});
+
+	test("an overseer-only install links the herdr plugin", () => {
+		const result = runInstaller(makeHome(), ["--dry-run", "--profession", "overseer"]);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, herdrLink);
+	});
+
+	for (const args of [
+		["--target", "opencode"],
+		["--target", "kiro"],
+		["--profession", "reviewer"],
+	]) {
+		test(`${args.join(" ")} skips the herdr plugin`, () => {
+			const result = runInstaller(makeHome(), ["--dry-run", ...args]);
+			assert.equal(result.status, 0, result.stderr);
+			assert.doesNotMatch(result.stdout, herdrLink);
+			assert.doesNotMatch(result.stderr, /herdr not found/, "a skipped plugin must not warn about herdr");
+		});
+	}
 });

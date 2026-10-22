@@ -98,6 +98,8 @@ describe("skill scripts: structural segment check", () => {
 		`${fixtureList}`,
 		`cd ${tmpRoot}/skills/script-fixture && bash scripts/fixture-list.sh`,
 		`/bin/bash ${fixtureList}`,
+		// Plain arguments after the script stay allowed.
+		`${fixtureReport} x --status done`,
 	];
 
 	for (const command of allowed) {
@@ -144,6 +146,12 @@ describe("skill scripts: structural segment check", () => {
 		`bash '${fixtureList}'`,
 		// A symlink inside the real scripts dir that points outside.
 		`bash ${symlinkScript}`,
+		// A redirect writes a file the script never names; the exception must not
+		// carry it, even for an agent without a redirect deny rule.
+		`${fixtureList} > /home/user/.bashrc`,
+		`bash ${fixtureList} >> /home/user/.bashrc`,
+		`${fixtureList} 2>/tmp/out`,
+		`${fixtureList} < /etc/shadow`,
 	];
 
 	for (const command of adversarial) {

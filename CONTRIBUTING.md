@@ -370,9 +370,9 @@ AT LOAD TIME (extension factory / session start):
 
 5. (Optional) Preview generated output without touching your real config.
    `install.sh` writes generated agent files to `~/.kiro/` and
-   `~/.config/opencode/`. It also appends shell aliases to `~/.zshrc` and
-   `~/.bash_aliases`, and it copies the herdr plugin to
-   `~/.local/share/herdr/plugins/overseer-herald`. `--dry-run` writes nothing:
+   `~/.config/opencode/`. A full install (`--target all`) also copies the herdr
+   plugin to `~/.local/share/herdr/plugins/overseer-herald`. `--dry-run` writes
+   nothing:
 
    ```bash
    ./install.sh --dry-run --target all
