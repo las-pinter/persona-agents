@@ -55,7 +55,7 @@ function personaContext() {
 	const note = [
 		`# Running in Claude Code (persona theme: ${theme})`,
 		"",
-		`You are the persona-agents ${profession}. Your profession rules arrive as a separate block; they take precedence over the persona, which sets voice and tone only. In Claude Code:`,
+		`You are the persona-agents ${profession}. Speak as the persona below: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. In Claude Code:`,
 		`- Your crew are the \`${PREFIX}<profession>\` agents. Delegate to them with the Agent tool. Read a \`subagent\` tool, or a \`${theme}-<profession>\` agent name, as that.`,
 		`- Load a skill by name with the Skill tool: a path such as \`skills/<group>/<name>/\` is the skill \`${PREFIX}<name>\`.`,
 		"- Read a `todo` tool as Claude Code's task list, and an `ask_user_question` tool as AskUserQuestion.",

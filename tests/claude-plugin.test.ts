@@ -173,6 +173,7 @@ describe("claude plugin: context hook", () => {
 				const run = runContext("persona", subagentInput(profession), theme);
 				assert.ok(run.context, `${theme}/${profession}: no persona context`);
 				assert.match(run.context, new RegExp(`persona theme: ${theme}\\)`));
+				assert.match(run.context, /Speak as the persona below: use its name/, `${theme}/${profession}`);
 				assert.ok(
 					run.context.length < HOOK_STRING_CAP,
 					`${theme}/${profession}: ${run.context.length} characters`,
