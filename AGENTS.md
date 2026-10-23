@@ -36,7 +36,7 @@ No other file carries the package version number.
 
 Rules:
 
-- No `README.md` in this repository may contain a version number. A release
+- No `README.md` in this repository may contain the package version number. A release
   must never need a README edit.
 
 ## Commit rule
