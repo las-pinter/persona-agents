@@ -617,8 +617,13 @@ describe("orchestrator: mutation forms are never a silent allow", () => {
 	});
 
 	test("opencode orchestrator: mutation forms are not allow", () => {
+		// A plain merge or rebase allows the opencode orchestrator too (owner
+		// choice); git pull still asks. kiro keeps them off the allow list.
+		const opencodePlainHistory = new Set(["git merge origin/main", "git rebase main"]);
 		for (const command of ORCH_GIT_MUTATIONS_NOT_ALLOW) {
-			assert.notEqual(opencodeVerdict("orchestrator", command), "allow", command);
+			const kind = opencodeVerdict("orchestrator", command);
+			if (opencodePlainHistory.has(command)) assert.equal(kind, "allow", command);
+			else assert.notEqual(kind, "allow", command);
 		}
 	});
 

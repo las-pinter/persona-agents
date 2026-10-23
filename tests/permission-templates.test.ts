@@ -244,8 +244,12 @@ describe("pi: env-prefix bypass and branch gate", () => {
 
 describe("opencode: env-prefix bypass and branch gate", () => {
 	test("orchestrator: writes ask", () => {
+		// A plain add or commit allows the opencode orchestrator (owner choice).
+		// git pull, the env-prefixed forms, push, and gh pr still ask.
+		const plainHistory = new Set(["git add .", "git commit -m x"]);
 		for (const command of [...ENV_PREFIXED, ...WRITE_BARE]) {
-			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+			const expected = plainHistory.has(command) ? "allow" : "ask";
+			assert.equal(opencodeVerdict("orchestrator", command), expected, command);
 		}
 	});
 

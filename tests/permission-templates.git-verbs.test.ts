@@ -340,7 +340,7 @@ describe("opencode/kiro: accepted over-deny for read-only tag long options", () 
 
 // ---------------------------------------------------------------------------
 // Git merge doctrine: a plain merge allows the pi orchestrator (owner choice);
-// a merge asks the opencode orchestrator and stays unlisted (ask) on kiro. Every non-orchestrator must not
+// a plain merge also allows the opencode orchestrator and stays unlisted (ask) on kiro. Every non-orchestrator must not
 // merge: pi blocks by deny-by-default mode; opencode and kiro carry explicit
 // deny rules.
 // ---------------------------------------------------------------------------
@@ -424,8 +424,13 @@ describe("git merge permission doctrine", () => {
 		}
 	});
 
-	test("opencode orchestrator: git merge asks", () => {
-		for (const command of MERGE_COMMANDS) assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+	test("opencode orchestrator: plain git merge allows; -C and a chain ask", () => {
+		// The test model matches the raw command string, so the `cd X &&` chain
+		// guard asks for the whole chain. A `git -C` form asks (owner decision).
+		for (const command of MERGE_COMMANDS) {
+			const expected = command.startsWith("git merge") ? "allow" : "ask";
+			assert.equal(opencodeVerdict("orchestrator", command), expected, command);
+		}
 	});
 
 	test("opencode non-orchestrators: git merge denies", () => {

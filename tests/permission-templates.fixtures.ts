@@ -129,7 +129,11 @@ export function loadOpenCodeRules(agent: string): OpenCodeRule[] {
 	return rules;
 }
 
-/** opencode uses findLast: the last matching rule wins; no match is `ask`. */
+/**
+ * opencode uses findLast: the last matching rule wins; no match is `ask`.
+ * This model matches the whole raw string. The real binary (v2.1.2) matches
+ * each tree-sitter command node on its own; the raw model is the stricter one.
+ */
 export function opencodeVerdict(agent: string, command: string): string {
 	const rules = loadOpenCodeRules(agent);
 	for (let idx = rules.length - 1; idx >= 0; idx--) {

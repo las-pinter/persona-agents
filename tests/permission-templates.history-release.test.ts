@@ -23,8 +23,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // Git rebase doctrine: a plain rebase allows the pi orchestrator (owner
-// choice); a strategy or a wrapped form asks it. The opencode and kiro
-// orchestrators ask by their shell defaults. Every non-orchestrator denies,
+// choice); a strategy or a wrapped form asks it. A plain rebase also allows
+// the opencode orchestrator; the kiro orchestrator asks by its shell default.
+// Every non-orchestrator denies,
 // matching the `git merge` doctrine.
 // ---------------------------------------------------------------------------
 
@@ -158,9 +159,10 @@ describe("git rebase permission doctrine", () => {
 		}
 	});
 
-	test("opencode orchestrator: git rebase asks", () => {
+	test("opencode orchestrator: plain git rebase allows; -C and a chain ask", () => {
 		for (const command of REBASE_GATED_COMMANDS) {
-			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+			const expected = command.startsWith("git rebase") ? "allow" : "ask";
+			assert.equal(opencodeVerdict("orchestrator", command), expected, command);
 		}
 	});
 

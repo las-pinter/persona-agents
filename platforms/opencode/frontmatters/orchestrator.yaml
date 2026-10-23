@@ -702,11 +702,14 @@ permissions:
   - action: shell
     resource: "*--filters*"
     effect: ask
-  # Chain guards. opencode matches the raw command string and the last match
-  # wins, so a trailing-`*` read allow covers the whole chain (for example
-  # `git grep x && git rm -rf y`). Every guard sits after the read allows and
+  # Chain guards. opencode (v2.1.2) parses the command with tree-sitter and
+  # matches each command node on its own; the node text keeps env assignments
+  # and redirects, and a command inside `&&`, `;`, `|`, or `$(...)` is a
+  # separate resource. The last match wins. These guards are defense in depth
+  # for a node text that still holds a separator or an expansion (and for an
+  # older raw-string matcher). Every guard sits after the read allows and
   # before the explicit denies, so a plain read with no separator still allows,
-  # any chain falls to ask, and a chained tag delete still denies at the end.
+  # and a tag delete still denies at the end.
   - action: shell
     resource: "*;*"
     effect: ask
@@ -1145,6 +1148,137 @@ permissions:
     effect: ask
   - action: shell
     resource: "*git --paginate commit*"
+    effect: ask
+  # Plain history commands allow for the orchestrator: git add, commit,
+  # merge, and rebase. The block sits after the broad `*git add*`/
+  # `*git commit*` asks above (last match wins). A trailing ` *` also matches
+  # the bare verb. A prefixed form (`env git ...`, `X=1 git ...`, `bash -c`)
+  # never starts with `git `, so it matches no allow here.
+  # Not allowed (owner decision): `git -C <dir> <verb>` (a quoted or escaped
+  # space in the directory can hide a second verb), `git pull` and `git tag`
+  # (a planted file named `--upload-pack=<cmd>` or `-d` turns a bare `*` into
+  # code execution or a tag delete). They ask.
+  # Accepted risk: opencode reads `*` and `?` as wildcards, so no rule can
+  # match a literal `*` or `?`. A bare glob on add, commit, merge, or rebase
+  # allows, and bash can expand it into an option word.
+  - action: shell
+    resource: "git add *"
+    effect: allow
+  - action: shell
+    resource: "git commit *"
+    effect: allow
+  - action: shell
+    resource: "git merge *"
+    effect: allow
+  - action: shell
+    resource: "git rebase *"
+    effect: allow
+  # Exceptions. Each ask sits after the allows so it wins. A `*` matches any
+  # text, spaces too, so the asks are substring checks on the command text.
+  # Over-asking is accepted (a message or a path can hold the text).
+  #
+  # commit --amend has no short form. The literal `--am` catches each long
+  # abbreviation. A quote or a backslash (read as `/`) can split the option
+  # word only right after a `-` or after `--a`, so those pairs also ask.
+  - action: shell
+    resource: "*git*commit*--am*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit* --a"
+    effect: ask
+  - action: shell
+    resource: "*git*commit* --a *"
+    effect: ask
+  - action: shell
+    resource: "*git*commit* --a=*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit*--a'*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit*--a\"*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit*--a/*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit*-'*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit*-\"*"
+    effect: ask
+  - action: shell
+    resource: "*git*commit*-/*"
+    effect: ask
+  # A transport helper URL (`ext::sh -c ...`). A quote or a backslash right
+  # after the first `:` can hide the `::`.
+  - action: shell
+    resource: "*git*merge*::*"
+    effect: ask
+  - action: shell
+    resource: "*git*merge*:'*"
+    effect: ask
+  - action: shell
+    resource: "*git*merge*:\"*"
+    effect: ask
+  - action: shell
+    resource: "*git*merge*:/:*"
+    effect: ask
+  # A merge strategy (`git-merge-<name>` from PATH). A short bundle can be any
+  # length, so any `-` followed later by `s` asks.
+  - action: shell
+    resource: "*git*merge*-*s*"
+    effect: ask
+  - action: shell
+    resource: "*git*rebase*-*s*"
+    effect: ask
+  # Brace, bracket, and extglob expansion can add an option word.
+  - action: shell
+    resource: "git *{*"
+    effect: ask
+  - action: shell
+    resource: "git *[*"
+    effect: ask
+  - action: shell
+    resource: "git *@(*"
+    effect: ask
+  - action: shell
+    resource: "git *+(*"
+    effect: ask
+  - action: shell
+    resource: "git *!(*"
+    effect: ask
+  # Chain, redirect, and expansion guards for the allows above. They are
+  # scoped to `git ` so they do not turn an earlier deny into an ask.
+  - action: shell
+    resource: "git *;*"
+    effect: ask
+  - action: shell
+    resource: "git *&*"
+    effect: ask
+  - action: shell
+    resource: "git *|*"
+    effect: ask
+  - action: shell
+    resource: "git *>*"
+    effect: ask
+  - action: shell
+    resource: "git *`*"
+    effect: ask
+  - action: shell
+    resource: "git *$*"
+    effect: ask
+  - action: shell
+    resource: "git *\n*"
+    effect: ask
+  - action: shell
+    resource: "git *\t*"
+    effect: ask
+  - action: shell
+    resource: "git *<(*"
+    effect: ask
+  - action: shell
+    resource: "git *=(*"
     effect: ask
   - action: shell
     resource: "git tag -d*"
