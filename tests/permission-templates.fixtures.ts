@@ -143,6 +143,15 @@ export function opencodeVerdict(agent: string, command: string): string {
 	return "ask";
 }
 
+/**
+ * True when a command string holds a raw chain operator (&&, ||, ;, |, &, or a
+ * newline). opencode splits a chain into command nodes first, so a test that
+ * models the real binary must not feed it a raw chain.
+ */
+export function isRawChain(command: string): boolean {
+	return /&&|\|\||[;|&\n]/.test(command);
+}
+
 /** opencode last-match verdict for any action/resource pair (e.g. edit paths). */
 export function opencodeResourceVerdict(agent: string, action: string, resource: string): string {
 	const rules = loadOpenCodeRules(agent);

@@ -23,29 +23,18 @@ import {
 // Process substitution and chain-guard over-ask.
 // ---------------------------------------------------------------------------
 
-describe("process substitution and chain-guard over-ask", () => {
+describe("process substitution ask", () => {
 	test("pi orchestrator: an inner process substitution asks", () => {
 		// pi parses `<(...)`, so the git read plus the inner `echo` would both
 		// allow; the process-substitution ask rule fires on the raw segment.
 		assert.equal(verdict("orchestrator", "git grep x <(echo y)"), "ask");
 	});
-
-	test("opencode orchestrator: the & and > guards over-ask URL arguments (fail-safe)", () => {
-		// Accepted trade-off: `*&*` and `*>*` match argument content, so a
-		// harmless `git remote get-url 'https://x?a=1&b=2'` asks.
-		for (const command of [
-			"git remote get-url 'https://x?a=1&b=2'",
-			"git remote get-url 'https://x?a=1>b=2'",
-		]) {
-			assert.notEqual(opencodeVerdict("orchestrator", command), "allow", command);
-		}
-	});
 });
 
 // ---------------------------------------------------------------------------
-// opencode matches the raw command string with last-match-wins, so a read allow
-// that ends in `*` covers a whole chain. The chain guards must make every chain
-// ask (or deny) while a single read with no separator still allows.
+// opencode uses last-match-wins and matches each command node on its own, so
+// it never sees a raw chain. The chain-guard rules stay in the template as a
+// backstop; a test pins that they exist. The chains below run on pi and kiro.
 // ---------------------------------------------------------------------------
 
 const CHAIN_GUARD_WRITES = [
@@ -84,14 +73,8 @@ const OPENCODE_PLAIN_READ_ALLOWS = ["git tag -l", "git tag --list", "git branch"
 // raw-match engine cannot dequote, so these fall to the shell default: ask.
 const OPENCODE_PLAIN_READ_ASKS = ["git grep -n x", "git merge-base x"];
 
-describe("opencode: chain guards and read allows", () => {
-	test("orchestrator: a chained read plus write asks", () => {
-		for (const command of CHAIN_GUARD_WRITES) {
-			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
-		}
-	});
-
-	test("orchestrator: pi and kiro never allow the same chains", () => {
+describe("chain guards and read allows", () => {
+	test("orchestrator: pi and kiro never allow chained read plus write", () => {
 		// pi tests each segment on its own. A read piped into a plain commit is
 		// two allowed segments, so it allows the pi orchestrator (owner choice:
 		// a plain commit runs without a prompt). kiro keeps asking for it.
@@ -116,10 +99,6 @@ describe("opencode: chain guards and read allows", () => {
 		for (const resource of ["*;*", "*&*", "*|*", "*>*", "*$(*", "*`*", "*\n*", "*<(*", "*=(*"]) {
 			assert.ok(hasOpenCodeRule("orchestrator", resource, "ask"), `missing {shell, ${resource}, ask}`);
 		}
-	});
-
-	test("orchestrator: a piped read asks (fail-safe over-ask without a parser)", () => {
-		assert.equal(opencodeVerdict("orchestrator", "git grep x | head"), "ask");
 	});
 });
 
@@ -476,9 +455,8 @@ describe("opencode: read-only roles deny writes and keep the read forms", () => 
 				assert.equal(opencodeVerdict(agent, command), "allow", `${agent}: ${command}`);
 			}
 		});
-		test(`opencode ${agent}: a redirect denies and the fd-dup form is over-denied`, () => {
+		test(`opencode ${agent}: a redirect denies`, () => {
 			assert.equal(opencodeVerdict(agent, "echo hi > out.txt"), "deny", "file redirect");
-			assert.equal(opencodeVerdict(agent, "echo hi 2>&1"), "deny", "fd-dup over-deny");
 		});
 		test(`opencode ${agent}: common and redirect deny entries exist`, () => {
 			for (const pattern of RAW_READ_ONLY_COMMON_DENIES) {

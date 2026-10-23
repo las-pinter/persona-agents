@@ -17,6 +17,7 @@ import {
 	kiroHasShellTool,
 	kiroVerdict,
 	loadAgentRules,
+	isRawChain,
 	opencodeVerdict,
 	piHasBashTool,
 	ruleSetMatches,
@@ -169,6 +170,9 @@ const FILE_MIGRATION_COMMANDS = [
 	"env cp src/a dest/b",
 ];
 
+// opencode matches each command node on its own, so it never sees a raw chain.
+const OPENCODE_FILE_MIGRATION_COMMANDS = FILE_MIGRATION_COMMANDS.filter((command) => !isRawChain(command));
+
 const FILE_MIGRATION_TARGETS = ["orchestrator", "implementer"];
 
 describe("file-migration permission doctrine (cp/mv/rsync)", () => {
@@ -201,7 +205,7 @@ describe("file-migration permission doctrine (cp/mv/rsync)", () => {
 
 	test("opencode orchestrator and implementers: cp/mv/rsync ask", () => {
 		for (const agent of FILE_MIGRATION_TARGETS) {
-			for (const command of FILE_MIGRATION_COMMANDS) {
+			for (const command of OPENCODE_FILE_MIGRATION_COMMANDS) {
 				assert.equal(opencodeVerdict(agent, command), "ask", `${agent}: ${command}`);
 			}
 		}
@@ -212,7 +216,7 @@ describe("file-migration permission doctrine (cp/mv/rsync)", () => {
 			for (const resource of MIGRATION_RESOURCES) {
 				assert.ok(hasOpenCodeRule(agent, resource, "deny"), `${agent}: missing {shell, ${resource}, deny}`);
 			}
-			for (const command of FILE_MIGRATION_COMMANDS) {
+			for (const command of OPENCODE_FILE_MIGRATION_COMMANDS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}

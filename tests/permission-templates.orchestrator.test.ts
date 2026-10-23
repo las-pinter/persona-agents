@@ -11,6 +11,7 @@ import {
 	hasOpenCodeRule,
 	kiroVerdict,
 	loadKiroConfig,
+	isRawChain,
 	opencodeVerdict,
 	readVerdict,
 	verdict,
@@ -620,7 +621,8 @@ describe("orchestrator: mutation forms are never a silent allow", () => {
 		// A plain merge or rebase allows the opencode orchestrator too (owner
 		// choice); git pull still asks. kiro keeps them off the allow list.
 		const opencodePlainHistory = new Set(["git merge origin/main", "git rebase main"]);
-		for (const command of ORCH_GIT_MUTATIONS_NOT_ALLOW) {
+		// opencode matches each command node on its own, so raw chains are skipped.
+		for (const command of ORCH_GIT_MUTATIONS_NOT_ALLOW.filter((entry) => !isRawChain(entry))) {
 			const kind = opencodeVerdict("orchestrator", command);
 			if (opencodePlainHistory.has(command)) assert.equal(kind, "allow", command);
 			else assert.notEqual(kind, "allow", command);

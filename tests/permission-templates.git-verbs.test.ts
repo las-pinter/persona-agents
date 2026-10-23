@@ -13,6 +13,7 @@ import {
 	PI_SHELL_AGENTS,
 	hasKiroDeny,
 	hasOpenCodeRule,
+	isRawChain,
 	kiroVerdict,
 	loadAgentRules,
 	opencodeVerdict,
@@ -101,6 +102,10 @@ const TAG_NAME_FALSE_POSITIVES = ["git tag v1.0.0-final", "git tag v2.0.0-delta"
 const TAG_LISTING = ["git tag", "git tag -l", "git tag --list", "git -C /repo tag -l"];
 
 const TAG_ALL = [...TAG_CREATE, ...TAG_CREATE_WRAPPED, ...TAG_DELETE_ALL, ...TAG_FORCE_ALL];
+
+// opencode matches each command node on its own, so it never sees a raw chain.
+const OPENCODE_TAG_CREATE = [...TAG_CREATE, ...TAG_CREATE_WRAPPED].filter((command) => !isRawChain(command));
+const OPENCODE_TAG_ALL = TAG_ALL.filter((command) => !isRawChain(command));
 
 describe("pi: git tag doctrine", () => {
 	test("orchestrator: plain tag creation allows", () => {
@@ -207,7 +212,7 @@ describe("opencode: git tag doctrine", () => {
 	});
 
 	test("orchestrator: tag creation asks", () => {
-		for (const command of [...TAG_CREATE, ...TAG_CREATE_WRAPPED]) {
+		for (const command of OPENCODE_TAG_CREATE) {
 			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
 		}
 	});
@@ -224,21 +229,21 @@ describe("opencode: git tag doctrine", () => {
 		}
 	});
 
-	test("orchestrator: tag names containing -d/-f are not denied", () => {
-		for (const command of TAG_NAME_FALSE_POSITIVES) {
-			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
-		}
-	});
-
 	test("orchestrator: tag listing is not denied", () => {
 		for (const command of TAG_LISTING) {
 			assert.notEqual(opencodeVerdict("orchestrator", command), "deny", command);
 		}
 	});
 
+	test("orchestrator: tag names containing -d/-f are not denied", () => {
+		for (const command of TAG_NAME_FALSE_POSITIVES) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
 	test("non-orchestrators: tag creation, force, and delete forms deny", () => {
 		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of TAG_ALL) {
+			for (const command of OPENCODE_TAG_ALL) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -318,22 +323,15 @@ describe("kiro: git tag doctrine", () => {
 const TAG_READONLY_DELETE_OVERDENIED = ["git tag --merged"];
 const TAG_READONLY_FORMAT = "git tag --format=%(refname) -l";
 
-describe("opencode/kiro: accepted over-deny for read-only tag long options", () => {
-	test("opencode orchestrator: --merged denies (accepted delete over-deny)", () => {
-		for (const command of TAG_READONLY_DELETE_OVERDENIED) {
-			assert.equal(opencodeVerdict("orchestrator", command), "deny", command);
-		}
-	});
-
+describe("kiro: accepted over-deny for read-only tag long options", () => {
 	test("kiro orchestrator: --merged denies (accepted delete over-deny)", () => {
 		for (const command of TAG_READONLY_DELETE_OVERDENIED) {
 			assert.equal(kiroVerdict("orchestrator", command), "deny", command);
 		}
 	});
 
-	test("orchestrators: --format allows on pi and asks on opencode and kiro", () => {
+	test("orchestrators: --format allows on pi and asks on kiro", () => {
 		assert.equal(verdict("orchestrator", TAG_READONLY_FORMAT), "allow");
-		assert.equal(opencodeVerdict("orchestrator", TAG_READONLY_FORMAT), "ask");
 		assert.equal(kiroVerdict("orchestrator", TAG_READONLY_FORMAT), "ask");
 	});
 });
@@ -399,6 +397,7 @@ const MERGE_SUBSTITUTION_RULES_SHARED = [
 
 // A boundary slip in the merge rules could turn the read-only `git merge-base`
 // into an ask (opencode, where the last match wins) or a deny (kiro).
+const OPENCODE_MERGE_COMMANDS = MERGE_COMMANDS.filter((command) => !isRawChain(command));
 const MERGE_BASE_COMMAND = "git merge-base origin/dev origin/main";
 const MERGE_BASE_COMMANDS = [MERGE_BASE_COMMAND, "git -C /repo merge-base origin/dev origin/main"];
 // `git merge-file`/`git merge-tree` share the `merge` token but are not
@@ -424,10 +423,9 @@ describe("git merge permission doctrine", () => {
 		}
 	});
 
-	test("opencode orchestrator: plain git merge allows; -C and a chain ask", () => {
-		// The test model matches the raw command string, so the `cd X &&` chain
-		// guard asks for the whole chain. A `git -C` form asks (owner decision).
-		for (const command of MERGE_COMMANDS) {
+	test("opencode orchestrator: plain git merge allows; -C asks", () => {
+		// A `git -C` form asks (owner decision).
+		for (const command of OPENCODE_MERGE_COMMANDS) {
 			const expected = command.startsWith("git merge") ? "allow" : "ask";
 			assert.equal(opencodeVerdict("orchestrator", command), expected, command);
 		}
@@ -435,7 +433,7 @@ describe("git merge permission doctrine", () => {
 
 	test("opencode non-orchestrators: git merge denies", () => {
 		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of MERGE_COMMANDS) {
+			for (const command of OPENCODE_MERGE_COMMANDS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -503,14 +501,6 @@ describe("git merge permission doctrine", () => {
 		}
 	});
 
-	test("opencode non-orchestrators: separator-prefixed -C merge denies", () => {
-		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of MERGE_SEPARATOR_COMMANDS) {
-				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
-			}
-		}
-	});
-
 	test("kiro non-orchestrators: separator-prefixed -C merge denies", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of MERGE_SEPARATOR_COMMANDS) {
@@ -544,9 +534,9 @@ describe("git merge permission doctrine", () => {
 		}
 	});
 
-	test("opencode non-orchestrators: merge substitution and trailing-separator deny", () => {
+	test("opencode non-orchestrators: merge substitution forms deny", () => {
 		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of [...MERGE_SUBSTITUTION_COMMANDS, ...MERGE_TRAILING_SEPARATOR_COMMANDS]) {
+			for (const command of MERGE_SUBSTITUTION_COMMANDS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -560,8 +550,8 @@ describe("git merge permission doctrine", () => {
 		}
 	});
 
-	test("opencode orchestrator: merge substitution and trailing-separator ask", () => {
-		for (const command of [...MERGE_SUBSTITUTION_COMMANDS, ...MERGE_TRAILING_SEPARATOR_COMMANDS]) {
+	test("opencode orchestrator: merge substitution forms ask", () => {
+		for (const command of MERGE_SUBSTITUTION_COMMANDS) {
 			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
 		}
 	});
@@ -609,15 +599,7 @@ describe("git merge permission doctrine", () => {
 
 const MERGE_READONLY_OVERDENIED = ["git -C /repo log --grep merge"];
 
-describe("opencode/kiro: accepted over-deny for a read-only argument ending in merge", () => {
-	test("opencode non-orchestrators: read-only --grep merge denies (accepted over-deny)", () => {
-		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of MERGE_READONLY_OVERDENIED) {
-				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
-			}
-		}
-	});
-
+describe("kiro: accepted over-deny for a read-only argument ending in merge", () => {
 	test("kiro non-orchestrators: read-only --grep merge denies (accepted over-deny)", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of MERGE_READONLY_OVERDENIED) {

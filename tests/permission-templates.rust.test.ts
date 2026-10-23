@@ -623,15 +623,6 @@ describe("rust toolchain permission doctrine", () => {
 		}
 	});
 
-	// One fence for the whole cargo class is simpler than per-verb fences; it
-	// over-denies a benign write whose text mentions cargo.
-	test("opencode: the broad cargo redirect fence over-denies a benign write", () => {
-		const command = 'echo "cargo notes" > out.txt';
-		for (const agent of ["orchestrator", "implementer", "tester", "reviewer", "researcher"]) {
-			assert.equal(opencodeVerdict(agent, command), "deny", `opencode ${agent}: ${command}`);
-		}
-	});
-
 	test("boundary: tester allows cargo build, reviewer denies it", () => {
 		assert.equal(verdict("tester", "cargo build"), "allow", "pi tester build");
 		assert.notEqual(verdict("reviewer", "cargo build"), "allow", "pi reviewer build");

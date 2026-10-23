@@ -14,6 +14,7 @@ import {
 	PI_SHELL_AGENTS,
 	hasKiroDeny,
 	hasOpenCodeRule,
+	isRawChain,
 	kiroVerdict,
 	loadAgentRules,
 	opencodeVerdict,
@@ -54,6 +55,9 @@ const REBASE_GATED_COMMANDS = [
 	"git -C /repo rebase",
 	"cd /repo && git rebase origin/main",
 ];
+
+// opencode matches each command node on its own, so it never sees a raw chain.
+const OPENCODE_REBASE_GATED_COMMANDS = REBASE_GATED_COMMANDS.filter((command) => !isRawChain(command));
 
 // Separator-prefixed `-C` forms must not slip past the deny, mirroring the
 // merge separator matrix.
@@ -159,8 +163,8 @@ describe("git rebase permission doctrine", () => {
 		}
 	});
 
-	test("opencode orchestrator: plain git rebase allows; -C and a chain ask", () => {
-		for (const command of REBASE_GATED_COMMANDS) {
+	test("opencode orchestrator: plain git rebase allows; -C asks", () => {
+		for (const command of OPENCODE_REBASE_GATED_COMMANDS) {
 			const expected = command.startsWith("git rebase") ? "allow" : "ask";
 			assert.equal(opencodeVerdict("orchestrator", command), expected, command);
 		}
@@ -168,7 +172,7 @@ describe("git rebase permission doctrine", () => {
 
 	test("opencode non-orchestrators: git rebase denies", () => {
 		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of REBASE_GATED_COMMANDS) {
+			for (const command of OPENCODE_REBASE_GATED_COMMANDS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -195,14 +199,6 @@ describe("git rebase permission doctrine", () => {
 			assert.ok(kind === "ask" || kind === "deny", `${command}: ${kind}`);
 		});
 	}
-
-	test("opencode non-orchestrators: separator-prefixed -C rebase denies", () => {
-		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of REBASE_SEPARATOR_COMMANDS) {
-				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
-			}
-		}
-	});
 
 	test("kiro non-orchestrators: separator-prefixed -C rebase denies", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
@@ -237,9 +233,9 @@ describe("git rebase permission doctrine", () => {
 		}
 	});
 
-	test("opencode non-orchestrators: rebase substitution and trailing-separator deny", () => {
+	test("opencode non-orchestrators: rebase substitution forms deny", () => {
 		for (const agent of OPENCODE_SHELL_AGENTS) {
-			for (const command of [...REBASE_SUBSTITUTION_COMMANDS, ...REBASE_TRAILING_SEPARATOR_COMMANDS]) {
+			for (const command of REBASE_SUBSTITUTION_COMMANDS) {
 				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
@@ -253,8 +249,8 @@ describe("git rebase permission doctrine", () => {
 		}
 	});
 
-	test("opencode orchestrator: rebase substitution and trailing-separator ask", () => {
-		for (const command of [...REBASE_SUBSTITUTION_COMMANDS, ...REBASE_TRAILING_SEPARATOR_COMMANDS]) {
+	test("opencode orchestrator: rebase substitution forms ask", () => {
+		for (const command of REBASE_SUBSTITUTION_COMMANDS) {
 			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
 		}
 	});

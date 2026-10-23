@@ -16,6 +16,7 @@ import {
 	kiroVerdict,
 	loadKiroConfig,
 	opencodeResourceVerdict,
+	isRawChain,
 	opencodeVerdict,
 	repoRoot,
 	verdict,
@@ -117,14 +118,18 @@ describe("implementer quality-gate tools: uv and cargo gates", () => {
 
 	test("opencode: uv gate subcommands allow; mutations ask", () => {
 		for (const command of UV_GATE_ALLOWED) assert.equal(opencodeVerdict("implementer", command), "allow", command);
-		for (const command of UV_MUTATIONS) assert.equal(opencodeVerdict("implementer", command), "ask", command);
+		for (const command of UV_MUTATIONS.filter((entry) => !isRawChain(entry))) {
+			assert.equal(opencodeVerdict("implementer", command), "ask", command);
+		}
 	});
 
 	test("opencode: cargo scanners allow; cargo mutations ask", () => {
 		for (const command of CARGO_SCANNER_ALLOWED) {
 			assert.equal(opencodeVerdict("implementer", command), "allow", command);
 		}
-		for (const command of CARGO_MUTATIONS) assert.equal(opencodeVerdict("implementer", command), "ask", command);
+		for (const command of CARGO_MUTATIONS.filter((entry) => !isRawChain(entry))) {
+			assert.equal(opencodeVerdict("implementer", command), "ask", command);
+		}
 	});
 
 	test("kiro: uv gate subcommands allow; mutations default to ask", () => {

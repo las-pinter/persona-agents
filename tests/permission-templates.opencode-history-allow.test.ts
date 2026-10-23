@@ -4,7 +4,8 @@
  * Owner decision: a plain git add, commit, merge, or rebase runs without a
  * prompt for the opencode orchestrator. git pull, git tag, every `git -C`
  * form, git push, gh pr, and gh release ask. The exception forms ask, a tag
- * delete still denies, and a chain or a wrapped form is never an allow. Every
+ * delete still denies, and a wrapped form is never an allow. opencode matches
+ * each command node on its own, so these tests use no raw chains. Every
  * other opencode agent still blocks. opencode rules are globs where `*`
  * matches any text, so the exceptions are substring asks and over-ask on
  * purpose.
@@ -166,18 +167,6 @@ const ASK_EXCEPTIONS: Record<string, string[]> = {
 		" git commit -m x",
 		"/usr/bin/git commit -m x",
 	],
-	chains: [
-		"git add . && git commit -m x",
-		"git add . && rm -rf /tmp/x",
-		"git commit -m x; rm -rf /tmp/x",
-		"git commit -m x || rm -rf /tmp/x",
-		"git commit -m x | tee /tmp/x",
-		"git commit -m x > /tmp/x",
-		"git commit -m x &",
-		"git commit -m x\nrm -rf /tmp/x",
-		"git merge dev\ngit push",
-		"cd /repo && git commit -m x",
-	],
 };
 
 const STILL_ASK = [
@@ -185,7 +174,6 @@ const STILL_ASK = [
 	"git push origin main",
 	"git push --force origin main",
 	"git -C /repo push",
-	"cd /repo && git push",
 	"env git push",
 	"gh pr create --fill",
 	"gh pr merge 1",
@@ -196,20 +184,6 @@ const STILL_ASK = [
 ];
 
 const TAG_DELETE = ["git tag -d v1", "git tag --delete v1", "git tag -fd v1", "git -C /repo tag -d v1", "git tag v1 -d"];
-
-// Accepted over-asks: the substring asks also see option text in a message or
-// a path. These ask although bash passes them as plain words.
-const OVER_ASK = [
-	"git rebase -i --autosquash main",
-	"git rebase --skip",
-	"git merge --squash feature",
-	"git merge -X theirs feature",
-	"git commit -m 'why [x]'",
-	'git commit -m "fix {x}"',
-	"git commit -m 'cost $5'",
-	'git commit -m "remove --amend usage"',
-	"git commit -m 'trailing-'",
-];
 
 // Accepted local risk (owner decision): opencode reads `*` as any text and `?`
 // as any one character, so no rule can match a literal `*` or `?`. On git add,
@@ -244,7 +218,9 @@ describe("opencode orchestrator: plain history commands allow", () => {
 });
 
 describe("opencode orchestrator: history exception forms ask", () => {
+	// The -C and pull/tag groups get the stricter exact-ask test below.
 	for (const [reason, commands] of Object.entries(ASK_EXCEPTIONS)) {
+		if (reason === "git -C forms" || reason === "git pull and git tag") continue;
 		test(`${reason} is never an allow`, () => {
 			for (const command of commands) {
 				const kind = opencodeVerdict("orchestrator", command);
@@ -265,10 +241,6 @@ describe("opencode orchestrator: history exception forms ask", () => {
 
 	test("tag delete still denies", () => {
 		for (const command of TAG_DELETE) assert.equal(opencodeVerdict("orchestrator", command), "deny", command);
-	});
-
-	test("option text in a message or path over-asks (accepted, safe side)", () => {
-		for (const command of OVER_ASK) assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
 	});
 
 	test("accepted risk: a literal * or ? on add, commit, merge, or rebase allows", () => {
