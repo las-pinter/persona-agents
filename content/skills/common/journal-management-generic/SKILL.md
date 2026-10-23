@@ -52,7 +52,9 @@ every session so the journal history stays in one place.
 ```
 <USER_HOME>/agent-notes/<AGENT_TYPE>/
 ├── journals/
-│   ├── daily/    YYYY-MM-DD.md
+│   ├── daily/    YYYY-MM-DD.md   (only dailies not yet consolidated)
+│   ├── archive/
+│   │   └── daily/  YYYY-MM-DD.md   (dailies already consolidated)
 │   ├── weekly/   YYYY-Wnn.md
 │   ├── monthly/  YYYY-MM.md
 │   └── yearly/   YYYY.md
@@ -72,6 +74,8 @@ glob(pattern="YYYY-MM-DD.md",
 ```
 
 Pick the most recent by filename (YYYY-MM-DD sorts naturally). Read that file.
+The glob and the startup read use `journals/daily/` only. Never glob
+`journals/archive/daily/` for the latest daily.
 
 **Fallback (if glob returns nothing):**
 Run the ls command on the daily directory. The listing sorts by name. Read the
@@ -229,7 +233,8 @@ Load additional entries when:
 - The latest daily entry mentions dependencies on earlier work
 
 Priority for additional reads: weekly summary → monthly → yearly → specific
-dailies.
+dailies → archived dailies (`journals/archive/daily/`). Read an archived daily
+only when a task needs old detail that the summaries do not have.
 
 ---
 
@@ -247,17 +252,35 @@ dailies.
 
 | Level | When | Source | Target |
 |-------|------|--------|--------|
-| **Weekly** | First run of a new ISO week | Last 7 daily files | `YYYY-Wnn.md` |
+| **Weekly** | First run of a new ISO week | Dailies of the previous ISO week | `YYYY-Wnn.md` |
 | **Monthly** | First run of a new month | 4-5 weekly files | `YYYY-MM.md` |
 | **Yearly** | First run of a new year | 12 monthly files | `YYYY.md` |
 
-First run of a new ISO week: consolidate the last 7 daily files into
-`YYYY-Wnn.md` (read source files first, then write the merged result).
+First run of a new ISO week: consolidate the dailies of the previous
+ISO week into `YYYY-Wnn.md` (read source files first, then write the merged
+result). After a missed week, consolidate each closed ISO week that has
+unconsolidated dailies into its own weekly file.
 
 **Keep summaries short:**
 - Weekly: 1-2 paragraphs per day (~15 lines total)
 - Monthly: 1 paragraph per week (~20 lines total)
 - Yearly: 1 paragraph per month (~25 lines total)
+
+### Archive consolidated dailies
+
+After a weekly file is written, move its source daily files from
+`journals/daily/` into `journals/archive/daily/`. Keep the same file names.
+Never delete a daily. The daily folder then holds only dailies not yet
+consolidated.
+
+- Move a daily only after you write the weekly file, re-read it, and confirm
+  it holds every source day.
+- Move only the dailies you read and merged into this weekly. Never move a
+  daily that the weekly does not cover.
+- Never move today's daily or any daily of the current ISO week.
+- If you cannot run `mv`, do not move the files. Leave the dailies in place.
+  Report them to the owner.
+- Do not archive weekly, monthly, or yearly files.
 
 Consolidations (weekly/monthly/yearly) keep the per-project grouping of the
 source dailies (e.g. `### <project>` inside each day's summary where sources
