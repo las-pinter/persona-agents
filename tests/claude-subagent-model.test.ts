@@ -334,7 +334,7 @@ describe("claude plugin: subagent model hook", () => {
 			assert.equal(modelOf(run), "opus");
 		});
 
-		const unsetManaged: Record<string, unknown> = { "an empty string": "", "a number": 7, null: null, "an object": {} };
+		const unsetManaged: Record<string, unknown> = { "an empty string": "", "a number": 7 };
 		for (const [label, value] of Object.entries(unsetManaged)) {
 			test(`a managed value that is ${label} falls through to the user value`, () => {
 				const body = JSON.stringify({

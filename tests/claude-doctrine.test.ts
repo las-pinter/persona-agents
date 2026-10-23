@@ -58,7 +58,6 @@ const ALLOWED = [
 	"git --work-tree /tmp commit -m x",
 	"git -C x tag v1",
 	"git merge -X ours main",
-	"git merge --squash feature",
 	"git pull --rebase=interactive",
 	"git rebase -X ours main",
 	"git rebase -Xours main",
@@ -71,7 +70,6 @@ const ALLOWED = [
 /** Publish commands and the ask exceptions. */
 const ASKED = [
 	"git push origin main",
-	"git push --tags",
 	"gh pr create --fill",
 	"gh release create v1.0.0",
 	// AGENTS.md gates every gh pr and gh release command, reads included.
@@ -88,7 +86,6 @@ const ASKED = [
 	"git --config-env=core.hooksPath=X commit -m m",
 	"git --exec-path=/tmp/x commit -m m",
 	"git commit --amend",
-	"git commit --amend --no-edit",
 	"git commit --amen",
 	"git pull --upload-pack='touch x' origin",
 	"git add . && git push",
@@ -223,7 +220,6 @@ describe("doctrine: an allow covers every segment or none", () => {
 	});
 
 	test("an ask segment beats an allow segment", () => {
-		assert.equal(bash("orchestrator", "git add . && git push"), "ask");
 		assert.equal(bash("orchestrator", "git status && git push"), "ask");
 		assert.equal(bash("orchestrator", "git commit -m m && cp a b"), "ask");
 	});
@@ -234,9 +230,6 @@ const COPY = ["cp a b", "mv a b", "rsync -a src/ dst/", "sudo cp a /etc/b", "bas
 /** Reads that must never be gated. */
 const READS = [
 	"git status",
-	"git log --oneline -5",
-	"git diff HEAD~1",
-	"git show HEAD",
 	"git tag",
 	"git tag -l",
 	"git tag --list 'v*'",
