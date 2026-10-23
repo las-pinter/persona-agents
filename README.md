@@ -76,22 +76,42 @@ The last command starts a session as the orchestrator. It delegates to the
 other `persona-agents:` agents, and every agent speaks as the theme's persona.
 Change the theme any time in `/config` (**Persona theme**). No restart is
 needed: new subagents get the new theme at once, and the main session gets it
-after `/clear` or in a new session. The commit doctrine holds here too: only
-the orchestrator may write git history. A plain commit runs without a prompt;
-a push, a pull request, or a release needs your approval. The
-read-only agents cannot edit files. A plain `claude` session stays normal; the
-agents are still there to delegate to.
+after `/clear` or in a new session.
+
+The `subagent_model` option (**Subagent model**) sets the model for the
+subagents. The default is `sonnet`. A change applies to the next subagent with
+no restart. The value `inherit` gives no hook output, so the model that the
+caller gives applies, else the Claude Code default. The hook reads this option
+only from the managed and user `settings.json` files, not from the start-time
+value, so a project env block cannot set it. An install from another
+marketplace name always gets `sonnet`, because the hook looks for the
+`persona-agents@persona-agents` key. The orchestrator (the main session) keeps
+the session model. If `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` is set, Claude Code
+ignores this option.
+
+The commit doctrine holds here too: only the orchestrator may write git
+history. A plain commit runs without a prompt; a push, a pull request, or a
+release needs your approval. The read-only agents cannot edit files. A plain
+`claude` session stays normal; the agents are still there to delegate to.
 
 The hook reads the theme each time an agent starts. The order is: the managed
 settings (`managed-settings.json` and the `managed-settings.d` drop-ins, where
 a drop-in wins over `managed-settings.json`, and the last drop-in in
 alphabetical order that sets the theme wins), then your
 `settings.json`, then the theme that Claude Code gave at start, then `goblin`.
-Limits:
+The `subagent_model` option uses the same order, but with no start-time value.
+Limits (for both options):
 
-- The hook does not read MDM policies (macOS plist, Windows registry) or
+- The hooks do not read MDM policies (macOS plist, Windows registry) or
   server-managed settings. A theme set only there comes from the start-time
-  value, so it needs a restart.
+  value, so it needs a restart. A `subagent_model` set only there is never
+  applied, and the hook uses `sonnet`.
+- The hooks ignore a `CLAUDE_CONFIG_DIR` or `HOME` that is inside the project
+  the agent works in. A project in your home folder, or above it, does not
+  count. Your settings then come from `.claude` in your home folder. This can
+  also change which theme you get. If the system cannot find your home folder
+  (a user with no passwd entry), the home-folder exception does not apply, and
+  the hooks skip your `settings.json` instead.
 - The hook does not apply the Claude Code first-wins choice among managed
   sources. A theme in a managed file can show even when Claude Code uses a
   remote or MDM source.

@@ -16,7 +16,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const contentDir = path.join(repoRoot, "content");
@@ -72,6 +72,13 @@ interface SettingsFiles {
 	dropInDirs?: string[];
 	/** Leave CLAUDE_CONFIG_DIR unset, so the hook uses the .claude folder under HOME. */
 	noConfigDir?: boolean;
+	/** Extra node arguments before the script, such as an --import preload. */
+	nodeArgs?: string[];
+}
+
+/** A node --import argument for a preload module given as source text. */
+function preload(source: string): string {
+	return `--import=data:text/javascript,${encodeURIComponent(source)}`;
 }
 
 /** A settings file body that selects a theme, the way /config writes it. */
@@ -111,13 +118,14 @@ function runContext(
 			CLAUDE_PLUGIN_ROOT: repoRoot,
 			HOME: tmp,
 			CLAUDE_CONFIG_DIR: configDir,
-			PERSONA_AGENTS_MANAGED_SETTINGS: managedFile,
 		};
 		delete env.CLAUDE_PLUGIN_OPTION_THEME;
 		delete env.PERSONA_AGENTS_DEBUG;
 		if (settings.noConfigDir) delete env.CLAUDE_CONFIG_DIR;
 		if (theme !== undefined) env.CLAUDE_PLUGIN_OPTION_THEME = theme;
-		result = spawnSync(process.execPath, [contextScript, part], {
+		// The test seam: a hook argument, which a settings env block cannot set.
+		const args = [...(settings.nodeArgs ?? []), contextScript, part, `--managed-settings=${managedFile}`];
+		result = spawnSync(process.execPath, args, {
 			input: JSON.stringify(input),
 			env,
 			encoding: "utf8",
@@ -313,6 +321,37 @@ describe("claude plugin: context hook", () => {
 				user: themeSettings(themeA),
 				noConfigDir: true,
 			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a failing passwd lookup still gives the theme from the settings under HOME", () => {
+			// os.userInfo() throws for a uid with no passwd entry (for example a container user).
+			const failingUserInfo = [
+				'import os from "node:os";',
+				'import { syncBuiltinESMExports } from "node:module";',
+				'os.userInfo = () => { throw new Error("no passwd entry"); };',
+				"syncBuiltinESMExports();",
+			].join("\n");
+			// Sanity check: the preload must make realHome() give "".
+			const moduleUrl = pathToFileURL(path.join(repoRoot, "platforms", "claude", "scripts", "plugin-options.mjs")).href;
+			const probe = spawnSync(
+				process.execPath,
+				[
+					preload(failingUserInfo),
+					"--input-type=module",
+					"-e",
+					`import { realHome } from ${JSON.stringify(moduleUrl)}; process.stdout.write(JSON.stringify(realHome()));`,
+				],
+				{ encoding: "utf8" },
+			);
+			assert.equal(probe.status, 0, probe.stderr);
+			assert.equal(JSON.parse(probe.stdout), "");
+			const run = runContext("persona", subagentInput("implementer"), themeB, {
+				user: themeSettings(themeA),
+				noConfigDir: true,
+				nodeArgs: [preload(failingUserInfo)],
+			});
+			assert.equal(run.status, 0);
 			assert.equal(themeOf(run), themeA);
 		});
 
