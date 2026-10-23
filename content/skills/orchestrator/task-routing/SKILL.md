@@ -81,6 +81,25 @@ tester at the same time — run them one after the other.
 
 ---
 
+## Context Growth
+
+A round is one review cycle: findings go to the implementer, and the result
+goes back to the reviewer. Each review that returns findings counts as one
+round, including a NIT and SUGGESTION batch. A resumed subagent keeps its full
+history, so the token cost grows each round.
+
+- Resume the same implementer and reviewer for up to 2 rounds. They keep
+  useful context.
+- After 2 rounds, start a fresh subagent of the same type. Give it a short
+  brief: the goal, the current state (the files and the last commit or the
+  uncommitted diff), the decisions already made, and the open findings. Do not
+  paste earlier transcripts.
+- The round count starts again at 0 for each fresh subagent.
+- Write large command output to a temporary file. Pass the path, not the
+  content.
+
+---
+
 ## Dispatch Brief
 
 - Name the reference source line in every implementer brief before the first draft.
