@@ -66,6 +66,10 @@ interface HookRun {
 interface SettingsFiles {
 	user?: string;
 	managed?: string;
+	/** Files in the managed-settings.d directory next to the managed file, by file name. */
+	dropIns?: Record<string, string>;
+	/** Subdirectories to make in the managed-settings.d directory, by name. */
+	dropInDirs?: string[];
 	/** Leave CLAUDE_CONFIG_DIR unset, so the hook uses the .claude folder under HOME. */
 	noConfigDir?: boolean;
 }
@@ -94,6 +98,14 @@ function runContext(
 		fs.mkdirSync(configDir);
 		if (settings.user !== undefined) fs.writeFileSync(path.join(configDir, "settings.json"), settings.user);
 		if (settings.managed !== undefined) fs.writeFileSync(managedFile, settings.managed);
+		if (settings.dropIns !== undefined || settings.dropInDirs !== undefined) {
+			const dropInDir = path.join(tmp, "managed-settings.d");
+			fs.mkdirSync(dropInDir);
+			for (const [name, body] of Object.entries(settings.dropIns ?? {})) {
+				fs.writeFileSync(path.join(dropInDir, name), body);
+			}
+			for (const name of settings.dropInDirs ?? []) fs.mkdirSync(path.join(dropInDir, name));
+		}
 		const env: NodeJS.ProcessEnv = {
 			...process.env,
 			CLAUDE_PLUGIN_ROOT: repoRoot,
@@ -315,6 +327,80 @@ describe("claude plugin: context hook", () => {
 				user: themeSettings(themeA),
 			});
 			assert.equal(themeOf(run), themeB);
+		});
+
+		test("a managed-settings.d drop-in theme wins over the managed-settings.json theme", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				managed: themeSettings(themeA),
+				dropIns: { "10-theme.json": themeSettings(themeB) },
+			});
+			assert.equal(themeOf(run), themeB);
+		});
+
+		test("a drop-in theme wins over the user settings theme without managed-settings.json", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				user: themeSettings(themeA),
+				dropIns: { "10-theme.json": themeSettings(themeB) },
+			});
+			assert.equal(themeOf(run), themeB);
+		});
+
+		test("of two drop-ins, the later one in alphabetical order wins", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				dropIns: { "20-b.json": themeSettings(themeB), "10-a.json": themeSettings(themeA) },
+			});
+			assert.equal(themeOf(run), themeB);
+		});
+
+		test("a later drop-in without the plugin key does not hide an earlier drop-in theme", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				dropIns: { "10-a.json": themeSettings(themeA), "20-b.json": "{}" },
+			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a drop-in with bad JSON falls through to the next source", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				managed: themeSettings(themeA),
+				dropIns: { "10-bad.json": "{ not json" },
+			});
+			assert.equal(run.status, 0);
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a hidden drop-in and a non-json drop-in are ignored", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				managed: themeSettings(themeA),
+				dropIns: { ".x.json": themeSettings(themeB), "x.json.bak": themeSettings(themeB) },
+			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a drop-in with an empty theme does not hide the managed-settings.json theme", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				managed: themeSettings(themeA),
+				dropIns: { "50-reset.json": themeSettings("") },
+			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a later drop-in with an empty options object does not hide an earlier drop-in theme", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				dropIns: {
+					"10-a.json": themeSettings(themeA),
+					"20-b.json": JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: {} } } }),
+				},
+			});
+			assert.equal(themeOf(run), themeA);
+		});
+
+		test("a subdirectory named like a drop-in is skipped", () => {
+			const run = runContext("persona", subagentInput("implementer"), undefined, {
+				managed: themeSettings(themeA),
+				dropInDirs: ["x.json"],
+			});
+			assert.equal(run.status, 0);
+			assert.equal(themeOf(run), themeA);
 		});
 
 		test("an unknown theme from the settings file still warns", () => {

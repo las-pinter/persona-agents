@@ -15,11 +15,12 @@
 //
 // Set PERSONA_AGENTS_DEBUG=1 to append each hook input to
 // $CLAUDE_PLUGIN_DATA/hook-input.log. PERSONA_AGENTS_MANAGED_SETTINGS replaces
-// the managed settings path; the tests use it to keep away from the system file.
+// the managed settings path, and the managed-settings.d directory next to it;
+// the tests use it to keep away from the system files.
 
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const PREFIX = "persona-agents:";
 // Another marketplace name gives another key, so the lookup misses it and falls back to the env var.
@@ -60,6 +61,27 @@ function settingsTheme(file) {
 	}
 }
 
+/**
+ * The managed theme: the last managed-settings.d drop-in that sets it, else managed-settings.json.
+ * An empty or non-string theme counts as not set, so an earlier source still applies (Claude Code's deep merge would keep the empty value).
+ */
+function managedTheme(managedFile) {
+	const dir = join(dirname(managedFile), "managed-settings.d");
+	let names = [];
+	try {
+		names = readdirSync(dir).filter((name) => name.endsWith(".json") && !name.startsWith("."));
+	} catch {
+		// The drop-in directory is often missing.
+	}
+	// Plain code-unit order; no locale collation.
+	names.sort();
+	for (let i = names.length - 1; i >= 0; i--) {
+		const theme = settingsTheme(join(dir, names[i]));
+		if (theme) return theme;
+	}
+	return settingsTheme(managedFile);
+}
+
 /** The selected theme: managed settings, then user settings, then the env var, then the default. */
 function selectedTheme() {
 	// Claude Code sets CLAUDE_PLUGIN_OPTION_THEME once at start, so read the live settings files first.
@@ -67,7 +89,7 @@ function selectedTheme() {
 	const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
 	// Project settings are skipped: Claude Code reads pluginConfigs from user and managed settings only.
 	return (
-		(managed && settingsTheme(managed)) ||
+		(managed && managedTheme(managed)) ||
 		settingsTheme(join(configDir, "settings.json")) ||
 		process.env.CLAUDE_PLUGIN_OPTION_THEME ||
 		DEFAULT_THEME

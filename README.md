@@ -81,6 +81,22 @@ the orchestrator may write git history (you approve each time), and the
 read-only agents cannot edit files. A plain `claude` session stays normal; the
 agents are still there to delegate to.
 
+The hook reads the theme each time an agent starts. The order is: the managed
+settings (`managed-settings.json` and the `managed-settings.d` drop-ins, where
+a drop-in wins over `managed-settings.json`, and the last drop-in in
+alphabetical order that sets the theme wins), then your
+`settings.json`, then the theme that Claude Code gave at start, then `goblin`.
+Limits:
+
+- The hook does not read MDM policies (macOS plist, Windows registry) or
+  server-managed settings. A theme set only there comes from the start-time
+  value, so it needs a restart.
+- The hook does not apply the Claude Code first-wins choice among managed
+  sources. A theme in a managed file can show even when Claude Code uses a
+  remote or MDM source.
+- If the theme comes only from MDM or server-managed settings, a theme in your
+  `settings.json` wins over it.
+
 Update with `claude plugin marketplace update persona-agents`, then
 `claude plugin update persona-agents@persona-agents`, and restart.
 
