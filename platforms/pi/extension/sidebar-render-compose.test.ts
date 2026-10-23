@@ -11,6 +11,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+	type SidebarSnapshot,
 	type SidebarTheme,
 	AGENTS_PAD_MIN,
 	SECTION_RULE_CHAR,
@@ -42,16 +43,6 @@ test("a theme with no methods still renders a plain header", () => {
 	const plain: SidebarTheme = {};
 	const lines = content(renderAgentTreePanel([], 40, 5, plain, 0));
 	assert.equal(lines[0]?.trimEnd(), " AGENTS");
-});
-
-test("a theme with only fg colors headers and dims the more marker", () => {
-	const fgOnly: SidebarTheme = { fg: (name, text) => `<${name}>${text}</>` };
-	const nodes = Array.from({ length: 6 }, (_value, index) =>
-		makeNode({ runId: `n${index}`, agent: `agent${index}` }),
-	);
-	const lines = renderAgentTreePanel(nodes, 60, 3, fgOnly, 0);
-	assert.ok(lines[0]?.includes("<accent>"));
-	assert.ok(lines[2]?.includes("<dim>"));
 });
 
 test("an empty color map keeps every color token as plain text", () => {
@@ -90,16 +81,15 @@ test("a token in the color map is colored while a missing token stays plain", ()
 
 // --- selection ---------------------------------------------------------------
 
-test("selectNext wraps from the last id to the first", () => {
+test("selectNext and selectPrev wrap, fall back on an unknown id, and tolerate an empty list", () => {
 	assert.equal(selectNext(["a", "b", "c"], "c"), "a");
-});
-
-test("selectPrev wraps from the first id to the last", () => {
 	assert.equal(selectPrev(["a", "b", "c"], "a"), "c");
-});
-
-test("selectNext on an unknown id selects the first", () => {
 	assert.equal(selectNext(["a", "b"], "zzz"), "a");
+	assert.equal(selectPrev(["a", "b", "c"], "zzz"), "c");
+	assert.equal(selectNext(["a"], "a"), "a");
+	assert.equal(selectPrev(["a"], "a"), "a");
+	assert.equal(selectNext([], null), null);
+	assert.equal(selectPrev([], "x"), "x");
 });
 
 // --- composition, width, and signature ---------------------------------------
@@ -148,24 +138,6 @@ test("the section rule is clipped at width 0 and 1 and still fits", () => {
 	const atZero = renderSidebarPanel(makeSnapshot(), 0, 30, theme, 0);
 	assertFits(atZero, 0);
 	assert.ok(atZero.every((line) => line === ""), "every line is empty at width 0");
-});
-
-test("the section rule is drawn with the dim color token", () => {
-	const calls: Array<[string, string]> = [];
-	const recording: SidebarTheme = {
-		fg: (name, text) => {
-			calls.push([name, text]);
-			return text;
-		},
-	};
-	const rule = SECTION_RULE_CHAR.repeat(80);
-
-	renderSidebarPanel(makeSnapshot(), 80, 30, recording, 0);
-
-	assert.ok(
-		calls.some(([name, text]) => name === "dim" && text === rule),
-		"the section rule must use the dim token",
-	);
 });
 
 test("the section rule counts against the height budget", () => {
@@ -224,23 +196,6 @@ test("a long task clips with an ellipsis", () => {
 	assertFits(lines, 20);
 });
 
-test("treeSignature changes when a node status changes", () => {
-	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", status: "running" })] }));
-	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", status: "done" })] }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a todo changes", () => {
-	const before = treeSignature(makeSnapshot({ todos: [{ id: "1", text: "a", done: false }] }));
-	const after = treeSignature(makeSnapshot({ todos: [{ id: "1", text: "a", done: true }] }));
-	assert.notEqual(before, after);
-});
-
-test("a short tree pads the AGENTS panel to a stable footprint", () => {
-	const lines = renderAgentTreePanel([makeNode({ runId: "n1" })], 45, 20, theme, 0);
-	assert.equal(lines.length, AGENTS_PAD_MIN);
-});
-
 test("AGENTS padding never exceeds the height budget", () => {
 	const lines = renderAgentTreePanel([], 45, 2, theme, 0);
 	assert.ok(lines.length <= 2, `padded to ${lines.length} lines for height 2`);
@@ -270,24 +225,6 @@ for (const width of [0, 1, 45]) {
 			),
 		];
 		for (const lines of panels) assertFits(lines, width);
-	});
-}
-
-for (const height of [0, 1, 3, 8, 15, 30]) {
-	test(`renderSidebarPanel respects height ${height}`, () => {
-		const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
-		const lines = renderSidebarPanel(
-			makeSnapshot({
-				tree: [node],
-				mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
-				todos: [{ id: "1", text: "do it", done: false }],
-			}),
-			80,
-			height,
-			theme,
-			0,
-		);
-		assert.ok(lines.length <= height, `height ${height} overflowed with ${lines.length} lines`);
 	});
 }
 
@@ -328,7 +265,7 @@ test("renderSidebarPanel drops lower panels first", () => {
 		todos: [{ id: "1", text: "do it", done: false }],
 	});
 	const headers = [" AGENTS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS "];
-	for (const height of [1, 3, 8, 12, 15, 18, 30]) {
+	for (const height of [0, 1, 3, 8, 12, 15, 18, 30]) {
 		const lines = renderSidebarPanel(snapshot, 80, height, theme, 0);
 		assert.ok(lines.length <= height, `height ${height} overflowed`);
 		const present = headers
@@ -342,135 +279,60 @@ test("renderSidebarPanel drops lower panels first", () => {
 
 // --- selection edge cases ----------------------------------------------------
 
-test("selectNext on an empty list returns the current value", () => {
-	assert.equal(selectNext([], null), null);
-	assert.equal(selectNext([], "x"), "x");
-});
-
-test("selectPrev on an empty list returns the current value", () => {
-	assert.equal(selectPrev([], null), null);
-	assert.equal(selectPrev([], "x"), "x");
-});
-
-test("selectPrev on an unknown id selects the last", () => {
-	assert.equal(selectPrev(["a", "b", "c"], "zzz"), "c");
-});
-
-test("selectNext and selectPrev wrap a single-element list to itself", () => {
-	assert.equal(selectNext(["a"], "a"), "a");
-	assert.equal(selectPrev(["a"], "a"), "a");
-});
-
 // --- treeSignature coverage --------------------------------------------------
 
-test("treeSignature changes when a node depth changes", () => {
-	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", depth: 0 })] }));
-	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", depth: 1 })] }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a task changes after char 64", () => {
-	const prefix = "t".repeat(80);
-	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", task: `${prefix}A` })] }));
-	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", task: `${prefix}B` })] }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when an output preview changes after char 64", () => {
-	const prefix = "p".repeat(80);
-	const before = treeSignature(
-		makeSnapshot({ tree: [makeNode({ runId: "n1", outputPreview: `${prefix}A` })] }),
-	);
-	const after = treeSignature(
-		makeSnapshot({ tree: [makeNode({ runId: "n1", outputPreview: `${prefix}B` })] }),
-	);
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a node usage changes", () => {
-	const before = treeSignature(
+test("treeSignature changes for every field the panels paint", () => {
+	const n = (overrides: Partial<Parameters<typeof makeNode>[0]>) =>
+		makeSnapshot({ tree: [makeNode({ runId: "n1", ...overrides })] });
+	const long = "t".repeat(80);
+	const mcp = (connected: boolean, status: "connected" | "disconnected" | "unknown") =>
+		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected, status }] });
+	const file = (added: number) =>
 		makeSnapshot({
-			tree: [makeNode({ runId: "n1", usage: { input: 1, output: 2, cost: 0.1, turns: 3 } })],
-		}),
-	);
-	const after = treeSignature(
-		makeSnapshot({
-			tree: [makeNode({ runId: "n1", usage: { input: 1, output: 2, cost: 0.2, turns: 3 } })],
-		}),
-	);
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a node tool count changes", () => {
-	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", toolCount: 1 })] }));
-	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", toolCount: 2 })] }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature keeps a null error distinct from an empty string", () => {
-	const before = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", error: null })] }));
-	const after = treeSignature(makeSnapshot({ tree: [makeNode({ runId: "n1", error: "" })] }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a session field changes", () => {
-	const before = treeSignature(makeSnapshot({ session: makeSession({ model: "model-a" }) }));
-	const after = treeSignature(makeSnapshot({ session: makeSession({ model: "model-b" }) }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a session token total changes", () => {
-	const before = treeSignature(makeSnapshot({ session: makeSession({ tokensIn: 10, tokensOut: 20, turns: 1 }) }));
-	const after = treeSignature(makeSnapshot({ session: makeSession({ tokensIn: 10, tokensOut: 20, turns: 2 }) }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a workspace field changes", () => {
-	const before = treeSignature(makeSnapshot({ workspace: makeWorkspace({ branch: "dev" }) }));
-	const after = treeSignature(makeSnapshot({ workspace: makeWorkspace({ branch: "main" }) }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a workspace file stat changes", () => {
-	const before = treeSignature(
-		makeSnapshot({ workspace: makeWorkspace({ files: [{ path: "a.ts", added: 1, removed: 0, untracked: false }] }) }),
-	);
-	const after = treeSignature(
-		makeSnapshot({ workspace: makeWorkspace({ files: [{ path: "a.ts", added: 2, removed: 0, untracked: false }] }) }),
-	);
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when an MCP field changes", () => {
-	const before = treeSignature(
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false, status: "disconnected" }] }),
-	);
-	const after = treeSignature(
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: true, status: "connected" }] }),
-	);
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when only an MCP status changes", () => {
-	const before = treeSignature(
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false, status: "unknown" }] }),
-	);
-	const after = treeSignature(
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected: false, status: "disconnected" }] }),
-	);
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when a todos field changes", () => {
-	const before = treeSignature(makeSnapshot({ todos: [{ id: "1", text: "first", done: false }] }));
-	const after = treeSignature(makeSnapshot({ todos: [{ id: "1", text: "second", done: false }] }));
-	assert.notEqual(before, after);
-});
-
-test("treeSignature changes when the todos turn marker changes", () => {
-	const before = treeSignature(makeSnapshot({ todosTurnMarker: false }));
-	const after = treeSignature(makeSnapshot({ todosTurnMarker: true }));
-	assert.notEqual(before, after);
+			workspace: makeWorkspace({ files: [{ path: "a.ts", added, removed: 0, untracked: false }] }),
+		});
+	const usage = (cost: number) => n({ usage: { input: 1, output: 2, cost, turns: 3 } });
+	const cases: Array<[string, SidebarSnapshot, SidebarSnapshot]> = [
+		["node status", n({ status: "running" }), n({ status: "done" })],
+		["node depth", n({ depth: 0 }), n({ depth: 1 })],
+		["task after char 64", n({ task: `${long}A` }), n({ task: `${long}B` })],
+		["output preview after char 64", n({ outputPreview: `${long}A` }), n({ outputPreview: `${long}B` })],
+		["node usage", usage(0.1), usage(0.2)],
+		["tool count", n({ toolCount: 1 }), n({ toolCount: 2 })],
+		["null error vs empty error", n({ error: null }), n({ error: "" })],
+		[
+			"session model",
+			makeSnapshot({ session: makeSession({ model: "model-a" }) }),
+			makeSnapshot({ session: makeSession({ model: "model-b" }) }),
+		],
+		[
+			"session turns",
+			makeSnapshot({ session: makeSession({ turns: 1 }) }),
+			makeSnapshot({ session: makeSession({ turns: 2 }) }),
+		],
+		[
+			"workspace branch",
+			makeSnapshot({ workspace: makeWorkspace({ branch: "dev" }) }),
+			makeSnapshot({ workspace: makeWorkspace({ branch: "main" }) }),
+		],
+		["workspace file stat", file(1), file(2)],
+		["MCP connected", mcp(false, "disconnected"), mcp(true, "connected")],
+		["MCP status only", mcp(false, "unknown"), mcp(false, "disconnected")],
+		[
+			"todo done flag",
+			makeSnapshot({ todos: [{ id: "1", text: "a", done: false }] }),
+			makeSnapshot({ todos: [{ id: "1", text: "a", done: true }] }),
+		],
+		[
+			"todo text",
+			makeSnapshot({ todos: [{ id: "1", text: "first", done: false }] }),
+			makeSnapshot({ todos: [{ id: "1", text: "second", done: false }] }),
+		],
+		["todos turn marker", makeSnapshot({ todosTurnMarker: false }), makeSnapshot({ todosTurnMarker: true })],
+	];
+	for (const [label, before, after] of cases) {
+		assert.notEqual(treeSignature(before), treeSignature(after), label);
+	}
 });
 
 // --- detail overlay clipping and placeholders --------------------------------

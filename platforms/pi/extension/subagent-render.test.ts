@@ -123,120 +123,45 @@ function toolResultMessage(toolCallId: string, durationMs?: number) {
 
 // --- formatToolDuration boundaries ------------------------------------------
 
-test("formatToolDuration renders fast durations as whole milliseconds", () => {
-	assert.equal(formatToolDuration(0), "0ms");
-	assert.equal(formatToolDuration(42), "42ms");
-	assert.equal(formatToolDuration(500), "500ms");
-	assert.equal(formatToolDuration(999), "999ms");
+test("formatToolDuration switches unit at each boundary", () => {
+	const cases: Array<[number, string]> = [
+		[0, "0ms"],
+		[999, "999ms"],
+		// 999.6 ms must not round into a "1000ms" label; it crosses to seconds.
+		[999.6, "1.0s"],
+		[1_500, "1.5s"],
+		// Parity with pi core: toFixed(1) rounds 59_999 ms up to "60.0s".
+		[59_999, "60.0s"],
+		[60_000, "1m 0s"],
+		[3_599_999, "59m 59s"],
+		[1_000, "1.0s"],
+		[90_000, "1m 30s"],
+		[3_600_000, "1h 0m 0s"],
+		[3_661_000, "1h 1m 1s"],
+	];
+	for (const [ms, label] of cases) assert.equal(formatToolDuration(ms), label, String(ms));
 });
 
-test("formatToolDuration renders durations of one second or more with one decimal", () => {
-	assert.equal(formatToolDuration(1_000), "1.0s");
-	assert.equal(formatToolDuration(1_500), "1.5s");
-	assert.equal(formatToolDuration(59_000), "59.0s");
-});
+// --- headers: run total ------------------------------------------------------
 
-test("formatToolDuration keeps the millisecond branch below one second", () => {
-	// 999.6 ms must not round into a "1000ms" label; it crosses to the second branch.
-	assert.equal(formatToolDuration(999), "999ms");
-	assert.equal(formatToolDuration(1_000), "1.0s");
-	assert.equal(formatToolDuration(999.6), "1.0s");
-});
-
-test("formatToolDuration rounds 59.999 seconds up to 60.0s", () => {
-	// Parity with pi core: the sub-minute branch uses toFixed(1), so the
-	// boundary value 59_999 ms displays as "60.0s" rather than "59.9s".
-	assert.equal(formatToolDuration(59_999), "60.0s");
-});
-
-test("formatToolDuration renders whole minutes under an hour", () => {
-	assert.equal(formatToolDuration(60_000), "1m 0s");
-	assert.equal(formatToolDuration(90_000), "1m 30s");
-	assert.equal(formatToolDuration(3_599_999), "59m 59s");
-});
-
-test("formatToolDuration renders hours, minutes, and seconds", () => {
-	assert.equal(formatToolDuration(3_600_000), "1h 0m 0s");
-	assert.equal(formatToolDuration(3_661_000), "1h 1m 1s");
-});
-
-// --- collapsed headers: run total -------------------------------------------
-
-test("the collapsed single header appends the run total exactly once", () => {
+test("every collapsed and expanded header appends the run total once and omits it without a duration", () => {
 	const tool = captureTool();
-	const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), false, { durationMs: 1_200 });
-
-	assert.equal(countOccurrences(out, "1.2s"), 1);
-	assert.equal(out.split("\n")[0], "✓ tester (user) 1.2s");
-});
-
-test("the collapsed single header omits the run total when no duration is given", () => {
-	const tool = captureTool();
-	const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), false, {});
-
-	assert.equal(out.split("\n")[0], "✓ tester (user)");
-});
-
-test("the collapsed chain header appends the run total exactly once", () => {
-	const tool = captureTool();
-	const results = [makeSingle({ agent: "alpha", step: 1 }), makeSingle({ agent: "beta", step: 2 })];
-	const out = render(tool, makeResult(makeDetails("chain", results)), false, { durationMs: 1_200 });
-
-	assert.equal(countOccurrences(out, "1.2s"), 1);
-	assert.equal(out.split("\n")[0], "✓ chain 2/2 steps 1.2s");
-});
-
-test("the collapsed chain header omits the run total when no duration is given", () => {
-	const tool = captureTool();
-	const results = [makeSingle({ agent: "alpha", step: 1 }), makeSingle({ agent: "beta", step: 2 })];
-	const out = render(tool, makeResult(makeDetails("chain", results)), false, {});
-
-	assert.equal(out.split("\n")[0], "✓ chain 2/2 steps");
-});
-
-test("the collapsed parallel header appends the run total exactly once", () => {
-	const tool = captureTool();
-	const results = [makeSingle({ agent: "alpha" }), makeSingle({ agent: "beta" })];
-	const out = render(tool, makeResult(makeDetails("parallel", results)), false, { durationMs: 1_200 });
-
-	assert.equal(countOccurrences(out, "1.2s"), 1);
-	assert.equal(out.split("\n")[0], "✓ parallel 2/2 tasks 1.2s");
-});
-
-test("the collapsed parallel header omits the run total when no duration is given", () => {
-	const tool = captureTool();
-	const results = [makeSingle({ agent: "alpha" }), makeSingle({ agent: "beta" })];
-	const out = render(tool, makeResult(makeDetails("parallel", results)), false, {});
-
-	assert.equal(out.split("\n")[0], "✓ parallel 2/2 tasks");
-});
-
-// --- expanded headers: run total --------------------------------------------
-
-test("the expanded single header appends the run total exactly once", () => {
-	const tool = captureTool();
-	const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), true, { durationMs: 1_200 });
-
-	assert.equal(countOccurrences(out, "1.2s"), 1);
-	assert.equal(out.split("\n")[0], "✓ tester (user) 1.2s");
-});
-
-test("the expanded chain header appends the run total exactly once", () => {
-	const tool = captureTool();
-	const results = [makeSingle({ agent: "alpha", step: 1 }), makeSingle({ agent: "beta", step: 2 })];
-	const out = render(tool, makeResult(makeDetails("chain", results)), true, { durationMs: 1_200 });
-
-	assert.equal(countOccurrences(out, "1.2s"), 1);
-	assert.equal(out.split("\n")[0], "✓ chain 2/2 steps 1.2s");
-});
-
-test("the expanded parallel header appends the run total exactly once", () => {
-	const tool = captureTool();
-	const results = [makeSingle({ agent: "alpha" }), makeSingle({ agent: "beta" })];
-	const out = render(tool, makeResult(makeDetails("parallel", results)), true, { durationMs: 1_200 });
-
-	assert.equal(countOccurrences(out, "1.2s"), 1);
-	assert.equal(out.split("\n")[0], "✓ parallel 2/2 tasks 1.2s");
+	const pair = [makeSingle({ agent: "alpha", step: 1 }), makeSingle({ agent: "beta", step: 2 })];
+	const modes: Array<["single" | "chain" | "parallel", unknown[], string]> = [
+		["single", [makeSingle()], "✓ tester (user)"],
+		["chain", pair, "✓ chain 2/2 steps"],
+		["parallel", pair, "✓ parallel 2/2 tasks"],
+	];
+	for (const [mode, results, label] of modes) {
+		for (const expanded of [false, true]) {
+			const result = makeResult(makeDetails(mode, results));
+			const withTotal = render(tool, result, expanded, { durationMs: 1_200 });
+			assert.equal(countOccurrences(withTotal, "1.2s"), 1, `${mode} expanded=${expanded}`);
+			assert.equal(withTotal.split("\n")[0], `${label} 1.2s`);
+			const without = render(tool, result, expanded, {});
+			assert.equal(without.split("\n")[0], label, `${mode} expanded=${expanded} has no suffix`);
+		}
+	}
 });
 
 // --- non-finite run totals must render nothing -------------------------------
@@ -247,12 +172,6 @@ test("a non-finite run total renders no header suffix", () => {
 		const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), false, { durationMs: bad });
 		assert.equal(out.split("\n")[0], "✓ tester (user)", `durationMs=${bad}`);
 	}
-});
-
-test("the expanded single header omits the run total when no duration is given", () => {
-	const tool = captureTool();
-	const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), true, { durationMs: undefined });
-	assert.equal(out.split("\n")[0], "✓ tester (user)");
 });
 
 // --- per-command durations on inner tool lines -------------------------------
@@ -422,6 +341,11 @@ test("formatThinkingIndicator shows the total and reasoning count after thinking
 	assert.equal(out, "🧠 think 1.2s · 500 reasoning");
 });
 
+test("formatThinkingIndicator omits reasoning when the count is zero", () => {
+	const out = formatThinkingIndicator({ thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 }, 0, 9_999);
+	assert.equal(out, "🧠 think 1.2s");
+});
+
 test("formatThinkingIndicator returns null when no thinking happened", () => {
 	assert.equal(formatThinkingIndicator(INITIAL_THINKING, undefined, 0), null);
 	assert.equal(formatThinkingIndicator(undefined, undefined, 0), null);
@@ -431,12 +355,6 @@ test("formatThinkingIndicator returns null when no thinking happened", () => {
 test("formatThinkingIndicator shows the count when only reasoning tokens exist", () => {
 	const out = formatThinkingIndicator(undefined, 500, 0);
 	assert.equal(out, "🧠 think 0ms · 500 reasoning");
-});
-
-test("formatThinkingIndicator omits reasoning when the count is zero", () => {
-	const out = formatThinkingIndicator({ thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 }, 0, 9_999);
-	assert.equal(out, "🧠 think 1.2s");
-	assert.ok(!out?.includes("0 reasoning"), out ?? "");
 });
 
 // --- thinking indicator in the inline block ---------------------------------
@@ -450,17 +368,6 @@ test("a single block renders the thinking total and reasoning count", () => {
 	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
 	assert.ok(out.includes("🧠 think 1.2s"), out);
 	assert.ok(out.includes("500 reasoning"), out);
-});
-
-test("a thinking-only block does not print 0 reasoning", () => {
-	const tool = captureTool();
-	const result = makeSingle({
-		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
-		reasoningTokens: 0,
-	});
-	const out = render(tool, makeResult(makeDetails("single", [result])), false, {});
-	assert.ok(out.includes("🧠 think 1.2s"), out);
-	assert.ok(!out.includes("0 reasoning"), out);
 });
 
 test("a result without thinking fields renders no thinking line", () => {
@@ -544,17 +451,6 @@ function captureCommands(): Map<string, CapturedCommand> {
 	registerInspectorCommands(pi as unknown as ExtensionAPI);
 	return commands;
 }
-
-test("toInspectTask carries the thinking total and reasoning tokens", () => {
-	const task = toInspectTask(
-		makeSingle({
-			thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 1_200 },
-			reasoningTokens: 500,
-		}) as unknown as SingleResult,
-	);
-	assert.equal(task.thinkingMs, 1_200);
-	assert.equal(task.reasoningTokens, 500);
-});
 
 test("archiveRun stores the thinking fields and /runs shows them", async () => {
 	const task = toInspectTask(

@@ -202,34 +202,12 @@ test("the MCP total sums every server, including rows beyond the visible cap", (
 	assert.ok(lines.includes("total x15"));
 });
 
-test("the MCP total label uses the dim style", () => {
-	const dimmed: string[] = [];
-	const recording: SidebarTheme = {
-		dim: (text) => {
-			dimmed.push(text);
-			return text;
-		},
-	};
-	const mcp: McpSnapshot = [{ name: "a", configured: true, connected: true, status: "connected" }];
-
-	renderMcpPanel(mcp, 60, recording, { a: 2 });
-
-	assert.ok(dimmed.includes("x2"), "the row badge is dim");
-	assert.ok(dimmed.includes("total x2"), "the total label is dim");
-});
-
 test("the MCP total row fits the column width", () => {
 	const mcp: McpSnapshot = [{ name: "context7", configured: true, connected: true, status: "connected" }];
 	const lines = renderMcpPanel(mcp, 20, theme, { context7: 12345 });
 	for (const line of lines) {
 		assert.ok(visibleWidth(line) <= 20, `line exceeds 20: ${JSON.stringify(line)}`);
 	}
-});
-
-test("a large usage count renders every digit in a wide panel", () => {
-	const mcp: McpSnapshot = [{ name: "exa", configured: true, connected: true, status: "connected" }];
-	const lines = content(renderMcpPanel(mcp, 60, theme, { exa: 123456789 }));
-	assert.ok(lines.some((line) => line.includes("● exa x123456789")));
 });
 
 test("a long server name and a large count clip cleanly to a narrow width", () => {

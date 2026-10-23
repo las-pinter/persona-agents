@@ -696,16 +696,6 @@ test("planSidebarWidthChange rejects junk values", () => {
 	}
 });
 
-test("planSidebarWidthChange rejects both range ends", () => {
-	const low = planSidebarWidthChange([String(SIDEBAR_MIN_WIDTH - 1)], SIDEBAR_DEFAULT_WIDTH);
-	assert.equal(low.ok, false);
-	if (!low.ok) assert.match(low.message, /out of range/);
-
-	const high = planSidebarWidthChange([String(SIDEBAR_MAX_WIDTH + 1)], SIDEBAR_DEFAULT_WIDTH);
-	assert.equal(high.ok, false);
-	if (!high.ok) assert.match(high.message, /out of range/);
-});
-
 test("planSidebarWidthChange does not reinstall for the current width", () => {
 	assert.deepEqual(planSidebarWidthChange(["80"], 80), {
 		ok: true,

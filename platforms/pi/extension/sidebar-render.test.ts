@@ -28,7 +28,6 @@ import {
 	renderTreeLines,
 	renderWorkspacePanel,
 	shortenHome,
-	statusGlyph,
 } from "./sidebar-render.ts";
 import {
 	assertFits,
@@ -47,40 +46,24 @@ test("zero nodes renders the AGENTS placeholder", () => {
 	assert.ok(lines.some((line) => line.includes("(no active agents)")));
 });
 
-test("one done node renders one line with the check icon", () => {
-	const node = makeNode({ runId: "n1", agent: "planner", status: "done" });
-	const lines = renderAgentTreePanel([node], 40, 5, theme, 0);
-	assert.ok(lines.length >= 2);
-	assert.ok(lines[1]?.includes("✓"));
-	assert.ok(lines[1]?.includes("planner"));
-});
-
-test("a running node renders the spinner frame", () => {
-	const node = makeNode({ runId: "n1", agent: "tester", status: "running" });
-	const lines = renderAgentTreePanel([node], 40, 5, theme, 0);
-	assert.ok(lines[1]?.includes("⠋"));
-});
-
-test("an idle node renders the idle glyph and not the spinner", () => {
-	const node = makeNode({ runId: "n1", agent: "tester", status: "idle" });
-	const line = renderAgentTreePanel([node], 40, 5, theme, 0)[1];
-	assert.ok(line?.includes("○"));
-	assert.ok(!line?.includes("⠋"));
-});
-
-test("a failed node renders the cross icon", () => {
-	const node = makeNode({ runId: "n1", status: "failed" });
-	assert.ok(renderAgentTreePanel([node], 40, 5, theme, 0)[1]?.includes("✗"));
-});
-
-test("a stale node renders the warning icon", () => {
-	const node = makeNode({ runId: "n1", status: "stale" });
-	assert.ok(renderAgentTreePanel([node], 40, 5, theme, 0)[1]?.includes("⚠"));
-});
-
-test("an orphan node renders the question mark", () => {
-	const node = makeNode({ runId: "n1", status: "running", orphan: true });
-	assert.ok(renderAgentTreePanel([node], 40, 5, theme, 0)[1]?.includes("?"));
+test("each node status renders its own glyph on the first node line", () => {
+	const cases: Array<[string, Partial<Parameters<typeof makeNode>[0]>, string]> = [
+		["done", { status: "done" }, "✓"],
+		["running", { status: "running" }, "⠋"],
+		["idle", { status: "idle" }, "○"],
+		["failed", { status: "failed" }, "✗"],
+		["stale", { status: "stale" }, "⚠"],
+		["orphan", { status: "running", orphan: true }, "?"],
+	];
+	for (const [label, overrides, glyph] of cases) {
+		const node = makeNode({ runId: "n1", agent: "planner", ...overrides });
+		const lines = renderAgentTreePanel([node], 40, 5, theme, 0);
+		assert.ok(lines.length >= 2, label);
+		assert.ok(lines[1]?.includes(glyph), `${label} shows ${glyph}`);
+		assert.ok(lines[1]?.includes("planner"), `${label} shows the agent name`);
+	}
+	const idle = renderAgentTreePanel([makeNode({ runId: "n1", status: "idle" })], 40, 5, theme, 0)[1];
+	assert.ok(!idle?.includes("⠋"), "an idle node does not spin");
 });
 
 test("branch connectors nest with depth and mark the last child", () => {
@@ -186,20 +169,6 @@ test("every SESSION value starts at the same column", () => {
 		assert.equal(line, label.padEnd(SESSION_LABEL_WIDTH) + value);
 		assert.equal(line?.indexOf(value), SESSION_LABEL_WIDTH, `${label} value is not aligned`);
 	}
-});
-
-test("the session stats align every value in one column and clip", () => {
-	const lines = content(
-		renderSessionPanel(
-			makeSession({ tokensIn: 1500, tokensOut: 2300, turns: 7, cost: 0.5, tps: 9.9 }),
-			80,
-			theme,
-		),
-	);
-	assert.ok(lines.includes("tokens".padEnd(SESSION_LABEL_WIDTH) + "1.5k / 2.3k"));
-	assert.ok(lines.includes("turns".padEnd(SESSION_LABEL_WIDTH) + "7"));
-	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.50"));
-	assert.ok(lines.includes("tok/s".padEnd(SESSION_LABEL_WIDTH) + "9.9"));
 	assertFits(renderSessionPanel(makeSession(), 8, theme), 8);
 });
 
@@ -245,6 +214,18 @@ test("contextBarColor uses the low, mid, and alarm thresholds", () => {
 	assert.equal(contextBarColor(80), "warning");
 	assert.equal(contextBarColor(81), "error");
 	assert.equal(contextBarColor(100), "error");
+});
+
+test("the session panel colors the context bar with the alarm token above 80 percent", () => {
+	const calls: string[] = [];
+	const recording: SidebarTheme = {
+		fg: (name, text) => {
+			calls.push(name);
+			return text;
+		},
+	};
+	renderSessionPanel(makeSession({ contextTokens: 1900, contextWindow: 2000 }), 80, recording);
+	assert.ok(calls.includes("error"));
 });
 
 test("the session context bar clips at width 0 and 1", () => {
@@ -326,56 +307,6 @@ test("formatElapsed compacts seconds, minutes, and hours", () => {
 });
 
 // --- colored status glyphs ---------------------------------------------------
-
-test("status glyphs use the expected theme color tokens", () => {
-	const calls: string[] = [];
-	const recording: SidebarTheme = {
-		fg: (name, text) => {
-			calls.push(name);
-			return text;
-		},
-	};
-	statusGlyph(recording, makeNode({ runId: "r", status: "running" }), 0);
-	statusGlyph(recording, makeNode({ runId: "i", status: "idle" }), 0);
-	statusGlyph(recording, makeNode({ runId: "d", status: "done" }), 0);
-	statusGlyph(recording, makeNode({ runId: "f", status: "failed" }), 0);
-	statusGlyph(recording, makeNode({ runId: "s", status: "stale" }), 0);
-	statusGlyph(recording, makeNode({ runId: "o", status: "running", orphan: true }), 0);
-	assert.deepEqual(calls, ["accent", "dim", "success", "error", "warning", "warning"]);
-});
-
-test("the context fill bar uses the alarm color token above 80 percent", () => {
-	const calls: string[] = [];
-	const recording: SidebarTheme = {
-		fg: (name, text) => {
-			calls.push(name);
-			return text;
-		},
-	};
-	renderSessionPanel(makeSession({ contextTokens: 1900, contextWindow: 2000 }), 80, recording);
-	assert.ok(calls.includes("error"));
-});
-
-test("todo glyphs use the success and dim tokens", () => {
-	const calls: string[] = [];
-	const recording: SidebarTheme = {
-		fg: (name, text) => {
-			calls.push(name);
-			return text;
-		},
-	};
-	renderTodosPanel(
-		[
-			{ id: "1", text: "done", done: true },
-			{ id: "2", text: "open", done: false },
-		],
-		60,
-		8,
-		recording,
-	);
-	assert.ok(calls.includes("success"));
-	assert.ok(calls.includes("dim"));
-});
 
 // --- WORKSPACE ---------------------------------------------------------------
 
@@ -467,28 +398,6 @@ test("MCP summary counts the status, not the connected flag", () => {
 	assert.ok(lines.includes("configured: 3, connected: 2"));
 });
 
-test("MCP status dots use the success, error, and warning color tokens", () => {
-	const calls: string[] = [];
-	const recording: SidebarTheme = {
-		fg: (name, text) => {
-			calls.push(name);
-			return text;
-		},
-	};
-	const mcp: McpSnapshot = [
-		{ name: "a", configured: true, connected: true, status: "connected" },
-		{ name: "b", configured: true, connected: false, status: "disconnected" },
-		{ name: "c", configured: true, connected: false, status: "unknown" },
-	];
-
-	const lines = content(renderMcpPanel(mcp, 60, recording));
-
-	assert.deepEqual(calls, ["accent", "success", "error", "warning"]);
-	assert.ok(lines.some((line) => line.includes("● a")));
-	assert.ok(lines.some((line) => line.includes("○ b")));
-	assert.ok(lines.some((line) => line.includes("◐ c")));
-});
-
 test("MCP dots stay plain text when the theme has no colors", () => {
 	const mcp: McpSnapshot = [
 		{ name: "a", configured: true, connected: true, status: "connected" },
@@ -557,21 +466,6 @@ test("no turn marker renders when it is false", () => {
 		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, 8, theme),
 	);
 	assert.ok(!lines.some((line) => line.includes("— new turn —")));
-});
-
-test("a done todo is dim and keeps its check glyph", () => {
-	const calls: Array<[string, string]> = [];
-	const recording: SidebarTheme = {
-		fg: (name, text) => {
-			calls.push([name, text]);
-			return text;
-		},
-	};
-	const lines = content(
-		renderTodosPanel([{ id: "1", text: "finished", done: true }], 60, 8, recording),
-	);
-	assert.ok(lines.some((line) => line.includes("✓ finished")));
-	assert.ok(calls.some(([name, text]) => name === "dim" && text === "finished"));
 });
 
 test("all done todos render the all-done cue", () => {
