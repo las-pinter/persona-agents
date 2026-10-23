@@ -13,10 +13,18 @@ Load and follow the **persona-free-documents** skill (`skills/common/persona-fre
 
 ## Tool Names Per Stack
 
-Tool names differ by stack. Read the table in
-[CONTRIBUTING.md](../../../../CONTRIBUTING.md#research-and-mcp-tool-names-per-stack).
-This skill names the capability (Context7, DeepWiki, Exa). Replace each name
-with the name for your stack.
+Tool names differ by stack. This skill names the capability (Context7,
+DeepWiki, Exa). Replace each name with the name for your stack. The pi server
+names come from `config/mcp.json.example`. The pi tool form is
+`mcp__<server>__<tool>`. Claude Code uses the tool names that the session
+lists.
+
+| Capability | pi | kiro | opencode |
+|---|---|---|---|
+| Web search | `mcp__exa__web_search_exa` | `@exa` or `web_search` | `websearch` or `exa*` |
+| Web fetch | `mcp__exa__web_fetch_exa` | `@exa` | `exa*` |
+| Library and API docs | `mcp__context7__*` | `@context7` | `context7*` |
+| Repository architecture | `mcp__deepwiki__*` | `@deepwiki` | `deepwiki*` |
 
 ---
 

@@ -275,6 +275,13 @@ researcher, reviewer. Mascot is excluded. Each allowed agent lists
 - `/agent-inspect [runId|last]` — open one node's detail.
 - `/retro` — print-only blameless session retrospective; run `/reload` after install. The same command runs as `/retro` on kiro and OpenCode, and as `/persona-agents:retro` in Claude Code.
 
+The retro skill sets `disable-model-invocation: true`, so only the user starts
+it. The pi agents list `common/retro` in `skills:`. The extension puts a skill
+with that key in a separate "User-invoked skills" list, not in the on-demand
+index. The agent has the path for the command but does not load the skill on a
+task match. A command file in `content/commands/` ships through the
+`pi.prompts` key in `package.json`. Run `/reload` after a change.
+
 The sidebar has no keyboard focus, so node details use these overlays.
 
 ### Turn `pi-sidebar-tui` off

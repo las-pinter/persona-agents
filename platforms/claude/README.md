@@ -3,8 +3,7 @@
 This file describes how the Claude Code plugin reads its options, for admins
 and maintainers. The root [README.md](../../README.md) covers install and use.
 
-For the hook design, see [CONTRIBUTING.md](../../CONTRIBUTING.md), sections
-"4. Claude Code Plugin" and "Runtime Context Pipeline (Claude Code)".
+The hook design is in the section "Plugin and hook design" below.
 
 ## Option lookup
 
@@ -39,3 +38,40 @@ These limits apply to the `theme` and `subagent_model` options.
   remote or MDM source.
 - If the theme comes only from MDM or server-managed settings, a theme in your
   `settings.json` wins over it.
+
+## Plugin and hook design
+
+The repo root is the plugin (`.claude-plugin/plugin.json`) and its own
+marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
+
+- **Agents** (`platforms/claude/agents/{profession}.md`) hold frontmatter only:
+  `name`, `description`, and tool limits. The body stays empty on purpose. A
+  non-empty body would replace the Claude Code system prompt when the agent
+  runs as the main session, and it would copy the profession text.
+- **Context** comes from one script, `platforms/claude/scripts/context.mjs`.
+  It runs as two hooks on `SessionStart` (the main session, started with
+  `claude --agent persona-agents:orchestrator`) and on `SubagentStart` (an
+  agent that the orchestrator dispatches). The `profession` hook sends
+  `content/professions/{profession}.md` unchanged. The `persona` hook sends a
+  short Claude Code note and the persona that `content/agents.json` picks for
+  the `theme` option (`/config`, **Persona theme**).
+- **Two hooks, not one,** because Claude Code caps each hook string at 10,000
+  characters and shows only a 2,000-character preview of a longer string.
+  `tests/claude-plugin.test.ts` fails if a profession, or a theme persona with
+  its note, reaches the cap.
+- **Skills** load in place from `content/skills/`. `plugin.json` lists each
+  skill folder. A skill for another platform only is left out of the list and
+  named in `EXCLUDED_SKILLS` in `tests/claude-plugin.test.ts`, with the reason.
+- **Doctrine** is one `PreToolUse` hook,
+  `platforms/claude/scripts/doctrine.ts`, keyed on the calling agent.
+  `tests/claude-doctrine.test.ts` holds the matrix. `AGENTS.md` owns the
+  history and release rules. The hook also does this:
+  - It allows a plain history command only when every part of the command is
+    such a command. A command with another part gets no hook decision.
+  - An edit outside the `agent-notes/` zone of an agent asks for the
+    orchestrator, and denies the planner, researcher, reviewer, and mascot.
+  - A hook deny wins over a user allow rule.
+  - It reuses the shell parser of the pi gate. It unwraps `cd x &&`,
+    `sudo`, `env`, and `xargs` prefixes and `bash -c` payloads. An unreadable
+    command that names a gated program fails closed.
+  - It leaves sessions without a persona-agents agent alone.

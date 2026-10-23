@@ -249,5 +249,5 @@ Pull the latest and re-apply: `cd ~/persona-agents && git pull && ./install.sh -
 ## Contributing
 
 Want to add a new warband, profession, or fix something? See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the full docs — architecture, development
-setup, testing, PR checklist, and everything else that would clutter this README.
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full docs: setup, how to add content, testing,
+and PR rules. Platform internals are in `platforms/*/README.md`.
