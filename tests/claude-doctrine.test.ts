@@ -126,6 +126,86 @@ describe("doctrine: fail closed", () => {
 		assert.equal(bash("implementer", "cat <<EOF > notes.txt\nhello\nEOF"), "none");
 	});
 
+	/** Quoted heredoc bodies that the shell passes as plain data. */
+	const DATA_HEREDOCS = [
+		"python3 - <<'PY'\n# then run git commit\nprint(1)\nPY",
+		"python3 - <<'PY'\nshutil.copy(a, b)  # like cp a b\nPY",
+		'python3 - <<"PY"\nx = "mv old new"\nPY',
+		"cat <<'EOF' > notes.md\ngit push\nEOF",
+		"tee notes.md <<'EOF'\ngit push\nEOF\n",
+		"cat\t<<'EOF'\t>\tf\ngit push\nEOF",
+		"cat <<'EOF'\ngit push\nEOF\n   ",
+		// Known limit: interpreter code in a body is not inspected.
+		"node - <<'JS'\nrequire('child_process').execSync('git push');\nJS",
+	];
+	for (const command of DATA_HEREDOCS) {
+		test(`a quoted heredoc body is data: ${JSON.stringify(command)}`, () => {
+			for (const profession of ["implementer", "orchestrator", "tester"]) {
+				assert.equal(bash(profession, command), "none", profession);
+			}
+		});
+	}
+
+	/** Heredocs that still hit the history gate. */
+	const GATED_HEREDOCS = [
+		"cat <<'EOF' > f && git push\nhello\nEOF",
+		"git commit -F - <<'EOF'\nmsg\nEOF",
+		"bash <<'EOF'\ngit push\nEOF",
+		"sh -s <<'EOF'\ngit push\nEOF",
+		"xargs git <<'EOF'\npush\nEOF",
+		"cat <<EOF\n$(git push)\nEOF",
+		"cat <<'EOF'\ngit push",
+		'bash <<< "git push"',
+		"cat <<EOF\n/usr/bin/git push\nEOF",
+		"cat <<'EOF'\ngit push\nEOF \n",
+		"cat <<'EOF'\nEOF\ngit push",
+		// Each one runs a real git push.
+		"cat <<'EO'F\nEOF\ngit push\nEO",
+		"echo $'a' \"\n<<'X'\n\"; git push\nX",
+		"cat <<'A'\na\nA\necho '\n<<\"X\"\n'; git push\nX",
+		"cat <<'EOF' \\\n| bash\ngit push\nEOF",
+		"echo $(bash <<'EOF'\ngit push\nEOF\n)",
+		"x=$(bash <<'EOF'\ngit push\nEOF\n)",
+		"if bash <<'EOF'\ngit push\nEOF\nthen :; fi",
+		"! bash <<'EOF'\ngit push\nEOF",
+		"( (bash <<'EOF'\ngit push\nEOF\n) )",
+		"cat <<'EOF' | (bash)\ngit push\nEOF",
+		"cat <<'EOF' | tee >(bash)\ngit push\nEOF",
+		"$SHELL <<'EOF'\ngit push\nEOF",
+		"busybox sh <<'EOF'\ngit push\nEOF",
+		"setsid bash <<'EOF'\ngit push\nEOF",
+		"cat <<'EOF' | sudo -s\ngit push\nEOF",
+		"cat <<'EOF' | parallel\ngit push\nEOF",
+		"at now <<'EOF'\ngit push\nEOF",
+		"2>/dev/null bash <<'EOF'\ngit push\nEOF",
+		"stdbuf -o 0 bash <<'EOF'\ngit push\nEOF",
+		"cat <<'EOF' > s.sh\ngit push\nEOF\nbash s.sh",
+		"fish <<'EOF'\ngit push\nEOF",
+		"cat <<'EOF'\r\ngit push\r\nEOF\r",
+		"cat <<'EOF' | bash\ngit push\nEOF",
+		"sudo bash <<'EOF'\ngit push\nEOF",
+		"/bin/bash <<'EOF'\ngit push\nEOF",
+	];
+	for (const command of GATED_HEREDOCS) {
+		test(`a heredoc stays gated: ${JSON.stringify(command)}`, () => {
+			assert.equal(bash("orchestrator", command), "ask");
+			assert.equal(bash("implementer", command), "deny");
+			assert.equal(bash("tester", command), "deny");
+		});
+	}
+
+	test("the fail-closed scan returns only the gate it matched", () => {
+		const command = "python3 - <<EOF\nmv a b\nEOF";
+		const reason = (profession: string): string =>
+			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
+		assert.equal(bash("orchestrator", command), "ask");
+		assert.equal(bash("implementer", command), "ask");
+		assert.equal(bash("tester", command), "deny");
+		assert.match(reason("implementer"), /cp, mv, and rsync need your approval/);
+		assert.match(reason("tester"), /for the orchestrator and the implementer only/);
+		assert.doesNotMatch(reason("tester"), /git history/);
+	});
+
 	test("an ask explains the approval; a deny names who may run it", () => {
 		const reason = (profession: string, command: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";

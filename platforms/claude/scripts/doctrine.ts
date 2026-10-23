@@ -15,6 +15,8 @@
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
 // before it is classified. A command the parser cannot read (a heredoc, an
 // unbalanced quote) that names a gated command counts as a hit: fail closed.
+// One exception: a single quoted heredoc fed to a data reader (cat, tee,
+// python3 -, node -) is checked by its header only (safeHeredocHeader).
 //
 // Any other agent, or a session without one, gets no decision, so Claude
 // Code's own permission flow runs unchanged.
@@ -95,7 +97,20 @@ const PREFIX_VALUE_OPTIONS: Record<string, Set<string>> = {
 	xargs: new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"]),
 };
 /** Names a fail-closed scan looks for in a command the parser cannot read. */
-const GATED_WORD = /(^|[\s;&|(`$'"])(git|gh|cp|mv|rsync)(\s|$)/;
+const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync)(?=\s|$)/;
+/** A plain file path in a heredoc header: no quotes, expansions, or operators. */
+const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
+const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;
+const HEREDOC_TOKEN = String.raw`<<[ \t]*(?:'(\w+)'|"(\w+)")`;
+/**
+ * The only heredoc header whose body may skip the fail-closed scan: a data
+ * reader (cat, tee with one file, python3/python/node with `-`), one optional
+ * output redirect to a plain path, and one heredoc with a quoted delimiter.
+ */
+const SAFE_HEREDOC_HEADER = new RegExp(
+	String.raw`^(?:cat|tee(?:[ \t]+${PLAIN_PATH})?|(?:python3|python|node)(?:[ \t]+-)?)` +
+		String.raw`(?:(?:[ \t]+${HEREDOC_REDIRECT})?[ \t]+${HEREDOC_TOKEN}|[ \t]+${HEREDOC_TOKEN}(?:[ \t]+${HEREDOC_REDIRECT})?)[ \t]*$`,
+);
 
 const MAX_UNWRAP_DEPTH = 4;
 
@@ -187,10 +202,38 @@ function classify(command: string, args: string[]): Gate[] {
 function commandGates(command: string, depth = 0): Gate[] {
 	const parsed = parseShellCommand(command);
 	if (parsed.unsupported) {
+		const header = safeHeredocHeader(command);
+		if (header !== null) return commandGates(header, depth);
 		// Fail closed: an unreadable command that names a gated program is a hit.
-		return GATED_WORD.test(command) ? ["history", "copy"] : [];
+		const gates = new Set<Gate>();
+		for (const match of command.matchAll(new RegExp(GATED_WORD.source, "g"))) {
+			gates.add(match[1] === "git" || match[1] === "gh" ? "history" : "copy");
+		}
+		return [...gates];
 	}
 	return [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, depth)))];
+}
+
+/**
+ * The header without its heredoc token when the whole command is one safe
+ * data heredoc, else null. The check is a strict allow-list because any shape
+ * it does not know (a shell reading the body, a pipe, a later line that runs
+ * the written file) must fall back to the fail-closed scan.
+ * Shape: header line (SAFE_HEREDOC_HEADER), body, a closing line equal to the
+ * delimiter, then only blank lines.
+ * Known limit: python or node code in a body (a subprocess or child_process
+ * call to git) is not inspected; `python -c '...'` has the same limit.
+ */
+function safeHeredocHeader(command: string): string | null {
+	const lines = command.split("\n");
+	const match = SAFE_HEREDOC_HEADER.exec(lines[0]);
+	if (!match) return null;
+	const delimiter = match.slice(1).find((group) => group !== undefined);
+	if (!delimiter) return null;
+	const close = lines.indexOf(delimiter, 1);
+	if (close < 0) return null;
+	if (!lines.slice(close + 1).every((line) => /^[ \t]*$/.test(line))) return null;
+	return lines[0].replace(new RegExp(HEREDOC_TOKEN), " ");
 }
 
 /** The doctrine decision for one tool call, or null to leave it alone. */
