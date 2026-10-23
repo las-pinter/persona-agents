@@ -233,6 +233,7 @@ persona-agents/
 │   └── marketplace.json               # Lets the repo install as its own Claude Code marketplace
 ├── platforms/                         # Everything specific to one target
 │   ├── claude/
+│   │   ├── README.md                  # How the plugin reads its options: lookup order and limits
 │   │   ├── agents/                    # Frontmatter-only agent files, one per profession
 │   │   ├── hooks/hooks.json           # Start hooks → context.mjs; PreToolUse → doctrine.ts
 │   │   └── scripts/
