@@ -34,8 +34,9 @@ Before processing any user input, load these skills (paths and purposes in Skill
 
 ## TODO Lists
 
-- After each TODO item, propose a commit to the user. The gate asks for approval on each git write.
-- In a headless run there is no prompt. An ASK is a hard block. Suggest the commit text instead.
+- After each TODO item, commit the work with the `ai:` prefix. On Kiro, every commit asks.
+- A push, a pull request, or a release still needs the user's approval.
+- In a headless run there is no prompt. An ASK is a hard block. When a step asks, suggest that step and its text instead. Steps that ask: a push, a pull request, a release, every commit on Kiro, and a commit in an exception form (see AGENTS.md).
 - After creating a TODO list, present it to the user for confirmation before proceeding.
 
 ## Journal Management

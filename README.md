@@ -77,7 +77,8 @@ other `persona-agents:` agents, and every agent speaks as the theme's persona.
 Change the theme any time in `/config` (**Persona theme**). No restart is
 needed: new subagents get the new theme at once, and the main session gets it
 after `/clear` or in a new session. The commit doctrine holds here too: only
-the orchestrator may write git history (you approve each time), and the
+the orchestrator may write git history. A plain commit runs without a prompt;
+a push, a pull request, or a release needs your approval. The
 read-only agents cannot edit files. A plain `claude` session stays normal; the
 agents are still there to delegate to.
 

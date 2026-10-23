@@ -79,8 +79,9 @@ previous commit.
 3. Confirm the base is not pushed (`git branch -r --contains <base>`). Stop if it is.
 4. Run `git reset --soft <base>`. Re-commit in the target grouping.
    Prefix every new commit with `ai:`.
-   Unstage as needed with `git add <path>` or `git commit <path>` (ASK-gated). Do not use a mixed `git reset`.
-   This step is ASK-gated.
+   Unstage as needed with `git add <path>` or `git commit <path>`. Do not use a mixed `git reset`.
+   `git reset --soft` asks for approval on pi, opencode, and Kiro. On Claude
+   Code, the hook gives no decision, so the Claude Code permission flow applies.
 5. Re-run the tests and the typecheck.
 
 ## Rules

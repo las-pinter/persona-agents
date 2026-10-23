@@ -46,9 +46,35 @@ the prefix `ai:`. The implementer never commits. It suggests a commit.
 
 The doctrine lives in the permission templates, the live global file
 `~/.pi/agent/permissions.json`, and, for Claude Code, the PreToolUse hook
-`platforms/claude/scripts/doctrine.ts`. The orchestrator gets an ASK verdict for
-`git add`, `git commit`, `git push`, `git pull`, `git merge`, `git rebase`,
-`git tag`, and every `gh pr` and `gh release` command. Every other agent gets a
-DENY for these. `cp`, `mv`, and `rsync` also ASK for the orchestrator and the
-implementer, and are denied to the rest. The global file change is live and
-unversioned.
+`platforms/claude/scripts/doctrine.ts`. On Claude Code and pi, the orchestrator
+runs a plain `git add`, `git commit`, `git pull`, `git merge`, `git rebase`, or
+`git tag` with no prompt. On every platform, it gets an ASK verdict for
+`git push` and every `gh pr` and `gh release` command. Coverage differs per
+platform:
+
+- Claude Code allows a command only when every part of it is a plain history
+  command. A command with another part gets no hook decision, so Claude Code
+  decides.
+- pi allows the six commands also with `git -C <path>`, `--no-pager`, `-p`,
+  and a leading `cd x &&`.
+- opencode allows only a plain `git add`, `git commit`, `git merge`, and
+  `git rebase`. `git pull` and `git tag` ask, because a bare star can expand
+  to a planted `--upload-pack` or `-d` file. `git -C` forms ask, because a
+  quoted space in the directory can hide a second verb.
+- Kiro has no ask tier, so every git history command stays unlisted and asks.
+- On every platform, some forms still ask: tag force-move, `git -c` overrides
+  and unknown global options, `commit --amend`, upload-pack and transport
+  helper URLs, merge strategies, wrapped or substituted forms, and brace,
+  bracket, and extglob words. On Claude Code and pi, star and question mark
+  words also ask. Tag delete is a DENY on pi, opencode, and Kiro, and an ASK
+  on Claude Code.
+- Accepted risks: `rebase --exec` and `rebase -i` are allowed. On Claude Code
+  and pi, `git -C` to another repository is allowed, and the hooks and config
+  of that repository run. On opencode, a bare star or question mark in an
+  allowed command can expand to an option name from a planted file.
+
+Every other agent gets a DENY for `git add`, `git commit`, `git push`,
+`git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr` and
+`gh release` command. `cp`, `mv`, and `rsync` ASK for the orchestrator and the
+implementer, and are denied to the rest. The global file asks for `git push`
+and `gh pr` for every agent. It is live and unversioned.

@@ -143,10 +143,14 @@ content:
   skill folder; a pi-only skill is left out and named in `EXCLUDED_SKILLS` in
   the test, with the reason.
 - **Doctrine** is one `PreToolUse` hook, `platforms/claude/scripts/doctrine.ts`,
-  keyed on the calling agent. Git history (`add`, `commit`, `push`, `pull`,
-  `merge`, `rebase`, `tag`) and every `gh pr` / `gh release` command ask for the
-  orchestrator and deny the rest. `cp`, `mv`, and `rsync` ask for the
-  orchestrator and the implementer and deny the rest. Edits outside an agent's
+  keyed on the calling agent. A plain git `add`, `commit`, `pull`, `merge`,
+  `rebase`, or `tag` is allowed for the orchestrator when every part of the
+  command is such a history command; a command with another part gets no hook
+  decision. `git push`, every `gh pr` / `gh release` command, and the exception
+  forms (for example tag force-move or delete, `git -c`, `commit --amend`,
+  wrapped or runtime-shaped forms) ask for the orchestrator. All of these deny
+  the rest. `cp`, `mv`, and `rsync` ask for the orchestrator and the
+  implementer and deny the rest. Edits outside an agent's
   `agent-notes/` zone ask for the orchestrator and deny the planner,
   researcher, reviewer, and mascot. A hook deny wins over a user allow rule. It
   reuses the pi gate's shell parser and unwraps `cd x &&`, `sudo`/`env`/`xargs`
@@ -233,7 +237,7 @@ persona-agents/
 │   │   ├── hooks/hooks.json           # Start hooks → context.mjs; PreToolUse → doctrine.ts
 │   │   └── scripts/
 │   │       ├── context.mjs            # Reads content/ and returns it as hook context
-│   │       └── doctrine.ts            # Commit and file doctrine: ask or deny per agent
+│   │       └── doctrine.ts            # Commit and file doctrine: allow, ask, or deny per agent
 │   ├── pi/
 │   │   ├── README.md                  # Pi install steps and extension architecture notes
 │   │   ├── extension/                 # Pi extension ("agent-stack"): subagent + todo tools, permission gate, sidebar
@@ -747,7 +751,9 @@ denied prompts the user. The repo doctrine holds by omission:
   case is the orchestrator tag force-move: Kiro asks by omission, while tag
   delete stays denied.
 
-A gated git-write command in an `allowedCommands` list is a bug. A tool that is
+A gated git-write command in a Kiro `allowedCommands` list is a bug. This
+rule is for Kiro only: the Claude Code hook, pi, and opencode allow some plain
+history commands for the orchestrator. A tool that is
 absent from `allowedTools` stays available, so it defaults to ask. The reviewer
 and planner omit `code` for this reason.
 

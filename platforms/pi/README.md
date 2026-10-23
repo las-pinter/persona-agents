@@ -172,14 +172,26 @@ spanning always-allow runs the current call and remembers the rule, approving no
 segment; later calls skip the spanning ask, but they still must pass the allow checks,
 so deny-by-default can still block them.
 
-**Git writes now ask**: the orchestrator's `git add`, `git commit`, `git push`,
-`git pull`, and every `gh pr` and `gh release` command moved to its `ask` list — each one prompts
-allow/deny in the main session instead of running silently. The implementer gets a
-hard DENY for the same commands. It may only SUGGEST a commit. Since a write is an
-`ask` rule and ask is a hard block without a UI, **headless orchestrator runs
-(delegated/`-p`/`--mode json`) cannot commit**. The global file
-`~/.pi/agent/permissions.json` is live and unversioned; it carries a global ask for
-push/pull and `gh pr` as a safety net.
+**Git writes**: the orchestrator runs a plain `git add`, `git commit`, `git pull`,
+`git merge`, `git rebase`, or `git tag` with no prompt. `git push` and every `gh pr`
+and `gh release` command are on its `ask` list — each one prompts allow/deny in the
+main session. These exception forms also ask:
+
+- tag force-move and `commit --amend`;
+- `git -c` overrides and unknown global options;
+- upload-pack and transport helper URLs, and merge strategies;
+- wrapped or substituted forms, and glob or brace words;
+- `git reset --soft`.
+
+Tag delete is denied. `git -C` to another repository is allowed
+(an accepted risk: the hooks and config of that repository run). The implementer
+gets a hard DENY for the history, push, `gh pr`, and `gh release` commands. It may
+only SUGGEST a commit. Ask is a hard block without a UI. **Headless orchestrator
+runs (delegated/`-p`/`--mode json`) can run a plain commit**, but a commit in an
+exception form still blocks, for example a message with a question mark or a
+bracket. Headless runs cannot push, open a pull request, or release. The global
+file `~/.pi/agent/permissions.json` is live and unversioned; it carries a global
+ask for `git push` and `gh pr` as a safety net.
 
 Gate scope: only `bash`/`powershell` (command), `read`/`grep`/`find`/`ls`/`edit`/`write`
 (path/pattern), and other plain tools (JSON args) are probed. `mcp__…` and namespaced
