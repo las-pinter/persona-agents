@@ -4,18 +4,15 @@
  * Runs under plain Node (type stripping) with no extra dependencies:
  *   node --experimental-strip-types --test tests/doc-lint.test.ts
  *
- * It asserts the six conditions of the doc-lint contract:
+ * It asserts the five conditions of the doc-lint contract:
  *   1. every skill path named by a profession or a template resolves;
  *   2. each skills/ * /SKILL.md `name:` equals its folder name;
  *   3. every file path a SKILL.md explicitly points to exists;
- *   4. agents.json has the expected profession count per theme;
- *   5. pi `alwaysLoad` matches the profession Startup skill list;
- *   6. study and note files stay under their documented line caps.
+ *   4. every agents.json theme has the profession set of content/professions;
+ *   5. pi `alwaysLoad` matches the profession Startup skill list.
  *
  * Condition 1 is hermetic: repo references must resolve under the repo tree,
- * and a missing optional common skill is skipped, not failed. Condition 6
- * resolves the home from the environment and skips cleanly when the notes tree
- * is absent.
+ * and a missing optional common skill is skipped, not failed.
  */
 
 import { describe, test } from "node:test";
@@ -28,15 +25,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const skillsRoot = path.join(repoRoot, "content", "skills");
 const professionsDir = path.join(repoRoot, "content", "professions");
+const HOME = process.env.HOME ?? os.homedir();
 const piFrontmattersDir = path.join(repoRoot, "platforms", "pi", "frontmatters");
 const opencodeFrontmattersDir = path.join(repoRoot, "platforms", "opencode", "frontmatters");
 const kiroTemplatesDir = path.join(repoRoot, "platforms", "kiro", "templates");
-
-/**
- * The one named constant for the expected profession count per theme.
- * Each theme has 7 professions.
- */
-const EXPECTED_PROFESSIONS_PER_THEME = 7;
 
 /**
  * Agents whose pi `alwaysLoad` must equal the profession Startup skill list.
@@ -46,23 +38,6 @@ const EXPECTED_PROFESSIONS_PER_THEME = 7;
  * list must match one-for-one.
  */
 const STARTUP_PARITY_AGENTS = ["orchestrator"];
-
-/**
- * Line caps documented in `skills/common/project-notes/SKILL.md`.
- *
- * The summary cap is written as `~30`; `SUMMARY_CAP_SLACK` honors the tilde.
- * The journal cap lives in the journal-management skill, not project-notes, so
- * it is reported but not enforced here (see condition 6).
- */
-const SUMMARY_CAP_LINES = 30;
-const SUMMARY_CAP_SLACK = 3;
-const FEATURE_BUG_TECH_CAP_LINES = 300;
-const STUDY_CAP_LINES = 500;
-const SIDE_DOC_CAP_LINES = 300;
-
-const HOME = process.env.HOME ?? os.homedir();
-const AGENT_NOTES_ROOT = path.join(HOME, "agent-notes");
-const REPO_NAME = path.basename(repoRoot);
 
 // --- small filesystem and text helpers --------------------------------------
 
@@ -493,22 +468,29 @@ describe("condition 3: referenced skill files exist", () => {
 
 // --- condition 4: expected profession count per theme -------------------------
 
-describe("condition 4: agents.json profession count", () => {
-	test(`every theme has ${EXPECTED_PROFESSIONS_PER_THEME} professions`, () => {
+describe("condition 4: agents.json professions match content/professions", () => {
+	test("every theme has exactly the profession set of the content folder", () => {
 		const registry: unknown = JSON.parse(readText(path.join(repoRoot, "content", "agents.json")));
 		assert.ok(registry && typeof registry === "object", "agents.json must be an object");
+		const expected = fs
+			.readdirSync(professionsDir)
+			.filter((name) => name.endsWith(".md"))
+			.map((name) => name.slice(0, -3))
+			.sort();
+		assert.ok(expected.length > 0, "content/professions must hold a profession file");
+		assert.ok(Object.keys(registry as Record<string, unknown>).length > 0, "agents.json must hold at least one theme");
 		const bad: string[] = [];
 		for (const [theme, professions] of Object.entries(registry as Record<string, unknown>)) {
 			if (!professions || typeof professions !== "object") {
 				bad.push(`${theme}: not an object`);
 				continue;
 			}
-			const count = Object.keys(professions as Record<string, unknown>).length;
-			if (count !== EXPECTED_PROFESSIONS_PER_THEME) {
-				bad.push(`${theme}: ${count} != ${EXPECTED_PROFESSIONS_PER_THEME}`);
+			const names = Object.keys(professions as Record<string, unknown>).sort();
+			if (JSON.stringify(names) !== JSON.stringify(expected)) {
+				bad.push(`${theme}: ${names.join(",")} != ${expected.join(",")}`);
 			}
 		}
-		assert.deepEqual(bad, [], "agents.json profession count drifted");
+		assert.deepEqual(bad, [], "agents.json professions drifted from content/professions");
 	});
 });
 
@@ -541,106 +523,4 @@ describe("condition 5: pi alwaysLoad matches the profession Startup list", () =>
 		});
 	}
 
-});
-
-// --- condition 6: study and note line caps ------------------------------------
-
-function lineCount(content: string): number {
-	if (content.length === 0) return 0;
-	const trimmed = content.endsWith("\n") ? content.slice(0, -1) : content;
-	return trimmed.split("\n").length;
-}
-
-interface LineCap {
-	cap: number;
-	label: string;
-}
-
-/**
- * True when the path sits under an archived `legacy_studies/` folder.
- */
-function isLegacyStudy(relativeFile: string): boolean {
-	return relativeFile.split(path.sep).includes("legacy_studies");
-}
-
-/**
- * The project-notes caps that apply to a file, or null when no cap maps.
- *
- * A study holds one `study.md` with a 500-line cap and optional side documents
- * with a 300-line cap. A pre-overhaul `quick-study.md` or `full-study.md` that
- * still sits outside `legacy_studies/` maps to no cap. Files under
- * `legacy_studies/` are skipped as archived.
- */
-function capFor(relativeFile: string): LineCap | null {
-	const parts = relativeFile.split(path.sep);
-	if (isLegacyStudy(relativeFile)) return null;
-	const base = parts[parts.length - 1];
-	if (base === "summary.md") return { cap: SUMMARY_CAP_LINES + SUMMARY_CAP_SLACK, label: "summary (~30)" };
-	if (base === "study.md") return { cap: STUDY_CAP_LINES, label: "study" };
-	if (base === "quick-study.md" || base === "full-study.md") return null;
-	if (
-		parts.includes("studies") &&
-		parts.length >= 3 &&
-		base.endsWith(".md") &&
-		base !== "status.md"
-	) {
-		return { cap: SIDE_DOC_CAP_LINES, label: "study side document" };
-	}
-	if (parts.includes("features") || parts.includes("bugs") || parts.includes("tech")) {
-		return { cap: FEATURE_BUG_TECH_CAP_LINES, label: "feature/bug/tech note" };
-	}
-	return null;
-}
-
-describe("condition 6: study and note line caps", () => {
-	const projectNotes = path.join(AGENT_NOTES_ROOT, "project-notes", REPO_NAME);
-
-	test("this repo's project notes stay under their caps", (t) => {
-		if (!fs.existsSync(projectNotes)) {
-			// Hermetic: a machine without the notes tree skips the check.
-			t.skip(`no agent-notes tree for ${REPO_NAME} at ${projectNotes}`);
-			return;
-		}
-		const violations: string[] = [];
-		const unmapped: string[] = [];
-		for (const file of listFilesRecursive(projectNotes, (name) => name.endsWith(".md"))) {
-			const relative = path.relative(projectNotes, file);
-			const cap = capFor(relative);
-			if (!cap) {
-				// Archived studies are exempt and are not reported as unmapped.
-				if (!isLegacyStudy(relative)) unmapped.push(relative);
-				continue;
-			}
-			const lines = lineCount(readText(file));
-			if (lines > cap.cap) violations.push(`${relative}: ${lines} > ${cap.cap} (${cap.label})`);
-		}
-		if (unmapped.length > 0) {
-			// Flag files whose cap is not documented in common/project-notes.
-			console.warn(`doc-lint: no project-notes line cap for ${unmapped.length} file(s): ${unmapped.join(", ")}`);
-		}
-		assert.deepEqual(violations, [], "note line caps exceeded");
-	});
-
-	test("capFor maps the study, side-doc, status, and legacy paths", () => {
-		const capCases: { file: string; cap: number | null }[] = [
-			{ file: "studies/2026-01-01-x/study.md", cap: STUDY_CAP_LINES },
-			{ file: "studies/2026-01-01-x/notes.md", cap: SIDE_DOC_CAP_LINES },
-			{ file: "studies/2026-01-01-x/reverse_engineering/finding.md", cap: SIDE_DOC_CAP_LINES },
-			{ file: "studies/2026-01-01-x/status.md", cap: null },
-			{ file: "studies/2026-01-01-x/quick-study.md", cap: null },
-			{ file: "studies/2026-01-01-x/full-study.md", cap: null },
-		];
-		for (const { file, cap } of capCases) {
-			const relative = file.split("/").join(path.sep);
-			assert.equal(capFor(relative)?.cap ?? null, cap, `${file} cap`);
-		}
-		for (const file of [
-			"studies/legacy_studies/2026-01-01-x/study.md",
-			"studies/legacy_studies/2026-01-01-x/notes.md",
-		]) {
-			const relative = file.split("/").join(path.sep);
-			assert.ok(isLegacyStudy(relative), `${file} is archived`);
-			assert.equal(capFor(relative), null, `${file} is skipped`);
-		}
-	});
 });

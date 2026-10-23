@@ -2,9 +2,9 @@
  * Structural checks for the shared commands in `content/commands/`.
  *
  * The `pi.prompts` globs in `package.json` decide which commands pi ships.
- * install.sh copies the same files to kiro and OpenCode. Each platform turns
- * the filename into the slash command, so a broken glob or a dead skill
- * reference removes a command with no other signal.
+ * Each platform turns the filename into the slash command, so a broken glob
+ * or a dead skill reference removes a command with no other signal. The
+ * install.sh copy is covered by tests/install-sh.test.ts.
  *
  * Run: npm test
  */
@@ -18,7 +18,6 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const skillsRoot = path.join(repoRoot, "content", "skills");
 const commandsDir = path.join(repoRoot, "content", "commands");
-const installScript = path.join(repoRoot, "install.sh");
 
 /** The platforms a skill reference file can target, one file name each. */
 const PLATFORMS = ["pi", "kiro", "opencode", "claude"];
@@ -114,18 +113,6 @@ describe("shared commands: pi ships every command", () => {
 			.sort();
 		assert.ok(commands.length > 0, "content/commands must hold a command file");
 		assert.deepEqual(matched, commands);
-	});
-});
-
-describe("shared commands: install.sh copies them for kiro and OpenCode", () => {
-	const installer = readText(installScript);
-
-	test("the kiro block installs content/commands into ~/.kiro/prompts", () => {
-		assert.match(installer, /for f in "\$CONTENT_DIR"\/commands\/\*\.md; do[\s\S]*?"\$KIRO_DEST\/prompts\//);
-	});
-
-	test("the OpenCode block installs content/commands into commands/", () => {
-		assert.match(installer, /for f in "\$CONTENT_DIR"\/commands\/\*\.md; do[\s\S]*?"\$OPENCODE_DEST\/commands\//);
 	});
 });
 
