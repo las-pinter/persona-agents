@@ -587,6 +587,58 @@ function dequoteProbe(probe: string): string {
 	return probe.replace(/\$"/g, '"').replace(/["']/g, "").replace(/\\(.)/g, "$1");
 }
 
+/** A separator that was quoted or escaped becomes `_`: it is data, not a separator. */
+function neutralChar(ch: string): string {
+	return ch === ";" || ch === "&" || ch === "|" || ch === "\n" ? "_" : ch;
+}
+
+/**
+ * The dequoted probe with quoted and escaped separators made neutral. In
+ * `dequoteProbe` a quoted `;` turns bare, so a scan that stops at a separator
+ * cannot reach a quoted option after it (`-m 'a;b' '--amend'`). This variant
+ * keeps that scan going. It is an extra probe next to `dequoteProbe`, never a
+ * replacement, so a rule anchored on a separator still sees the old form:
+ * ask and deny rules can only match more.
+ */
+export function neutralDequoteProbe(probe: string): string {
+	let out = "";
+	let quote: "'" | '"' | null = null;
+	for (let i = 0; i < probe.length; i++) {
+		const ch = probe[i];
+		if (quote === "'") {
+			if (ch === "'") quote = null;
+			else out += neutralChar(ch);
+			continue;
+		}
+		if (ch === "\\" && i + 1 < probe.length) {
+			i++;
+			out += neutralChar(probe[i]);
+			continue;
+		}
+		if (quote === '"') {
+			if (ch === '"') quote = null;
+			else out += neutralChar(ch);
+			continue;
+		}
+		if (ch === "$" && probe[i + 1] === '"') {
+			quote = '"';
+			i++;
+			continue;
+		}
+		if (ch === "'" || ch === '"') {
+			quote = ch;
+			continue;
+		}
+		out += ch;
+	}
+	return out;
+}
+
+/** Every deny/ask variant of a probe: the old dequoted form and the neutral one. */
+function normalizedProbes(probe: string): string[] {
+	return [dequoteProbe(probe), neutralDequoteProbe(probe)];
+}
+
 /**
  * True when `ch` can start a bash parameter expansion after a `$`: a name
  * char (`$W`), a brace (`${W}`), or a positional/special parameter (`$1`,
@@ -642,13 +694,31 @@ function hasUnresolvedExpansion(segment: string): boolean {
 }
 
 /**
- * A segment plus its dequoted variant. Ask rules test this list, so a
+ * A segment plus its dequoted variants. Ask rules test this list, so a
  * quote/backslash-obfuscated escape guard sees the resolved form, mirroring the
  * deny path. The raw segment stays first so a raw match wins.
  */
 function askProbes(segment: string): string[] {
-	const dequoted = dequoteProbe(segment);
-	return dequoted === segment ? [segment] : [segment, dequoted];
+	return unique([segment, ...normalizedProbes(segment)]);
+}
+
+/**
+ * True when a session "Always allow" approves the whole segment: at least one
+ * ask rule matches it, and EVERY ask rule that matches it (over all ask
+ * probes) is session-allowed. One allowed rule must not approve a segment
+ * that a sibling ask rule still gates (`git pull -s ours --upload-pack=x`).
+ */
+function isSessionApprovedSegment(
+	rules: CompiledRule[],
+	toolName: string,
+	segment: string,
+	isSessionAllowed: (rule: RawRule) => boolean,
+): boolean {
+	const probes = askProbes(segment);
+	const matching = rules.filter(
+		(r) => (r.tool === "*" || r.tool === toolName) && probes.some((probe) => r.re.test(probe)),
+	);
+	return matching.length > 0 && matching.every((r) => isSessionAllowed(r.rule));
 }
 
 interface RuleMatch {
@@ -677,9 +747,12 @@ function firstSpanningMatch(
 	toolName: string,
 	probes: string[],
 	segments: string[],
+	isSessionAllowed?: (rule: RawRule) => boolean,
 ): RuleMatch | null {
 	for (const r of rules) {
 		if (r.tool !== "*" && r.tool !== toolName) continue;
+		// A session-allowed spanning rule must not hide a later one.
+		if (isSessionAllowed?.(r.rule)) continue;
 		if (segments.some((s) => askProbes(s).some((probe) => r.re.test(probe)))) continue;
 		for (const probe of probes) {
 			if (r.re.test(probe)) return { rule: r.rule, probe };
@@ -691,9 +764,11 @@ function firstSpanningMatch(
 type AskDecision = Extract<Decision, { kind: "ask" }>;
 
 /**
- * Find the first unapproved segment that matches an ask rule. Session-allowed
- * segments are already folded into `approved` by the caller, so a match here is
- * always a real prompt. Returns the ask decision or `null`.
+ * Find the first unapproved segment that matches an ask rule not yet allowed
+ * for the session. A session-allowed rule is skipped, so the prompt names the
+ * rule that still blocks. A segment whose matching rules are all allowed is
+ * already in `approved` (isSessionApprovedSegment), so a skip never lets a
+ * segment that should ask fall through. Returns the ask decision or `null`.
  */
 function findAsk(
 	rules: CompiledRule[],
@@ -702,6 +777,7 @@ function findAsk(
 	segmentStarts: number[],
 	approved: ReadonlySet<number>,
 	source: "global" | "agent",
+	isSessionAllowed?: (rule: RawRule) => boolean,
 ): AskDecision | null {
 	for (let idx = 0; idx < segments.length; idx++) {
 		if (approved.has(idx)) continue;
@@ -710,6 +786,10 @@ function findAsk(
 		for (const r of rules) {
 			if (r.tool !== "*" && r.tool !== toolName) continue;
 			if (!probes.some((probe) => r.re.test(probe))) continue;
+			// Name the first matching rule not yet allowed for the session. A
+			// segment whose matching rules are all allowed is already in
+			// `approved` (isSessionApprovedSegment), so skipping stays fail-closed.
+			if (isSessionAllowed?.(r.rule)) continue;
 			return {
 				kind: "ask",
 				rule: r.rule,
@@ -766,7 +846,7 @@ export function evaluateCommandRules(
 	// Deny-only defense in depth: a quoted separator, a mid-token quote, or a
 	// backslash escape hides a literal deny from the raw probes. The normalized
 	// variants can add a denial, never an allowance.
-	const denyProbes = unique([...probes, ...probes.map(dequoteProbe)]);
+	const denyProbes = unique([...probes, ...probes.flatMap(normalizedProbes)]);
 
 	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, denyProbes);
 	if (globalDeny) {
@@ -789,14 +869,7 @@ export function evaluateCommandRules(
 		const sessionAskRules = [...compile(ruleSets.globalAsk), ...compile(ruleSets.agentAsk)];
 		for (let idx = 0; idx < segments.length; idx++) {
 			if (approved.has(idx)) continue;
-			const segment = segments[idx];
-			const sessionApproved = sessionAskRules.some(
-				(r) =>
-					(r.tool === "*" || r.tool === toolName) &&
-					askProbes(segment).some((probe) => r.re.test(probe)) &&
-					isSessionAllowed(r.rule),
-			);
-			if (sessionApproved) approved.add(idx);
+			if (isSessionApprovedSegment(sessionAskRules, toolName, segments[idx], isSessionAllowed)) approved.add(idx);
 		}
 	}
 
@@ -811,7 +884,9 @@ export function evaluateCommandRules(
 		const wholeProbes = unique(
 			[command, ...segments, ...rawSegments].flatMap((probe) => askProbes(probe)),
 		);
-		const globalWhole = firstSpanningMatch(compile(ruleSets.globalAsk), toolName, wholeProbes, segments);
+		const globalWhole = firstSpanningMatch(
+			compile(ruleSets.globalAsk), toolName, wholeProbes, segments, isSessionAllowed,
+		);
 		if (globalWhole && !(isSessionAllowed?.(globalWhole.rule) ?? false)) {
 			return {
 				kind: "ask",
@@ -822,7 +897,9 @@ export function evaluateCommandRules(
 				source: "global",
 			};
 		}
-		const agentWhole = firstSpanningMatch(compile(ruleSets.agentAsk), toolName, wholeProbes, segments);
+		const agentWhole = firstSpanningMatch(
+			compile(ruleSets.agentAsk), toolName, wholeProbes, segments, isSessionAllowed,
+		);
 		if (agentWhole && !(isSessionAllowed?.(agentWhole.rule) ?? false)) {
 			return {
 				kind: "ask",
@@ -836,10 +913,14 @@ export function evaluateCommandRules(
 	}
 
 	// Ask tests each unapproved segment (global rules first, then agent rules).
-	const globalAsk = findAsk(compile(ruleSets.globalAsk), toolName, segments, parsed.segmentStarts, approved, "global");
+	const globalAsk = findAsk(
+		compile(ruleSets.globalAsk), toolName, segments, parsed.segmentStarts, approved, "global", isSessionAllowed,
+	);
 	if (globalAsk) return globalAsk;
 
-	const agentAsk = findAsk(compile(ruleSets.agentAsk), toolName, segments, parsed.segmentStarts, approved, "agent");
+	const agentAsk = findAsk(
+		compile(ruleSets.agentAsk), toolName, segments, parsed.segmentStarts, approved, "agent", isSessionAllowed,
+	);
 	if (agentAsk) return agentAsk;
 
 	// Allow: deny-by-default requires every unapproved segment to match a rule.
@@ -915,14 +996,9 @@ export function unallowedSegments(
 		const sessionAskRules = [...compile(ruleSets.globalAsk), ...compile(ruleSets.agentAsk)];
 		for (let idx = 0; idx < parsed.segments.length; idx++) {
 			if (approved.has(idx)) continue;
-			const segment = parsed.segments[idx];
-			const sessionApproved = sessionAskRules.some(
-				(r) =>
-					(r.tool === "*" || r.tool === toolName) &&
-					askProbes(segment).some((probe) => r.re.test(probe)) &&
-					isSessionAllowed(r.rule),
-			);
-			if (sessionApproved) approved.add(idx);
+			if (isSessionApprovedSegment(sessionAskRules, toolName, parsed.segments[idx], isSessionAllowed)) {
+				approved.add(idx);
+			}
 		}
 	}
 	const indices: number[] = [];

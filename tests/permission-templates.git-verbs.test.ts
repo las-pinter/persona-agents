@@ -21,8 +21,9 @@ import {
 } from "./permission-templates.fixtures.ts";
 
 // ---------------------------------------------------------------------------
-// Git tag doctrine: creation and force-move ask the orchestrator on pi/opencode
-// and stay unlisted (ask) on kiro. Deletion denies every agent. Read-only
+// Git tag doctrine: a plain tag creation allows the pi orchestrator; a wrapped
+// creation and a force-move ask it. Creation and force-move ask the opencode
+// orchestrator and stay unlisted (ask) on kiro. Deletion denies every agent. Read-only
 // listing stays allowed on pi. Every non-orchestrator must not create a tag.
 // ---------------------------------------------------------------------------
 
@@ -102,13 +103,19 @@ const TAG_LISTING = ["git tag", "git tag -l", "git tag --list", "git -C /repo ta
 const TAG_ALL = [...TAG_CREATE, ...TAG_CREATE_WRAPPED, ...TAG_DELETE_ALL, ...TAG_FORCE_ALL];
 
 describe("pi: git tag doctrine", () => {
-	test("orchestrator: tag creation asks", () => {
-		for (const command of [...TAG_CREATE, ...TAG_CREATE_WRAPPED]) {
+	test("orchestrator: plain tag creation allows", () => {
+		for (const command of TAG_CREATE) {
+			assert.equal(verdict("orchestrator", command), "allow", command);
+		}
+	});
+
+	test("orchestrator: wrapped tag creation asks", () => {
+		for (const command of TAG_CREATE_WRAPPED) {
 			assert.equal(verdict("orchestrator", command), "ask", command);
 		}
 	});
 
-	test("orchestrator: the tag force ask rule entry exists and is not an allow", () => {
+	test("orchestrator: the tag force ask rule entry exists and beats the plain allow", () => {
 		const { mode, ruleSets } = loadAgentRules("orchestrator");
 		assert.equal(mode, "deny-by-default");
 		assert.ok(
@@ -116,9 +123,11 @@ describe("pi: git tag doctrine", () => {
 			"the orchestrator ask list must carry an explicit git tag rule that covers force",
 		);
 		assert.ok(
-			!ruleSetMatches(ruleSets.agentAllow, "git tag -f v3.0.0"),
-			"git tag force-move must not sit on the orchestrator allow list",
+			!ruleSetMatches(ruleSets.agentAsk, "git tag v3.0.0"),
+			"the tag force ask rule must not match a plain tag creation",
 		);
+		// The plain history allow also matches the force form; the ask runs first.
+		assert.equal(verdict("orchestrator", "git tag -f v3.0.0"), "ask");
 	});
 
 	test("orchestrator: tag force-move asks in any position", () => {
@@ -133,18 +142,18 @@ describe("pi: git tag doctrine", () => {
 		}
 	});
 
-	test("orchestrator: tag names containing -d/-f are not denied", () => {
+	test("orchestrator: tag names containing -d/-f are not denied and not asked", () => {
 		for (const command of TAG_NAME_FALSE_POSITIVES) {
-			assert.equal(verdict("orchestrator", command), "ask", command);
+			assert.equal(verdict("orchestrator", command), "allow", command);
 		}
 	});
 
 	test("orchestrator: --format is not caught by the --for abbreviation", () => {
-		assert.notEqual(verdict("orchestrator", "git tag --format=%(refname) -l"), "deny");
+		assert.equal(verdict("orchestrator", "git tag --format=%(refname) -l"), "allow");
 	});
 
 	test("orchestrator: --merged is not caught by the delete flag rule", () => {
-		assert.equal(verdict("orchestrator", "git tag --merged"), "ask");
+		assert.equal(verdict("orchestrator", "git tag --merged"), "allow");
 	});
 
 	test("orchestrator: read-only tag listing stays allowed", () => {
@@ -300,9 +309,10 @@ describe("kiro: git tag doctrine", () => {
 // Accepted trade-off: the delete space-free glob `*git tag -*d*` cannot tell
 // the `-d` flag from a read-only long option that contains `d`, so `--merged`
 // is over-denied on opencode/kiro. The user chose fail-safe over-deny. pi uses
-// a real regex with word boundaries, so it stays precise and returns `ask`.
-// Removing the force space-free glob un-denied `--format=...`; it now asks on
-// every stack.
+// a real regex with word boundaries, so it stays precise and allows it (a
+// plain tag command allows for the pi orchestrator). Removing the force
+// space-free glob un-denied `--format=...`; it asks on opencode and kiro and
+// allows on pi.
 // ---------------------------------------------------------------------------
 
 const TAG_READONLY_DELETE_OVERDENIED = ["git tag --merged"];
@@ -321,16 +331,16 @@ describe("opencode/kiro: accepted over-deny for read-only tag long options", () 
 		}
 	});
 
-	test("orchestrators: --format asks on every stack", () => {
-		assert.equal(verdict("orchestrator", TAG_READONLY_FORMAT), "ask");
+	test("orchestrators: --format allows on pi and asks on opencode and kiro", () => {
+		assert.equal(verdict("orchestrator", TAG_READONLY_FORMAT), "allow");
 		assert.equal(opencodeVerdict("orchestrator", TAG_READONLY_FORMAT), "ask");
 		assert.equal(kiroVerdict("orchestrator", TAG_READONLY_FORMAT), "ask");
 	});
 });
 
 // ---------------------------------------------------------------------------
-// Git merge doctrine: a merge writes history, so it asks the orchestrator on
-// pi/opencode and stays unlisted (ask) on kiro. Every non-orchestrator must not
+// Git merge doctrine: a plain merge allows the pi orchestrator (owner choice);
+// a merge asks the opencode orchestrator and stays unlisted (ask) on kiro. Every non-orchestrator must not
 // merge: pi blocks by deny-by-default mode; opencode and kiro carry explicit
 // deny rules.
 // ---------------------------------------------------------------------------
@@ -396,8 +406,14 @@ const MERGE_BASE_COMMANDS = [MERGE_BASE_COMMAND, "git -C /repo merge-base origin
 const MERGE_NEAR_MISS_COMMANDS = ["git merge-file a b c", "git merge-tree base head"];
 
 describe("git merge permission doctrine", () => {
-	test("pi orchestrator: git merge asks", () => {
-		for (const command of MERGE_COMMANDS) assert.equal(verdict("orchestrator", command), "ask", command);
+	test("pi orchestrator: plain git merge allows", () => {
+		for (const command of MERGE_COMMANDS) assert.equal(verdict("orchestrator", command), "allow", command);
+	});
+
+	test("pi orchestrator: wrapped git merge asks", () => {
+		for (const command of MERGE_SUBSTITUTION_COMMANDS) {
+			assert.equal(verdict("orchestrator", command), "ask", command);
+		}
 	});
 
 	test("pi non-orchestrators: git merge defaults to deny", () => {

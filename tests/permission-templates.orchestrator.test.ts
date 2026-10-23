@@ -606,8 +606,13 @@ const BRANCH_CREATE_BY_LISTING_OPTION = [
 
 describe("orchestrator: mutation forms are never a silent allow", () => {
 	test("pi orchestrator: mutation forms are not allow", () => {
+		// A plain pull, merge, or rebase allows the pi orchestrator (owner choice).
+		// opencode and kiro still keep them off the allow list.
+		const piPlainHistory = new Set(["git pull", "git merge origin/main", "git rebase main"]);
 		for (const command of ORCH_GIT_MUTATIONS_NOT_ALLOW) {
-			assert.notEqual(verdict("orchestrator", command), "allow", command);
+			const kind = verdict("orchestrator", command);
+			if (piPlainHistory.has(command)) assert.equal(kind, "allow", command);
+			else assert.notEqual(kind, "allow", command);
 		}
 	});
 

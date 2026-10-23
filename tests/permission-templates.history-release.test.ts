@@ -22,10 +22,10 @@ import {
 } from "./permission-templates.fixtures.ts";
 
 // ---------------------------------------------------------------------------
-// Git rebase doctrine: a rebase rewrites history, so the orchestrator asks
-// (pi by an explicit rule; opencode and kiro by their shell defaults) and
-// every non-orchestrator denies, matching the `git merge` doctrine. The pi
-// ask rule entry itself is asserted, not just the engine default.
+// Git rebase doctrine: a plain rebase allows the pi orchestrator (owner
+// choice); a strategy or a wrapped form asks it. The opencode and kiro
+// orchestrators ask by their shell defaults. Every non-orchestrator denies,
+// matching the `git merge` doctrine.
 // ---------------------------------------------------------------------------
 
 const REBASE_COMMANDS = [
@@ -93,10 +93,11 @@ const REBASE_SUBSTITUTION_RULES_SHARED = [
 	"*git -C * rebase;*",
 ];
 
-// Compound separators must never turn a rebase into a silent allow.
+// A compound with a gated segment or a substitution never turns a rebase into
+// a silent allow. A pipe into an allowed read verb (`git rebase -i | cat`)
+// allows on pi, because each segment is allowed on its own.
 const COMPOUND_REBASE_COMMANDS = [
 	"git rebase -i; git push",
-	"git rebase -i | cat",
 	"echo $(git rebase -i)",
 	"echo `git rebase -i`",
 ];
@@ -105,37 +106,47 @@ const COMPOUND_REBASE_COMMANDS = [
 
 
 describe("git rebase permission doctrine", () => {
-	test("pi orchestrator: the rebase ask rule entry exists and is not an allow", () => {
+	test("pi orchestrator: a plain rebase sits on the allow list and no ask rule matches it", () => {
 		const { mode, ruleSets } = loadAgentRules("orchestrator");
 		assert.equal(mode, "deny-by-default");
 		assert.ok(
-			ruleSetMatches(ruleSets.agentAsk, "git rebase main"),
-			"the orchestrator ask list must carry an explicit git rebase rule",
+			ruleSetMatches(ruleSets.agentAllow, "git rebase main"),
+			"the orchestrator allow list must carry the plain git rebase form",
 		);
 		assert.ok(
-			!ruleSetMatches(ruleSets.agentAllow, "git rebase main"),
-			"git rebase must not sit on the orchestrator allow list",
+			!ruleSetMatches(ruleSets.agentAsk, "git rebase main"),
+			"no orchestrator ask rule may match a plain git rebase",
 		);
 	});
 
-	test("pi orchestrator: bare rebase and every flag variant ask", () => {
-		for (const command of REBASE_COMMANDS) assert.equal(verdict("orchestrator", command), "ask", command);
+	test("pi orchestrator: bare rebase and every plain flag variant allow", () => {
+		const wrapped = ["env git rebase main"];
+		for (const command of REBASE_COMMANDS) {
+			assert.equal(verdict("orchestrator", command), wrapped.includes(command) ? "ask" : "allow", command);
+		}
 	});
 
-	test("pi orchestrator: --exec asks from the agent rebase rule", () => {
+	test("pi orchestrator: --exec and -i allow (accepted risk, owner choice)", () => {
 		const { mode, ruleSets } = loadAgentRules("orchestrator");
-		const decision = evaluateCommandRules(
-			"git rebase --exec 'true'",
-			true,
-			ruleSets,
-			mode,
-			"bash",
-			"orchestrator",
-		);
-		assert.equal(decision.kind, "ask");
-		if (decision.kind === "ask") {
-			assert.equal(decision.source, "agent");
-			assert.equal(decision.rule.reason, "git rebase requires user approval");
+		for (const command of ["git rebase --exec 'true'", "git rebase -x 'npm test' main", "git rebase -i main"]) {
+			const decision = evaluateCommandRules(command, true, ruleSets, mode, "bash", "orchestrator");
+			assert.equal(decision.kind, "allow", command);
+		}
+	});
+
+	test("pi orchestrator: a rebase strategy asks", () => {
+		for (const command of [
+			"git rebase -s ours main",
+			"git rebase -is ours main",
+			"git rebase --strategy ours main",
+			"git rebase --strategy=ours main",
+			"git rebase --strat ours main",
+		]) {
+			assert.equal(verdict("orchestrator", command), "ask", command);
+		}
+		// `-X` is a strategy option, not a strategy; `-x` is exec.
+		for (const command of ["git rebase -Xours main", "git rebase -X theirs main", "git rebase --autosquash main"]) {
+			assert.equal(verdict("orchestrator", command), "allow", command);
 		}
 	});
 

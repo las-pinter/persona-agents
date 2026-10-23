@@ -2,11 +2,12 @@
  * Regression harness for the git-write permission doctrine on the pi platform.
  *
  * Loads the shipped pi agent frontmatters and asserts the verdict matrix:
- *   orchestrator                                -> ASK for add/commit/push/pull and `gh pr`/`gh release`
+ *   orchestrator                                -> ALLOW for a plain add/commit/pull; ASK for push and `gh pr`/`gh release`
  *   implementer                                 -> DENY for add/commit/push/pull and `gh pr`/`gh release`
  *   researcher/reviewer/tester/planner          -> DENY for push/pull and `gh pr`/`gh release`
  *
- * Also checks the live global file does not keep a push/pull or `gh pr` deny.
+ * Also checks the live global file does not keep a push/pull or `gh pr` deny,
+ * and that its global ask covers push and `gh pr` but not pull.
  * That check skips when the file is absent, because the file is outside the repo.
  *
  * Run: npm test
@@ -37,9 +38,11 @@ const WRITE_COMMANDS = [
 const ANCHORED_COMMANDS = ["git -C /repo push", "cd /repo && git push"];
 
 describe("git-write permission doctrine (pi templates)", () => {
-	test("orchestrator: add/commit/push/pull and gh pr all ask", () => {
+	test("orchestrator: plain add/commit/pull allow; push and gh pr ask", () => {
+		const allowed = ["git add agent-stack/foo.ts", 'git commit -m "test"', "git pull"];
 		for (const command of [...WRITE_COMMANDS, ...ANCHORED_COMMANDS]) {
-			assert.equal(verdict("orchestrator", command), "ask", command);
+			const expected = allowed.includes(command) ? "allow" : "ask";
+			assert.equal(verdict("orchestrator", command), expected, command);
 		}
 	});
 
@@ -77,7 +80,7 @@ describe("git-write permission doctrine (pi templates)", () => {
 	}
 });
 
-test("live global permissions.json drops the git push/pull and gh pr denies", (t) => {
+test("live global permissions.json drops the git push/pull and gh pr denies and asks only for push", (t) => {
 	const ruleSets = loadGlobalRuleSets();
 	if (ruleSets === null) {
 		t.skip(`${liveGlobalPath()} is absent; the live file is outside the repo`);
@@ -92,10 +95,10 @@ test("live global permissions.json drops the git push/pull and gh pr denies", (t
 	for (const command of ["git push", "git pull", "env git push", "env git pull"]) {
 		assert.notEqual(globalVerdict(command), "deny", `global deny must not keep a git push/pull rule: ${command}`);
 	}
-	// Global ask must cover bare git push/pull.
-	for (const command of ["git push", "git pull"]) {
-		assert.equal(globalVerdict(command), "ask", `global ask must include git push/pull: ${command}`);
-	}
+	// Global ask must cover bare git push, but not git pull: a global ask beats
+	// the orchestrator's agent allow for a plain pull.
+	assert.equal(globalVerdict("git push"), "ask", "global ask must include git push");
+	assert.notEqual(globalVerdict("git pull"), "ask", "global ask must not include git pull");
 	// No global gh pr deny (bare and env-prefixed forms).
 	for (const command of ["gh pr create", "env gh pr create"]) {
 		assert.notEqual(globalVerdict(command), "deny", `global deny must not keep a gh pr rule: ${command}`);

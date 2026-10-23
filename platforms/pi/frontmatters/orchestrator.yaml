@@ -1,13 +1,17 @@
 name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, shared project notes, and studies
-# Not spawnable as a subagent: the orchestrator alone holds the gated
-# `git add`/`commit`/`push`/`pull`, `gh pr`, `gh release`, `git tag` (create or
-# force-move), and `git merge`/`git rebase` operations. It shares the gated
-# `cp`/`mv`/`rsync` asks with the implementer. Every one prompts the user, so a
-# dispatcher must never escalate them by spawning one. Read-only git verbs
-# (status, log, diff, show, rev-parse, cat-file, merge-base, rev-list, tag -l,
-# and the listing/inspection forms below) run without a prompt; every mutation
-# form of a mutation-capable verb still asks or denies.
+# Not spawnable as a subagent: the orchestrator alone holds the git history
+# operations (`git add`/`commit`/`pull`/`merge`/`rebase`/`tag`) and the gated
+# `git push`, `gh pr`, and `gh release` operations. It shares the gated
+# `cp`/`mv`/`rsync` asks with the implementer. A plain history command runs
+# without a prompt; push, `gh pr`, `gh release`, and the history exception
+# forms (tag force-move, commit --amend, a transport helper URL, a merge
+# strategy, a git -c override, an unknown global option, a wrapped or
+# runtime-shaped form) prompt the user, so a dispatcher must never escalate
+# them by spawning one. Read-only git verbs (status, log, diff, show,
+# rev-parse, cat-file, merge-base, rev-list, tag -l, and the listing/inspection
+# forms below) run without a prompt; every other mutation form of a
+# mutation-capable verb still asks or denies.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/project-notes", "common/simplified-technical-english", "common/journal-management-generic", "common/persona-free-documents", "common/shell-discipline", "common/retro"]
@@ -49,6 +53,14 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+worktree\\s+list(?:\\s|$)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+submodule\\s+(?:status|summary)(?:\\s|$)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*\\s+sparse-checkout\\s+list(?:\\s|$)" }
+    # Plain history commands run without a prompt (owner choice). The ask rules
+    # below fence the exception forms. `git rebase --exec` and `git rebase -i`
+    # are allowed: the exec payload is not inspected, an accepted risk.
+    # pi compiles every rule case-insensitive, so `-C` also matches `-c`. A
+    # `-C` value shaped like a config key (starts with a letter, holds a dot,
+    # no slash) is not allowed: `git -c core.hooksPath commit` must ask. A value
+    # with a slash or a leading digit passes on purpose: it is a path.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+(?![A-Za-z][A-Za-z0-9-]*\\.[^\\s/]*(?:\\s|$))\\S+|--no-pager|-p))*\\s+(?:add|commit|pull|merge|rebase|tag)(?:\\s|$)" }
     # `git fetch` is deliberately not allowed because it writes refs (tags, HEAD, prefetch/refmap); it stays denied.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+(--version|auth\\s+status)\\s*$" }
     - { tool: bash, match: "^(cat|head|tail|sort|uniq|wc|grep|rg|ls|stat|od|pwd|date|echo|diff|cut|seq|mkdir|which|command -v|jq|bash -n)\\b" }
@@ -87,16 +99,44 @@ permissions:
     # The value always carries `=`, so this does not catch a real `-C <dir>`.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git\\b[^;&|(\\n]*?\\s-c\\s+\\S*=", reason: "git config override requires user approval" }
     - { tool: bash, match: "\\bsudo\\b" }
-    # Delegated git add/commit prompts (ask) instead of running silently:
-    # committing is orchestrator-only, gated per call.
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(add|commit)(?=\\s|$)", reason: "orchestrator commit requires user approval" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(push|pull)\\b", reason: "orchestrator push/pull requires user approval" }
-    # git merge integrates history; gated per call like push/pull.
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+merge(?=\\s|$)", reason: "git merge requires user approval" }
-    # git rebase rewrites history; gated per call like merge. `--exec` stays ASK
-    # so the human sees the payload; it is never a silent allow.
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+rebase(?=\\s|$)", reason: "git rebase requires user approval" }
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\s+(?!-d\\b|--(?:delete|delet|dele|del|de|d)\\b|-l\\b|--list\\b)", reason: "tag creation or force-move requires user approval" }
+    # A plain git add/commit/pull/merge/rebase/tag is allowed above. These ask
+    # rules match only the exception forms, because an ask beats the allow.
+    # A long option abbreviation (`--amen`, `--forc`, `--strat`) counts. The
+    # scan skips quoted words, so a commit message does not trigger an ask;
+    # the dequoted probe still catches a quote split such as `--am"end"`.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+commit(?=\\s|$)(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?\\s--a(?:m[a-z]*)?(?=[\\s=]|$)", reason: "commit --amend requires user approval" }
+    # A tag force-move: `--force` (or an abbreviation) or a short bundle with `f`.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag(?=\\s|$)(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?\\s(?:-(?=[^-\\s])[^\\s=]*f|--f(?:o(?:r(?:c(?:e)?)?)?)?(?=[\\s=]|$))", reason: "tag force-move requires user approval" }
+    # `--upload-pack`, a transport helper URL (`ext::sh -c ...`), and a merge
+    # strategy (`git-merge-<name>` from PATH) run a program of the caller's choice.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+pull(?=\\s|$)(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?\\s--upl[a-z-]*(?=[\\s=]|$)", reason: "pull --upload-pack requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:pull|merge)(?=\\s|$)[^\\n]*::", reason: "transport helper URL requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:pull|merge)(?=\\s|$)(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?\\s(?:-(?=[^-\\s])[^\\s=]*s|--s(?:t(?:r(?:a(?:t(?:e(?:g(?:y)?)?)?)?)?)?)?(?=[\\s=]|$))", reason: "merge strategy requires user approval" }
+    # Only no-value short flags may come before the `s`, so `-Xours` and
+    # `-x 'cmd'` stay plain.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+rebase(?=\\s|$)(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?\\s(?:-[iqvnmfrk]*s|--s(?:t(?:r(?:a(?:t(?:e(?:g(?:y)?)?)?)?)?)?)?(?=[\\s=]|$))", reason: "rebase strategy requires user approval" }
+    # A global option other than -C, --no-pager, or -p (--git-dir, --exec-path,
+    # an option git adds later) may change what the history command runs. A
+    # `-C` with a config-key value counts as unknown: it can be `-c <key>`.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+(?![A-Za-z][A-Za-z0-9-]*\\.[^\\s/]*(?:\\s|$))\\S+|--no-pager|-p))*\\s+(?!-C\\s+(?![A-Za-z][A-Za-z0-9-]*\\.[^\\s/]*(?:\\s|$))\\S|(?:--no-pager|-p)(?=\\s|$))-\\S*(?:\\s+[^-\\s]\\S*)?(?:\\s+-\\S*(?:\\s+[^-\\s]\\S*)?)*\\s+(?:add|commit|pull|merge|rebase|tag)(?=\\s|$)", reason: "git global option on a history command requires user approval" }
+    # A wrapped history command (env/time/nice/nohup/exec/command/sudo prefix
+    # or an env assignment) is never a silent allow.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:cd\\s+\\S+\\s*&&\\s*)?(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)+(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:add|commit|pull|merge|rebase|tag)(?=\\s|$)", reason: "wrapped git history command requires user approval" }
+    # A history command inside a substitution or a subshell.
+    - { tool: bash, match: "[(`]\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:add|commit|pull|merge|rebase|tag)(?=[\\s)`]|$)", reason: "git history command in a substitution requires user approval" }
+    # A runtime-shaped history command: a `$` expansion, `$(...)`, or backtick
+    # outside single quotes. Bash changes the words after the gate runs, so it
+    # asks. The dequoted probe also sees a single-quoted `$` or backtick, so
+    # that literal over-asks.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:add|commit|pull|merge|rebase|tag)(?=\\s|$)(?:\\\\.|\\$(?![A-Za-z_{(0-9*@#?$!-])|[^\\\\'\"$`;&|\\n]|'[^']*'|\"(?:\\\\.|\\$(?![A-Za-z_{(0-9*@#?$!-])|[^\"\\\\$`])*\")*(?:`|\\$[A-Za-z_{(0-9*@#?$!-]|\"(?:\\\\.|\\$(?![A-Za-z_{(0-9*@#?$!-])|[^\"\\\\$`])*(?:`|\\$[A-Za-z_{(0-9*@#?$!-]))", reason: "runtime-shaped git history command requires user approval" }
+    # A glob (`*`, `?`, `[`, an extglob `!(`/`@(`/`+(`) or a brace expansion
+    # (`{`) in a history command. Bash expands it after the gate runs, so a
+    # file named `--amend` or a word such as `{--amend,}` could add a flag that
+    # no exception rule sees. The dequoted probe removes quotes, so a quoted
+    # glob or brace (a commit message with `?` or `[x]`, a quoted pathspec)
+    # asks too: an accepted over-ask on the safe side.
+    - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?=(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:add|commit|pull|merge|rebase|tag)(?:\\s|$))[^\\n]*(?:[*?\\[{]|[!@+]\\()", reason: "glob or brace expansion in a git history command requires user approval" }
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+push\\b", reason: "orchestrator push requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b", reason: "pull request operations require user approval" }
     # Publishing a GitHub release is a user-visible write; gate it like `gh pr`.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+release\\b", reason: "release publishing requires user approval" }
@@ -119,5 +159,7 @@ permissions:
     - { tool: bash, match: "\\bmkfs|\\bdd\\b.*\\bof=/dev/" }
     - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
     # A tag delete flag can appear anywhere after `tag`, not only first. A short
-    # cluster that contains `d` is a delete, so DELETE wins over a force flag.
-    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\b[^;&|(\\n]*\\s(?:-[A-Za-z]*d[A-Za-z]*\\b|--(?:delete|delet|dele|del|de|d)\\b)" }
+    # bundle (letters or digits) that contains `d` is a delete, so DELETE wins
+    # over a force flag and `-dv1`/`-d1` deny. The scan skips quoted words, so a
+    # quoted `;`, `|`, `&`, newline, or `(` before `-d` cannot end it.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+tag\\b(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?\\s(?:-[A-Za-z0-9]*d[A-Za-z0-9]*(?=[\\s=]|$)|--(?:delete|delet|dele|del|de|d)\\b)" }

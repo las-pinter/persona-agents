@@ -107,8 +107,11 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 	});
 
 	test("pi: writes hidden behind a broad allow ask the orchestrator and deny others", () => {
+		// A plain commit allows the pi orchestrator, so the chain has no ask left;
+		// the ungated `git fetch` segment still falls to deny-by-default.
+		const piDefault = new Set(["git fetch origin ; git commit -m x"]);
 		for (const command of HIDDEN_WRITES) {
-			assert.equal(verdict("orchestrator", command), "ask", command);
+			assert.equal(verdict("orchestrator", command), piDefault.has(command) ? "default" : "ask", command);
 			for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 				assert.equal(verdict(agent, command), "deny", `${agent}: ${command}`);
 			}

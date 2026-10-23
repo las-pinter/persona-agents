@@ -12,6 +12,7 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
 	evaluateCommandRules,
+	neutralDequoteProbe,
 	parseShellCommand,
 	splitShellSegments,
 	type Decision,
@@ -643,4 +644,65 @@ test("a locale-quoted flag resolves to its content and asks", () => {
 		agentAsk: [{ tool: "bash", match: "^git\\s+fsck\\b[^\\n]*\\s--l[a-zA-Z-]*" }],
 	};
 	assert.equal(evaluateCmd('git fsck $"--lost-found"', rules).kind, "ask");
+});
+
+test("a session-allowed spanning ask does not hide a later spanning ask", () => {
+	// Both rules span the `&&` separator, so neither matches a single segment.
+	const first: RawRule = { tool: "bash", match: "echo a && echo b", reason: "first spanning" };
+	const second: RawRule = { tool: "bash", match: "a && echo", reason: "second spanning" };
+	const rules: RuleSets = {
+		globalDeny: [],
+		globalAsk: [],
+		agentDeny: [],
+		agentAsk: [first, second],
+		agentAllow: [{ tool: "bash", match: "^echo\\b" }],
+	};
+	const decide = (allowed: RawRule[]) =>
+		evaluateCommandRules("echo a && echo b", true, rules, "deny-by-default", "bash", "x", {
+			isSessionAllowed: (rule) => allowed.includes(rule),
+		});
+	const none = decide([]);
+	assert.equal(none.kind, "ask");
+	if (none.kind === "ask") assert.equal(none.rule.reason, "first spanning");
+	const one = decide([first]);
+	assert.equal(one.kind, "ask");
+	if (one.kind === "ask") {
+		assert.equal(one.rule.reason, "second spanning");
+		assert.equal(one.segmentIndex, -1);
+	}
+	assert.equal(decide([first, second]).kind, "allow");
+});
+
+test("the neutral dequoted probe keeps quoted and escaped separators as data", () => {
+	const cases: [string, string][] = [
+		["git commit -m 'a;b' '--amend'", "git commit -m a_b --amend"],
+		['git tag "a|b" -"d" v1', "git tag a_b -d v1"],
+		["git tag 'x&y' \\-d v1", "git tag x_y -d v1"],
+		["git tag 'a\nb' -d v1", "git tag a_b -d v1"],
+		["echo a\\;b", "echo a_b"],
+		// A backslash inside single quotes is literal.
+		["echo 'a\\;b'", "echo a\\_b"],
+		// Locale quoting acts like double quotes.
+		['git fsck $"--lost;found"', "git fsck --lost_found"],
+		// Unquoted separators and plain words stay as they are.
+		["git status; git log", "git status; git log"],
+		["git commit --am\\end", "git commit --amend"],
+	];
+	for (const [input, expected] of cases) assert.equal(neutralDequoteProbe(input), expected, input);
+});
+
+test("a quoted separator cannot hide a quoted option from an ask or deny scan", () => {
+	const scan = "(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?";
+	const rules: RuleSets = {
+		globalDeny: [],
+		globalAsk: [],
+		agentDeny: [{ tool: "bash", match: `^git\\s+tag\\b${scan}\\s-[a-z0-9]*d[a-z0-9]*(?=[\\s=]|$)` }],
+		agentAsk: [{ tool: "bash", match: `^git\\s+commit\\b${scan}\\s--amend\\b` }],
+		agentAllow: [{ tool: "bash", match: "^git\\s+(?:commit|tag)(?:\\s|$)" }],
+	};
+	const kind = (command: string) =>
+		evaluateCommandRules(command, true, rules, "deny-by-default", "bash", "orchestrator").kind;
+	assert.equal(kind("git commit -m 'a;b' '--amend'"), "ask");
+	assert.equal(kind("git tag 'a;b' '-d' v1"), "deny");
+	assert.equal(kind("git commit -m 'a;b'"), "allow");
 });

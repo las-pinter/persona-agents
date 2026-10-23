@@ -92,8 +92,13 @@ describe("opencode: chain guards and read allows", () => {
 	});
 
 	test("orchestrator: pi and kiro never allow the same chains", () => {
+		// pi tests each segment on its own. A read piped into a plain commit is
+		// two allowed segments, so it allows the pi orchestrator (owner choice:
+		// a plain commit runs without a prompt). kiro keeps asking for it.
+		const piPlainChains = new Set(["git diff --stat | git commit -F -"]);
 		for (const command of CHAIN_GUARD_WRITES) {
-			assert.notEqual(verdict("orchestrator", command), "allow", `pi: ${command}`);
+			if (piPlainChains.has(command)) assert.equal(verdict("orchestrator", command), "allow", `pi: ${command}`);
+			else assert.notEqual(verdict("orchestrator", command), "allow", `pi: ${command}`);
 			assert.notEqual(kiroVerdict("orchestrator", command), "allow", `kiro: ${command}`);
 		}
 	});
