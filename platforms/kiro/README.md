@@ -45,9 +45,8 @@ nor denied prompts the user. The repo doctrine holds by omission:
   `allowedCommands` is a bug. A tag command that creates or moves a tag stays
   unlisted. The orchestrator list allows only the list forms: the bare tag
   command, `-l`, and `--list`.
-- A destructive command stays in `deniedCommands`, so Kiro denies it. Tag
-  delete is denied. Kiro asks for a tag force-move because the command is not
-  listed.
+- A destructive command stays in `deniedCommands`, so Kiro denies it. The
+  verdict comes from `AGENTS.md`.
 - A tool that is absent from `allowedTools` stays available, so it defaults to
   ask. The reviewer and the planner omit `code` for this reason.
 

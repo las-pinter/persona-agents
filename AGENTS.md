@@ -63,11 +63,11 @@ platform:
   quoted space in the directory can hide a second verb.
 - Kiro has no ask tier, so every git history command stays unlisted and asks.
 - On every platform, some forms still ask: tag force-move, `git -c` overrides
-  and unknown global options, `commit --amend`, upload-pack and transport
-  helper URLs, merge strategies, wrapped or substituted forms, and brace,
-  bracket, and extglob words. On Claude Code and pi, star and question mark
-  words also ask. Tag delete is a DENY on pi, opencode, and Kiro, and an ASK
-  on Claude Code.
+  and unknown global options, `commit --amend`, `git reset --soft`, upload-pack
+  and transport helper URLs, merge strategies, wrapped or substituted forms, and
+  brace, bracket, and extglob words. On Claude Code and pi, star and question
+  mark words also ask. Tag delete is a DENY on pi, opencode, and Kiro, and
+  an ASK on Claude Code.
 - Accepted risks: `rebase --exec` and `rebase -i` are allowed. On Claude Code
   and pi, `git -C` to another repository is allowed, and the hooks and config
   of that repository run. On opencode, a bare star or question mark in an

@@ -52,13 +52,12 @@ Pi needs no `install.sh` run — it installs through the pi CLI (see below).
 ### Pi (extension package)
 
 `persona-agents` is also a **pi package**. One command installs the whole unit:
-the `agent-stack` extension, the 7 pi agents, the personas, and the skills.
+the persona-agents pi extension, the 7 pi agents, the personas, and the skills.
 
 Full install steps live in [platforms/pi/README.md](platforms/pi/README.md).
 
-> ⚠️ Install only **one** source per package. A local path and a git clone both
-> register the same extension tools, commands, and flags, which pi reports as
-> conflicts. Remove the dev entry before installing the git one.
+> ⚠️ Install only **one** source per package. See
+> [platforms/pi/README.md](platforms/pi/README.md) for the conflict rule.
 
 ### Claude Code (plugin)
 
@@ -79,16 +78,8 @@ needed: new subagents get the new theme at once, and the main session gets it
 after `/clear` or in a new session.
 
 The `subagent_model` option (**Subagent model**) sets the model for the
-subagents. The default is `sonnet`. A change applies to the next subagent with
-no restart. The value `inherit` leaves the model choice to Claude Code. The
-orchestrator keeps your session model. If `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`
-is set, Claude Code ignores the `subagent_model` option.
-
-Set the options in `/config` or in your user `settings.json`. Managed (admin)
-settings override them. A project `settings.json` cannot set the subagent
-model.
-
-For the exact lookup order and the limits, see
+subagents. Set it in `/config` or in your user `settings.json`. For the values,
+the default, the exact lookup order, and the limits, see
 [platforms/claude/README.md](platforms/claude/README.md).
 
 The commit doctrine holds here too: only the orchestrator may write git
@@ -103,18 +94,12 @@ Update with `claude plugin marketplace update persona-agents`, then
 
 Every platform gets a retro command for a print-only review of the current
 session. The agent you talk to runs it. It prints findings and actions in chat
-and writes no files.
-
-| Platform | Command | Comes from |
-|----------|---------|------------|
-| pi | `/retro` | the pi package; run `/reload` after install |
-| kiro | `/retro` | `install.sh` (`~/.kiro/prompts/retro.md`) |
-| OpenCode | `/retro` | `install.sh` (`~/.config/opencode/commands/retro.md`) |
-| Claude Code | `/persona-agents:retro` | the plugin skill |
+and writes no files. The command name for each platform is in
+[content/skills/common/retro/SKILL.md](content/skills/common/retro/SKILL.md).
 
 The retro reads the session transcript and the permission rules of its own
-platform. It reports the session cost from pi and Claude Code session files,
-and says that no cost data exists on kiro and OpenCode.
+platform. It reports the session cost on pi, token totals on Claude Code, and
+no cost figure on kiro and OpenCode.
 
 ## Agents
 
@@ -134,7 +119,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | goblin-researcher | **Skribnik** | 🔬 Researcher | Ink-stained scribe. Knows books and the internet — Context7, DeepWiki, Exa |
 | goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
 | goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
-| goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools except reading its own persona and skills, no profession, just stupid mushroom-addled nonsense with occasional accidental genius |
+| goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools except reading its own persona and skills. A minimal mascot profession with no functional duties. Stupid mushroom-addled nonsense, with occasional accidental genius |
 
 ### The WH40K Warband
 
@@ -146,7 +131,7 @@ One real captured run: four themes' orchestrator personas answer the same prompt
 | wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
 | wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
 | wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
-| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools except reading its own persona and skills, no profession. Just Brok, trying very hard |
+| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools except reading its own persona and skills. A minimal mascot profession with no functional duties. Just Brok, trying very hard |
 
 ### The WH40K Ork Warband
 
@@ -242,7 +227,12 @@ without `--force` never overwrites your changes. Pi agents are edited in the
 repo itself (`platforms/pi/frontmatters/` + `content/professions/`) and
 picked up on `/reload`.
 
-Pull the latest and re-apply: `cd ~/persona-agents && git pull && ./install.sh --force`
+For Kiro and OpenCode, pull the latest and re-apply:
+`cd ~/persona-agents && git pull && ./install.sh --force`.
+For pi, run `/reload` after `pi update --extensions`
+(see [platforms/pi/README.md](platforms/pi/README.md)).
+For Claude Code, use the update commands in
+[Claude Code (plugin)](#claude-code-plugin).
 
 ---
 

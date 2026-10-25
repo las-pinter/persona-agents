@@ -1,4 +1,4 @@
-# agent-stack — the persona-agents pi extension
+# persona-agents — the pi extension
 
 One extension, one entry: `extension/extension.ts`. Internally modular (every
 module below lives in `extension/`):
@@ -6,21 +6,31 @@ module below lives in `extension/`):
 | Module | Responsibility |
 |---|---|
 | `extension.ts` | Entry point: wires gate, commands, subagent tool, session hooks |
-| `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package (`platforms/pi/agents/`, `content/personas/`) |
+| `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package. Package agents are `platforms/pi/frontmatters/<profession>.yaml` composed with `content/professions/<profession>.md`; `platforms/pi/agents/` is an optional override folder |
 | `permissions.ts` | Tool-call gate: global `permissions.json` (hard deny/ask) + active agent's frontmatter `permissions:` (deny → ask → allow → mode default) |
+| `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
 | `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |
 | `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
+| `subagent-schema.ts` | TypeBox schema for the `subagent` tool arguments |
+| `subagent-run.ts` | Spawns one `pi` child per run and parses its JSON stdout lines |
+| `subagent-result.ts` | Result types with the output, usage, and truncation helpers |
+| `subagent-render.ts` | Tool call and result renderers for single, parallel, and chain runs |
+| `subagent-thinking.ts` | Per-run thinking timing and the thinking indicator lines |
+| `subagent-tree.ts` | Writes each child run's start, update, and end records to the tree log |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
 | `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent `--tools` strip, run-id allocation |
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
 | `sidebar-render.ts` | Pure five-panel renderers (AGENTS, SESSION, WORKSPACE, MCP, TODOS) |
+| `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
 | `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
 | `tree-ui.ts` | Sidebar glue: binds compositor, data, commands, and lifecycle; reads the git branch |
 | `todo-tool.ts` | `todo` tool: session-entry state, registration, and the `persona-agents/todos/v1` event |
+| `status-text.ts` | Dims footer status text in TUI mode, with a plain-text fallback |
+| `duration.ts` | Shared display formatting for durations and token counts |
 
 ## Install
 
@@ -35,10 +45,11 @@ pi install git:github.com/las-pinter/persona-agents@<newest-release-tag>
 
 Check the GitHub Releases/tags page for the **newest tag** and bump on
 releases — don't hardcode one version. Manage the package with `pi list` /
-`pi remove <source>`, reconcile a clone after a new tag with
-`pi update --extensions`, and install only **one** source per package (a local
-path and a git clone of the same repo both register the extension, which pi
-reports as duplicate-tools/commands/flags conflicts).
+`pi remove <source>`, and reconcile a clone after a new tag with
+`pi update --extensions`. Install only **one** source per package. Remove the
+other source with `pi remove <source>` before you install this one. A local
+path and a git clone of the same repo both register the extension, and pi
+reports the duplicate as tools/commands/flags conflicts.
 
 ## Agent files
 
@@ -172,26 +183,16 @@ spanning always-allow runs the current call and remembers the rule, approving no
 segment; later calls skip the spanning ask, but they still must pass the allow checks,
 so deny-by-default can still block them.
 
-**Git writes**: the orchestrator runs a plain `git add`, `git commit`, `git pull`,
-`git merge`, `git rebase`, or `git tag` with no prompt. `git push` and every `gh pr`
-and `gh release` command are on its `ask` list — each one prompts allow/deny in the
-main session. These exception forms also ask:
+**Git writes**: `AGENTS.md` owns the history doctrine, the forms that still
+ask, and the accepted-risk list. The pi mapping allows the six history
+commands also with `git -C <path>`, `--no-pager`, `-p`, and a leading
+`cd x &&`.
 
-- tag force-move and `commit --amend`;
-- `git -c` overrides and unknown global options;
-- upload-pack and transport helper URLs, and merge strategies;
-- wrapped or substituted forms, and glob or brace words;
-- `git reset --soft`.
-
-Tag delete is denied. `git -C` to another repository is allowed
-(an accepted risk: the hooks and config of that repository run). The implementer
-gets a hard DENY for the history, push, `gh pr`, and `gh release` commands. It may
-only SUGGEST a commit. Ask is a hard block without a UI. **Headless orchestrator
-runs (delegated/`-p`/`--mode json`) can run a plain commit**, but a commit in an
-exception form still blocks, for example a message with a question mark or a
-bracket. Headless runs cannot push, open a pull request, or release. The global
-file `~/.pi/agent/permissions.json` is live and unversioned; it carries a global
-ask for `git push` and `gh pr` as a safety net.
+**Headless orchestrator runs (delegated/`-p`/`--mode json`) can run a plain
+commit**, but a commit in an exception form still blocks, for example a message
+with a question mark or a bracket. Headless runs cannot push, open a pull
+request, or release. The global file `~/.pi/agent/permissions.json` is live and
+unversioned; it carries a global ask for `git push` and `gh pr` as a safety net.
 
 Gate scope: only `bash`/`powershell` (command), `read`/`grep`/`find`/`ls`/`edit`/`write`
 (path/pattern), and other plain tools (JSON args) are probed. `mcp__…` and namespaced
@@ -242,12 +243,15 @@ The sidebar owns the right column. It paints FIVE panels:
 1. AGENTS — the live agent tree.
 2. SESSION — model, thinking level, context use, cost, and tokens per second.
 3. WORKSPACE — cwd, git branch, and the changed-file count.
-4. MCP — configured servers and an inferred connection dot.
+4. MCP — configured servers, an inferred connection dot, a per-server `xN`
+   use count, and a `total xN` line.
 5. TODOS — the `todo` tool's list.
 
-The tree is the only cross-process panel. Every other panel shows the root
-process's data. `pi.events` is process-local, so a child's session, MCP, and todo
-data is not visible to the root sidebar.
+The tree and the MCP counts are cross-process. The SESSION, WORKSPACE, and
+TODOS panels show the root process's data only. `pi.events` is process-local,
+so a child's session and todo data is not visible to the root sidebar. The
+root counts its own MCP tool starts and folds each child's counts through the
+tree log into one session tally.
 
 The tree comes from a shared append-only NDJSON log. The root creates the log in
 `os.tmpdir()`, unique per root. The root compacts the log when it grows past the
@@ -255,7 +259,10 @@ cap. Each spawned process appends the records of its own children.
 
 MCP fidelity is reduced. The built-in `pi.getMcpServers()` returns config only,
 with no live connection state. The panel infers `connected` from the tool names
-in `getAllTools()` (`mcp__<server>__<tool>`).
+in `getAllTools()` (`mcp__<server>__<tool>`). The count for one server is its
+MCP tool starts: the root's own starts plus every child's, folded from the tree
+log. A repeated call id counts once. The total sums every server that has a
+count, including the rows beyond the visible cap.
 
 ### The `todo` tool
 
@@ -273,7 +280,7 @@ researcher, reviewer. Mascot is excluded. Each allowed agent lists
 - `/sidebar [on|off|width <n>]` — show or hide the right column, or set its width (10 to 120). A bare `/sidebar` toggles.
 - `/agents-tree` — open the live tree overlay. Up/down selects a node.
 - `/agent-inspect [runId|last]` — open one node's detail.
-- `/retro` — print-only blameless session retrospective; run `/reload` after install. The same command runs as `/retro` on kiro and OpenCode, and as `/persona-agents:retro` in Claude Code.
+- `/retro` — print-only blameless session retrospective; run `/reload` after install. The command name for each platform is in [content/skills/common/retro/SKILL.md](../../content/skills/common/retro/SKILL.md).
 
 The retro skill sets `disable-model-invocation: true`, so only the user starts
 it. The pi agents list `common/retro` in `skills:`. The extension puts a skill

@@ -19,6 +19,16 @@ alphabetical order that sets the theme wins), then your
 `settings.json`, then the theme that Claude Code gave at start, then `goblin`.
 The `subagent_model` option uses the same order, but with no start-time value.
 
+## Option values
+
+The `subagent_model` option takes four values: `sonnet` (the default),
+`opus`, `haiku`, and `inherit`. The value `inherit` leaves the model choice to
+Claude Code. If `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` is set, Claude Code ignores
+the `subagent_model` option. The orchestrator keeps your session model.
+
+Set an option in `/config` (**Persona theme**, **Subagent model**) or in your
+user `settings.json`. A project `settings.json` cannot set the subagent model.
+
 ## Limits
 
 These limits apply to the `theme` and `subagent_model` options.
@@ -59,6 +69,15 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
   characters and shows only a 2,000-character preview of a longer string.
   `tests/claude-plugin.test.ts` fails if a profession, or a theme persona with
   its note, reaches the cap.
+- **Subagent model** comes from `platforms/claude/scripts/subagent-model.mjs`.
+  It runs as a `PreToolUse` hook on `Agent` and `Task`. It sets the model of a
+  `persona-agents:` subagent, except the orchestrator, from the `subagent_model`
+  option. A value outside `sonnet`, `opus`, `haiku`, and `inherit` gives the
+  default, `sonnet`. The hook gives no permission decision and never blocks a
+  call.
+- **Option read** is `platforms/claude/scripts/plugin-options.mjs`. Both the
+  `theme` hook and the model hook call it at run time, so a `/config` change
+  needs no restart.
 - **Skills** load in place from `content/skills/`. `plugin.json` lists each
   skill folder. A skill for another platform only is left out of the list and
   named in `EXCLUDED_SKILLS` in `tests/claude-plugin.test.ts`, with the reason.

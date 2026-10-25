@@ -1,7 +1,8 @@
 # OpenCode templates and plugins
 
 This file describes the OpenCode frontmatters and plugins, for maintainers.
-[CONTRIBUTING.md](../../CONTRIBUTING.md) covers how to add a profession.
+[CONTRIBUTING.md](../../CONTRIBUTING.md) covers how to add a profession and the
+cleanup rule for a retired profession.
 
 ## Frontmatter templates
 
@@ -96,10 +97,3 @@ copies them as-is to `~/.config/opencode/plugins/`. They need no build step,
 `install.sh` copies each file in `content/commands/` to
 `~/.config/opencode/commands/`. The file sets no `agent` key, so the current
 agent runs the command.
-
-## Retired professions
-
-The installer never deletes files. When a profession is retired, its agent
-files stay in `~/.kiro/agents/` and `~/.config/opencode/agents/`. Its
-profession file and templates stay in the installed config tree. Remove them
-by hand. Release notes state the removal.

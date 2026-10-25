@@ -48,24 +48,27 @@ Kiro and OpenCode templates use five placeholders, which `install.sh` fills:
 A template does not need all five. Pi frontmatters and Claude Code agent files
 use no placeholders.
 
-The OpenCode stub comment has this form:
-`<!-- persona-agents:{theme}-{profession}:{personaFile} -->`. The plugin reads
-it at run time, so a new theme or profession needs no plugin change. The parse
-rules are in `platforms/opencode/README.md`.
+An OpenCode agent file holds exactly one stub comment. The plugin replaces it
+at run time, so a new theme or profession needs no plugin change. The format
+and the parse rules are in `platforms/opencode/README.md`.
 
 Platform details are in `platforms/kiro/README.md` (templates and the Kiro
 permission model), `platforms/opencode/README.md` (frontmatter, stub format,
 plugins), `platforms/pi/README.md`, and `platforms/claude/README.md` (hooks
 and options).
 
-`install.sh` never deletes files. When you retire a profession, remove its old
-installed files by hand.
+`install.sh` never deletes files. When you retire a profession, its old agent
+files stay in `~/.kiro/agents/` and `~/.config/opencode/agents/`. Its
+profession file stays under the kiro config root and under the opencode
+config root. Its template stays in
+`platforms/<target>/` in the repo. Remove the files by hand.
 
 ## Repository Structure
 
 Platform-neutral sources live in `content/`. Files for one target live in
-`platforms/<target>/`. An install mirrors `content/`, so the `skills/...`
-paths inside professions and skills work in the repo and after install.
+`platforms/<target>/`. An install mirrors `content/` into the target config
+tree, so a `skills/...` path inside a profession or a skill resolves only
+after install. The repo sources live under `content/skills/`.
 
 | Path | Purpose |
 |------|---------|
@@ -92,8 +95,9 @@ paths inside professions and skills work in the repo and after install.
    git clone https://github.com/las-pinter/persona-agents.git
    ```
 
-2. Install the tools. You need `jq`, Node.js 22 or later (the tests use
-   `--experimental-strip-types`), and `shellcheck`. Then install the npm
+2. Install the tools. You need `jq`, Node.js 22.6 or later, and `shellcheck`.
+   The tests use `--experimental-strip-types`, which Node.js added in 22.6.
+   The minimum is `engines.node` in `package.json`. Then install the npm
    packages:
 
    ```bash
@@ -167,16 +171,18 @@ every theme.
    ```
 
    The required sections appear in the order shown. `## Startup` lists the
-   skills to load before any user input. The `alwaysLoad` list in the pi
-   frontmatter must match it. A role section normally sits between
-   `## Core Behavior` and `## When to Defer`. A profession that does no tool
-   work, such as `mascot.md`, may omit most sections.
+   skills to load before any user input. When a profession has a
+   `## Startup` section, its `alwaysLoad` list in the pi frontmatter must
+   match it. `tests/doc-lint.test.ts` enforces that parity for the
+   orchestrator only.
+   A role section normally sits between `## Core Behavior` and
+   `## When to Defer`. A profession that does no tool work, such as
+   `mascot.md`, may omit most sections.
    The orchestrator puts `## TODO Lists`, `## Journal Management`,
    `## Project Notes`, and `## Context Discipline (CRITICAL)` after
    `## When to Defer`. A trailing section may sit before or after `## Skills`.
    The researcher puts `## Research Documentation` between `## Output Format`
-   and `## Skills`. `tests/doc-lint.test.ts` checks the skill references and
-   the Startup list.
+   and `## Skills`. `tests/doc-lint.test.ts` also checks the skill references.
 
 2. Create the Kiro template, `platforms/kiro/templates/{name}.json`. Copy an
    existing template. Set the tools, the allowed and denied commands, the
@@ -333,8 +339,9 @@ real with `--force`:
 
 ### Check the generated output
 
-- Each target has 56 agents (8 themes and 7 professions):
+- Kiro and OpenCode each have 56 agents (8 themes and 7 professions):
   `ls ~/.kiro/agents/ | wc -l` and `ls ~/.config/opencode/agents/ | wc -l`.
+  pi and Claude Code each have 7, one per profession.
 - Kiro files are valid JSON: `jq . ~/.kiro/agents/*.json > /dev/null`.
 - OpenCode files have valid YAML frontmatter and exactly one stub comment.
 - No `{{` placeholder remains in `~/.kiro/agents/` or
