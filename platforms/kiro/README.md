@@ -38,7 +38,13 @@ copies it to `~/.kiro/settings/cli.json` when that file is missing.
 ## Ask by omission
 
 Kiro has no `ask` tier. An available tool or command that is neither allowed
-nor denied prompts the user. The repo doctrine holds by omission:
+nor denied prompts the user. One more verdict exists: the read-only detector
+can allow a command with no prompt. For that reason each of the five templates
+that set `autoAllowReadonly` true carries explicit denies for the write forms
+the detector allows: fetch, `git remote show`, `git remote update`, and branch
+forms with an argument. A branch glob cannot tell a create from a listing, so
+a listing with an argument denies too. The repo doctrine otherwise holds by
+omission:
 
 - A gated history or release command stays out of `allowedCommands`, so Kiro
   asks. `AGENTS.md` names these commands. A gated command in

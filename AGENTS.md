@@ -61,8 +61,17 @@ platform:
   `git rebase`. `git pull` and `git tag` ask, because a bare star can expand
   to a planted `--upload-pack` or `-d` file. `git -C` forms ask, because a
   quoted space in the directory can hide a second verb.
-- Kiro has no ask tier, so every git history command stays unlisted and asks.
-- On every platform, some forms still ask: tag force-move, `git -c` overrides
+- Kiro has no ask tier. An unmatched command that the read-only detector
+  calls read-only runs with no prompt. Each of the five templates that set
+  `autoAllowReadonly` true denies the detector's write forms with explicit
+  globs: fetch, `git remote show`, `git remote update`, and branch forms with
+  an argument. A glob cannot tell a branch create from a branch listing, so a
+  listing with an argument denies too. Those globs cover the detector's write
+  forms only; an unlisted command asks. Those five templates deny the history
+  verbs with globs: add, commit, push, pull, merge, rebase, and tag create and
+  tag delete.
+- On every platform, some forms still ask: tag force-move (a DENY on the five
+  Kiro read-only templates; the Kiro orchestrator asks), `git -c` overrides
   and unknown global options, `commit --amend`, `git reset --soft`, upload-pack
   and transport helper URLs, merge strategies, wrapped or substituted forms, and
   brace, bracket, and extglob words. On Claude Code and pi, star and question
