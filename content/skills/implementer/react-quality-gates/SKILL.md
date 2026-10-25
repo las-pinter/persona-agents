@@ -33,7 +33,7 @@ this exact order — fix all issues in one gate before advancing to the next.
 - Run the project's runner (`npm test`, `vitest`, `jest`, or `pnpm test`).
 - Coverage threshold of **80%+** when the runner reports coverage.
 - Write tests for all new functionality: happy path, failure cases, edge cases, error messages.
-- Test names describe behavior: `createOrder_returns400_whenInventoryEmpty` ✅.
+- Test naming follows the **test-case-structure** skill.
 
 ## 4. Build Verification — MUST HAVE
 

@@ -61,7 +61,7 @@ never once per nit.
 - [ ] All changes logically belong in this PR
 - [ ] Matches the requested change or issue
 - [ ] README, docs, or API specs updated if behavior changed
-- [ ] Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) when reviewing documents and code comments; flag any theme word or roleplay address, or a plan, ticket, decision-record, or outside-repo reference
+- [ ] Load and follow the **persona-free-documents** skill when reviewing documents and code comments; flag every violation it names
 
 ### 2. Design & Architecture
 - [ ] Overall approach makes sense for the problem
@@ -81,7 +81,7 @@ never once per nit.
 - [ ] A new developer could understand this within a minute
 - [ ] No over-engineering (YAGNI)
 - [ ] Cyclomatic complexity reasonable — deep nesting extracted into helpers
-- [ ] File length follows the **file-length-policy** skill (`skills/common/file-length-policy/`).
+- [ ] File length follows the **file-length-policy** skill.
 
 ### 5. Security
 - [ ] All user/input data validated and sanitized at trust boundaries
@@ -114,15 +114,14 @@ never once per nit.
 
 ### 10. Comments & Documentation
 - [ ] Comments explain **why**, not **what**
-- [ ] No long explanatory comment blocks; a long block is a design smell
+- [ ] Comment length follows the **simplified-technical-english** skill; a long comment block signals a design problem.
 - [ ] No outdated comments or commented-out code
-- [ ] Comments and docs name no task, phase, milestone, decision-record ID, or audit/backlog number; no outside-repo citation
+- [ ] Comments and docs follow the **persona-free-documents** skill.
 - [ ] TODOs describe the missing work and name an owner; no ticket reference
 
 ### 11. Style & Consistency
 - [ ] Follows team style guide and project conventions
 - [ ] Style nits prefixed `NIT:`
-- [ ] NIT and SUGGESTION findings form one fix batch, re-reviewed once
 
 ### 12. Observability & Operations
 - [ ] New features covered by logging, metrics, or structured events
@@ -156,6 +155,9 @@ never once per nit.
 ---
 
 ## PR Size Strategy
+
+These bands measure the diff of one pull request, not the length of one file;
+file length belongs to the **file-length-policy** skill.
 
 | Size | Lines | Approach |
 |------|-------|----------|

@@ -1,6 +1,6 @@
 ---
 name: project-notes
-description: Shared, persona-free project notes and planner studies for repositories agents work on. Every agent reads them.
+description: Shared, persona-free project notes and planner studies for repositories agents work on. The orchestrator and the planner write them. Outside a retro, only they read `agent-notes/project-notes/`.
 ---
 
 # Project Notes
@@ -11,12 +11,13 @@ Plain, persona-free records about repositories agents work on. The notes hold
 architecture, conventions, lessons learned, and planner studies. No flair.
 Every line must earn its place.
 
-**Every agent reads `agent-notes`.** Only the orchestrator and the planner
-write the shared notes.
+Only the orchestrator and the planner write `agent-notes/project-notes/`, and
+outside a retro only they read it. The retro skill reads those notes in every
+profession.
 
 ## Persona-Free Documents
 
-Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
 
 ## Storage
 
@@ -24,7 +25,7 @@ Load and follow the **persona-free-documents** skill (`skills/common/persona-fre
 <USER_HOME>/agent-notes/
 ├── project-notes/
 │   └── <project>/
-│       ├── summary.md                 (orchestrator, max ~30 lines)
+│       ├── summary.md                 (orchestrator, max 30 lines)
 │       ├── features/<slug>.md         (orchestrator, max 300 lines)
 │       ├── bugs/<slug>.md             (orchestrator, max 300 lines)
 │       ├── tech/<slug>.md             (orchestrator, max 300 lines)
@@ -99,9 +100,13 @@ Rules:
 
 - No "Last worked on" field.
 - No persona voice. Plain facts only.
-- `summary.md`: maximum ~30 lines (STRICT).
+- `summary.md`: maximum 30 lines (hard ceiling).
 - Feature, bug, and tech notes: maximum 300 lines each (hard ceiling). Split the
   topic when a note cannot fit.
+- `study.md`: maximum 500 lines (hard ceiling). Split the study before it
+  exceeds the cap.
+- Each side document: maximum 300 lines (hard ceiling). Split the topic before
+  it exceeds the cap.
 - Omit a section when it has nothing notable.
 
 ## Study Lifecycle (planner-owned, manual)
@@ -131,14 +136,14 @@ No script writes these files. The planner writes them with the `write` and
 
 Rules:
 
-1. Create `status.md` in the same action that creates the study folder.
+1. Create `status.md` in the same action that creates the study folder. A new
+   study starts at `full`.
 2. Move the stage `full` → `done`. The stage `blocked` or `abandoned` may
    replace the current stage at any time. A study is `done` only on the user's
    explicit acceptance.
 3. Append one History row on every stage change.
 4. Update the `Updated` field on every `status.md` write.
-5. List each side document in the `Side documents` field. A side document has
-   a maximum of 300 lines.
+5. List each side document in the `Side documents` field.
 6. Create `status.md` only for new studies. Do not backfill the archived plans.
 
 ### `studies/index.md` format (one per project)
@@ -199,8 +204,8 @@ history. When a feature ships, its note may be removed or consolidated.
 
 ## Related Skills
 
-- **study** (`skills/planner/study/`) — Owns `study.md` and the side documents.
-- **interview** (`skills/planner/interview/`) — Owns the frontier rounds and the
+- **study** — Owns `study.md` and the side documents.
+- **interview** — Owns the frontier rounds and the
   decisions record.
-- **source-selection** (`skills/researcher/source-selection/`) — Owns the
-  researcher report root `agent-notes/researcher/reports/`.
+- **source-selection** — Owns the researcher report root
+  `agent-notes/researcher/reports/`.

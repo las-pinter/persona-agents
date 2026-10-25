@@ -52,6 +52,6 @@ These files do not follow the tiers:
 
 ## Related Skills
 
-- **code-implementation** (`skills/implementer/code-implementation/`) — the implementation workflow.
-- **test-case-structure** (`skills/tester/test-case-structure/`) — the test file structure.
-- **code-review-checklist** (`skills/reviewer/code-review-checklist/`) — the review checklist.
+- **code-implementation** — the implementation workflow.
+- **test-case-structure** — the test file structure.
+- **code-review-checklist** — the review checklist.

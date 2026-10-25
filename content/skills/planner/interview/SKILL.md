@@ -12,7 +12,7 @@ request into a settled set of decisions. It is the only stage before the study.
 
 ## Persona-Free Documents
 
-Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
 
 ## The Design Tree
 
@@ -107,8 +107,8 @@ at the start of every run. The disk file is its memory.
 The interview ends when the frontier is empty. The planner then ends the run
 with `## INTERVIEW COMPLETE`.
 
-Study acceptance is a separate, later step. The user accepts the study in
-explicit words, and the planner moves `status.md` from `full` to `done`.
+Study acceptance is a separate, later step. The **project-notes** skill owns the
+`status.md` stage rules.
 
 ## Self-Check
 
@@ -119,6 +119,6 @@ explicit words, and the planner moves `status.md` from `full` to `done`.
 
 ## Related Skills
 
-- **study** (`skills/planner/study/`) — Owns the study document and its cap.
-- **project-notes** (`skills/common/project-notes/`) — Owns the study tree,
-  `status.md`, and `studies/index.md` formats.
+- **study** — Owns the study document.
+- **project-notes** — Owns the caps,
+  the `status.md` rules, and the `studies/index.md` format.

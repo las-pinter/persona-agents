@@ -18,13 +18,14 @@ two skills as one unit. The study is the record of the interview.
 
 ## Persona-Free Documents
 
-Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
 
 ## One Document
 
 - One study folder per feature: `studies/YYYY-MM-DD-<slug>/`.
 - One study document: `studies/YYYY-MM-DD-<slug>/study.md`.
-- There is no quick stage and no full stage. The stage starts at `full`.
+- There is no quick stage. The **project-notes** skill owns the `status.md`
+  stage rules.
 - Use the `date` command for the date. Use a plain kebab-case slug with no date
   inside it.
 
@@ -142,22 +143,10 @@ chain. A delay on that chain delays the study. Mark it.
 - Reference every side document from `study.md`.
 - Do not copy the study into a side document. Move detail out and link it.
 
-## Size Limits
+## Caps, Status, and Index
 
-- `study.md`: maximum 500 lines.
-- Each side document: maximum 300 lines.
-- Split before exceeding a cap.
-
-## Status and Index
-
-Follow the **project-notes** skill for the exact formats.
-
-- Create `status.md` in the same action that creates the study folder. Set the
-  stage to `full`.
-- Add the study row to `studies/index.md`.
-- Set the stage to `done` only when the user accepts the study in explicit
-  words.
-- Append one History row on every stage change.
+Follow the **project-notes** skill: it owns the caps, the `status.md` rules, and
+the `studies/index.md` format.
 
 ## Quality Gate
 
@@ -183,7 +172,7 @@ A study is done only when every line is true:
 
 ## Related Skills
 
-- **interview** (`skills/planner/interview/`) — Owns the frontier rounds and the
+- **interview** — Owns the frontier rounds and the
   decisions record. Load with this skill.
-- **project-notes** (`skills/common/project-notes/`) — Owns the study tree,
-  `status.md`, and `studies/index.md` formats.
+- **project-notes** — Shared, persona-free project
+  context. Load with this skill.

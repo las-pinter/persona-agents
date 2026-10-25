@@ -11,7 +11,7 @@ command and a wrong path.
 ## Working Directory
 
 - The bash shell starts at the repository root. Do not `cd` into the repository.
-- Do not join `cd <repo> &&` to a command. The pi gate folds `cd X` into the git, cargo, rustup, and uv allow rules only. Other commands fail.
+- Do not join `cd <repo> &&` to a command.
 
 ## Paths
 

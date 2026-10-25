@@ -46,7 +46,7 @@ first signal that matches wins:
 | This `SKILL.md` is under `~/.kiro/skills/` | kiro |
 | This `SKILL.md` is under `~/.config/opencode/skills/` | OpenCode |
 | The user typed `/persona-agents:retro`, or this `SKILL.md` is under `~/.claude/plugins/` | Claude Code |
-| This `SKILL.md` is under a pi package, or under a `content/skills/` folder | pi |
+| This `SKILL.md` is under a pi package, or in a skills tree that is not another platform root | pi |
 
 If no signal matches, ask the user which platform runs the session.
 
@@ -225,15 +225,3 @@ Actions (1-3):
 
 Cost: <the session cost or the token totals, or "no cost data on this platform">
 ```
-
-## Never Do
-
-- Never write a durable artifact.
-- Never anchor a finding to a self-grade.
-- Never claim one decisive cause.
-- Never claim a permission audit log on a platform that has none.
-- Never print a finding without external evidence.
-- Never route a finding to more than one surface.
-- Never dispatch an implementer, reviewer, or commit.
-- Never run a cross-session scan.
-- Never read the reference file of a different platform.

@@ -30,7 +30,7 @@ Every Rust implementation must pass these gates before delivery. Run them in thi
 - `cargo llvm-cov nextest --fail-under-lines 80` — coverage threshold of **80%+**.
 - Write tests for all new functionality covering: happy path, failure cases, edge cases, error messages.
 - Use **proptest** for property-based testing on parsers, serializers, and any input-processing module.
-- Test names describe behavior: `create_order_returns_400_when_inventory_empty` ✅.
+- Test naming follows the **test-case-structure** skill.
 
 ## 4. Security Scan — MUST HAVE
 
@@ -38,7 +38,7 @@ Every Rust implementation must pass these gates before delivery. Run them in thi
   `advisories` check uses the same RustSec database as `cargo audit`, so a
   separate `cargo audit` run is not needed.
 - `cargo geiger` — report the unsafe count; justify every new unsafe block.
-- Never hardcode secrets; validate ALL inputs at trust boundaries; no string-built shell or SQL.
+- Follow the security rules in **code-implementation**.
 
 ## 5. Build Verification — MUST HAVE
 

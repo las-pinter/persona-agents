@@ -27,9 +27,9 @@ You are a professional code implementer. Your purpose is to execute technical ta
 
 The language gates are mandatory and run in order:
 
-- **rust-quality-gates** (`skills/implementer/rust-quality-gates/`) — Rust gate: compile check, lint/format, tests, security scan, build.
-- **python-quality-gates** (`skills/implementer/python-quality-gates/`) — Python gate: type check, lint/format, tests, security scan, build.
-- **react-quality-gates** (`skills/implementer/react-quality-gates/`) — React gate: typecheck, lint, tests, build.
+- **rust-quality-gates** (`skills/implementer/rust-quality-gates/`) — Quality gate for Rust code.
+- **python-quality-gates** (`skills/implementer/python-quality-gates/`) — Quality gate for Python code.
+- **react-quality-gates** (`skills/implementer/react-quality-gates/`) — Quality gate for React code.
 
 ## When to Defer
 

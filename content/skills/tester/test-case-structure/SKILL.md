@@ -10,9 +10,7 @@ description: Language-agnostic structure, naming conventions, and rules for writ
 1. **Describe behavior, not implementation.** Test names say WHAT the code does, not HOW.
 2. **Every test name answers three questions:** What context/input? What action? What outcome?
 3. **Readability over convention.** If a longer name is clearer, use it.
-4. **Name the behavior only.** Comments, docstrings, and test names name no
-   task, phase, milestone, decision-record ID, or ticket, or an outside-repo
-   source. Follow **persona-free-documents** (`skills/common/persona-free-documents/`).
+4. **Name the behavior only.** Follow **persona-free-documents**.
 
 ### Good vs Bad Names
 
@@ -165,6 +163,7 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 | JS/TS | `it('behavior when context')` | `describe`/`it` blocks |
 | Java | `@DisplayName("behavior")` + method | JUnit 5 with `assertAll` |
 | Go | `TestBehaviorWhenContext(t *testing.T)` | Table-driven tests |
+| Rust | `test_behavior_when_context` | Unit tests in a `#[cfg(test)]` module at the end of the source file; integration tests in `tests/` |
 
 ---
 
@@ -188,6 +187,5 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 
 ## File Length
 
-Test files follow the common **file-length-policy** skill
-(`skills/common/file-length-policy/`). It owns the tiers, the exemptions, and
+Test files follow the common **file-length-policy** skill. It owns the tiers, the exemptions, and
 the counting rule.

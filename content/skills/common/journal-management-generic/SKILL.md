@@ -7,7 +7,7 @@ description: Generic hierarchical journal system for any agent's operational con
 
 ## Persona-Free Documents
 
-Load and follow the **persona-free-documents** skill (`skills/common/persona-free-documents/`) for every study, note, journal, report, release note, and code comment.
+Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
 
 ## Discovery — Find Your Home Directory
 
@@ -28,24 +28,25 @@ Store the returned value and use it to replace `<USER_HOME>` in all paths below.
 Journals live under `<USER_HOME>/agent-notes/<AGENT_TYPE>/`, so every theme's
 agent of the same profession shares one stable operational memory.
 
-This skill is agent-agnostic and lives in the shared `skills/common/` folder:
-`<AGENT_TYPE>` comes from the profession that DECLARES it (for this repo's
-orchestrator: `orchestrator`), never from a persona name in a system prompt.
+This skill is agent-agnostic and lives in the shared `common/` skills
+folder. `<AGENT_TYPE>` comes from the profession that DECLARES it, never
+from a persona name in a system prompt. The profession journal skill gives
+the value; a profession with no journal skill uses its own profession name.
 
 **How to resolve `<AGENT_TYPE>` (in priority order):**
 
 1. **Profession / agent type (preferred, always used in this repo)** —
    `<AGENT_TYPE>` is the profession this skill ships with, set once per
-   deployment. In this repo it is `orchestrator`. It comes from the profession /
-   agent type, NOT from anything in a system prompt.
+   deployment. It comes from the profession / agent type, NOT from anything in a
+   system prompt.
 2. **NEVER resolve it from a persona name** — a system prompt opening like
    "You are <PersonaName> the <RoleTitle>..." is theme flavor only and varies
    per theme. Personas are decoration; the profession's operational memory must
-   be stable across themes. Every theme's Orchestrator journals to
-   `<USER_HOME>/agent-notes/orchestrator/`, never to a persona-named directory.
+   be stable across themes. Every theme's agent of one profession journals to
+   `<USER_HOME>/agent-notes/<AGENT_TYPE>/`, never to a persona-named directory.
 
-Format the value lowercase with hyphens (e.g. `orchestrator`). Use the same value
-every session so the journal history stays in one place.
+Format the value as lowercase hyphenated words. Use the same value every session
+so the journal history stays in one place.
 
 ## Folder Structure
 
@@ -87,13 +88,13 @@ last line.
 
 > **HARD LIMIT — 100 lines maximum.** Applies to ALL journal levels: daily,
 > weekly, monthly, yearly.
-> If new information cannot fit, compress existing content (tighten wording,
-> merge redundant points, drop non-essential detail) rather than exceeding the
+> If new information cannot fit, compress a file you alone write: tighten
+> wording, merge redundant points, drop non-essential detail. Never exceed the
 > limit.
 >
-> A session may compress only its own block to stay under the cap, must preserve
-> other authors' text verbatim, and must use consolidation as the sanctioned
-> compression path for the whole file.
+> A session may compress its own block. A shared file comes under the cap by
+> consolidation, not by trimming another author; keep other authors' text
+> verbatim.
 
 For the correct current date use the `date` bash command.
 

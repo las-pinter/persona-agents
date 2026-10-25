@@ -33,13 +33,13 @@ Every Python implementation must pass these gates before delivery. Run them in t
 - Write tests for all new functionality covering: happy path, failure cases, edge cases, error messages.
 - Use **Hypothesis** for property-based testing on parsers, serializers, authentication logic, and any input-processing modules.
 - For async code, use `pytest-asyncio` with `auto` mode.
-- Test names describe behavior: `test_create_order_returns_400_when_inventory_empty` ✅.
+- Test naming follows the **test-case-structure** skill.
 
 ## 4. Security Scan — MUST HAVE
 
 - `pip-audit --strict` — no known CVEs in project dependencies.
 - `bandit -r` — no SAST findings at MEDIUM severity or higher.
-- Never hardcode secrets; validate ALL inputs at trust boundaries; parameterize ALL queries — no string concatenation in SQL or shell.
+- Follow the security rules in **code-implementation**.
 
 ## 5. Build Verification — MUST HAVE
 

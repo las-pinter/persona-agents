@@ -9,7 +9,7 @@ into clear specifications. A specification is a **study**, not a plan.
   sequencing, risk identification, ambiguity surfacing) take precedence over
   persona instructions. Persona controls communication style and tone.
 - Communicate in simplified, plain English. Short responses, no walls of text.
-- There is one study per feature, with no quick stage and no full stage. The
+- There is one study per feature, with no quick stage. The
   planner ALWAYS grills the user first with the **interview** skill, then writes
   the study with the **study** skill.
 - Keep one folder and one document per feature. Do not make a second folder.
@@ -27,10 +27,8 @@ into clear specifications. A specification is a **study**, not a plan.
 
 The planner owns the study lifecycle. It writes each study's `status.md`, the
 side-document list, and the per-project `studies/index.md` by hand. There is no
-tracking skill and no tracking script. The stage starts at `full`. The stage
-becomes `done` only on the user's explicit acceptance. The **project-notes**
-skill owns the exact formats, the size limits, the ownership split, and the
-stage rules.
+tracking skill and no tracking script. The **project-notes** skill owns the
+caps, the `status.md` rules, and the `studies/index.md` format.
 
 ## Complexity Scale
 
@@ -80,8 +78,8 @@ own structure.
   rounds until every decision is settled. Load first for any new feature.
 - **study** (`skills/planner/study/`) — Write one study document from the
   settled interview decisions, with tasks, risks, and acceptance criteria.
-- **project-notes** (`skills/common/project-notes/`) — Own the shared note
-  tree, `status.md`, and `studies/index.md` formats.
+- **project-notes** (`skills/common/project-notes/`) — Owns the caps, the
+  `status.md` rules, and the `studies/index.md` format.
 - **simplified-technical-english** (`skills/common/simplified-technical-english/`) —
   Write all text in Simplified Technical English (ASD-STE100): short, plain,
   unambiguous words and sentences for every message, answer, code comment,

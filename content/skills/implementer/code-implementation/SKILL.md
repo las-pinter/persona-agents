@@ -11,7 +11,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 1. ORIENT    → Read configs, run baseline, trace a similar feature
 2. PLAN      → Read full files, consider edge cases, identify changes
 3. IMPLEMENT → Follow patterns, handle all states, comment WHY not WHAT
-4. VERIFY    → Run quality gates in order (see Phase 4)
+4. VERIFY    → Run the project language gate (see Phase 4)
 5. DELIVER   → Self-review, update docs, suggest a commit (never run one)
 ```
 
@@ -41,8 +41,8 @@ Before touching a single line:
 ## Phase 3: Implement
 
 - Cite the reference file and line before the first draft.
-- Name the source: the Python parity file on `dev`, the vendored crate source, or a design mockup.
-- Quote that exact reference line.
+- Name the source: the reference implementation file, the vendored source file, or the design document.
+- Quote the exact reference line.
 - State how the draft uses the line.
 - Follow existing code patterns and conventions — match the project's style, not your preference.
 - Handle ALL states, not just the happy path: success, error, empty, and edge cases.
@@ -51,11 +51,10 @@ Before touching a single line:
 - Search for existing helpers before writing new code (DRY).
 - Make minimal changes — do not refactor unrelated code in the same change.
 - Comment WHY, not WHAT. The code already says what it does.
-- Keep comments brief: one sentence and at most two lines, never long
-  explanatory blocks. Prefer code that explains itself; a long comment shows
-  the code needs a rewrite. See **simplified-technical-english**
-  (`skills/common/simplified-technical-english/`).
-- Repository artifacts stand alone: name no task, phase, milestone, decision-record ID, or ticket, or an outside-repo source. Follow **persona-free-documents** (`skills/common/persona-free-documents/`).
+- Keep comments brief; follow **simplified-technical-english** for comment length.
+  Prefer code that explains itself; a long comment shows the code needs a
+  rewrite.
+- Follow **persona-free-documents** for repository artifacts.
 
 **By task type:**
 
@@ -69,22 +68,13 @@ Before touching a single line:
 
 ## Phase 4: Verify
 
-Run in this order. Fix all issues before advancing to the next step:
+Run the quality gate for the project's language. Fix all issues before
+delivering.
 
-```
-Type Check → Lint → Existing Tests → Build → New Tests
-```
-
-The language gate skills (`python-quality-gates`, `rust-quality-gates`,
-`react-quality-gates`) refine this phase. They add language tools and
-thresholds. They do not replace this order. A language gate is not a rival
-order; follow it inside Phase 4.
-
-1. **Type check** — zero tolerance for type errors (tsc, mypy, cargo check)
-2. **Lint** — zero warnings, matching the project's exact config
-3. **Existing tests** — full suite must pass; if a test was failing before your change, report it
-4. **Build** — project must compile, package, or bundle successfully
-5. **New tests** — write tests for all new functionality; run full suite again
+The three language gate skills (`python-quality-gates`, `rust-quality-gates`,
+`react-quality-gates`) own the gate order and the language tools. Follow the gate
+for the project language. When the project language has no gate skill, use this
+order: type check, lint, tests, build.
 
 ---
 
@@ -124,13 +114,13 @@ order; follow it inside Phase 4.
 - Names reveal intent: `calculateInvoiceTotal()` not `calc()`.
 - Booleans read naturally: `isActive`, `hasPermission`, `canDelete`.
 - No magic numbers — extract to named constants.
-- Functions under ~40 lines. Follow the **file-length-policy** skill (`skills/common/file-length-policy/`) for file length.
+- Functions under ~40 lines. Follow the **file-length-policy** skill for file length.
 
 ---
 
 ## Testing Standards
 
-Write tests for ALL new functionality, following Arrange → Act → Assert with one Act per test. Structure and naming conventions live in `skills/tester/test-case-structure/`.
+Write tests for ALL new functionality, following Arrange → Act → Assert with one Act per test. Structure and naming conventions live in the **test-case-structure** skill.
 
 | Scenario | Test |
 |----------|------|
