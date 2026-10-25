@@ -321,8 +321,9 @@ describe("read-only roles: an allowed read never carries a write or an exec", ()
 // is pinned here.
 // ---------------------------------------------------------------------------
 
-// A bare `git branch NAME` cannot be fenced by a glob without also denying a
-// listing, so the branch-create option forms carry the class on these engines.
+// A bare `git branch NAME` is fenced on kiro by the broad `git branch *` glob,
+// so a listing with an argument denies too. Opencode cannot use a negative glob
+// and leaves the create to the branch-create option forms.
 const RAW_READ_ONLY_GIT_WRITES = [
 	"git log --output=/tmp/x",
 	"git diff --output=/tmp/x",
@@ -404,13 +405,19 @@ describe("kiro: read-only roles deny writes and keep the read forms", () => {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		});
-		test(`kiro ${agent}: git reads allow and listings are not denied`, () => {
+		test(`kiro ${agent}: git reads allow and a listing with an argument denies`, () => {
 			for (const command of RAW_READ_ONLY_GIT_READS) {
 				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
 			}
 			for (const command of RAW_READ_ONLY_GIT_NOT_DENIED) {
+				// `git branch -a` is a listing with an argument. The kiro branch fence
+				// denies it, so the deny assertion is below. Opencode keeps it not denied.
+				if (command === "git branch -a") continue;
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
+			// The branch-create fence is a broad glob, so a listing with an
+			// argument denies too. Deny wins over allow.
+			assert.equal(kiroVerdict(agent, "git branch -a"), "deny", `${agent}: git branch -a`);
 		});
 		test(`kiro ${agent}: git deny entries exist`, () => {
 			for (const pattern of RAW_READ_ONLY_GIT_DENIES) {

@@ -188,7 +188,9 @@ export function kiroVerdict(agent: string, command: string): string {
 export interface KiroAgentConfig {
 	tools?: string[];
 	allowedTools?: string[];
-	toolsSettings?: { shell?: { allowedCommands?: string[]; deniedCommands?: string[] } };
+	toolsSettings?: {
+		shell?: { allowedCommands?: string[]; deniedCommands?: string[]; autoAllowReadonly?: boolean };
+	};
 }
 
 export function loadKiroConfig(agent: string): KiroAgentConfig {

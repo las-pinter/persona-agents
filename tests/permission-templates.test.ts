@@ -22,6 +22,7 @@ import {
 	PI_SHELL_AGENTS,
 	kiroVerdict,
 	loadGlobalRuleSets,
+	loadKiroConfig,
 	liveGlobalPath,
 	opencodeVerdict,
 	verdict,
@@ -332,10 +333,14 @@ describe("kiro: bare forms, env-prefix bypass, and branch gate", () => {
 		assert.equal(kiroVerdict("orchestrator", "xargs git push"), "ask");
 	});
 
-	test("non-orchestrators: read-only branch stays not denied", () => {
+	test("non-orchestrators: a bare branch listing is not denied, an argument form denies", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.notEqual(kiroVerdict(agent, "git branch"), "deny", `${agent}: git branch`);
 			for (const command of READ_ONLY_BRANCH) {
-				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+				if (command === "git branch") continue;
+				// Kiro has no negative glob: the branch-create fence also denies a
+				// listing that carries an argument. Deny wins over allow.
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
 	});
@@ -371,6 +376,73 @@ describe("kiro: command-substitution and option-form bypass", () => {
 			for (const command of SUBSTITUTION_WRITES) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Kiro read-only detector fence. The five role templates keep
+// `autoAllowReadonly: true`. That detector would silently allow fetch, remote
+// show/update, and a bare branch create, so each template carries explicit
+// deny globs for them. Deny wins over allow, so a branch listing denies too.
+// ---------------------------------------------------------------------------
+
+const KIRO_READONLY_DETECTOR_DENIES = [
+	"git fetch",
+	"git fetch origin",
+	"git fetch --tags origin",
+	"cd /repo && git fetch origin",
+	"cd /repo && git fetch",
+	"x; git fetch",
+	"git fetch; git log",
+	"git fetch&&git log",
+	"git remote update origin",
+	"x; git remote update",
+	"cd /repo && git remote update",
+	"git remote show origin",
+	"git branch feature-x",
+	"git branch -a",
+	"git branch -r",
+	"git branch --show-current",
+];
+
+const KIRO_ORCH_READ_FORMS = [
+	"git branch",
+	"git branch -a",
+	"git branch -r",
+	"git branch --show-current",
+	"git tag",
+	"git tag -l",
+	"git remote",
+	"git remote -v",
+];
+
+describe("kiro: the read-only detector leak is fenced in the five templates", () => {
+	for (const agent of KIRO_SHELL_AGENTS) {
+		test(`${agent}: fetch, remote show/update, and branch forms deny`, () => {
+			for (const command of KIRO_READONLY_DETECTOR_DENIES) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+	}
+
+	test("orchestrator: autoAllowReadonly stays false", () => {
+		assert.equal(loadKiroConfig("orchestrator").toolsSettings?.shell?.autoAllowReadonly, false);
+	});
+
+	test("the five shell templates keep autoAllowReadonly true", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.equal(
+				loadKiroConfig(agent).toolsSettings?.shell?.autoAllowReadonly,
+				true,
+				`${agent}: autoAllowReadonly`,
+			);
+		}
+	});
+
+	test("orchestrator: branch, tag, and remote read forms still allow", () => {
+		for (const command of KIRO_ORCH_READ_FORMS) {
+			assert.equal(kiroVerdict("orchestrator", command), "allow", command);
 		}
 	});
 });

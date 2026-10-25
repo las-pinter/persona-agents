@@ -155,10 +155,17 @@ describe("branch flag-order bypass and broad-allow writes", () => {
 		}
 	});
 
-	test("kiro: plain read-only branch commands are not denied", () => {
+	test("kiro: a bare branch listing is not denied, an argument form denies", () => {
 		for (const command of READ_ONLY_BRANCH_PLAIN) {
-			for (const agent of ["orchestrator", ...KIRO_SHELL_AGENTS]) {
-				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			assert.notEqual(kiroVerdict("orchestrator", command), "deny", `orchestrator: ${command}`);
+		}
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.notEqual(kiroVerdict(agent, "git branch"), "deny", `${agent}: git branch`);
+			for (const command of READ_ONLY_BRANCH_PLAIN) {
+				if (command === "git branch") continue;
+				// The branch-create fence is a broad glob, so a listing with an
+				// argument denies too. Deny wins over allow.
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
 	});
