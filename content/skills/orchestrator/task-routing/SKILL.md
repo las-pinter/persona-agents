@@ -97,6 +97,8 @@ history, so the token cost grows each round.
 - The round count starts again at 0 for each fresh subagent.
 - Write large command output to a temporary file. Pass the path, not the
   content.
+- The 2-round limit in this section governs subagent reuse. The limit on review
+  rounds lives in **code-review-checklist** under `## Fix Batching`.
 
 ---
 
@@ -120,7 +122,8 @@ history, so the token cost grows each round.
   **code-review-checklist** skill. Point at that map. Do not copy a row of it.
   When the brief adds a check, name the file or command the check uses.
 - Keep one task in one brief. A brief carries at most 5 acceptance checks. The
-  change stays at most 25 lines. The task touches one code area. A brief that
+  diff stays at most 25 changed lines, rework rounds included. The task
+  touches one code area. A brief that
   needs a sixth check or a second code area is two briefs.
 
 ---

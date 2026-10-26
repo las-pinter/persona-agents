@@ -46,9 +46,16 @@ severity-to-verdict authority. The **reviewer** profession references it.
 
 ## Fix Batching
 
-Collect every NIT and SUGGESTION finding from one review round into one fix
-batch. Apply the batch, then re-review once. A re-review runs once per batch,
-never once per nit.
+One review round yields one fix batch. Apply the batch once.
+
+Round one reports every finding in one verdict. That verdict starts one fix
+batch.
+
+A second review round runs only after a failed test or a failed live probe.
+A design objection that no test covers goes to the owner for a decision.
+
+The NIT and SUGGESTION batch keeps one re-review round. That re-review reports
+no new NIT or SUGGESTION.
 
 ---
 
