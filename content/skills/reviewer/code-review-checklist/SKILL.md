@@ -59,6 +59,22 @@ no new NIT or SUGGESTION.
 
 ---
 
+## Verification Evidence
+
+A permission fix or a configuration fix is not closed until one live command
+runs through the real engine. A test over a mirror or a copy of the engine
+does not close the fix.
+
+The evidence has three items: the command, the verdict it returned, and the
+journal line that records it.
+
+The command forms live in
+`<USER_HOME>/agent-notes/project-notes/<project>/tech/`.
+`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
+**journal-management-generic** skill for the exact rule and the fallback.
+
+---
+
 ## The Checklist
 
 > Many standards below are defined in the implementer's code-implementation skill; here they are verified from the review side.
