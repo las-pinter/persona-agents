@@ -11,39 +11,40 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 
 ## Discovery — Find Your Home Directory
 
-At the START of every session, run this bash command ONCE:
+`<USER_HOME>` is the home folder of the user. Take the absolute path that the
+platform gives for this skill file. Go up one folder at a time. Stop at the
+first folder that holds a folder named agent-notes. That folder is the user
+home folder. The notes root is the agent-notes folder inside it.
 
-```bash
-echo $HOME
-```
+Do not run a shell command to find the home path. Test each parent folder with
+a literal path.
 
-Store the returned value and use it to replace `<USER_HOME>` in all paths below.
+If the platform reports no absolute path, ask the user once.
 
-> **CRITICAL:** Tools like `glob` do NOT expand `$HOME`, `~`, or any shell
-> variables. Always substitute the discovered literal path (e.g.,
-> `/home/exampleuser`) into tool calls.
+**Fallback:** if the walk reaches the filesystem root, or the skill file sits
+outside the home folder, ask the user once for the home folder. Do not take the
+working directory as the home folder.
+
+> **CRITICAL:** Tools like `glob` do not expand a home variable, a tilde, or any
+> shell variable. Put the literal path into every tool call.
 
 ## Determining `<AGENT_TYPE>`
 
 Journals live under `<USER_HOME>/agent-notes/<AGENT_TYPE>/`, so every theme's
 agent of the same profession shares one stable operational memory.
 
-This skill is agent-agnostic and lives in the shared `common/` skills
-folder. `<AGENT_TYPE>` comes from the profession that DECLARES it, never
-from a persona name in a system prompt. The profession journal skill gives
-the value; a profession with no journal skill uses its own profession name.
+This skill is agent-agnostic and lives in the shared `common/` skills folder.
+The profession journal skill gives `<AGENT_TYPE>`; a profession with no
+journal skill uses its own profession name.
 
 **How to resolve `<AGENT_TYPE>` (in priority order):**
 
-1. **Profession / agent type (preferred, always used in this repo)** —
-   `<AGENT_TYPE>` is the profession this skill ships with, set once per
-   deployment. It comes from the profession / agent type, NOT from anything in a
-   system prompt.
+1. **Profession / agent type (preferred, always used in this repo)** — the
+   profession this skill ships with, set once per deployment.
 2. **NEVER resolve it from a persona name** — a system prompt opening like
-   "You are <PersonaName> the <RoleTitle>..." is theme flavor only and varies
-   per theme. Personas are decoration; the profession's operational memory must
-   be stable across themes. Every theme's agent of one profession journals to
-   `<USER_HOME>/agent-notes/<AGENT_TYPE>/`, never to a persona-named directory.
+   "You are <PersonaName> the <RoleTitle>..." is theme flavor only. Personas
+   are decoration; the profession's operational memory must be stable across
+   themes.
 
 Format the value as lowercase hyphenated words. Use the same value every session
 so the journal history stays in one place.

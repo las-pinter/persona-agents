@@ -4,15 +4,21 @@
  * Runs under plain Node (type stripping) with no extra dependencies:
  *   node --experimental-strip-types --test tests/doc-lint.test.ts
  *
- * It asserts the five conditions of the doc-lint contract:
+ * It asserts the seven conditions of the doc-lint contract:
  *   1. every skill path named by a profession or a template resolves;
  *   2. each skills/ * /SKILL.md `name:` equals its folder name;
  *   3. every file path a SKILL.md explicitly points to exists;
  *   4. every agents.json theme has the profession set of content/professions;
- *   5. pi `alwaysLoad` matches the profession Startup skill list.
+ *   5. pi `alwaysLoad` matches the profession Startup skill list;
+ *   6. no doctrine file runs a home discovery order or marks the home path in a
+ *      command block;
+ *   7. exactly one skill file owns the full home discovery rule.
  *
  * Condition 1 is hermetic: repo references must resolve under the repo tree,
  * and a missing optional common skill is skipped, not failed.
+ *
+ * The file is 816 lines, inside the 501-1000 tier: it holds one lint contract,
+ * and every condition shares the helper block at the top.
  */
 
 import { describe, test } from "node:test";
@@ -29,6 +35,8 @@ const HOME = process.env.HOME ?? os.homedir();
 const piFrontmattersDir = path.join(repoRoot, "platforms", "pi", "frontmatters");
 const opencodeFrontmattersDir = path.join(repoRoot, "platforms", "opencode", "frontmatters");
 const kiroTemplatesDir = path.join(repoRoot, "platforms", "kiro", "templates");
+const commandsDir = path.join(repoRoot, "content", "commands");
+const claudeAgentsDir = path.join(repoRoot, "platforms", "claude", "agents");
 
 /**
  * Agents whose pi `alwaysLoad` must equal the profession Startup skill list.
@@ -38,6 +46,18 @@ const kiroTemplatesDir = path.join(repoRoot, "platforms", "kiro", "templates");
  * list must match one-for-one.
  */
 const STARTUP_PARITY_AGENTS = ["orchestrator"];
+
+/**
+ * The character that opens the home expansion marker, built from a code so this
+ * lint file never carries the literal token it forbids.
+ */
+const HOME_MARKER_CHARACTER = String.fromCharCode(36);
+
+/**
+ * The installed common root prefix: the marker form or the angle-bracket token.
+ * The marker sits in a character class, because a bare marker is an anchor.
+ */
+const HOME_ROOT_PREFIX = "(?:[" + HOME_MARKER_CHARACTER + "]HOME|<USER_HOME>)";
 
 // --- small filesystem and text helpers --------------------------------------
 
@@ -165,9 +185,9 @@ function parseCommonSkillContract(): CommonSkillContract {
 		}
 	}
 
-	// Root bullets: ``- `$HOME/.agents/skills` ``.
+	// Root bullets: a marker home form or the angle-bracket token.
 	const roots: string[] = [];
-	const rootRe = /^-\s+`\$HOME\/([^`]+)`\s*$/gm;
+	const rootRe = new RegExp("^-\\s+`" + HOME_ROOT_PREFIX + "\\/([^`]+)`\\s*$", "gm");
 	while ((match = rootRe.exec(text)) !== null) roots.push(path.join(HOME, match[1]));
 
 	if (candidates.size === 0) {
@@ -523,4 +543,274 @@ describe("condition 5: pi alwaysLoad matches the profession Startup list", () =>
 		});
 	}
 
+});
+
+// --- condition 6: no shell command discovers the home path --------------------
+
+/**
+ * A home reference written as the marker, with optional braces or quotes around
+ * the name.
+ */
+const HOME_MARKER_SOURCE = "[" + HOME_MARKER_CHARACTER + "]\\{?['\"]?HOME['\"]?\\}?";
+
+/** The marker alone, with no command word in front of it. */
+const HOME_MARKER_ONLY = new RegExp(HOME_MARKER_SOURCE, "i");
+
+/**
+ * A discovery order that names the marker: a command word that can print the
+ * path, then the marker. The gap crosses a newline, so an order wrapped across
+ * two lines still matches. It is lazy, so the nearest marker wins.
+ *
+ * Accepted trade: a doctrine line that forbids the order and quotes it in
+ * backticks also matches, so such a line must be reworded, not exempted.
+ */
+const HOME_MARKER_ORDER = new RegExp(
+	"\\b(?:echo|printenv|env|printf)\\b[\\s\\S]*?(?:" + HOME_MARKER_SOURCE + ")",
+	"i",
+);
+
+/**
+ * A bare `HOME` word after a printing command, bounded to one line and allowed
+ * to cross a pipe, so a piped reader such as `printenv | grep HOME` matches.
+ */
+const HOME_BARE_ORDER = new RegExp("\\b(?:printenv|env)\\b[^;&\\n]*\\bHOME\\b", "i");
+
+/** True when a text carries a shell order that prints the home path. */
+function isHomeDiscoveryOrder(text: string): boolean {
+	return HOME_MARKER_ORDER.test(text) || HOME_BARE_ORDER.test(text);
+}
+
+/**
+ * 1-based lines that carry the marker inside a fenced command block, whatever
+ * word comes before it. Doctrine code blocks are commands, so the marker has no
+ * place in one.
+ */
+function markerInCommandBlockLines(text: string): number[] {
+	const hits: number[] = [];
+	let inBlock = false;
+	text.split("\n").forEach((line, index) => {
+		if (/^\s*```/.test(line)) {
+			inBlock = !inBlock;
+			return;
+		}
+		if (inBlock && line.includes(HOME_MARKER_CHARACTER)) hits.push(index + 1);
+	});
+	return hits;
+}
+
+/** One scanned doctrine folder and the file names it contributes. */
+interface DiscoveryScanSet {
+	label: string;
+	dir: string;
+	include: (name: string) => boolean;
+}
+
+/**
+ * Every doctrine folder the home discovery rule covers. A missing folder is
+ * reported by the folder test below instead of throwing: the recursive walk
+ * guards its readdir and returns no file for it.
+ */
+const DISCOVERY_SCAN_SETS: DiscoveryScanSet[] = [
+	{ label: "content/skills", dir: skillsRoot, include: (name) => name.endsWith(".md") },
+	{ label: "content/professions", dir: professionsDir, include: (name) => name.endsWith(".md") },
+	{ label: "content/commands", dir: commandsDir, include: (name) => name.endsWith(".md") },
+	{ label: "platforms/pi/frontmatters", dir: piFrontmattersDir, include: (name) => name.endsWith(".yaml") },
+	{
+		label: "platforms/opencode/frontmatters",
+		dir: opencodeFrontmattersDir,
+		include: (name) => name.endsWith(".yaml"),
+	},
+	{ label: "platforms/kiro/templates", dir: kiroTemplatesDir, include: (name) => name.endsWith(".json") },
+	{ label: "platforms/claude/agents", dir: claudeAgentsDir, include: (name) => name.endsWith(".md") },
+];
+
+/** Scanned doctrine folders that are absent from the tree. */
+function missingDiscoveryScanFolders(): string[] {
+	return DISCOVERY_SCAN_SETS.filter((set) => !fs.existsSync(set.dir)).map((set) => set.label);
+}
+
+/** Every doctrine file the home discovery rule covers. */
+function homeDiscoveryFiles(): string[] {
+	return DISCOVERY_SCAN_SETS.flatMap((set) => listFilesRecursive(set.dir, set.include));
+}
+
+/** The 1-based line of a character offset. */
+function lineAtOffset(text: string, offset: number): number {
+	return text.slice(0, offset).split("\n").length;
+}
+
+/**
+ * 1-based lines that run a shell order to print the home path. The line scan
+ * catches a same-line order. The whole-text scan catches an order wrapped
+ * across two lines and reports both the command line and the marker line.
+ */
+function shellHomeDiscoveryLines(text: string): number[] {
+	const hits = new Set<number>();
+	text.split("\n").forEach((line, index) => {
+		if (isHomeDiscoveryOrder(line)) hits.add(index + 1);
+	});
+	const wrapped = HOME_MARKER_ORDER.exec(text);
+	if (wrapped) {
+		hits.add(lineAtOffset(text, wrapped.index));
+		const marker = HOME_MARKER_ONLY.exec(text.slice(wrapped.index));
+		if (marker) hits.add(lineAtOffset(text, wrapped.index + marker.index));
+	}
+	return [...hits].sort((left, right) => left - right);
+}
+
+describe("condition 6: no shell command discovers the home path", () => {
+	test("every scanned doctrine folder exists", () => {
+		assert.deepEqual(
+			missingDiscoveryScanFolders(),
+			[],
+			"check 6 (no shell home discovery order) scans a missing folder",
+		);
+	});
+	test("no doctrine file runs a shell home discovery order", () => {
+		const failures: string[] = [];
+		for (const file of homeDiscoveryFiles()) {
+			const rel = relativePosix(repoRoot, file);
+			for (const line of shellHomeDiscoveryLines(readText(file))) failures.push(rel + ":" + line);
+		}
+		assert.deepEqual(
+			failures,
+			[],
+			"check 6 (no shell home discovery order) found a discovery order at: " + failures.join(", "),
+		);
+	});
+	test("no doctrine file carries the home marker inside a command block", () => {
+		const failures: string[] = [];
+		for (const file of homeDiscoveryFiles()) {
+			const rel = relativePosix(repoRoot, file);
+			for (const line of markerInCommandBlockLines(readText(file))) failures.push(rel + ":" + line);
+		}
+		assert.deepEqual(
+			failures,
+			[],
+			"check 6 (no shell home discovery order) found the home marker in a command block at: " +
+				failures.join(", "),
+		);
+	});
+});
+
+// --- condition 7: one owner of the home discovery rule ------------------------
+
+/** The one file that owns the full home discovery rule. */
+const HOME_DISCOVERY_OWNER = path.join(skillsRoot, "common", "journal-management-generic", "SKILL.md");
+
+/**
+ * The owner sentence that ends the search at the folder holding agent-notes.
+ *
+ * Limit: the check matches this one phrase, so an owner that rewords the
+ * sentence makes check 7 pass with no owner at all. Rename the phrase here
+ * together with the sentence.
+ */
+const HOME_DISCOVERY_SENTENCE = "Stop at the first folder that holds a folder named agent-notes";
+
+/** Collapse whitespace so a sentence wrapped across lines still matches. */
+function collapseWhitespace(text: string): string {
+	return text.replace(/\s+/g, " ").trim();
+}
+
+/** True when a file carries the canonical discovery rule sentence. */
+function carriesDiscoveryRule(text: string): boolean {
+	return collapseWhitespace(text).includes(HOME_DISCOVERY_SENTENCE);
+}
+
+/**
+ * The pointer line every doctrine file that names the placeholder must carry.
+ * The owner states the rule; a pointer only sends the reader to the owner.
+ */
+const HOME_DISCOVERY_POINTER =
+	"`<USER_HOME>` is the folder that holds `agent-notes`. Follow the **journal-management-generic** skill for the exact rule and the fallback.";
+
+/** True when a file carries the pointer line that sends the reader to the owner. */
+function carriesOwnerPointer(text: string): boolean {
+	return collapseWhitespace(text).includes(HOME_DISCOVERY_POINTER);
+}
+
+/**
+ * The files that replaced a startup shell order with the pointer line. Each one
+ * must still carry it: a file that drops the pointer leaves the reader with no
+ * rule, and a file that restates the rule breaks the one-owner law.
+ */
+const HOME_DISCOVERY_POINTER_FILES: string[] = [
+	"content/professions/orchestrator.md",
+	"content/professions/planner.md",
+	"content/professions/researcher.md",
+	"content/skills/common/project-notes/SKILL.md",
+	"content/skills/common/skill-resolution/SKILL.md",
+	"content/skills/planner/study/SKILL.md",
+];
+
+/** Phrases only the owner may state. A copy that restates the rule fails here. */
+const HOME_DISCOVERY_OWNER_PHRASES: string[] = ["literal path", "ask the user once"];
+
+describe("condition 7: one owner of the home discovery rule", () => {
+	test("only the journal-management-generic skill carries the discovery sentence", () => {
+		const owner = relativePosix(repoRoot, HOME_DISCOVERY_OWNER);
+		const carriers = homeDiscoveryFiles()
+			.filter((file) => carriesDiscoveryRule(readText(file)))
+			.map((file) => relativePosix(repoRoot, file));
+		assert.deepEqual(
+			carriers,
+			[owner],
+			"check 7 (single owner of the home discovery rule) expected only " +
+				owner +
+				" but found: " +
+				carriers.join(", "),
+		);
+	});
+	test("every pointer file carries the pointer line", () => {
+		const failures = new Set<string>();
+		for (const rel of HOME_DISCOVERY_POINTER_FILES) {
+			const file = path.join(repoRoot, rel);
+			if (!fs.existsSync(file)) failures.add(rel + " (missing file)");
+			else if (!carriesOwnerPointer(readText(file))) failures.add(rel + " (no pointer line)");
+		}
+		// Any skill that names the placeholder must point at the owner as well.
+		for (const file of homeDiscoveryFiles()) {
+			if (file === HOME_DISCOVERY_OWNER) continue;
+			if (!file.startsWith(skillsRoot + path.sep)) continue;
+			const text = readText(file);
+			if (!text.includes("<USER_HOME>")) continue;
+			if (!carriesOwnerPointer(text)) {
+				failures.add(relativePosix(repoRoot, file) + " (no pointer line)");
+			}
+		}
+		assert.deepEqual(
+			[...failures].sort(),
+			[],
+			"check 7 (single owner of the home discovery rule) these files lack the pointer line: " +
+				[...failures].sort().join(", "),
+		);
+	});
+	test("only the owner skill states the owner phrases", () => {
+		const owner = relativePosix(repoRoot, HOME_DISCOVERY_OWNER);
+		const failures: string[] = [];
+		for (const file of homeDiscoveryFiles()) {
+			const rel = relativePosix(repoRoot, file);
+			if (rel === owner) continue;
+			const text = collapseWhitespace(readText(file));
+			for (const phrase of HOME_DISCOVERY_OWNER_PHRASES) {
+				if (text.includes(phrase)) failures.push(rel + ' (copies "' + phrase + '")');
+			}
+		}
+		assert.deepEqual(
+			failures.sort(),
+			[],
+			"check 7 (single owner of the home discovery rule) these files restate the rule: " +
+				failures.sort().join(", "),
+		);
+	});
+	test("the owner skill states both owner phrases", () => {
+		const text = collapseWhitespace(readText(HOME_DISCOVERY_OWNER));
+		const missing = HOME_DISCOVERY_OWNER_PHRASES.filter((phrase) => !text.includes(phrase));
+		assert.deepEqual(
+			missing,
+			[],
+			"check 7 (single owner of the home discovery rule) the owner lost these phrases: " +
+				missing.join(", "),
+		);
+	});
 });

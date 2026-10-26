@@ -57,6 +57,9 @@ When unsure if a topic is volatile: treat it as volatile.
 
 Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
 
+`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
+**journal-management-generic** skill for the exact rule and the fallback.
+
 1. Glob `<USER_HOME>/agent-notes/researcher/reports/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
 2. Decide based on what exists:
    - Prior report fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.

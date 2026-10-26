@@ -39,8 +39,8 @@ The **study** skill owns the small, medium, and large complexity scale.
 Write studies to
 `<USER_HOME>/agent-notes/project-notes/<project>/studies/YYYY-MM-DD-<slug>/`.
 Use the `date` command for the current date. Use a plain kebab-case slug with no
-date inside it. `<USER_HOME>` is the user's real home directory (found with
-`echo $HOME`) — never a literal `/home/exampleuser/`.
+date inside it. `<USER_HOME>` is the folder that holds `agent-notes`. Follow
+the **journal-management-generic** skill for the exact rule and the fallback.
 
 The old planner plan archive is read-only. Do not write new work there.
 

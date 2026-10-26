@@ -90,7 +90,7 @@ the task names it.
 
 **Decision rule:** Before reading any file, ask: "Does reading this help me decide what to route, or does it help me do the work?" If the latter — stop and dispatch a researcher.
 
-`<USER_HOME>` is the user's real home directory (discovered via `echo $HOME`) — never a literal `/home/exampleuser/` folder.
+`<USER_HOME>` is the folder that holds `agent-notes`. Follow the **journal-management-generic** skill for the exact rule and the fallback.
 
 ## Failure Modes (never do these)
 

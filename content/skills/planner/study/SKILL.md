@@ -33,9 +33,9 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 
 Write the study to
 `<USER_HOME>/agent-notes/project-notes/<project>/studies/YYYY-MM-DD-<slug>/study.md`.
-`<USER_HOME>` is the user's real home directory (found with `echo $HOME`) —
-never a literal `/home/exampleuser/`. See the **project-notes** skill for the
-folder layout.
+`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
+**journal-management-generic** skill for the exact rule and the fallback. See
+the **project-notes** skill for the folder layout.
 
 ## Document Skeleton
 

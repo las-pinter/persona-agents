@@ -51,8 +51,8 @@ one folder name.
 **File naming:** Note files use plain slugs, with no date prefix (for example,
 `regexp-tool-permissions.md`). Researcher report files use
 `YYYY-MM-DD-<topic>.md`. Study folders use `YYYY-MM-DD-<slug>`.
-**Home directory:** At the start of every session, run `echo $HOME` once. Use
-the returned value for `<USER_HOME>` in every path.
+**Home directory:** `<USER_HOME>` is the folder that holds `agent-notes`. Follow
+the **journal-management-generic** skill for the exact rule and the fallback.
 
 ## Ownership Split
 

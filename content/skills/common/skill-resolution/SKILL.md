@@ -27,17 +27,20 @@ domains in one resolution.
 
 The common roots are:
 
-- `$HOME/.agents/skills`
-- `$HOME/.pi/agent/skills`
-- `$HOME/.kiro/skills`
-- `$HOME/.config/opencode/skills`
-- `$HOME/.claude/skills`
+- `<USER_HOME>/.agents/skills`
+- `<USER_HOME>/.pi/agent/skills`
+- `<USER_HOME>/.kiro/skills`
+- `<USER_HOME>/.config/opencode/skills`
+- `<USER_HOME>/.claude/skills`
 
-Use the shell for the test. Do not use the file read, glob, or grep tools on
-these paths. Run one command per candidate:
+`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
+**journal-management-generic** skill for the exact rule and the fallback.
+
+Do not use the file read, glob, or grep tools on these paths. Run one command
+per candidate:
 
 ```sh
-ls "$HOME/.agents/skills/<name>/SKILL.md" "$HOME/.pi/agent/skills/<name>/SKILL.md" "$HOME/.kiro/skills/<name>/SKILL.md" "$HOME/.config/opencode/skills/<name>/SKILL.md" "$HOME/.claude/skills/<name>/SKILL.md" 2>/dev/null
+ls "<USER_HOME>/.agents/skills/<name>/SKILL.md" "<USER_HOME>/.pi/agent/skills/<name>/SKILL.md" "<USER_HOME>/.kiro/skills/<name>/SKILL.md" "<USER_HOME>/.config/opencode/skills/<name>/SKILL.md" "<USER_HOME>/.claude/skills/<name>/SKILL.md" 2>/dev/null
 ```
 
 The candidates come from the domain:

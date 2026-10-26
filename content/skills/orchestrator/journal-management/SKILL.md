@@ -14,3 +14,6 @@ here.
 
 - **Journal root:** `<AGENT_TYPE>` is `orchestrator` for this profession.
   Journals live in `<USER_HOME>/agent-notes/orchestrator/`.
+
+`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
+**journal-management-generic** skill for the exact rule and the fallback.

@@ -55,7 +55,7 @@ For simple lookups (a single fact, a version number), inline prose with a source
 
 ## Research Documentation
 
-Write research results as reports to `<USER_HOME>/agent-notes/researcher/reports/` using descriptive filenames: `YYYY-MM-DD-<topic>.md`. Use the `date` command for the current date. `<USER_HOME>` is the user's real home directory (discovered via `echo $HOME`) — never a literal `/home/exampleuser/`.
+Write research results as reports to `<USER_HOME>/agent-notes/researcher/reports/` using descriptive filenames: `YYYY-MM-DD-<topic>.md`. Use the `date` command for the current date. `<USER_HOME>` is the folder that holds `agent-notes`. Follow the **journal-management-generic** skill for the exact rule and the fallback.
 
 - **Dedup naming before writing** — glob `<USER_HOME>/agent-notes/researcher/reports/` and check existing filenames to avoid near-duplicate files; if the topic already has a report, extend or reference it instead of creating a new one. Always use the consistent `YYYY-MM-DD-<topic>.md` format.
 - **Cite every source with its date** — publication date when known, otherwise the access date (use the `date` command if needed). Include the date alongside each source citation in the report.
