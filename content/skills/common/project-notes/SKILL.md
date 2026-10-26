@@ -29,6 +29,7 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 │       ├── features/<slug>.md         (orchestrator, max 300 lines)
 │       ├── bugs/<slug>.md             (orchestrator, max 300 lines)
 │       ├── tech/<slug>.md             (orchestrator, max 300 lines)
+│       ├── rules/<slug>.md            (orchestrator, one rule per file)
 │       └── studies/
 │           ├── index.md               (planner)
 │           ├── legacy_studies/        (orchestrator)
@@ -60,6 +61,7 @@ the **journal-management-generic** skill for the exact rule and the fallback.
 |------|-------|---------------|
 | `summary.md` | orchestrator | On significant discovery or user correction. |
 | `features/`, `bugs/`, `tech/` | orchestrator | On significant discovery or user correction. |
+| `rules/` | orchestrator | On rule create, update, or retire. The planner does not write it. |
 | `studies/index.md` | planner | On study creation and on every stage change. |
 | `studies/legacy_studies/` | orchestrator | When archiving an old study. |
 | `<study>/study.md` | planner | While the study is active. |
@@ -69,11 +71,53 @@ the **journal-management-generic** skill for the exact rule and the fallback.
 The subfolder rule is doctrine, not a gate rule. Do not write another owner's
 subfolder.
 
-**READ rule.** Read `<project>/studies/index.md` first. Then read `status.md`
-for the named study. Read a study folder only when the task names it. Do not
-read all project notes at startup. Archived studies live in
+**READ rule.** The read order lives in **Read order** under `## Rules Folder`. A
+task read happens only when the task names the note.
+
+The two startup reads are the project `rules/` folder and `summary.md`. No
+other note is a startup read. Archived studies live in
 `studies/legacy_studies/`. Read one only when the task names it. Never migrate
 one back.
+
+## Rules Folder
+
+`rules/` holds short general rules for one project. One rule per file, plain
+markdown. The folder is the list. There is no index and no manifest.
+
+File shape:
+
+```markdown
+# <rule title>
+
+- **Date:** YYYY-MM-DD
+- **Importance:** high | normal | low
+
+<one to three lines of rule text>
+```
+
+- **high:** the rule prevents broken work or lost data.
+- **normal:** the rule keeps the work consistent.
+- **low:** optional guidance that improves a note and breaks nothing if ignored.
+
+**Budget:** at most 8 files and 200 lines in total. When the folder is full,
+retire one rule or merge two rules in the same edit. Then write the new rule.
+
+**Read order.** It has 5 steps:
+
+1. Read the always-load skills.
+2. Read the project `rules/` folder in full, in file-name order.
+3. Read `summary.md` in full.
+4. Read `studies/index.md` and one `status.md` only when the task names a study.
+5. Read every other note only when a task names it.
+
+**Mid-session duty.** The orchestrator writes, updates, or retires a rule in the
+session that finds it. It records the reason in one journal line.
+
+**Startup guard.** Run it after the folder read and before the first dispatch.
+Count the files. Count the total lines. Re-read each rule against the current
+tree. Write one journal line per breach, with the file name, the measured
+value, and the limit. The guard is a procedure: no repository test can read a
+user note tree.
 
 ## Note Structure
 
@@ -174,8 +218,8 @@ Rules:
 
 ## Note Lifecycle
 
-**READ** — when a task names a project, read that project's `summary.md` first,
-then read only the notes for the task at hand.
+**READ** — the read order lives in **Read order** under `## Rules Folder`. Read
+a note only when the task names it.
 
 **CREATE** — the first time working on a new repository: check if the project
 folder exists. If not, dispatch a researcher to gather context, then create the
