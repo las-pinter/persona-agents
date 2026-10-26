@@ -61,17 +61,25 @@ platform:
   `git rebase`. `git pull` and `git tag` ask, because a bare star can expand
   to a planted `--upload-pack` or `-d` file. `git -C` forms ask, because a
   quoted space in the directory can hide a second verb.
-- Kiro has no ask tier. An unmatched command that the read-only detector
-  calls read-only runs with no prompt. Each of the five templates that set
-  `autoAllowReadonly` true denies the detector's write forms with explicit
-  globs: fetch, `git remote show`, `git remote update`, and branch forms with
-  an argument. A glob cannot tell a branch create from a branch listing, so a
-  listing with an argument denies too. Those globs cover the detector's write
-  forms only; an unlisted command asks. Those five templates deny the history
-  verbs with globs: add, commit, push, pull, merge, rebase, and tag create and
-  tag delete.
+- Kiro has no ask tier. It has three verdicts: an allow entry runs with no
+  prompt, a deny entry blocks the command, and an unmatched command asks. All
+  six shell templates set `autoAllowReadonly` false, so no read-only detector
+  can allow a command. The deny fence covers branch and tag on the five role
+  templates. It names these branch create forms: a bare name, a boolean
+  listing option followed by a name, a listing option value followed by a
+  second token, and the branch write flags. It names every tag create flag
+  shape, and tag delete and force. Each entry covers the bare command and
+  these wrappers: `;`, `&&`, `|`, `$(`, a backtick, `git -C <path>`, and a
+  leading space. A Kiro command pattern is an anchored regex, so an entry can
+  name a write form and leave a listing to the allow list. The cost is one
+  regex body per form: a new write shape that no entry names asks, a branch
+  listing with a second token after the listing value denies, and a tag
+  listing with a pattern argument asks. The orchestrator leaves those forms to
+  ask, because its allow list does not carry them. The five role templates
+  also deny the history verbs with explicit entries: add, commit, push, pull,
+  merge, and rebase.
 - On every platform, some forms still ask: tag force-move (a DENY on the five
-  Kiro read-only templates; the Kiro orchestrator asks), `git -c` overrides
+  Kiro role templates; the Kiro orchestrator asks), `git -c` overrides
   and unknown global options, `commit --amend`, `git reset --soft`, upload-pack
   and transport helper URLs, merge strategies, wrapped or substituted forms, and
   brace, bracket, and extglob words. On Claude Code and pi, star and question
