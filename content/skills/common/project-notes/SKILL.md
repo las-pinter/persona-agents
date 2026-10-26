@@ -44,6 +44,11 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
         └── YYYY-MM-DD-<topic>.md      (researcher)
 ```
 
+**Folder paths:** A bare name such as `rules/` or `summary.md` means that path
+inside the project folder, `<USER_HOME>/agent-notes/project-notes/<project>/`.
+Take the path from the `## Storage` block. Do not search the repository for a
+path.
+
 **Folder naming:** One folder per repository, named with the repository name
 only (no owner prefix). Collision risk: two repositories with the same name
 share one folder. When a repository has no remote, use its local directory
@@ -83,6 +88,8 @@ one back.
 
 `rules/` holds short general rules for one project. One rule per file, plain
 markdown. The folder is the list. There is no index and no manifest.
+
+The `## Storage` block holds the `rules/` path.
 
 File shape:
 
@@ -192,7 +199,7 @@ Rules:
 
 ### `studies/index.md` format (one per project)
 
-Location: `~/agent-notes/project-notes/<project>/studies/index.md`.
+Location: `studies/index.md` inside the project folder.
 
 ```markdown
 # Studies — <project>
