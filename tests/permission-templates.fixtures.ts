@@ -169,10 +169,13 @@ export function hasOpenCodeRule(agent: string, resource: string, effect: string)
 	);
 }
 
-/** Mirror of kiro's globset: `*` -> `.*`, `?` -> `.`, anchored, no optional trailing. */
-export function kiroGlob(pattern: string, value: string): boolean {
-	const body = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
-	return new RegExp(`^${body}$`, "s").test(value);
+/**
+ * Mirror of the kiro command gate: an entry is already a regex body, so the
+ * engine wraps it in `\A ... \z` and adds nothing else. The `(?!.)` tail is a
+ * true end-of-text anchor, because JS `$` also matches before a final newline.
+ */
+export function kiroPattern(pattern: string, value: string): boolean {
+	return new RegExp(`^(?:${pattern})$(?!.)`, "s").test(value);
 }
 
 export function kiroVerdict(agent: string, command: string): string {
@@ -180,8 +183,8 @@ export function kiroVerdict(agent: string, command: string): string {
 		fs.readFileSync(path.join(repoRoot, "platforms/kiro/templates", `${agent}.json`), "utf-8"),
 	) as { toolsSettings?: { shell?: { allowedCommands?: string[]; deniedCommands?: string[] } } };
 	const shell = cfg.toolsSettings?.shell ?? {};
-	if ((shell.deniedCommands ?? []).some((pattern) => kiroGlob(pattern, command))) return "deny";
-	if ((shell.allowedCommands ?? []).some((pattern) => kiroGlob(pattern, command))) return "allow";
+	if ((shell.deniedCommands ?? []).some((pattern) => kiroPattern(pattern, command))) return "deny";
+	if ((shell.allowedCommands ?? []).some((pattern) => kiroPattern(pattern, command))) return "allow";
 	return "ask";
 }
 
@@ -203,9 +206,18 @@ export function kiroDeniedCommands(agent: string): string[] {
 	return loadKiroConfig(agent).toolsSettings?.shell?.deniedCommands ?? [];
 }
 
+/**
+ * Convert a glob shape to the regex body a template stores now. Every call site
+ * writes the readable glob shape, so the comparison stays exact: an entry left
+ * in glob shape does not match the converted expectation.
+ */
+export function kiroStoredPattern(globShape: string): string {
+	return globShape.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+}
+
 /** True when a kiro agent denies an exact command pattern. */
-export function hasKiroDeny(agent: string, pattern: string): boolean {
-	return kiroDeniedCommands(agent).includes(pattern);
+export function hasKiroDeny(agent: string, globShape: string): boolean {
+	return kiroDeniedCommands(agent).includes(kiroStoredPattern(globShape));
 }
 
 /** kiro grants the shell tool only when `tools` or `allowedTools` lists it. */

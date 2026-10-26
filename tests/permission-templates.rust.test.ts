@@ -13,6 +13,7 @@ import {
 	OTHER_AGENTS,
 	hasKiroDeny,
 	hasOpenCodeRule,
+	kiroStoredPattern,
 	kiroVerdict,
 	loadAgentRules,
 	loadKiroConfig,
@@ -407,8 +408,11 @@ describe("rust toolchain permission doctrine", () => {
 		for (const agent of RUST_AGENTS) {
 			const allowed = loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? [];
 			for (const command of KIRO_RUST_ALLOWS[agent]) {
-				assert.ok(allowed.includes(command), `kiro ${agent}: missing allowedCommands ${command}`);
-				// Existence alone is not enough: a deny glob must not shadow the allow.
+				assert.ok(
+					allowed.includes(kiroStoredPattern(command)),
+					`kiro ${agent}: missing allowedCommands ${command}`,
+				);
+				// Existence alone is not enough: a deny entry must not shadow the allow.
 				// A trailing " *" is the wildcard form, so the bare command is the probe.
 				const probe = command.replace(/ \*$/, "");
 				assert.equal(kiroVerdict(agent, probe), "allow", `kiro ${agent}: ${probe}`);
@@ -682,7 +686,7 @@ describe("rust toolchain permission doctrine", () => {
 	test("kiro orchestrator: cargo nextest and cargo deny check allowedCommands exist", () => {
 		const allowed = loadKiroConfig("orchestrator").toolsSettings?.shell?.allowedCommands ?? [];
 		for (const entry of ["cargo nextest", "cargo nextest *", "cargo deny check", "cargo deny check *"]) {
-			assert.ok(allowed.includes(entry), `missing allowedCommands ${entry}`);
+			assert.ok(allowed.includes(kiroStoredPattern(entry)), `missing allowedCommands ${entry}`);
 		}
 		assert.equal(kiroVerdict("orchestrator", "cargo nextest run"), "allow", "kiro orchestrator nextest");
 		assert.equal(kiroVerdict("orchestrator", "cargo deny check"), "allow", "kiro orchestrator deny check");
@@ -691,7 +695,7 @@ describe("rust toolchain permission doctrine", () => {
 	test("kiro tester: cargo deny check allowedCommands exist", () => {
 		const allowed = loadKiroConfig("tester").toolsSettings?.shell?.allowedCommands ?? [];
 		for (const entry of ["cargo deny check", "cargo deny check *"]) {
-			assert.ok(allowed.includes(entry), `missing allowedCommands ${entry}`);
+			assert.ok(allowed.includes(kiroStoredPattern(entry)), `missing allowedCommands ${entry}`);
 		}
 		assert.equal(kiroVerdict("tester", "cargo deny check"), "allow", "kiro tester deny check");
 	});

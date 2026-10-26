@@ -13,7 +13,7 @@ import {
 	OTHER_AGENTS,
 	hasOpenCodeRule,
 	kiroDeniedCommands,
-	kiroGlob,
+	kiroPattern,
 	kiroHasShellTool,
 	kiroVerdict,
 	loadAgentRules,
@@ -228,7 +228,7 @@ describe("file-migration permission doctrine (cp/mv/rsync)", () => {
 		for (const agent of FILE_MIGRATION_TARGETS) {
 			const denied = kiroDeniedCommands(agent);
 			for (const command of FILE_MIGRATION_COMMANDS) {
-				assert.ok(!denied.some((pattern) => kiroGlob(pattern, command)), `${agent}: deny matches ${command}`);
+				assert.ok(!denied.some((pattern) => kiroPattern(pattern, command)), `${agent}: deny matches ${command}`);
 				assert.equal(kiroVerdict(agent, command), "ask", `${agent}: ${command}`);
 			}
 		}

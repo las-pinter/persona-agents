@@ -11,6 +11,7 @@ import { compileRegex } from "../platforms/pi/extension/command-segments.ts";
 import {
 	hasKiroDeny,
 	hasOpenCodeRule,
+	kiroStoredPattern,
 	kiroVerdict,
 	loadAgentRules,
 	loadKiroConfig,
@@ -314,16 +315,17 @@ describe("read-only roles: an allowed read never carries a write or an exec", ()
 });
 
 // ---------------------------------------------------------------------------
-// Read-only roles on kiro and opencode. Both engines match the raw command
-// string with globs, so each write class is fenced by an explicit deny entry.
-// The common, git, and xxd classes follow the pi per-role split. A blanket
-// redirect deny also denies the harmless fd-dup form; that fail-safe over-deny
-// is pinned here.
+// Read-only roles on kiro and opencode. opencode matches the raw command string
+// with globs, so each write class is fenced by an explicit deny entry; kiro
+// matches an anchored regex, so a give-away shape can be named directly. The
+// common, git, and xxd classes follow the pi per-role split. A blanket redirect
+// deny also denies the harmless fd-dup form; that fail-safe over-deny is pinned
+// here.
 // ---------------------------------------------------------------------------
 
-// A bare `git branch NAME` is fenced on kiro by the broad `git branch *` glob,
-// so a listing with an argument denies too. Opencode cannot use a negative glob
-// and leaves the create to the branch-create option forms.
+// A bare `git branch NAME` is fenced on kiro by the branch-argument entry, which
+// leaves a listing alone. Opencode cannot use a negative glob and leaves the
+// create to the branch-create option forms.
 const RAW_READ_ONLY_GIT_WRITES = [
 	"git log --output=/tmp/x",
 	"git diff --output=/tmp/x",
@@ -405,19 +407,14 @@ describe("kiro: read-only roles deny writes and keep the read forms", () => {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		});
-		test(`kiro ${agent}: git reads allow and a listing with an argument denies`, () => {
+		test(`kiro ${agent}: git reads allow and a listing with an argument is silent`, () => {
 			for (const command of RAW_READ_ONLY_GIT_READS) {
 				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
 			}
 			for (const command of RAW_READ_ONLY_GIT_NOT_DENIED) {
-				// `git branch -a` is a listing with an argument. The kiro branch fence
-				// denies it, so the deny assertion is below. Opencode keeps it not denied.
-				if (command === "git branch -a") continue;
+				// A listing with an argument, such as `git branch -a`, is a read form.
 				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
-			// The branch-create fence is a broad glob, so a listing with an
-			// argument denies too. Deny wins over allow.
-			assert.equal(kiroVerdict(agent, "git branch -a"), "deny", `${agent}: git branch -a`);
 		});
 		test(`kiro ${agent}: git deny entries exist`, () => {
 			for (const pattern of RAW_READ_ONLY_GIT_DENIES) {
@@ -562,8 +559,8 @@ const REMOVED_RESEARCHER_TOOL_FORMS = [
 ];
 
 const REMOVED_KIRO_ALLOWS: Record<string, string[]> = {
-	researcher: ["sort", "git branch"],
-	reviewer: ["sort", "git branch", "mypy", "ruff"],
+	researcher: ["sort"],
+	reviewer: ["sort", "mypy", "ruff"],
 	planner: ["sort", "mkdir"],
 };
 
@@ -605,7 +602,8 @@ function piAllowMatches(agent: string, command: string): boolean {
 
 /** True when a kiro agent's allowedCommands carries the exact pattern. */
 function hasKiroAllow(agent: string, pattern: string): boolean {
-	return (loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? []).includes(pattern);
+	const allowed = loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? [];
+	return allowed.includes(kiroStoredPattern(pattern));
 }
 
 describe("read-only roles: the allow shrink closes the known holes", () => {

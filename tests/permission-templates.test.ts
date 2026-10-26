@@ -333,14 +333,12 @@ describe("kiro: bare forms, env-prefix bypass, and branch gate", () => {
 		assert.equal(kiroVerdict("orchestrator", "xargs git push"), "ask");
 	});
 
-	test("non-orchestrators: a bare branch listing is not denied, an argument form denies", () => {
+	test("non-orchestrators: a branch listing is not denied", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
-			assert.notEqual(kiroVerdict(agent, "git branch"), "deny", `${agent}: git branch`);
 			for (const command of READ_ONLY_BRANCH) {
-				if (command === "git branch") continue;
-				// Kiro has no negative glob: the branch-create fence also denies a
-				// listing that carries an argument. Deny wins over allow.
-				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+				// A regex can tell a create from a listing, so the deny fences only
+				// the create and the write flags.
+				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		}
 	});
@@ -381,10 +379,10 @@ describe("kiro: command-substitution and option-form bypass", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Kiro read-only detector fence. The five role templates keep
-// `autoAllowReadonly: true`. That detector would silently allow fetch, remote
-// show/update, and a bare branch create, so each template carries explicit
-// deny globs for them. Deny wins over allow, so a branch listing denies too.
+// Kiro read-only verdicts. All six shell templates set the detector off, so
+// the three tiers decide: an allow entry runs silently, a deny entry blocks,
+// and an unmatched command asks. The deny entries fence the fetch, remote, and
+// branch write forms; the allow list carries the reads a role needs.
 // ---------------------------------------------------------------------------
 
 const KIRO_READONLY_DETECTOR_DENIES = [
@@ -401,9 +399,98 @@ const KIRO_READONLY_DETECTOR_DENIES = [
 	"cd /repo && git remote update",
 	"git remote show origin",
 	"git branch feature-x",
+	"git branch -t origin/main",
+	"git branch --contains HEAD newbranch",
+	"git branch --format=%(refname) newbranch",
+];
+
+// A listing keeps the value on the option, so no name token follows it. These
+// forms must stay not denied, because only a create carries a second token.
+const KIRO_BRANCH_LISTINGS = ["git branch --contains HEAD", "git branch --format=%(refname)"];
+
+const KIRO_SHELL_TEMPLATES = ["orchestrator", ...KIRO_SHELL_AGENTS];
+
+const KIRO_BRANCH_LISTING_ALLOWS = [
+	"git branch",
 	"git branch -a",
 	"git branch -r",
+	"git branch -v",
+	"git branch -vv",
+	"git branch -l",
+	"git branch --list",
+	"git branch --all",
+	"git branch --remotes",
+	"git branch --verbose",
 	"git branch --show-current",
+	"git branch --merged",
+	"git branch --no-merged",
+	"git branch --contains HEAD",
+	"git branch --points-at HEAD",
+	"git branch --sort=-committerdate",
+	"git branch --format=%(refname)",
+	"git branch --column=always",
+	"git branch --omit-empty",
+	"git branch --ignore-case",
+];
+
+const KIRO_TAG_READ_ALLOWS = ["git tag", "git tag -l", "git tag --list"];
+
+// A value option must hold exactly one token. A trailing name token is a create.
+const KIRO_BRANCH_VALUE_CREATES = [
+	"git branch --sort=-committerdate evil",
+	"git branch --column=always evil",
+	"git status && git branch --sort=-committerdate evil",
+	"git status && git branch --column=always evil",
+];
+
+const KIRO_BRANCH_VALUE_LISTINGS = ["git branch --sort=-committerdate", "git branch --column=always"];
+
+// A tag create is any option sequence plus a name token. These flags escaped the
+// old fence, which named only the write letters it knew.
+const KIRO_TAG_WRITE_FLAGS = [
+	"git tag -s v1 -m m",
+	"git tag --sign v1",
+	"git tag -S v1 -m m",
+	"git tag -e v1",
+	"git tag --annotate v1 -m m",
+	"git status && git tag -s v1 -m m",
+];
+
+const KIRO_REMOTE_READ_ALLOWS = ["git remote", "git remote -v", "git remote get-url"];
+
+const KIRO_READ_VERB_ALLOWS = [
+	"git blame",
+	"git describe",
+	"git shortlog",
+	"git reflog",
+	"git rev-parse",
+	"git rev-list",
+	"git ls-files",
+	"git show-ref",
+	"git for-each-ref",
+	"git cat-file",
+	"git count-objects",
+	"git log",
+	"git diff",
+	"git show",
+	"git status",
+];
+
+const KIRO_SYSTEM_READ_ALLOWS = [
+	"ls",
+	"cat",
+	"head",
+	"tail",
+	"find",
+	"grep",
+	"wc",
+	"echo",
+	"pwd",
+	"date",
+	"diff",
+	"file",
+	"uname",
+	"which",
 ];
 
 const KIRO_ORCH_READ_FORMS = [
@@ -417,26 +504,93 @@ const KIRO_ORCH_READ_FORMS = [
 	"git remote -v",
 ];
 
-describe("kiro: the read-only detector leak is fenced in the five templates", () => {
+describe("kiro: the six shell templates decide by allow, deny, and ask", () => {
 	for (const agent of KIRO_SHELL_AGENTS) {
-		test(`${agent}: fetch, remote show/update, and branch forms deny`, () => {
+		test(`${agent}: fetch, remote show/update, and a branch create deny`, () => {
 			for (const command of KIRO_READONLY_DETECTOR_DENIES) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
 			}
 		});
+
+		test(`${agent}: branch, tag, remote, read verbs, and system reads allow`, () => {
+			for (const command of [
+				...KIRO_BRANCH_LISTING_ALLOWS,
+				...KIRO_TAG_READ_ALLOWS,
+				...KIRO_REMOTE_READ_ALLOWS,
+				...KIRO_READ_VERB_ALLOWS,
+				...KIRO_SYSTEM_READ_ALLOWS,
+			]) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
 	}
 
-	test("orchestrator: autoAllowReadonly stays false", () => {
-		assert.equal(loadKiroConfig("orchestrator").toolsSettings?.shell?.autoAllowReadonly, false);
-	});
-
-	test("the five shell templates keep autoAllowReadonly true", () => {
-		for (const agent of KIRO_SHELL_AGENTS) {
+	test("all six shell templates set the read-only detector off", () => {
+		for (const agent of KIRO_SHELL_TEMPLATES) {
 			assert.equal(
 				loadKiroConfig(agent).toolsSettings?.shell?.autoAllowReadonly,
-				true,
+				false,
 				`${agent}: autoAllowReadonly`,
 			);
+		}
+	});
+
+	test("a branch listing that keeps its value on the option stays not denied", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of KIRO_BRANCH_LISTINGS) {
+				assert.notEqual(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("a branch create behind a value option denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of KIRO_BRANCH_VALUE_CREATES) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("a value-option branch listing stays allowed", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of KIRO_BRANCH_VALUE_LISTINGS) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("a tag create with any write flag denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of KIRO_TAG_WRITE_FLAGS) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("an exact tag listing still allows", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of ["git tag -l", "git tag --list"]) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("no value-taking allow entry ends in a bare dot-star", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			const allowed = loadKiroConfig(agent).toolsSettings?.shell?.allowedCommands ?? [];
+			for (const entry of allowed) {
+				const isValueEntry =
+					/^git branch --(?:contains|points-at|sort=|format=|column=)/.test(entry) ||
+					/^git remote get-url /.test(entry);
+				if (!isValueEntry || !entry.endsWith(".*")) continue;
+				assert.fail(`${agent}: a value allow entry ends in a bare dot-star: ${entry}`);
+			}
+		}
+	});
+
+	test("a boolean listing option followed by a branch name denies", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			assert.equal(kiroVerdict(agent, "git branch --no-color evil"), "deny", `${agent}: boolean listing create`);
 		}
 	});
 
@@ -445,4 +599,162 @@ describe("kiro: the read-only detector leak is fenced in the five templates", ()
 			assert.equal(kiroVerdict("orchestrator", command), "allow", command);
 		}
 	});
+});
+
+// ---------------------------------------------------------------------------
+// Kiro fence table. The five role templates must deny every branch and tag
+// write behind every wrapper, keep the read forms silent, and leave a tag
+// listing with a pattern argument to ask.
+// ---------------------------------------------------------------------------
+
+const KIRO_FENCE_AGENTS = ["implementer", "tester", "researcher", "reviewer", "planner"];
+
+const KIRO_BRANCH_BOOLEAN_LISTING = [
+	"-a",
+	"-r",
+	"-v",
+	"-vv",
+	"-l",
+	"-i",
+	"--all",
+	"--remotes",
+	"--verbose",
+	"--omit-empty",
+	"--ignore-case",
+	"--quiet",
+	"--no-color",
+];
+
+const KIRO_BRANCH_WRITE_FORMS = [
+	"git branch evil",
+	"git branch feature-x",
+	...KIRO_BRANCH_BOOLEAN_LISTING.map((option) => `git branch ${option} evil`),
+	"git branch -d x",
+	"git branch -D x",
+	"git branch -m a b",
+	"git branch -M a b",
+	"git branch -c a b",
+	"git branch -C a b",
+	"git branch -f x y",
+	"git branch -u origin/main",
+	"git branch -t origin/main",
+	"git branch --set-upstream-to=origin/main",
+	"git branch --contains HEAD evil",
+	"git branch --points-at HEAD evil",
+	"git branch --merged main evil",
+	"git branch --no-merged main evil",
+	"git branch --sort=-committerdate evil",
+	"git branch --column=always evil",
+	"git branch --format=%(refname) evil",
+];
+
+const KIRO_TAG_WRITE_BARE_FORMS = [
+	"git tag v1",
+	"git tag -a v1",
+	"git tag -s v1 -m m",
+	"git tag -S v1 -m m",
+	"git tag -e v1",
+	"git tag -u k v1",
+	"git tag -m m v1",
+	"git tag -F f v1",
+	"git tag --annotate v1",
+	"git tag --sign v1",
+	"git tag --local-user k v1",
+	"git tag --cleanup=strip v1",
+	"git tag -d v1",
+	"git tag -f v1",
+];
+
+/** The bare form plus the wrapper forms the fence must cover. */
+function kiroFenceForms(command: string): string[] {
+	const rest = command.replace(/^git /, "");
+	return [
+		command,
+		`git status; ${command}`,
+		`git status && ${command}`,
+		`git status | ${command}`,
+		`echo $(${command})`,
+		`echo \`${command}\``,
+		`git -C /repo ${rest}`,
+		` ${command}`,
+	];
+}
+
+const KIRO_BRANCH_WRITE_DENY = KIRO_BRANCH_WRITE_FORMS.flatMap(kiroFenceForms);
+const KIRO_TAG_WRITE_DENY = KIRO_TAG_WRITE_BARE_FORMS.flatMap(kiroFenceForms);
+
+const KIRO_BRANCH_READ_ALLOW = [
+	"git branch",
+	"git branch -a",
+	"git branch -r",
+	"git branch -v",
+	"git branch -vv",
+	"git branch -l",
+	"git branch --list",
+	"git branch --all",
+	"git branch --remotes",
+	"git branch --verbose",
+	"git branch --show-current",
+	"git branch --merged",
+	"git branch --no-merged",
+	"git branch --omit-empty",
+	"git branch --ignore-case",
+	"git branch --contains HEAD",
+	"git branch --points-at HEAD",
+	"git branch --merged main",
+	"git branch --no-merged main",
+	"git branch --sort=-committerdate",
+	"git branch --column=always",
+	"git branch --format=%(refname)",
+];
+
+const KIRO_TAG_READ_ALLOW = [
+	"git tag",
+	"git tag -l",
+	"git tag --list",
+	"git tag --contains HEAD",
+	"git tag --merged main",
+	"git tag --points-at HEAD",
+	"git tag -v v1",
+];
+
+const KIRO_TAG_FILTERED_ASK = ["git tag -l v1"];
+
+describe("kiro: the five role templates fence every branch and tag write", () => {
+	for (const agent of KIRO_FENCE_AGENTS) {
+		test(`${agent}: branch write forms deny, wrapped or not`, () => {
+			for (const command of KIRO_BRANCH_WRITE_DENY) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+
+		test(`${agent}: tag write forms deny, wrapped or not`, () => {
+			for (const command of KIRO_TAG_WRITE_DENY) {
+				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		});
+
+		test(`${agent}: branch and tag read forms allow`, () => {
+			for (const command of [...KIRO_BRANCH_READ_ALLOW, ...KIRO_TAG_READ_ALLOW]) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
+
+		test(`${agent}: a tag listing with a pattern argument asks`, () => {
+			for (const command of KIRO_TAG_FILTERED_ASK) {
+				assert.equal(kiroVerdict(agent, command), "ask", `${agent}: ${command}`);
+			}
+		});
+
+		test(`${agent}: a tag read with an option stays allowed`, () => {
+			for (const command of [
+				"git tag --contains HEAD",
+				"git tag --merged main",
+				"git tag --points-at HEAD",
+				"git tag -v v1",
+			]) {
+				assert.equal(kiroVerdict(agent, command), "allow", `${agent}: ${command}`);
+			}
+		});
+	}
 });
