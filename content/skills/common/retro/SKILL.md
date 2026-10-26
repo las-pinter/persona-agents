@@ -72,6 +72,7 @@ Review these sources only:
 - The latest journal entry of the agent that runs the retro, if that agent
   keeps a journal.
 - The project `summary.md`.
+- The project `rules/` folder.
 
 Do not scan earlier sessions. For a repeated-mistake check, use the latest
 journal entry and the git history in reach.
@@ -97,7 +98,7 @@ Collect evidence from these sources:
 | Session context | Live context | Messages, tool calls, denials, user turns |
 | Session transcript | See the platform reference file | Tool calls, timestamps, and usage where the platform records it |
 | Journals | `~/agent-notes/<agent-type>/journals/daily/` | Work log, decisions, issues, lessons |
-| Project notes | `~/agent-notes/project-notes/<project>/` | `summary.md`, studies |
+| Project notes | `~/agent-notes/project-notes/<project>/` | `summary.md`, `rules/`, studies |
 | Git history | Repo working tree | `git log`, `git diff`, `git status` |
 | Permission rules | See the platform reference file | Current allow, ask, and deny rules |
 | Permission audit log | See the platform reference file | Recorded permission decisions, only where the platform has a log |
@@ -194,6 +195,17 @@ of a different platform.
 ## Step 4: Print Actions
 
 Print 1 to 3 actions. Each action has one owner and one next step.
+
+### Rules Folder Check
+
+The retro checks the project `rules/` folder for a rule the session created,
+one it updated, and one it retired. It prints each rule action it finds, with
+the rule file name. A printed rule action counts inside the Step 4 list of 1
+to 3 actions. It does not add a second list.
+
+When the session caused a lesson that no rule holds, the retro proposes the
+missing rule action as an action. The owner is the orchestrator, because only
+the orchestrator writes the rules folder.
 
 ## Output Shape
 
