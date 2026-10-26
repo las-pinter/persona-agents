@@ -115,6 +115,13 @@ history, so the token cost grows each round.
   trigger no guard. Do not quote an exact line that carries one of these
   characters. Give the file name, the line number, and a plain-word description
   of the entry instead.
+- State the verdict the work must reach and the checks that prove it, before the
+  implementer starts. The map from severity to verdict lives in the
+  **code-review-checklist** skill. Point at that map. Do not copy a row of it.
+  When the brief adds a check, name the file or command the check uses.
+- Keep one task in one brief. A brief carries at most 5 acceptance checks. The
+  change stays at most 25 lines. The task touches one code area. A brief that
+  needs a sixth check or a second code area is two briefs.
 
 ---
 
