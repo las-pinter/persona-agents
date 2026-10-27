@@ -3,7 +3,7 @@
  *
  * The commit and file doctrine from AGENTS.md, per persona-agents agent:
  * a plain git add/commit/pull/merge/rebase/tag is allowed for the
- * orchestrator; git push, gh pr/release, the ask exceptions, and wrapped
+ * orchestrator; git push, gh pr/release/run, the ask exceptions, and wrapped
  * forms ask for the orchestrator; all of these deny the rest;
  * cp/mv/rsync ask for the orchestrator and the implementer and deny the rest;
  * edits outside an agent's notes zone ask (orchestrator) or deny (planner,
@@ -72,9 +72,15 @@ const ASKED = [
 	"git push origin main",
 	"gh pr create --fill",
 	"gh release create v1.0.0",
-	// AGENTS.md gates every gh pr and gh release command, reads included.
+	// AGENTS.md gates every gh pr, gh release, and gh run command, reads included.
 	"gh pr list",
 	"gh release list",
+	"gh run list",
+	"gh run delete 3",
+	// A gh global option before the subcommand does not hide the gate.
+	"gh -R owner/repo run list",
+	"gh --repo owner/repo run list",
+	"gh --repo=owner/repo run delete 1",
 	"git tag -d v1",
 	"git tag --delete v1",
 	"git tag -f v1",
@@ -179,7 +185,7 @@ describe("doctrine: plain git history", () => {
 	}
 });
 
-describe("doctrine: git push, gh pr/release, ask exceptions, wrapped forms", () => {
+describe("doctrine: git push, gh pr/release/run, ask exceptions, wrapped forms", () => {
 	for (const command of [...ASKED, ...DISGUISED_HISTORY]) {
 		test(command, () => {
 			assert.equal(bash("orchestrator", command), "ask");

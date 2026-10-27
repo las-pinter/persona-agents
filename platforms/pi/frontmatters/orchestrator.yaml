@@ -2,9 +2,9 @@ name: orchestrator
 description: Coordinates work by delegating to subagents; routes tasks, manages journals, shared project notes, and studies
 # Not spawnable as a subagent: the orchestrator alone holds the git history
 # operations (`git add`/`commit`/`pull`/`merge`/`rebase`/`tag`) and the gated
-# `git push`, `gh pr`, and `gh release` operations. It shares the gated
+# `git push`, `gh pr`, `gh run`, and `gh release` operations. It shares the gated
 # `cp`/`mv`/`rsync` asks with the implementer. A plain history command runs
-# without a prompt; push, `gh pr`, `gh release`, and the history exception
+# without a prompt; push, `gh pr`, `gh run`, `gh release`, and the history exception
 # forms (tag force-move, commit --amend, a transport helper URL, a merge
 # strategy, a git -c override, an unknown global option, a wrapped or
 # runtime-shaped form) prompt the user, so a dispatcher must never escalate
@@ -138,6 +138,8 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?git(?=(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+(?:add|commit|pull|merge|rebase|tag)(?:\\s|$))[^\\n]*(?:[*?\\[{]|[!@+]\\()", reason: "glob or brace expansion in a git history command requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+push\\b", reason: "orchestrator push requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+pr\\b", reason: "pull request operations require user approval" }
+    # A workflow run lists, views, reruns, cancels, or downloads artifacts; gate it like `gh pr`.
+    - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+run\\b", reason: "workflow run operations require user approval" }
     # Publishing a GitHub release is a user-visible write; gate it like `gh pr`.
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?gh\\s+release\\b", reason: "release publishing requires user approval" }
     - { tool: bash, match: "(?:^|[;&|(\\n])\\s*(?:(?:env|time|nice|nohup|exec|command|sudo)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+|[A-Za-z_][A-Za-z0-9_]*=\\S+\\s+)*(?:cd\\s+\\S+\\s*&&\\s*)?git(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*\\s+branch\\b[^\\n]*\\s(?:-[a-zA-Z]*[fDmMdcC]\\b|--(?:delete|delet|dele|del|de|d|force|forc|for|move|mov|mo|copy|cop)\\b)", reason: "destructive branch operation requires user approval" }

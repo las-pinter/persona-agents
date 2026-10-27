@@ -2,9 +2,9 @@
  * Permission regression harness for the pi orchestrator history allow.
  *
  * Owner decision: a plain git add, commit, pull, merge, rebase, or tag runs
- * without a prompt for the pi orchestrator. git push, gh pr, and gh release
- * still ask. The exception forms still ask, a tag delete still denies, and a
- * wrapped form is never an allow. Every other agent still blocks.
+ * without a prompt for the pi orchestrator. git push, gh pr, gh run, and gh
+ * release still ask. The exception forms still ask, a tag delete still denies,
+ * and a wrapped form is never an allow. Every other agent still blocks.
  */
 
 import { describe, test } from "node:test";
@@ -146,6 +146,7 @@ const STILL_ASK = [
 	"git push --force origin main",
 	"gh pr create --fill",
 	"gh pr merge 1",
+	"gh run list",
 	"gh release create v1",
 	"git reset --soft HEAD~1",
 ];
@@ -219,8 +220,13 @@ describe("pi orchestrator: history exception forms ask", () => {
 		});
 	}
 
-	test("push, gh pr, gh release, and reset --soft still ask", () => {
+	test("push, gh pr, gh run, gh release, and reset --soft still ask", () => {
 		for (const command of STILL_ASK) assert.equal(verdict("orchestrator", command), "ask", command);
+		// `gh run` does not overreach: a sibling subcommand and a longer word stay deny-by-default.
+		assert.equal(verdict("orchestrator", "gh issue list"), "default", "gh issue list");
+		assert.equal(verdict("orchestrator", "gh runner list"), "default", "gh runner list");
+		// A gh global option before the subcommand names no ask entry, so it falls to default.
+		assert.equal(verdict("orchestrator", "gh -R owner/repo run list"), "default", "gh -R owner/repo run list");
 	});
 
 	test("quoted glob, brace, and option text over-ask (accepted, safe side)", () => {
@@ -284,10 +290,23 @@ describe("pi orchestrator: a session allow approves a segment only when every ma
 describe("pi non-orchestrators: history commands still block", () => {
 	for (const agent of ["implementer", ...PI_SHELL_AGENTS]) {
 		test(`${agent}: plain history forms do not allow`, () => {
+			// A role never allows a history form: the kind is `deny` or `default`.
 			for (const command of [...PLAIN_HISTORY, ...ANCHORED_HISTORY]) {
 				const kind = verdict(agent, command);
 				assert.ok(kind === "deny" || kind === "default", `${agent}: ${command}: ${kind}`);
 			}
+		});
+	}
+
+	// A role never allows `gh run` either. The implementer names it with a deny
+	// entry; the other roles reach the block through deny-by-default.
+	test("implementer: gh run names a deny entry", () => {
+		assert.equal(verdict("implementer", "gh run list"), "deny");
+	});
+
+	for (const agent of PI_SHELL_AGENTS) {
+		test(`${agent}: gh run falls to deny-by-default`, () => {
+			assert.equal(verdict(agent, "gh run list"), "default");
 		});
 	}
 });

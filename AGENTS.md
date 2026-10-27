@@ -49,7 +49,9 @@ The doctrine lives in the permission templates, the live global file
 `platforms/claude/scripts/doctrine.ts`. On Claude Code and pi, the orchestrator
 runs a plain `git add`, `git commit`, `git pull`, `git merge`, `git rebase`, or
 `git tag` with no prompt. On every platform, it gets an ASK verdict for
-`git push` and every `gh pr` and `gh release` command. Coverage differs per
+`git push` and every `gh pr`, `gh run`, and `gh release` command, with one
+exception on pi: a `gh` global option before the subcommand falls to
+deny-by-default, because no ask entry names that form. Coverage differs per
 platform:
 
 - Claude Code allows a command only when every part of it is a plain history
@@ -88,10 +90,24 @@ platform:
 - Accepted risks: `rebase --exec` and `rebase -i` are allowed. On Claude Code
   and pi, `git -C` to another repository is allowed, and the hooks and config
   of that repository run. On opencode, a bare star or question mark in an
-  allowed command can expand to an option name from a planted file.
+  allowed command can expand to an option name from a planted file. On Claude
+  Code, a gh global option that takes a separate value and is not `-R` or
+  `--repo` defeats the option skip. The value is read as the subcommand, so the
+  gate fires on the value or not at all. gh has no other global option at the
+  time of writing. `gh workflow run` and `gh api` carry no gate entry on any
+  platform by owner choice, so the platform default decides them. On opencode,
+  the `gh run` glob also denies a plain read that merely quotes the string.
+  The opencode role templates carry three `gh run` deny forms (plain, repo
+  flag, joined repo flag) in four entries, because the repo flag has a short
+  word and a long word.
 
 Every other agent gets a DENY for `git add`, `git commit`, `git push`,
-`git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr` and
-`gh release` command. `cp`, `mv`, and `rsync` ASK for the orchestrator and the
-implementer, and are denied to the rest. The global file asks for `git push`
-and `gh pr` for every agent. It is live and unversioned.
+`git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr`,
+`gh run`, and `gh release` command, with one exception: `gh run` is an ASK on
+Kiro, where no role template carries the entry. The opencode role templates
+carry a `gh run` deny fence, and the Claude Code publish gate denies it. On
+pi, the implementer template names `gh run` with a deny entry, and the other pi
+role templates reach DENY through the deny-by-default mode. `cp`, `mv`, and
+`rsync` ASK for the orchestrator and the implementer, and are denied to the
+rest. The global file asks for `git push` and `gh pr` for every agent. It is
+live and unversioned.

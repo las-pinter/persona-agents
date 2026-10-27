@@ -1,8 +1,10 @@
 /**
- * Permission regression harness for the git rebase and release doctrines.
+ * Permission regression harness for the git rebase, release, and workflow run
+ * doctrines.
  *
- * Covers the rebase ask entry, the rebase matrices, and the `gh release`
- * gate on every stack.
+ * Covers the rebase ask entry, the rebase matrices, the `gh release` gate on
+ * every stack, and the `gh run` gate on opencode and kiro. The pi `gh run`
+ * cases live in tests/permission-templates.pi-history-allow.test.ts.
  */
 
 import { describe, test } from "node:test";
@@ -329,6 +331,57 @@ describe("github release permission doctrine", () => {
 		for (const agent of KIRO_SHELL_AGENTS) {
 			for (const command of RELEASE_COMMANDS) {
 				assert.equal(kiroVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// GitHub workflow run doctrine: `gh run` lists, views, reruns, cancels,
+// downloads artifacts, or deletes a run. It asks the orchestrator on opencode
+// and kiro. It denies an opencode role and leaves a kiro role to the platform
+// default ask. The pi cases live in
+// tests/permission-templates.pi-history-allow.test.ts, and the Claude Code
+// cases in tests/claude-doctrine.test.ts.
+// ---------------------------------------------------------------------------
+
+const RUN_COMMANDS = [
+	"gh run list",
+	"gh run view 1",
+	"gh run rerun 1",
+	"gh run cancel 1",
+	"gh -R owner/repo run cancel 1",
+	"gh --repo owner/repo run cancel 1",
+	"gh --repo=owner/repo run cancel 1",
+	"gh run download 1",
+	"gh run delete 1",
+];
+
+describe("github workflow run permission doctrine", () => {
+	test("opencode orchestrator: gh run asks via the base shell rule", () => {
+		for (const command of RUN_COMMANDS) {
+			assert.equal(opencodeVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("opencode non-orchestrators: gh run denies", () => {
+		for (const agent of OPENCODE_SHELL_AGENTS) {
+			for (const command of RUN_COMMANDS) {
+				assert.equal(opencodeVerdict(agent, command), "deny", `${agent}: ${command}`);
+			}
+		}
+	});
+
+	test("kiro orchestrator: gh run defaults to ask", () => {
+		for (const command of RUN_COMMANDS) {
+			assert.equal(kiroVerdict("orchestrator", command), "ask", command);
+		}
+	});
+
+	test("kiro non-orchestrators: gh run defaults to ask", () => {
+		for (const agent of KIRO_SHELL_AGENTS) {
+			for (const command of RUN_COMMANDS) {
+				assert.equal(kiroVerdict(agent, command), "ask", `${agent}: ${command}`);
 			}
 		}
 	});

@@ -7,7 +7,7 @@
 //
 //   plain git add/commit/pull/merge/rebase/tag
 //                     orchestrator: allow; every other agent: deny
-//   git push, gh pr, gh release, git tag -d/--delete/-f/--force,
+//   git push, gh pr, gh release, gh run, git tag -d/--delete/-f/--force,
 //   any git global option outside GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS
 //   (-c, --config-env, --exec-path, --attr-source, ...), git commit --amend,
 //   git pull --upload-pack, git pull/merge with a `::` transport URL or a
@@ -71,8 +71,9 @@ export interface HookInput {
 
 /**
  * history: a plain git add/commit/pull/merge/rebase/tag.
- * publish: git push, gh pr, gh release, and every history command that is an
- * ask exception or comes wrapped (see the header).
+ * publish: git push, and gh pr, gh release, or gh run, also when a gh global option
+ * comes first, plus every history command that is an ask exception or comes
+ * wrapped (see the header).
  */
 type Gate = "history" | "publish" | "copy";
 /** A segment that runs a command no gate covers. */
@@ -86,9 +87,9 @@ const COMMAND_RULES: Record<Gate, Record<string, Verdict>> = {
 	copy: { orchestrator: "ask", implementer: "ask" },
 };
 
-const HISTORY_DENY = "only the orchestrator writes git history or runs gh pr / gh release; suggest a commit instead";
+const HISTORY_DENY = "only the orchestrator writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 const PUBLISH_ASK =
-	"git push, gh pr, gh release, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
+	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
@@ -320,7 +321,15 @@ function longOption(arg: string, long: string, min: number): boolean {
 /** The hits of one plain command (no prefixes). */
 function classify(command: string, args: string[]): Hit[] {
 	if (COPY_COMMANDS.has(command)) return ["copy"];
-	if (command === "gh") return args[0] === "pr" || args[0] === "release" ? ["publish"] : [UNGATED];
+	if (command === "gh") {
+		// A global option before the subcommand (`gh -R owner/repo run list`) moves the
+		// word the gate reads, so skip the options first. `-R` and `--repo` take the
+		// next word as their value; a `--long=value` token carries its own value.
+		let g = 0;
+		while (g < args.length && args[g].startsWith("-")) g += args[g] === "-R" || args[g] === "--repo" ? 2 : 1;
+		const sub = args[g];
+		return sub === "pr" || sub === "release" || sub === "run" ? ["publish"] : [UNGATED];
+	}
 	if (command !== "git") return [UNGATED];
 	let i = 0;
 	while (i < args.length && args[i].startsWith("-")) {

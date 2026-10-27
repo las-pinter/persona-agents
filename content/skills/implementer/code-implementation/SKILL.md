@@ -82,7 +82,7 @@ order: type check, lint, tests, build.
 
 - Review your own code as if you were a reviewer: correctness, edge cases, naming, comments, dead code, security.
 - Update docs affected by the change: README, API docs, inline docs, changelog.
-- Suggest a commit message. Never run git add, commit, push, pull, merge, rebase, tag, gh pr, or gh release.
+- Suggest a commit message. Never run git add, commit, push, pull, merge, rebase, tag, gh pr, gh run, or gh release.
 
 ---
 

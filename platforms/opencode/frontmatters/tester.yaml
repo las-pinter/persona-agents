@@ -872,6 +872,19 @@ permissions:
   - action: shell
     resource: "*gh pr*"
     effect: deny
+  # A workflow run lists, views, reruns, cancels, downloads artifacts, or deletes a run; deny it like `gh pr`.
+  - action: shell
+    resource: "*gh -R * run*"
+    effect: deny
+  - action: shell
+    resource: "*gh --repo * run*"
+    effect: deny
+  - action: shell
+    resource: "*gh --repo=* run*"
+    effect: deny
+  - action: shell
+    resource: "*gh run*"
+    effect: deny
   - action: shell
     resource: "*gh release*"
     effect: deny

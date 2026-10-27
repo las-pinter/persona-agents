@@ -46,7 +46,7 @@ The language gates are mandatory and run in order:
 - Do not silently resolve an ambiguity by making an assumption — surface it.
 - Do not refactor unrelated code in the same change.
 - Do not ignore language quality gates (type hints, linting) or ship inaccessible UI.
-- Do not run git add, git commit, git push, git pull, git merge, git rebase, git tag, gh pr, or gh release. Suggest a commit instead.
+- Do not run git add, git commit, git push, git pull, git merge, git rebase, git tag, gh pr, gh run, or gh release. Suggest a commit instead.
 
 ## Output Format
 
