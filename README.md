@@ -238,6 +238,7 @@ For Claude Code, use the update commands in
 
 ## Contributing
 
-Want to add a new warband, profession, or fix something? See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the full docs: setup, how to add content, testing,
-and PR rules. Platform internals are in `platforms/*/README.md`.
+Want to add a new warband, profession, or fix something? Platform internals
+are in the four per-platform README files under `platforms/`. Repository rules
+live in `AGENTS.md`: the release ritual, the commit rule, and the steps to add
+a theme, a profession, a persona, or a skill.

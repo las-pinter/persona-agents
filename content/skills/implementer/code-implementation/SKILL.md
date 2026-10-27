@@ -22,7 +22,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 Before touching a single line:
 
 - Read project configs (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`) — identify language, framework, test runner, linter.
-- Read convention docs: `CONTRIBUTING.md`, `CLAUDE.md`, `README.md`, `.editorconfig`.
+- Read convention docs: `CLAUDE.md`, `README.md`, `.editorconfig`.
 - Run the baseline build/test command and confirm it's green. If baseline is broken, **stop and report it** — never build on a broken foundation.
 - Trace an existing similar feature end-to-end to understand the patterns and conventions expected.
 

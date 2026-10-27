@@ -1,8 +1,6 @@
 # OpenCode templates and plugins
 
 This file describes the OpenCode frontmatters and plugins, for maintainers.
-[CONTRIBUTING.md](../../CONTRIBUTING.md) covers how to add a profession and the
-cleanup rule for a retired profession.
 
 ## Frontmatter templates
 

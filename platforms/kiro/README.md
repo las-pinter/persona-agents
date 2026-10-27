@@ -1,7 +1,6 @@
 # Kiro templates
 
 This file describes the Kiro agent templates, for maintainers.
-[CONTRIBUTING.md](../../CONTRIBUTING.md) covers how to add a profession.
 
 ## Template format
 
