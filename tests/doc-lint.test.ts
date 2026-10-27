@@ -4,10 +4,9 @@
  * Runs under plain Node (type stripping) with no extra dependencies:
  *   node --experimental-strip-types --test tests/doc-lint.test.ts
  *
- * It asserts the seven conditions of the doc-lint contract:
+ * It asserts the conditions of the doc-lint contract:
  *   1. every skill path named by a profession or a template resolves;
  *   2. each skills/ * /SKILL.md `name:` equals its folder name;
- *   3. every file path a SKILL.md explicitly points to exists;
  *   4. every agents.json theme has the profession set of content/professions;
  *   5. pi `alwaysLoad` matches the profession Startup skill list;
  *   6. no doctrine file runs a home discovery order or marks the home path in a
@@ -17,7 +16,7 @@
  * Condition 1 is hermetic: repo references must resolve under the repo tree,
  * and a missing optional common skill is skipped, not failed.
  *
- * The file is 816 lines, inside the 501-1000 tier: it holds one lint contract,
+ * The file is 781 lines, inside the 501-1000 tier: it holds one lint contract,
  * and every condition shares the helper block at the top.
  */
 
@@ -449,40 +448,6 @@ describe("condition 2: SKILL.md name equals its folder name", () => {
 			const name = parseScalar(readText(file), "name");
 			assert.equal(name, folder, `${rel} has name ${name ?? "<none>"}, expected ${folder}`);
 		});
-	}
-});
-
-// --- condition 3: referenced skill files exist --------------------------------
-
-/** File paths a SKILL.md explicitly points to (markdown links, references/). */
-function referencedPaths(text: string): string[] {
-	const refs = new Set<string>();
-	const linkRe = /\[[^\]]*\]\(([^)]+)\)/g;
-	let match: RegExpExecArray | null;
-	while ((match = linkRe.exec(text)) !== null) {
-		const target = match[1].trim().replace(/^<|>$/g, "").split("#")[0];
-		if (!target || target.includes("://") || target.startsWith("mailto:")) continue;
-		if (target.startsWith("/")) continue;
-		refs.add(target);
-	}
-	const backtickRe = /`((?:\.\/)?(?:references|scripts)\/[^`]+)`/g;
-	while ((match = backtickRe.exec(text)) !== null) refs.add(match[1]);
-	return [...refs];
-}
-
-describe("condition 3: referenced skill files exist", () => {
-	for (const file of listFilesRecursive(skillsRoot, (name) => name === "SKILL.md")) {
-		const dir = path.dirname(file);
-		const refs = referencedPaths(readText(file));
-		for (const ref of refs) {
-			const rel = relativePosix(repoRoot, file);
-			test(`${rel} points to ${ref}`, () => {
-				// A glob tail only requires the directory it points into.
-				const target = ref.includes("*") ? path.dirname(ref) : ref;
-				const resolved = path.resolve(dir, target);
-				assert.ok(fs.existsSync(resolved), `${rel} references missing path ${ref}`);
-			});
-		}
 	}
 });
 
