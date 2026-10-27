@@ -225,8 +225,7 @@ Rules:
 
 ## Note Lifecycle
 
-**READ** — the read order lives in **Read order** under `## Rules Folder`. Read
-a note only when the task names it.
+**READ** — a task read happens only when the task names the note.
 
 **CREATE** — the first time working on a new repository: check if the project
 folder exists. If not, dispatch a researcher to gather context, then create the
