@@ -225,7 +225,7 @@ Rules:
 
 ## Note Lifecycle
 
-**READ** — a task read happens only when the task names the note.
+**READ** — follow the **READ rule** under `## Ownership Split`.
 
 **CREATE** — the first time working on a new repository: check if the project
 folder exists. If not, dispatch a researcher to gather context, then create the
