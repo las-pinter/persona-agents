@@ -281,3 +281,11 @@ A Kiro role template loads the skills of its profession through
 `skill://~/.kiro/skills/{{PROFESSION}}/*/SKILL.md`, so a skill in an existing
 profession needs no template change. The mascot template has no skill
 resource.
+
+## Tests
+
+Test the code this repository runs: the pi extension and gate, the Claude
+hooks, `install.sh`, and the skill scripts. Do not add a test that only reads
+another platform's settings, plugin manifest, or agent file, and do not write
+a test that restates doctrine prose. A local imitation of another platform's
+rule engine proves nothing about that platform.
