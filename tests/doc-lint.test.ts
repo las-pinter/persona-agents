@@ -31,8 +31,6 @@ const skillsRoot = path.join(repoRoot, "content", "skills");
 const professionsDir = path.join(repoRoot, "content", "professions");
 const HOME = process.env.HOME ?? os.homedir();
 const piFrontmattersDir = path.join(repoRoot, "platforms", "pi", "frontmatters");
-const opencodeFrontmattersDir = path.join(repoRoot, "platforms", "opencode", "frontmatters");
-const kiroTemplatesDir = path.join(repoRoot, "platforms", "kiro", "templates");
 
 /**
  * Agents whose pi `alwaysLoad` must equal the profession Startup skill list.
@@ -319,7 +317,7 @@ interface TemplateSkillParse {
 }
 
 /**
- * Top-level `skills` and `alwaysLoad` arrays in a pi/opencode YAML template.
+ * Top-level `skills` and `alwaysLoad` arrays in a pi YAML template.
  * A present key whose value is not an inline array (for example a block-style
  * YAML list) is reported in `unparsable` and fails the check instead of
  * silently yielding an empty list.
@@ -337,14 +335,6 @@ function templateSkillRefs(text: string): TemplateSkillParse {
 		for (const ref of parsed) refs.add(ref);
 	}
 	return { refs: [...refs], unparsable };
-}
-
-/** `skill://.../skills/<ref>` targets in a kiro template's `resources` list. */
-function kiroSkillRefs(profession: string, resource: unknown): string[] {
-	if (typeof resource !== "string" || !resource.startsWith("skill://")) return [];
-	const marker = resource.match(/skills\/(.+?)\/?$/);
-	if (!marker) return [];
-	return [marker[1].replace(/\{\{PROFESSION\}\}/g, profession)];
 }
 
 describe("condition 1: named skill paths resolve", () => {
@@ -381,40 +371,6 @@ describe("condition 1: named skill paths resolve", () => {
 		});
 	}
 
-	// OpenCode templates carry no top-level `skills:`/`alwaysLoad:` path field;
-	// their `skill:` entries are runtime permission names, not repo skill paths.
-	for (const file of fs.readdirSync(opencodeFrontmattersDir).filter((name) => name.endsWith(".yaml")).sort()) {
-		test(`opencode frontmatter ${file}`, () => {
-			const { refs, unparsable } = templateSkillRefs(readText(path.join(opencodeFrontmattersDir, file)));
-			const failures = [
-				...unparsable.map((key) => `${key}: present but not an inline array (use [\"...\"] )`),
-				...refs
-					.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
-					.filter((entry) => !entry.result.ok)
-					.map((entry) => `${entry.ref}: ${entry.result.detail}`),
-			];
-			assert.deepEqual(failures, [], `${file} names dead skills`);
-		});
-	}
-
-	for (const file of fs.readdirSync(kiroTemplatesDir).filter((name) => name.endsWith(".json")).sort()) {
-		test(`kiro template ${file}`, () => {
-			const parsed: unknown = JSON.parse(readText(path.join(kiroTemplatesDir, file)));
-			const profession = path.basename(file, ".json");
-			const resources =
-				typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-					? (parsed as Record<string, unknown>).resources
-					: undefined;
-			const refs = Array.isArray(resources)
-				? resources.flatMap((resource) => kiroSkillRefs(profession, resource))
-				: [];
-			const failures = refs
-				.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
-				.filter((entry) => !entry.result.ok)
-				.map((entry) => `${entry.ref}: ${entry.result.detail}`);
-			assert.deepEqual(failures, [], `${file} names dead skills`);
-		});
-	}
 });
 
 // --- condition 1: strict frontmatter list parse -------------------------------

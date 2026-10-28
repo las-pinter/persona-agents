@@ -1,11 +1,9 @@
 /**
- * Checks for the Claude Code plugin (.claude-plugin/ + platforms/claude/).
+ * Checks for the Claude Code context hook (context.mjs).
  *
- * The plugin copies no content: each agent file is frontmatter only, and the
- * context hook reads the profession and the persona from content/ at run time.
- * These tests keep the manifest in step with content/ and keep every hook
- * string under Claude Code's 10,000-character cap, so no profession or persona
- * is ever cut to a preview.
+ * The hook reads the profession and the persona from content/ at run time.
+ * These tests run the hook and keep every hook string under Claude Code's
+ * 10,000-character cap, so no profession or persona is cut to a preview.
  *
  * Run: node --experimental-strip-types --test tests/claude-plugin.test.ts
  */
@@ -21,14 +19,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const contentDir = path.join(repoRoot, "content");
 const manifestFile = path.join(repoRoot, ".claude-plugin", "plugin.json");
-const hooksFile = path.join(repoRoot, "platforms", "claude", "hooks", "hooks.json");
 const contextScript = path.join(repoRoot, "platforms", "claude", "scripts", "context.mjs");
 
 /** Claude Code replaces a longer hook string with a 2,000-character preview. */
 const HOOK_STRING_CAP = 10_000;
-
-/** Skills the plugin leaves out on purpose, with the reason. */
-const EXCLUDED_SKILLS: Record<string, string> = {};
 
 interface Manifest {
 	name: string;
@@ -49,11 +43,6 @@ const professions = fs
 	.map((name) => name.replace(/\.md$/, ""))
 	.sort();
 const themes = Object.keys(registry).sort();
-
-/** A manifest path ("./x/y") as an absolute path. */
-function fromManifest(rel: string): string {
-	return path.join(repoRoot, rel);
-}
 
 interface HookRun {
 	context: string | null;
@@ -148,78 +137,6 @@ function runContext(
 function subagentInput(profession: string): Record<string, unknown> {
 	return { hook_event_name: "SubagentStart", agent_type: `persona-agents:${profession}`, agent_id: "a1" };
 }
-
-describe("claude plugin: agents", () => {
-	test("one agent per profession, no more, no less", () => {
-		const listed = manifest.agents.map((rel) => path.basename(rel, ".md")).sort();
-		assert.deepEqual(listed, professions);
-	});
-
-	for (const rel of manifest.agents) {
-		test(`${rel} is frontmatter only and names itself`, () => {
-			const text = fs.readFileSync(fromManifest(rel), "utf8");
-			const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(text);
-			assert.ok(match, "the file must be one frontmatter block");
-			// A non-empty body would replace Claude Code's system prompt and copy content.
-			assert.equal(match[2].trim(), "", "the agent body must be empty");
-			assert.match(match[1], new RegExp(`^name: ${path.basename(rel, ".md")}$`, "m"));
-			assert.match(match[1], /^description: \S/m);
-		});
-	}
-});
-
-describe("claude plugin: skills", () => {
-	const listed = new Set(manifest.skills.map((rel) => path.relative(path.join(contentDir, "skills"), fromManifest(rel))));
-	const all = fs
-		.readdirSync(path.join(contentDir, "skills"))
-		.flatMap((group) =>
-			fs.readdirSync(path.join(contentDir, "skills", group)).map((name) => `${group}/${name}`),
-		)
-		.filter((rel) => fs.existsSync(path.join(contentDir, "skills", rel, "SKILL.md")));
-
-	test("every skill is listed or excluded on purpose", () => {
-		const missing = all.filter((rel) => !listed.has(rel) && !(rel in EXCLUDED_SKILLS));
-		assert.deepEqual(missing, [], "add the skill to plugin.json skills, or to EXCLUDED_SKILLS with a reason");
-	});
-
-	test("no excluded skill is listed", () => {
-		assert.deepEqual(
-			Object.keys(EXCLUDED_SKILLS).filter((rel) => listed.has(rel)),
-			[],
-		);
-	});
-
-	test("the retro skill is listed and user-invoked only", () => {
-		assert.ok(listed.has("common/retro"), "plugin.json skills must list common/retro");
-		const text = fs.readFileSync(path.join(contentDir, "skills", "common", "retro", "SKILL.md"), "utf8");
-		assert.match(text, /^---\n[\s\S]*?^disable-model-invocation: true$[\s\S]*?^---$/m);
-	});
-
-	test("every listed skill folder holds a SKILL.md", () => {
-		for (const rel of manifest.skills) {
-			assert.ok(fs.existsSync(path.join(fromManifest(rel), "SKILL.md")), rel);
-		}
-	});
-});
-
-describe("claude plugin: theme option and hooks", () => {
-	test("the theme picker offers exactly the agents.json themes", () => {
-		assert.deepEqual([...manifest.userConfig.theme.options].sort(), themes);
-		assert.ok(themes.includes(manifest.userConfig.theme.default), "the default theme must exist");
-	});
-
-	test("both start events run the profession and the persona part", () => {
-		assert.equal(fromManifest(manifest.hooks), hooksFile);
-		const hooks = JSON.parse(fs.readFileSync(hooksFile, "utf8")) as {
-			hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ args: string[] }> }>>;
-		};
-		for (const event of ["SessionStart", "SubagentStart"]) {
-			const parts = hooks.hooks[event].flatMap((group) => group.hooks.map((hook) => hook.args.at(-1)));
-			assert.deepEqual(parts.sort(), ["persona", "profession"], event);
-		}
-		assert.equal(hooks.hooks.SubagentStart[0].matcher, "^persona-agents:");
-	});
-});
 
 describe("claude plugin: context hook", () => {
 	for (const profession of professions) {

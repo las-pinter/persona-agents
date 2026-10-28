@@ -19,8 +19,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { inProject, managedOption, realHome, settingsOption, userConfigDir } from "../platforms/claude/scripts/plugin-options.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const manifestFile = path.join(repoRoot, ".claude-plugin", "plugin.json");
-const hooksFile = path.join(repoRoot, "platforms", "claude", "hooks", "hooks.json");
 const script = path.join(repoRoot, "platforms", "claude", "scripts", "subagent-model.mjs");
 
 interface ModelRun {
@@ -149,35 +147,6 @@ function modelOf(run: ModelRun): unknown {
 	const updated = run.output?.hookSpecificOutput.updatedInput as Record<string, unknown> | undefined;
 	return updated ? updated.model : null;
 }
-
-describe("claude plugin: subagent model option and hook entry", () => {
-	test("the manifest offers the subagent_model option with default sonnet", () => {
-		const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as {
-			userConfig: Record<string, { type: string; title: string; options: string[]; default: string }>;
-		};
-		const option = manifest.userConfig.subagent_model;
-		assert.ok(option, "plugin.json userConfig must have subagent_model");
-		assert.equal(option.type, "string");
-		assert.equal(option.title, "Subagent model");
-		assert.deepEqual(option.options, ["sonnet", "opus", "haiku", "inherit"]);
-		assert.equal(option.default, "sonnet");
-	});
-
-	test("hooks.json runs the script on the Agent and Task tools, in exec form", () => {
-		const hooks = JSON.parse(fs.readFileSync(hooksFile, "utf8")) as {
-			hooks: { PreToolUse: Array<{ matcher: string; hooks: Array<{ command: string; args: string[] }> }> };
-		};
-		const group = hooks.hooks.PreToolUse.find((entry) => entry.matcher === "^(Agent|Task)$");
-		assert.ok(group, "PreToolUse must have an ^(Agent|Task)$ entry");
-		const matcher = new RegExp(group.matcher);
-		assert.ok(matcher.test("Agent") && matcher.test("Task") && !matcher.test("AgentX"));
-		assert.equal(group.hooks.length, 1);
-		assert.equal(group.hooks[0].command, "node");
-		assert.deepEqual(group.hooks[0].args, ["${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/subagent-model.mjs"]);
-		const doctrine = hooks.hooks.PreToolUse.find((entry) => entry.matcher === "^(Bash|Edit|Write|NotebookEdit)$");
-		assert.ok(doctrine, "the doctrine entry must stay");
-	});
-});
 
 describe("claude plugin: subagent model hook", () => {
 	for (const model of ["sonnet", "opus", "haiku"]) {

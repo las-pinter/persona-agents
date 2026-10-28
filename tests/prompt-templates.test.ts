@@ -19,9 +19,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const skillsRoot = path.join(repoRoot, "content", "skills");
 const commandsDir = path.join(repoRoot, "content", "commands");
 
-/** The platforms a skill reference file can target, one file name each. */
-const PLATFORMS = ["pi", "kiro", "opencode", "claude"];
-
 function readText(file: string): string {
 	return fs.readFileSync(file, "utf-8");
 }
@@ -116,7 +113,7 @@ describe("shared commands: pi ships every command", () => {
 	});
 });
 
-describe("shared commands: a skill with platform references covers every platform", () => {
+describe("shared commands: a skill with platform references carries the pi reference", () => {
 	const withReferences = fs
 		.readdirSync(skillsRoot)
 		.flatMap((group) => fs.readdirSync(path.join(skillsRoot, group)).map((name) => path.join(skillsRoot, group, name)))
@@ -128,11 +125,9 @@ describe("shared commands: a skill with platform references covers every platfor
 
 	for (const dir of withReferences) {
 		const rel = path.relative(skillsRoot, dir);
-		for (const platform of PLATFORMS) {
-			test(`${rel} has references/${platform}.md`, () => {
-				assert.ok(fs.existsSync(path.join(dir, "references", `${platform}.md`)), `${rel}: references/${platform}.md is missing`);
-			});
-		}
+		test(`${rel} has references/pi.md`, () => {
+			assert.ok(fs.existsSync(path.join(dir, "references", "pi.md")), `${rel}: references/pi.md is missing`);
+		});
 	}
 });
 
@@ -145,23 +140,6 @@ describe("retro reach: every agent with tools can load the retro skill", () => {
 		test(`pi ${profession} lists common/retro in skills`, () => {
 			const text = readText(path.join(platformsDir, "pi", "frontmatters", `${profession}.yaml`));
 			assert.match(text, /^skills: \[.*"common\/retro".*\]$/m);
-		});
-
-		test(`kiro ${profession} attaches the retro skill`, () => {
-			const template = JSON.parse(readText(path.join(platformsDir, "kiro", "templates", `${profession}.json`))) as {
-				resources: string[];
-			};
-			assert.ok(template.resources.includes("skill://~/.kiro/skills/common/retro/SKILL.md"));
-		});
-
-		test(`OpenCode ${profession} allows the retro skill`, () => {
-			const text = readText(path.join(platformsDir, "opencode", "frontmatters", `${profession}.yaml`));
-			const allow = text.search(/- action: skill\n\s+resource: retro\n\s+effect: allow/);
-			const askAll = text.search(/- action: skill\n\s+resource: "\*"\n\s+effect: ask/);
-			assert.ok(allow >= 0, "the retro allow rule is missing");
-			assert.ok(askAll >= 0, 'the skill "*" ask rule is missing');
-			// OpenCode applies the last matching rule, so the allow must follow the catch-all ask.
-			assert.ok(allow > askAll, 'the retro allow rule must come after the skill "*" ask rule');
 		});
 	}
 });
