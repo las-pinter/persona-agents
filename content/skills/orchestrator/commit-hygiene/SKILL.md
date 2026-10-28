@@ -87,7 +87,6 @@ previous commit.
 ## Rules
 
 - One concern per commit.
-- Every commit starts with the prefix `ai:`.
 - Never rewrite pushed history.
 - Never push before this check passes.
 - Only the orchestrator commits and squashes.
