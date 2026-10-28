@@ -15,12 +15,14 @@ readonly RULES_FILE_LIMIT=8
 readonly RULES_LINE_LIMIT=200
 
 usage() {
-    echo "Usage: bash $0 [--home PATH] [--agent TYPE] [--project NAME] [--help]"
+    echo "Usage: bash $0 [--home PATH] [--agent TYPE] [--project NAME] [--no-dump] [--help]"
     echo "  --home PATH      Home folder override"
     echo "  --agent TYPE     Agent type folder under agent-notes (default: orchestrator)"
     echo "  --project NAME   Project folder under agent-notes/project-notes (default: auto)"
+    echo "  --no-dump        Print the report only, without the content dump"
     echo "  --help, -h       Show this help message"
-    echo "Output example (two keys):"
+    echo "Output example (three keys):"
+    echo "  agent_dir <path>"
     echo "  daily_dir <path> count <n>"
     echo "  daily_newest <file name>"
 }
@@ -46,11 +48,13 @@ reject_path_value() {
 HOME_ARG=""
 AGENT="orchestrator"
 PROJECT=""
+DUMP=1
 while [[ $# -gt 0 ]]; do
     case "$1" in
     --home) HOME_ARG="${2-}"; need_value --home "$HOME_ARG"; shift 2 ;;
     --agent) AGENT="${2-}"; need_value --agent "$AGENT"; shift 2 ;;
     --project) PROJECT="${2-}"; need_value --project "$PROJECT"; shift 2 ;;
+    --no-dump) DUMP=0; shift ;;
     --help | -h) usage; exit 0 ;;
     *) echo "Error: unknown option: $1" >&2; exit 1 ;;
     esac
@@ -73,14 +77,15 @@ fi
 holds_notes() { [[ -n "$1" && -d "$1/agent-notes" ]]; }
 
 # Nearest folder wins, so the closest agent-notes matches the home rule order.
-# Stop at the root, and stop when the strip gives an empty or equal value.
+# An empty strip maps to the root so the root is tested once before the break.
 walk_up_for_notes() {
     local dir="$1" next=""
     while :; do
         if holds_notes "$dir"; then printf '%s\n' "$dir"; return 0; fi
         if [[ "$dir" == "/" ]]; then break; fi
         next="${dir%/*}"
-        if [[ -z "$next" || "$next" == "$dir" ]]; then break; fi
+        if [[ -z "$next" ]]; then next="/"; fi
+        if [[ "$next" == "$dir" ]]; then break; fi
         dir="$next"
     done
     return 1
@@ -126,12 +131,10 @@ count_rules() {
     printf '%s %s\n' "$files" "$lines"
 }
 
-# GNU coreutils give date -d the file-name parse; the report targets Linux only.
-# One clock read keeps every week and month label consistent.
-CUR_WEEK="$(date -u +%G-W%V)"
-CUR_MONTH="$(date -u +%Y-%m)"
+# Journal names use the local date, so one local read serves both labels.
+read -r CUR_WEEK CUR_MONTH < <(date '+%G-W%V %Y-%m')
 NOTES="$HOME_DIR/agent-notes"
-NOTES_LABEL="$NOTES/$AGENT"
+AGENT_DIR="$NOTES/$AGENT"
 DAILY_DIR="$NOTES/$AGENT/journals/daily"
 WEEKLY_DIR="$NOTES/$AGENT/journals/weekly"
 MONTHLY_DIR="$NOTES/$AGENT/journals/monthly"
@@ -143,8 +146,13 @@ if [[ -d "$DAILY_DIR" ]]; then
     while IFS= read -r f; do
         name="${f##*/}"
         DAILY_COUNT=$((DAILY_COUNT + 1))
-        DAILY_NEWEST="$name"
-        week="$(date -u -d "${name%.md}" +%G-W%V 2>/dev/null || true)"
+        # Only a year-month-day name gets a week parsed; any other name is not
+        # a daily, because a short name like 2025.md still parses as a date.
+        week=""
+        if [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$ ]]; then
+            week="$(date -d "${name%.md}" +%G-W%V 2>/dev/null || true)"
+        fi
+        if [[ -n "$week" ]]; then DAILY_NEWEST="$name"; fi
         if [[ -n "$week" && "$week" < "$CUR_WEEK" && ! -f "$WEEKLY_DIR/$week.md" ]]; then
             if [[ "$UNCONSOLIDATED" == "none" || "$week" < "$UNCONSOLIDATED" ]]; then UNCONSOLIDATED="$week"; fi
         fi
@@ -178,15 +186,18 @@ if [[ "$PROJECT" != "none" && -f "$SUMMARY_FILE" ]]; then
     SUMMARY_STATE="present"
     SUMMARY_LINES="$(count_lines "$SUMMARY_FILE")"
 fi
+# A none project has no rules folder, so the scan would count a stray path.
 RULES_FILES=0; RULES_LINES=0
-read -r RULES_FILES RULES_LINES < <(count_rules "$RULES_DIR")
+if [[ "$PROJECT" != "none" ]]; then
+    read -r RULES_FILES RULES_LINES < <(count_rules "$RULES_DIR")
+fi
 SUMMARY_OK="ok"; if [[ "$SUMMARY_LINES" -gt "$SUMMARY_LINE_LIMIT" ]]; then SUMMARY_OK="breach"; fi
 RULES_OK="ok"; if [[ "$RULES_FILES" -gt "$RULES_FILE_LIMIT" || "$RULES_LINES" -gt "$RULES_LINE_LIMIT" ]]; then RULES_OK="breach"; fi
 
 printf 'home %s\n' "$HOME_DIR"
 printf 'home_rule %s\n' "$HOME_RULE"
 printf 'agent %s\n' "$AGENT"
-printf 'notes %s\n' "$NOTES_LABEL"
+printf 'agent_dir %s\n' "$AGENT_DIR"
 printf 'daily_dir %s count %s\n' "$DAILY_DIR" "$DAILY_COUNT"
 printf 'daily_newest %s\n' "$DAILY_NEWEST"
 printf 'weekly %s %s\n' "$CUR_WEEK" "$WEEKLY_STATE"
@@ -195,6 +206,68 @@ printf 'project %s\n' "$PROJECT"
 printf 'summary %s %s limit %s %s\n' "$SUMMARY_STATE" "$SUMMARY_LINES" "$SUMMARY_LINE_LIMIT" "$SUMMARY_OK"
 printf 'rules %s %s limit %s/%s %s\n' "$RULES_FILES" "$RULES_LINES" "$RULES_FILE_LIMIT" "$RULES_LINE_LIMIT" "$RULES_OK"
 printf 'unconsolidated %s\n' "$UNCONSOLIDATED"
+
+# Print the file text. Add a newline only when the last byte is not one.
+# An empty file gets no extra newline. A failed read returns nonzero.
+print_text() {
+    cat -- "$1" 2>/dev/null || return 1
+    if [[ -s "$1" && -n "$(tail -c 1 -- "$1" 2>/dev/null)" ]]; then printf '\n'; fi
+    return 0
+}
+
+# The header and the end line make one block easy to find in a long dump.
+# An empty path marks an absent source. An unreadable file says so.
+dump_block() {
+    local label="$1" header="$2" path="$3"
+    printf -- '--- %s %s ---\n' "$label" "$header"
+    if [[ -n "$path" ]]; then
+        # A read failure prints the marker instead of stopping the report.
+        if [[ ! -r "$path" ]] || ! print_text "$path"; then printf 'unreadable\n'; fi
+    fi
+    printf -- '--- end %s ---\n' "$label"
+}
+
+# Every rules file gets its own name line above the text, in name order.
+dump_rules() {
+    local f="" name=""
+    if [[ "$PROJECT" == "none" || ! -d "$RULES_DIR" ]]; then
+        dump_block rules absent ""
+        return 0
+    fi
+    printf -- '--- rules %s ---\n' "$RULES_DIR"
+    while IFS= read -r f; do
+        name="${f##*/}"
+        printf '### %s\n' "$name"
+        if [[ ! -r "$f" ]] || ! print_text "$f"; then printf 'unreadable\n'; fi
+    done < <(find "$RULES_DIR" -maxdepth 1 -type f -print 2>/dev/null | sort)
+    printf -- '--- end rules ---\n'
+}
+
+# The dump never changes a report or a breach line. It only reads text.
+dump_sources() {
+    dump_rules
+    if [[ "$SUMMARY_STATE" == "present" ]]; then
+        dump_block summary "$SUMMARY_FILE" "$SUMMARY_FILE"
+    else
+        dump_block summary absent ""
+    fi
+    if [[ -n "$DAILY_NEWEST" && "$DAILY_NEWEST" != "none" ]]; then
+        dump_block daily "$DAILY_NEWEST" "$DAILY_DIR/$DAILY_NEWEST"
+    else
+        dump_block daily absent ""
+    fi
+    if [[ "$WEEKLY_STATE" == "present" ]]; then
+        dump_block weekly "$CUR_WEEK.md" "$WEEKLY_DIR/$CUR_WEEK.md"
+    else
+        dump_block weekly absent ""
+    fi
+    if [[ "$MONTHLY_STATE" == "present" ]]; then
+        dump_block monthly "$CUR_MONTH.md" "$MONTHLY_DIR/$CUR_MONTH.md"
+    else
+        dump_block monthly absent ""
+    fi
+}
+
 BREACH_COUNT=0
 note_breach() {
     printf 'breach %s %s limit %s\n' "$1" "$2" "$3"
@@ -204,4 +277,5 @@ if [[ "$SUMMARY_LINES" -gt "$SUMMARY_LINE_LIMIT" ]]; then note_breach summary-li
 if [[ "$RULES_FILES" -gt "$RULES_FILE_LIMIT" ]]; then note_breach rules-files "$RULES_FILES" "$RULES_FILE_LIMIT"; fi
 if [[ "$RULES_LINES" -gt "$RULES_LINE_LIMIT" ]]; then note_breach rules-lines "$RULES_LINES" "$RULES_LINE_LIMIT"; fi
 if [[ "$BREACH_COUNT" -eq 0 ]]; then printf 'breach none\n'; fi
+if [[ "$DUMP" -eq 1 ]]; then dump_sources; fi
 exit 0
