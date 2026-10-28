@@ -98,11 +98,10 @@ if [[ -n "$HOME_ARG" ]] && ! holds_notes "$HOME_ARG"; then
     exit 1
 fi
 
-# The four home rules run in order; the first match wins.
+# The three home rules run in order; the first match wins.
 HOME_DIR=""; HOME_RULE="none"
 if [[ -n "$HOME_ARG" ]]; then HOME_DIR="$HOME_ARG"; HOME_RULE="flag"
 elif HOME_DIR="$(walk_up_for_notes "$SCRIPT_DIR")"; then HOME_RULE="skill-dir"
-elif HOME_DIR="$(walk_up_for_notes "$PWD")"; then HOME_RULE="pwd"
 elif holds_notes "${HOME-}"; then HOME_DIR="${HOME-}"; HOME_RULE="env-home"
 fi
 if [[ "$HOME_RULE" == "none" ]]; then

@@ -92,6 +92,35 @@ function outLines(stdout: string): string[] {
 	return stdout.split("\n");
 }
 
+/** Copy the real script into `dir` with a file copy; return the copy path. */
+function copyReportInto(dir: string): string {
+	fs.mkdirSync(dir, { recursive: true });
+	const copy = path.join(dir, "startup-report.sh");
+	fs.copyFileSync(reportScript, copy);
+	return copy;
+}
+
+/** Run a copy with --project demo and a temp HOME; cwd is optional. */
+function runCopy(copy: string, home: string, cwd?: string): RunResult {
+	const result = spawnSync("bash", [copy, "--project", "demo"], {
+		env: { ...process.env, HOME: home },
+		cwd,
+		encoding: "utf8",
+	});
+	return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status ?? 1 };
+}
+
+/** The first folder up from the system temp folder that holds agent-notes, if any. */
+function notesAboveTemp(): string | null {
+	let dir = fs.realpathSync(os.tmpdir());
+	for (;;) {
+		if (fs.existsSync(path.join(dir, "agent-notes"))) return dir;
+		const parent = path.dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
+	}
+}
+
 /** Assert stdout holds this line exactly once. */
 function assertWholeLine(result: RunResult, expected: string): void {
 	const found = outLines(result.stdout).filter((line) => line === expected);
@@ -131,6 +160,65 @@ describe("startup-report.sh report keys", () => {
 		assert.equal(result.status, 0, result.stderr);
 		assertWholeLine(result, `home ${home}`);
 		assertWholeLine(result, "home_rule flag");
+	});
+});
+
+describe("startup-report.sh home chain", () => {
+	test("a home above the script resolves by the skill-dir rule", () => {
+		const home = goodHome();
+		const copy = copyReportInto(path.join(home, "tools", "deep", "bin"));
+		const emptyHome = makeTree();
+		const result = runCopy(copy, emptyHome);
+		assert.equal(result.status, 0, result.stderr);
+		assertWholeLine(result, `home ${home}`);
+		assertWholeLine(result, "home_rule skill-dir");
+	});
+
+	test("an env home applies when no home sits above the script", (t) => {
+		const above = notesAboveTemp();
+		if (above) {
+			t.skip(`a home folder sits above the temp folder: ${above}`);
+			return;
+		}
+		const tree = makeTree();
+		const copy = copyReportInto(path.join(tree, "bin"));
+		const home = goodHome();
+		const result = runCopy(copy, home);
+		assert.equal(result.status, 0, result.stderr);
+		assertWholeLine(result, `home ${home}`);
+		assertWholeLine(result, "home_rule env-home");
+	});
+
+	test("no home anywhere exits 2 with one stderr line", (t) => {
+		const above = notesAboveTemp();
+		if (above) {
+			t.skip(`a home folder sits above the temp folder: ${above}`);
+			return;
+		}
+		const tree = makeTree();
+		const copy = copyReportInto(path.join(tree, "bin"));
+		const emptyHome = makeTree();
+		const result = runCopy(copy, emptyHome);
+		assert.equal(result.status, 2, "a missing home is not a user error");
+		assert.equal(result.stdout, "", "a missing home prints nothing on stdout");
+		const stderrLines = result.stderr.split("\n").filter((line) => line.length > 0);
+		assert.equal(stderrLines.length, 1, "a missing home prints exactly one stderr line");
+	});
+
+	test("a working directory home never wins over a missing home chain", (t) => {
+		const above = notesAboveTemp();
+		if (above) {
+			t.skip(`a home folder sits above the temp folder: ${above}`);
+			return;
+		}
+		const tree = makeTree();
+		const copy = copyReportInto(path.join(tree, "bin"));
+		const emptyHome = makeTree();
+		const workTree = makeTree();
+		fs.mkdirSync(path.join(workTree, "agent-notes"), { recursive: true });
+		const result = runCopy(copy, emptyHome, workTree);
+		assert.equal(result.status, 2, "the working directory is never the home folder");
+		assert.equal(result.stdout, "", "a missing home prints nothing on stdout");
 	});
 });
 

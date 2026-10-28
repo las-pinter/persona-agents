@@ -121,10 +121,10 @@ retire one rule or merge two rules in the same edit. Then write the new rule.
 session that finds it. It records the reason in one journal line.
 
 **Startup guard.** Run it after the folder read and before the first dispatch.
-Count the files. Count the total lines. Re-read each rule against the current
-tree. Write one journal line per breach, with the file name, the measured
-value, and the limit. The guard is a procedure: no repository test can read a
-user note tree.
+Count the rules files. Count their total lines. Re-read each rule against the
+current tree. Record one journal line per breach, with the measured value and
+the limit. The orchestrator's startup report prints the summary and rule
+limits. The guard is a procedure: no repository test can read a user note tree.
 
 ## Note Structure
 

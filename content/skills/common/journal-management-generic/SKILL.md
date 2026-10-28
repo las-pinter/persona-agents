@@ -16,8 +16,10 @@ platform gives for this skill file. Go up one folder at a time. Stop at the
 first folder that holds a folder named agent-notes. That folder is the user
 home folder. The notes root is the agent-notes folder inside it.
 
-Do not run a shell command to find the home path. Test each parent folder with
-a literal path.
+Do not run a filesystem search to find the home path. Test each parent folder
+with a literal path. When your profession journal skill names a startup script,
+run that script instead. The script owns the walk. It never takes the working
+directory as the home folder.
 
 If the platform reports no absolute path, ask the user once.
 

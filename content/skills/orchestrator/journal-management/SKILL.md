@@ -1,6 +1,6 @@
 ---
 name: journal-management
-description: Orchestrator journal root and the one orchestrator addition.
+description: Orchestrator journal root and the orchestrator startup report.
 ---
 
 # Journal Management (Orchestrator)
@@ -17,3 +17,18 @@ here.
 
 `<USER_HOME>` is the folder that holds `agent-notes`. Follow the
 **journal-management-generic** skill for the exact rule and the fallback.
+
+- **Startup report:** The agent runs this skill folder's
+  `scripts/startup-report.sh` with bash at the start of every session.
+  Pass the full path, unquoted, so the gate can match it.
+  The report prints the facts, then the text of the note rules, the summary,
+  and the recent journals.
+  Use the no-dump flag only when you already read those files in this session.
+  Every breach line names the measured fact, its value, and its limit.
+  Record each breach per the startup guard in the **project-notes** skill.
+  The report names the oldest unconsolidated week; consolidate it per the
+  **journal-management-generic** schedule.
+  The **project-notes** skill owns the note limits; a limit change changes the
+  numbers inside the report script too.
+  Skip the report in a headless run when the platform asks for a prompt.
+  State in the output that the report is blocked.
