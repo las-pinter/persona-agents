@@ -22,9 +22,9 @@ usage() {
     echo "  --no-dump        Print the report only, without the content dump"
     echo "  --help, -h       Show this help message"
     echo "Output example (three keys):"
-    echo "  agent_dir <path>"
+    echo "  today <YYYY-MM-DD>"
     echo "  daily_dir <path> count <n>"
-    echo "  daily_newest <file name>"
+    echo "  unconsolidated <none|week> <none|absent>"
 }
 
 # A missing or flag-like value is a user error, not a fallback.
@@ -130,7 +130,8 @@ count_rules() {
     printf '%s %s\n' "$files" "$lines"
 }
 
-# Journal names use the local date, so one local read serves both labels.
+# Journal names use the local date. Two reads run: one gives the day, one the week and month.
+TODAY="$(date -I)"
 read -r CUR_WEEK CUR_MONTH < <(date '+%G-W%V %Y-%m')
 NOTES="$HOME_DIR/agent-notes"
 AGENT_DIR="$NOTES/$AGENT"
@@ -157,6 +158,9 @@ if [[ -d "$DAILY_DIR" ]]; then
         fi
     done < <(find "$DAILY_DIR" -maxdepth 1 -type f -name '*.md' -print 2>/dev/null | sort)
 fi
+# The week loop picked a week whose weekly file is missing; this test re-verifies that path.
+UNCONSOLIDATED_STATE="none"
+if [[ "$UNCONSOLIDATED" != "none" && ! -f "$WEEKLY_DIR/$UNCONSOLIDATED.md" ]]; then UNCONSOLIDATED_STATE="absent"; fi
 WEEKLY_STATE="absent"; MONTHLY_STATE="absent"
 if [[ -f "$WEEKLY_DIR/$CUR_WEEK.md" ]]; then WEEKLY_STATE="present"; fi
 if [[ -f "$MONTHLY_DIR/$CUR_MONTH.md" ]]; then MONTHLY_STATE="present"; fi
@@ -193,6 +197,7 @@ fi
 SUMMARY_OK="ok"; if [[ "$SUMMARY_LINES" -gt "$SUMMARY_LINE_LIMIT" ]]; then SUMMARY_OK="breach"; fi
 RULES_OK="ok"; if [[ "$RULES_FILES" -gt "$RULES_FILE_LIMIT" || "$RULES_LINES" -gt "$RULES_LINE_LIMIT" ]]; then RULES_OK="breach"; fi
 
+printf 'today %s\n' "$TODAY"
 printf 'home %s\n' "$HOME_DIR"
 printf 'home_rule %s\n' "$HOME_RULE"
 printf 'agent %s\n' "$AGENT"
@@ -204,7 +209,7 @@ printf 'monthly %s %s\n' "$CUR_MONTH" "$MONTHLY_STATE"
 printf 'project %s\n' "$PROJECT"
 printf 'summary %s %s limit %s %s\n' "$SUMMARY_STATE" "$SUMMARY_LINES" "$SUMMARY_LINE_LIMIT" "$SUMMARY_OK"
 printf 'rules %s %s limit %s/%s %s\n' "$RULES_FILES" "$RULES_LINES" "$RULES_FILE_LIMIT" "$RULES_LINE_LIMIT" "$RULES_OK"
-printf 'unconsolidated %s\n' "$UNCONSOLIDATED"
+printf 'unconsolidated %s %s\n' "$UNCONSOLIDATED" "$UNCONSOLIDATED_STATE"
 
 # Print the file text. Add a newline only when the last byte is not one.
 # An empty file gets no extra newline. A failed read returns nonzero.

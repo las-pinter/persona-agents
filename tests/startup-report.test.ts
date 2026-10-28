@@ -129,12 +129,23 @@ function assertWholeLine(result: RunResult, expected: string): void {
 
 describe("startup-report.sh input guards", () => {
 	test("--help prints usage and exits 0", () => {
-		const home = makeTree();
+		const home = goodHome();
 		const result = runReport(home, ["--help"]);
 		assert.equal(result.status, 0, result.stderr);
 		assertWholeLine(
 			result,
 			`Usage: bash ${reportScript} [--home PATH] [--agent TYPE] [--project NAME] [--no-dump] [--help]`,
+		);
+		const exampleKeys = outLines(result.stdout)
+			.filter((line) => line.startsWith("  ") && !line.startsWith("  --"))
+			.map((line) => line.trim().split(/\s+/)[0]);
+		const report = runReport(home, ["--home", home, "--project", "demo"]);
+		assert.equal(report.status, 0, report.stderr);
+		const reportKeys = outLines(report.stdout).map((line) => line.split(" ")[0]);
+		assert.deepEqual(
+			reportKeys.filter((key) => exampleKeys.includes(key)),
+			exampleKeys,
+			"the usage example names the report keys in report order",
 		);
 	});
 
@@ -160,6 +171,39 @@ describe("startup-report.sh report keys", () => {
 		assert.equal(result.status, 0, result.stderr);
 		assertWholeLine(result, `home ${home}`);
 		assertWholeLine(result, "home_rule flag");
+	});
+});
+
+describe("startup-report.sh fact block", () => {
+	test("the first fact line is today with an ISO date value", () => {
+		const home = goodHome();
+		const result = runReport(home, ["--home", home, "--project", "demo"]);
+		assert.equal(result.status, 0, result.stderr);
+		const today = (spawnSync("date", ["-I"], { encoding: "utf8" }).stdout ?? "").trim();
+		assert.equal(outLines(result.stdout)[0], `today ${today}`);
+	});
+
+	test("a closed week with no weekly file reports the week and absent", () => {
+		const home = goodHome();
+		const dailyDir = path.join(home, "agent-notes", "orchestrator", "journals", "daily");
+		fs.mkdirSync(dailyDir, { recursive: true });
+		const closedDay = (spawnSync("date", ["-d", "14 days ago", "+%Y-%m-%d"], { encoding: "utf8" }).stdout ?? "").trim();
+		fs.writeFileSync(path.join(dailyDir, `${closedDay}.md`), "day\n");
+		const week = spawnSync("date", ["-d", closedDay, "+%G-W%V"], { encoding: "utf8" }).stdout.trim();
+		const result = runReport(home, ["--home", home, "--project", "demo"]);
+		assert.equal(result.status, 0, result.stderr);
+		assertWholeLine(result, `unconsolidated ${week} absent`);
+	});
+
+	test("a current week daily file reports none for both values", () => {
+		const home = goodHome();
+		const dailyDir = path.join(home, "agent-notes", "orchestrator", "journals", "daily");
+		fs.mkdirSync(dailyDir, { recursive: true });
+		const today = spawnSync("date", ["-I"], { encoding: "utf8" }).stdout.trim();
+		fs.writeFileSync(path.join(dailyDir, `${today}.md`), "day\n");
+		const result = runReport(home, ["--home", home, "--project", "demo"]);
+		assert.equal(result.status, 0, result.stderr);
+		assertWholeLine(result, "unconsolidated none none");
 	});
 });
 
