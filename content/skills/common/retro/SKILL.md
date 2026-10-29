@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Print-only blameless retrospective of the current session with the AAR spine, a 14-dimension sweep, and routed actions. Runs on pi, kiro, OpenCode, and Claude Code.
+description: Print-only blameless retrospective of the current session with the AAR spine, a 15-dimension sweep, and routed actions. Runs on pi, kiro, OpenCode, and Claude Code.
 disable-model-invocation: true
 ---
 
@@ -69,13 +69,13 @@ the cost source.
 Review these sources only:
 
 - The current session.
-- The latest journal entry of the agent that runs the retro, if that agent
-  keeps a journal.
+- The three most recent daily journal files of the agent that runs the
+  retro, when three exist.
 - The project `summary.md`.
 - The project `rules/` folder.
 
-Do not scan earlier sessions. For a repeated-mistake check, use the latest
-journal entry and the git history in reach.
+Do not scan earlier sessions. For a repeated-mistake check, use this agent's
+journal files named above and the git history in reach.
 
 ## Write Model (Print Only)
 
@@ -102,11 +102,17 @@ Collect evidence from these sources:
 | Git history | Repo working tree | `git log`, `git diff`, `git status` |
 | Permission rules | See the platform reference file | Current allow, ask, and deny rules |
 | Permission audit log | See the platform reference file | Recorded permission decisions, only where the platform has a log |
+| Dispatch histogram | Session transcript | Tool calls by name, denials by reason, and dispatches by agent type |
+
+The permissions, tooling, delegation, and dispatch efficiency dimensions use
+those counts.
+
+The repeated-mistake check reads the journal files named in Review Scope.
 
 For a large transcript file, read only the fields you need. Do not load the
 whole file into context.
 
-## Step 2: Sweep the 14 Dimensions
+## Step 2: Sweep the 15 Dimensions
 
 Sweep every dimension below. Ask the listed question for each one. Keep the
 sweep internal. Print only a dimension with evidence.
@@ -118,7 +124,7 @@ sweep internal. Print only a dimension with evidence.
 | 3 | Tooling and workflow | Which tool calls repeated, failed, or used a workaround? |
 | 4 | Prompt and steering quality | Which user instruction was ambiguous or caused a wrong turn? |
 | 5 | Context management | What context was missing, stale, or too large? |
-| 6 | Cost and latency | What did the session cost, and which turn or subagent dominated? |
+| 6 | Cost and latency | What did the session cost, and which turn or dispatch dominated? |
 | 7 | Error handling and recovery | Which error was handled well, and which recovery was slow? |
 | 8 | Testing and verification | Was the change verified by an external signal, or only by the agent? |
 | 9 | Communication and reporting | Was the final report clear, complete, and free of false claims? |
@@ -127,6 +133,7 @@ sweep internal. Print only a dimension with evidence.
 | 12 | Repeated mistakes | Which mistake appeared before in journals or git history? |
 | 13 | Update-surface routing | For each lesson, which surface should change? |
 | 14 | Delegation and routing | Which task went to the wrong agent type, and why? |
+| 15 | Dispatch efficiency | Did this task need this many agents, and which dispatch added no value? |
 
 ### Cost Data
 
@@ -141,17 +148,26 @@ external evidence. Drop a dimension with no evidence. If fewer than 3
 dimensions have evidence, print the ones that do. Never invent a finding to
 reach 3.
 
-Each finding has exactly these parts:
+A finding must still be open at session end. A finding whose fix landed in
+this session is not a finding.
+
+Each finding has exactly these parts, in this order:
 
 - An observation.
 - ONE external evidence item.
 - One Starfish lens: **Less of** or **More of**.
+- An impact: high, normal, or low.
 - One update surface.
+- The plausible causes.
+
+For a finding, high changes the next session, normal refines a practice, and
+low is optional polish.
 
 ### Evidence Anchor
 
 Every finding cites one external evidence item. Use a git diff, a test result,
-a permission denial, a session cost record, or a journal entry.
+a permission denial, or a session cost record. A journal entry or a
+transcript count is also evidence.
 
 Never anchor a finding to the agent's own self-grade. A self-grade is not
 evidence.
@@ -192,6 +208,9 @@ Claim a permission audit log only when the platform reference file says the
 platform has one. An audit log of one platform does not record the decisions
 of a different platform.
 
+After the findings, print the dimension numbers that had no external evidence,
+or print `none`. This line is the blind-spot report.
+
 ## Step 4: Print Actions
 
 Print 1 to 3 actions. Each action has one owner and one next step.
@@ -202,6 +221,10 @@ The retro checks the project `rules/` folder for a rule the session created,
 one it updated, and one it retired. It prints each rule action it finds, with
 the rule file name. A printed rule action counts inside the Step 4 list of 1
 to 3 actions. It does not add a second list.
+
+The folder holds at most 8 files and 200 lines in total. At 8 files or 200
+lines, the printed action names the rule to retire or the two rules to merge.
+The same edit makes that change.
 
 When the session caused a lesson that no rule holds, the retro proposes the
 missing rule action as an action. The owner is the orchestrator, because only
@@ -229,8 +252,11 @@ Findings (3-5):
 1. Observation ...
    Evidence: <one external item>
    Lens: More of ...
+   Impact: <high, normal, or low>
    Surface: <one surface>
    Plausible causes: ...
+
+Blind spots: <the dimension numbers with no external evidence, or "none">
 
 Actions (1-3):
 1. Owner: ... - Next step: ...
