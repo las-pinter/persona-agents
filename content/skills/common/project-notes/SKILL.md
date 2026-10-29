@@ -29,6 +29,8 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 │       ├── features/<slug>.md         (orchestrator, max 300 lines)
 │       ├── bugs/<slug>.md             (orchestrator, max 300 lines)
 │       ├── tech/<slug>.md             (orchestrator, max 300 lines)
+│       ├── releases/<version>.md      (orchestrator, one note per release, max 300 lines)
+│       ├── audit/<slug>.md            (orchestrator, one note per audit, max 300 lines)
 │       ├── rules/<slug>.md            (orchestrator, one rule per file)
 │       └── studies/
 │           ├── index.md               (planner)
@@ -55,7 +57,8 @@ share one folder. When a repository has no remote, use its local directory
 name. If two repositories still collide, add a short owner or path suffix to
 one folder name.
 **File naming:** Note files use plain slugs, with no date prefix (for example,
-`regexp-tool-permissions.md`). Researcher report files use
+`regexp-tool-permissions.md`). An audit note uses the same plain slug.
+A release note file uses `<version>.md`. Researcher report files use
 `YYYY-MM-DD-<topic>.md`. Study folders use `YYYY-MM-DD-<slug>`.
 **Home directory:** `<USER_HOME>` is the folder that holds `agent-notes`. Follow
 the **journal-management-generic** skill for the exact rule and the fallback.
@@ -66,6 +69,8 @@ the **journal-management-generic** skill for the exact rule and the fallback.
 |------|-------|---------------|
 | `summary.md` | orchestrator | On significant discovery or user correction. |
 | `features/`, `bugs/`, `tech/` | orchestrator | On significant discovery or user correction. |
+| `releases/` | orchestrator | On each release, one note per version. |
+| `audit/` | orchestrator | On each audit, one note per audit. |
 | `rules/` | orchestrator | On rule create, update, or retire. The planner does not write it. |
 | `studies/index.md` | planner | On study creation and on every stage change. |
 | `studies/legacy_studies/` | orchestrator | When archiving an old study. |
@@ -153,6 +158,8 @@ Rules:
 - No persona voice. Plain facts only.
 - `summary.md`: maximum 30 lines (hard ceiling).
 - Feature, bug, and tech notes: maximum 300 lines each (hard ceiling). Split the
+  topic when a note cannot fit.
+- Release and audit notes: maximum 300 lines each (hard ceiling). Split the
   topic when a note cannot fit.
 - `study.md`: maximum 500 lines (hard ceiling). Split the study before it
   exceeds the cap.
