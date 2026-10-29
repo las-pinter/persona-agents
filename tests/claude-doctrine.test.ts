@@ -7,8 +7,14 @@
  * forms ask for the orchestrator; all of these deny the rest;
  * cp/mv/rsync ask for the orchestrator and the implementer and deny the rest;
  * the installed journal write script is allowed for the orchestrator;
- * edits outside an agent's notes zone ask (orchestrator) or deny (planner,
- * researcher, reviewer, mascot). Agents outside the plugin get no decision.
+ * the orchestrator writes anywhere in the repository and anywhere in the
+ * agent-notes tree under the home folder, and asks on every other path; the
+ * planner, researcher, reviewer, and mascot deny an edit outside their own
+ * zone. The agent-notes zone is anchored to the home folder, and a leading `~`
+ * expands to it. A cwd places no repository when it holds the home folder or
+ * sits at a system-wide folder such as `/tmp`. A path resolves through its
+ * deepest existing ancestor, so a symlink that leaves a zone asks.
+ * Agents outside the plugin get no decision.
  *
  * Run: node --experimental-strip-types --test tests/claude-doctrine.test.ts
  */
@@ -32,9 +38,16 @@ function bash(profession: string, command: string): string {
 	return decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.verdict ?? "none";
 }
 
-function edit(profession: string, filePath: string, tool = "Edit"): string {
+function edit(profession: string, filePath: string, tool = "Edit", cwd?: string): string {
 	const key = tool === "NotebookEdit" ? "notebook_path" : "file_path";
-	return decide({ agent_type: `persona-agents:${profession}`, tool_name: tool, tool_input: { [key]: filePath } })?.verdict ?? "none";
+	return (
+		decide({
+			agent_type: `persona-agents:${profession}`,
+			tool_name: tool,
+			tool_input: { [key]: filePath },
+			...(cwd === undefined ? {} : { cwd }),
+		})?.verdict ?? "none"
+	);
 }
 
 /** Plain history writes: the orchestrator runs them without a prompt. */
@@ -396,7 +409,17 @@ describe("doctrine: fail closed", () => {
 });
 
 describe("doctrine: file writes", () => {
-	const home = "/home/u/agent-notes";
+	const userHome = os.homedir();
+	const home = path.join(userHome, "agent-notes");
+	const repo = path.join(userHome, "repo");
+	const reason = (profession: string, filePath: string, cwd?: string): string =>
+		decide({
+			agent_type: `persona-agents:${profession}`,
+			tool_name: "Write",
+			tool_input: { file_path: filePath },
+			...(cwd === undefined ? {} : { cwd }),
+		})?.reason ?? "";
+
 	test("implementer and tester write anywhere", () => {
 		for (const profession of ["implementer", "tester"]) {
 			assert.equal(edit(profession, "/repo/src/main.ts"), "none", profession);
@@ -404,29 +427,159 @@ describe("doctrine: file writes", () => {
 		}
 	});
 
-	test("the orchestrator writes its notes freely and asks elsewhere", () => {
+	test("the orchestrator writes a relative repository path freely", () => {
+		assert.equal(edit("orchestrator", "src/main.ts", "Edit", repo), "none");
+		assert.equal(edit("orchestrator", "README.md", "Write", repo), "none");
+		// The path resolves against the hook's cwd before the zone is tested.
+		assert.equal(edit("orchestrator", "src/../README.md", "Write", repo), "none");
+		assert.equal(edit("orchestrator", ".", "Write", repo), "none");
+	});
+
+	test("the orchestrator writes an absolute repository path freely", () => {
+		assert.equal(edit("orchestrator", `${repo}/src/main.ts`, "Edit", repo), "none");
+		assert.equal(edit("orchestrator", `${repo}/content/professions/x.md`, "Write", repo), "none");
+	});
+
+	test("the orchestrator writes anywhere in the agent-notes tree", () => {
 		assert.equal(edit("orchestrator", `${home}/orchestrator/journal.md`), "none");
 		assert.equal(edit("orchestrator", `${home}/project-notes/repo/study.md`, "Write"), "none");
-		assert.equal(edit("orchestrator", "/repo/README.md"), "ask");
+		assert.equal(edit("orchestrator", `${home}/researcher/findings.md`, "Write"), "none");
+		assert.equal(edit("orchestrator", "agent-notes/orchestrator/j.md", "Edit", userHome), "none");
+		assert.equal(edit("orchestrator", "~/agent-notes/planner/x.md", "Write"), "none");
+	});
+
+	test("the orchestrator asks on a path outside the repository and the notes", () => {
+		assert.equal(edit("orchestrator", "/etc/passwd", "Write", repo), "ask");
+		assert.equal(edit("orchestrator", `${repo}/../etc/passwd`, "Write", repo), "ask");
+		assert.equal(edit("orchestrator", "../other/x.md", "Write", repo), "ask");
+		assert.equal(edit("orchestrator", "/home/u/not-agent-notes/x.md", "Write", repo), "ask");
+		// Without an absolute cwd the hook cannot place an absolute path.
+		assert.equal(edit("orchestrator", `${repo}/src/main.ts`, "Write"), "ask");
+		// An empty path is not a repository path.
+		assert.equal(edit("orchestrator", "", "Write"), "ask");
+		assert.match(reason("orchestrator", "/etc/passwd", repo), /outside the repository and the agent-notes tree/);
+	});
+
+	test("an ask reason names the approval, not a capability limit", () => {
+		const text = reason("orchestrator", "/etc/passwd", repo);
+		assert.match(text, /needs your approval/);
+		assert.doesNotMatch(text, /does not edit/);
+	});
+
+	test("the agent-notes zone is anchored to the home folder", () => {
+		// A parent segment after agent-notes leaves the tree.
+		assert.equal(edit("orchestrator", `${home}/../etc/passwd`, "Write", repo), "ask");
+		assert.equal(edit("orchestrator", `${home}/orchestrator/../../etc/passwd`, "Write"), "ask");
+		// agent-notes in another folder is not the tree.
+		assert.equal(edit("orchestrator", "/tmp/agent-notes/x", "Write", repo), "ask");
+		assert.equal(edit("orchestrator", "/tmp/agent-notes/orchestrator/j.md", "Edit", repo), "ask");
+		// agent-notes as a middle segment of another folder.
+		assert.equal(edit("orchestrator", `${userHome}/x/agent-notes/y.md`, "Write", repo), "ask");
+		assert.equal(edit("orchestrator", "/var/lib/agent-notes/project-notes/x.md", "Write", repo), "ask");
+	});
+
+	test("a leading tilde expands to the home folder", () => {
+		assert.equal(edit("orchestrator", "~/agent-notes/planner/x.md", "Write", repo), "none");
+		assert.equal(edit("orchestrator", "~/agent-notes/orchestrator/j.md", "Write"), "none");
+		// Outside both zones the expanded path asks.
+		assert.equal(edit("orchestrator", "~/other/x.md", "Write", repo), "ask");
+		assert.equal(edit("orchestrator", "~", "Write", repo), "ask");
+	});
+
+	test("a cwd of / or of the home folder places no repository path", () => {
+		for (const cwd of ["/", userHome]) {
+			assert.equal(edit("orchestrator", "src/main.ts", "Write", cwd), "ask", cwd);
+			assert.equal(edit("orchestrator", path.join(cwd, "src/main.ts"), "Write", cwd), "ask", cwd);
+		}
+		// The notes tree stays writable from the home folder.
+		assert.equal(edit("orchestrator", "agent-notes/orchestrator/j.md", "Write", userHome), "none");
+		// `/` must not turn a relative notes path into the root tree.
+		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", "/"), "ask");
+	});
+
+	test("a cwd that holds the home folder or a system folder places no repository path", () => {
+		const homeParent = path.dirname(userHome);
+		for (const cwd of [homeParent, "/tmp"]) {
+			assert.equal(edit("orchestrator", "src/main.ts", "Write", cwd), "ask", cwd);
+			assert.equal(edit("orchestrator", path.join(cwd, "repo/src/main.ts"), "Write", cwd), "ask", cwd);
+			// The home parent holds the notes tree, so a notes path is not free either.
+			assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", cwd), "ask", cwd);
+		}
+	});
+
+	test("a symlink that leaves the zone asks", () => {
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-zone-"));
+		try {
+			const repoDir = path.join(tmp, "repo");
+			const outside = path.join(tmp, "outside");
+			fs.mkdirSync(repoDir);
+			fs.mkdirSync(outside);
+			fs.symlinkSync(outside, path.join(repoDir, "link"));
+			fs.symlinkSync(path.join(outside, "new.md"), path.join(repoDir, "dangling"));
+			// The link sits inside the repository but resolves outside it.
+			assert.equal(edit("orchestrator", path.join(repoDir, "link", "x.md"), "Write", repoDir), "ask");
+			assert.equal(edit("orchestrator", "link/x.md", "Edit", repoDir), "ask");
+			// A link that resolves to nothing cannot be placed.
+			assert.equal(edit("orchestrator", "dangling", "Write", repoDir), "ask");
+			// A real path in the repository still writes freely.
+			assert.equal(edit("orchestrator", path.join(repoDir, "x.md"), "Write", repoDir), "none");
+			assert.equal(edit("orchestrator", "x.md", "Edit", repoDir), "none");
+		} finally {
+			fs.rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	test("a doubled slash resolves to one path", () => {
+		assert.equal(edit("orchestrator", `${repo}//src/main.ts`, "Write", repo), "none");
+		assert.equal(edit("orchestrator", "src//main.ts", "Write", repo), "none");
+		assert.equal(edit("orchestrator", `${home}//orchestrator/j.md`, "Write", repo), "none");
+		assert.equal(edit("orchestrator", "//etc/passwd", "Write", repo), "ask");
 	});
 
 	test("the planner and researcher write only their own zone", () => {
+		assert.equal(edit("planner", `${home}/project-notes/repo/study.md`, "Edit", repo), "none");
+		assert.equal(edit("planner", "agent-notes/project-notes/x.md", "Write", userHome), "none");
+		assert.equal(edit("researcher", "agent-notes/researcher/x.md", "Write", userHome), "none");
 		assert.equal(edit("planner", `${home}/project-notes/repo/study.md`), "none");
 		assert.equal(edit("planner", `${home}/researcher/x.md`), "deny");
 		assert.equal(edit("researcher", `${home}/researcher/findings.md`, "Write"), "none");
-		assert.equal(edit("researcher", "/repo/src/main.ts"), "deny");
-		assert.equal(edit("researcher", "/repo/a.ipynb", "NotebookEdit"), "deny");
+		assert.equal(edit("researcher", `${repo}/src/main.ts`), "deny");
+		assert.equal(edit("researcher", `${repo}/a.ipynb`, "NotebookEdit"), "deny");
+	});
+
+	test("the planner stays denied inside the orchestrator zone", () => {
+		assert.equal(edit("planner", `${home}/orchestrator/journal.md`, "Write"), "deny");
+		assert.equal(edit("planner", "~/agent-notes/orchestrator/j.md", "Write", repo), "deny");
+		assert.equal(edit("planner", "src/main.ts", "Write", repo), "deny");
+		assert.equal(edit("researcher", "/tmp/agent-notes/researcher/x.md", "Write", repo), "deny");
 	});
 
 	test("the reviewer and the mascot never write", () => {
 		for (const profession of ["reviewer", "mascot"]) {
 			assert.equal(edit(profession, `${home}/project-notes/x.md`), "deny", profession);
-			assert.equal(edit(profession, "/repo/src/main.ts", "Write"), "deny", profession);
+			assert.equal(edit(profession, `${repo}/src/main.ts`, "Write"), "deny", profession);
 		}
 	});
 
 	test("a zone name inside another path does not count", () => {
-		assert.equal(edit("planner", "/repo/not-agent-notes/project-notes/x.md"), "deny");
+		assert.equal(edit("planner", `${repo}/not-agent-notes/project-notes/x.md`), "deny");
+		assert.equal(edit("orchestrator", `${userHome}/not-agent-notes/x.md`, "Write", repo), "ask");
+	});
+
+	test("the widened orchestrator zone moves no other verdict", () => {
+		const expected: Record<string, string> = {
+			orchestrator: "none",
+			planner: "deny",
+			researcher: "deny",
+			implementer: "none",
+			tester: "none",
+			reviewer: "deny",
+			mascot: "deny",
+		};
+		for (const profession of PROFESSIONS) {
+			assert.equal(edit(profession, "src/main.ts", "Write", repo), expected[profession], profession);
+			assert.equal(edit(profession, `${repo}/src/main.ts`, "Edit", repo), expected[profession], profession);
+		}
 	});
 });
 
@@ -479,6 +632,15 @@ describe("doctrine: hook wiring", () => {
 
 	test("no hit prints nothing", () => {
 		assert.equal(run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git status" } }), "");
+	});
+
+	test("the orchestrator write zone follows the cwd in the hook input", () => {
+		const base = { agent_type: "persona-agents:orchestrator", tool_name: "Write" };
+		const inside = { ...base, tool_input: { file_path: "src/main.ts" }, cwd: "/home/u/repo" };
+		const outside = { ...base, tool_input: { file_path: "/home/u/elsewhere/x.md" }, cwd: "/home/u/repo" };
+		assert.equal(run(inside), "");
+		const out = JSON.parse(run(outside)) as { hookSpecificOutput: Record<string, string> };
+		assert.equal(out.hookSpecificOutput.permissionDecision, "ask");
 	});
 });
 

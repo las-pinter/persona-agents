@@ -89,8 +89,9 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
     for the orchestrator, only when every part of the command is one of those.
     An allow beside an ungated part gets no hook decision. An ask or deny part
     keeps its own verdict.
-  - An edit outside the `agent-notes/` zone of an agent asks for the
-    orchestrator, and denies the planner, researcher, reviewer, and mascot.
+  - The orchestrator holds every tool and may write the repository and the
+    whole `agent-notes/` tree; any other path asks. An edit outside its own
+    `agent-notes/` zone denies the planner, researcher, reviewer, and mascot.
   - A hook deny wins over a user allow rule.
   - It reuses the shell parser of the pi gate. It unwraps `cd x &&`,
     `sudo`, `env`, and `xargs` prefixes and `bash -c` payloads. An unreadable

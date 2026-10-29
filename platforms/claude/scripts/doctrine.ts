@@ -36,8 +36,23 @@
 //   git rebase --exec '<cmd>' runs <cmd>; its payload is not inspected.
 //   git -C / --git-dir / --work-tree to another path runs that repository's
 //   hooks and core.* config.
-//   Edit/Write/NotebookEdit outside the agent's notes zone (FILE_ZONES)
-//                     orchestrator: ask; planner, researcher, reviewer, mascot: deny
+//
+// Write zone (FILE_ZONES). Edit, Write, and NotebookEdit are allowed inside the
+// zone of the agent. The orchestrator holds every tool: its zone is the
+// repository and the whole agent-notes tree under the home folder, and any
+// other path asks. The planner, researcher, reviewer, and mascot deny every
+// path outside their own notes zone. The implementer and the tester write
+// freely.
+//
+// A zone is anchored to an absolute folder and tested with a path check, never
+// a text match: `agent-notes` in the middle of another folder is not a zone.
+// The deepest existing ancestor of the target resolves through symlinks before
+// the test, so a link inside a zone that points outside it is not inside it.
+// A path that does not resolve counts as outside. The repository zone is the
+// session `cwd`, capped: a cwd that holds the home folder allows no repository
+// path, and neither does a cwd at a system-wide folder such as `/tmp`, `/etc`,
+// `/usr`, `/var`, or `/home`. A leading `~` expands to the home folder before
+// the test.
 //
 // A shell command is split into segments by the pi gate's parser; each segment
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
@@ -53,8 +68,9 @@
 // Set PERSONA_AGENTS_DEBUG=1 to append each hook input and decision to
 // $CLAUDE_PLUGIN_DATA/doctrine.log.
 
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { appendFileSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseShellCommand } from "../../pi/extension/command-segments.ts";
 
@@ -71,6 +87,8 @@ export interface HookInput {
 	agent_type?: unknown;
 	tool_name?: unknown;
 	tool_input?: Record<string, unknown>;
+	/** The session working directory, as Claude Code sends it. */
+	cwd?: unknown;
 }
 
 /**
@@ -117,19 +135,155 @@ const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 	journal: { allow: JOURNAL_ALLOW, ask: JOURNAL_NO, deny: JOURNAL_NO },
 };
 
+interface FileZone {
+	/**
+	 * The agent-notes subtree this profession may write, relative to the
+	 * agent-notes tree under the home folder. `""` is the whole tree; null is
+	 * no notes zone.
+	 */
+	notes: string | null;
+	/** The verdict on a path outside the zones. */
+	verdict: Verdict;
+	/** True when the repository is also a write zone. */
+	repo?: boolean;
+	/** The zone names for the ask or deny reason. */
+	label: string;
+}
+
+/** The home folder: the anchor of the agent-notes zone and of a `~` path. */
+const HOME = resolve(homedir());
+/** The agent-notes tree. A write zone is this folder or a folder under it. */
+const NOTES_ROOT = join(HOME, "agent-notes");
+
 /**
  * Where each profession may write with Edit/Write/NotebookEdit. A profession
- * missing here writes freely. `verdict` applies outside the allowed zones.
+ * missing here writes freely. The orchestrator holds every tool, so its zone is
+ * the repository plus the whole agent-notes tree; any other path asks. The
+ * planner, researcher, reviewer, and mascot keep their narrow zone.
+ *
+ * The repository zone. The tool input holds a path and no working directory.
+ * The hook input holds the session `cwd`. With an absolute `cwd`, a relative
+ * path resolves against it, and the path is in the repository when it equals
+ * `cwd` or sits under it after `..` normalization. Without an absolute `cwd`, a
+ * relative path stays in the working directory (REPO_RELATIVE), and an absolute
+ * or parent-relative path cannot be placed, so it falls to the zone verdict.
  */
-const FILE_ZONES: Record<string, { zones: RegExp[]; verdict: Verdict }> = {
-	orchestrator: { zones: [/(^|\/)agent-notes\/(orchestrator|project-notes)\//], verdict: "ask" },
-	planner: { zones: [/(^|\/)agent-notes\/project-notes\//], verdict: "deny" },
-	researcher: { zones: [/(^|\/)agent-notes\/researcher\//], verdict: "deny" },
-	reviewer: { zones: [], verdict: "deny" },
-	mascot: { zones: [], verdict: "deny" },
+const FILE_ZONES: Record<string, FileZone> = {
+	orchestrator: {
+		notes: "",
+		verdict: "ask",
+		repo: true,
+		label: "outside the repository and the agent-notes tree",
+	},
+	planner: { notes: "project-notes", verdict: "deny", label: "outside its agent-notes zone" },
+	researcher: { notes: "researcher", verdict: "deny", label: "outside its agent-notes zone" },
+	reviewer: { notes: null, verdict: "deny", label: "at all" },
+	mascot: { notes: null, verdict: "deny", label: "at all" },
 };
 
 const FILE_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+
+/** A relative path that stays in the working directory: no root and no parent segment. */
+const REPO_RELATIVE = /^(?![/~])(?!\.\.(?:\/|$))(?!.*\/\.\.(?:\/|$))/;
+
+/** True when `child` is `parent` or sits under it. Both paths must be absolute. */
+function under(child: string, parent: string): boolean {
+	if (!isAbsolute(child) || !isAbsolute(parent)) return false;
+	const rest = relative(parent, child);
+	return rest === "" || (!rest.startsWith("..") && !isAbsolute(rest));
+}
+
+/** Folders that hold unrelated trees, so a repository base at one is too wide. */
+const SYSTEM_FOLDERS = new Set(["/tmp", "/etc", "/usr", "/var", "/home"]);
+
+/**
+ * The repository base of a session, or null when the cwd is too wide to be a
+ * repository: the filesystem root holds every path, a cwd that holds the home
+ * folder holds the whole agent-notes tree, and a system-wide folder holds
+ * trees that are not one repository.
+ */
+function repoBase(cwdPath: string | null): string | null {
+	if (cwdPath === null) return null;
+	if (under(HOME, cwdPath)) return null;
+	if (SYSTEM_FOLDERS.has(cwdPath)) return null;
+	return cwdPath;
+}
+
+/** True when a name exists but resolves nowhere: a dangling symlink. */
+function dangling(path: string): boolean {
+	try {
+		lstatSync(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The path with its deepest existing ancestor resolved through symlinks, or
+ * null when the path cannot be placed. A lexical test alone lets a symlink
+ * inside a zone carry the write outside the zone. A loop, a denied folder, and
+ * a dangling symlink all fail the placement.
+ */
+function canonical(path: string): string | null {
+	const tail: string[] = [];
+	let current = path;
+	for (;;) {
+		try {
+			const real = realpathSync(current);
+			return tail.length === 0 ? real : join(real, ...tail.reverse());
+		} catch (error) {
+			// Walk up only past a name that is absent; anything else is final.
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dangling(current)) return null;
+			const parent = dirname(current);
+			if (parent === current) return null;
+			tail.push(basename(current));
+			current = parent;
+		}
+	}
+}
+
+/** The target with a leading `~` or `~/` replaced by the home folder. */
+function expandHome(target: string): string {
+	if (target === "~") return HOME;
+	return target.startsWith("~/") ? join(HOME, target.slice(2)) : target;
+}
+
+/** True when the resolved path is in the notes subtree of the rule. */
+function inNotesZone(notes: string | null, path: string | null): boolean {
+	if (notes === null || path === null) return false;
+	const root = canonical(notes === "" ? NOTES_ROOT : join(NOTES_ROOT, notes));
+	return root === null ? false : under(path, root);
+}
+
+/**
+ * True when the target path is in a write zone of the rule. The path expands a
+ * leading `~`, resolves against the session `cwd` when the hook input carries
+ * one, and resolves through symlinks before the zone test.
+ */
+function inWriteZone(rule: FileZone, rawTarget: string, cwd: unknown): boolean {
+	const target = expandHome(rawTarget);
+	const cwdPath = typeof cwd === "string" && isAbsolute(cwd) ? resolve(cwd) : null;
+	const base = repoBase(cwdPath);
+	// Without a cwd a relative path cannot be placed.
+	const path = isAbsolute(target) ? resolve(target) : cwdPath === null ? null : resolve(cwdPath, target);
+	const real = path === null ? null : canonical(path);
+	// A path that does not resolve cannot be placed, so it stays outside.
+	if (path !== null && real === null) return false;
+	const realBase = base === null ? null : canonical(base);
+	if (rule.repo && target !== "") {
+		if (cwdPath === null) {
+			if (REPO_RELATIVE.test(target)) return true;
+		} else if (realBase !== null && real !== null && under(real, realBase)) return true;
+	}
+	return inNotesZone(rule.notes, real);
+}
+
+/** An ask names the approval; a deny names who may write. */
+function zoneReason(rule: FileZone, profession: string): string {
+	if (rule.verdict === "ask") return `persona-agents doctrine: a write ${rule.label} needs your approval`;
+	return `persona-agents doctrine: the ${profession} does not edit files ${rule.label}`;
+}
 
 const GIT_HISTORY = new Set(["add", "commit", "pull", "merge", "rebase", "tag"]);
 const GIT_PUBLISH = new Set(["push"]);
@@ -483,9 +637,8 @@ export function decide(input: HookInput): Decision | null {
 		const rule = FILE_ZONES[profession];
 		if (!rule) return null;
 		const target = String(toolInput.file_path ?? toolInput.notebook_path ?? "");
-		if (rule.zones.some((zone) => zone.test(target))) return null;
-		const where = rule.zones.length > 0 ? "outside its agent-notes zone" : "at all";
-		return { verdict: rule.verdict, reason: `persona-agents doctrine: the ${profession} does not edit files ${where}` };
+		if (inWriteZone(rule, target, input.cwd)) return null;
+		return { verdict: rule.verdict, reason: zoneReason(rule, profession) };
 	}
 	return null;
 }

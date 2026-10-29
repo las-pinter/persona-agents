@@ -312,19 +312,27 @@ The compositor is a clean-room re-implementation of the technique: narrow
 code was copied. The upstream package declares the MIT license, but its npm
 tarball ships no `LICENSE` file.
 
-## Editable agent-notes zones
+## Editable write zones
 
-Per the kiro/opencode templates' `edit`/`external_directory` allows, each profession may
-freely edit its own `~/agent-notes` zones (the gate allows them; everything else stays
-denied-by-default):
+Per the templates and the pi frontmatter, each profession may freely edit the
+paths in its row:
 
 | Agent | Zones (edit + write) |
 |---|---|
-| orchestrator | `agent-notes/orchestrator/**`, `agent-notes/project-notes/**` |
+| orchestrator | the repository (`agent-notes/**` included), plus an absolute path that holds an `agent-notes` segment; any other path asks |
 | planner | `agent-notes/project-notes/**` |
 | researcher | `agent-notes/researcher/**` |
 | implementer / tester | workspace files (edit/write everywhere) |
 | reviewer / mascot | none (read-only) |
+
+On pi the engine cannot resolve a path against the working directory, so the
+orchestrator rules name the path forms directly. A relative path with no parent
+segment allows: it is the repository under the session working directory. A
+path with a parent segment asks, a home-relative (`~`) path asks, and any other
+absolute path asks. One exception allows: an absolute path that holds an
+`agent-notes` segment and no parent segment, because the notes tree sits outside
+the working directory. Residual: that exception cannot be anchored to one home
+folder, so any absolute path with an `agent-notes` segment allows.
 
 ## Personas and themes
 

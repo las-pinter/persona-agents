@@ -170,7 +170,8 @@ Rules:
 ## Study Lifecycle (planner-owned, manual)
 
 No script writes these files. The planner writes them with the `write` and
-`edit` tools. The orchestrator reads them and never edits them.
+`edit` tools. The orchestrator reads them. The write policy leaves them to the
+planner.
 
 ### `status.md` format (one per study folder)
 

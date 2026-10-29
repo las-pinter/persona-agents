@@ -28,8 +28,19 @@ permissions:
     - { tool: read, match: "(^|/)agents\\.json$" }
     - { tool: read, match: "(^|/)package\\.json$" }
     - { tool: read, match: "SKILL\\.md$" }
-    - { tool: edit, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
-    - { tool: write, match: "(^|/)agent-notes/(orchestrator|project-notes)/" }
+    # The write zone is the session working directory and the whole agent-notes
+    # tree. A relative path with no parent segment stays inside the working
+    # directory. A path with a parent segment asks, and a home-relative path
+    # asks, because the engine cannot resolve either one against the working
+    # directory. It cannot resolve an absolute path either, so the agent-notes
+    # allow cannot be anchored to one home folder: the rule accepts any
+    # absolute path that holds an agent-notes segment and no parent segment,
+    # and the ask rules below cover the rest. Residual: an absolute
+    # agent-notes path outside the operator's notes tree is accepted.
+    - { tool: edit, match: "^(?![/~])(?!(?:.*/)?\\.\\.(?:/|$))(?=.)" }
+    - { tool: write, match: "^(?![/~])(?!(?:.*/)?\\.\\.(?:/|$))(?=.)" }
+    - { tool: edit, match: "^/(?!(?:.*/)?\\.\\.(?:/|$))(?:.*/)?agent-notes(?:/|$)" }
+    - { tool: write, match: "^/(?!(?:.*/)?\\.\\.(?:/|$))(?:.*/)?agent-notes(?:/|$)" }
     - { tool: subagent, match: "." }
     - { tool: ask_user_question, match: "." }
     # Read-only git verbs are allowed without a prompt: inspect refs, history,
@@ -69,6 +80,19 @@ permissions:
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+nextest(\\s|$)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+deny\\s+check(\\s|$)", reason: "cargo deny check is a read-only dependency policy gate" }
   ask:
+    # A write or an edit outside the session working directory and outside the
+    # agent-notes tree prompts the user. Each path form carries its own rule: a
+    # parent segment, a home-relative path, and any other absolute path. A path
+    # with a parent segment asks, because no agent-notes allow rule matches one,
+    # so `agent-notes/../../.bashrc` asks. An "Always allow" click covers every
+    # later match of that one rule for the rest of the session, so the split by
+    # form keeps a click narrow.
+    - { tool: edit, match: "^(?:.*/)?\\.\\.(?:/|$)", reason: "edit with a parent segment requires user approval" }
+    - { tool: edit, match: "^~", reason: "home-relative edit requires user approval" }
+    - { tool: edit, match: "^/(?!(?:.*/)?agent-notes(?:/|$))", reason: "absolute edit path outside agent-notes requires user approval" }
+    - { tool: write, match: "^(?:.*/)?\\.\\.(?:/|$)", reason: "write with a parent segment requires user approval" }
+    - { tool: write, match: "^~", reason: "home-relative write requires user approval" }
+    - { tool: write, match: "^/(?!(?:.*/)?agent-notes(?:/|$))", reason: "absolute write path outside agent-notes requires user approval" }
     # Option-based execution or file writes on an allowed read verb. These carry
     # no shell separator, so the chain guards cannot see them.
     # `git grep -O<pager>` / `--open-files-in-pager[=<pager>]` runs the pager
