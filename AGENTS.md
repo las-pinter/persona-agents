@@ -55,14 +55,24 @@ deny-by-default, because no ask entry names that form. Coverage differs per
 platform:
 
 - Claude Code allows a command only when every part of it is a plain history
-  command. A command with another part gets no hook decision, so Claude Code
-  decides.
+  command or the orchestrator's journal script call from its installed skill
+  path. The journal allow is cancelled by a leading `cd`, a wrapper, or any
+  ungated part beside it. It is also cancelled by a substitution that runs an
+  ungated command, or by a redirect that writes a file. A redirect to
+  `/dev/null` and an fd duplicate such as `2>&1` keep it. Two journal calls
+  still allow. An allow beside an ungated part gets no hook decision, so Claude
+  Code decides. An ask or deny part keeps its own verdict.
 - pi allows the six commands also with `git -C <path>`, `--no-pager`, `-p`,
-  and a leading `cd x &&`.
+  and a leading `cd x &&`. The gate derives the skill script folder from the
+  loaded skill, so the journal script call needs no template entry.
 - opencode allows only a plain `git add`, `git commit`, `git merge`, and
   `git rebase`. `git pull` and `git tag` ask, because a bare star can expand
   to a planted `--upload-pack` or `-d` file. `git -C` forms ask, because a
-  quoted space in the directory can hide a second verb.
+  quoted space in the directory can hide a second verb. Two allow entries
+  cover the two date forms, `date +%Y%m%dT%H%M%S%N` and
+  `date -u +%Y-%m-%dT%H:%M:%SZ`. One allow entry covers the journal script
+  call, six asks cover a separator after it, and one ask covers the call with
+  `--home`.
 - Kiro has no ask tier. It has three verdicts: an allow entry runs with no
   prompt, a deny entry blocks the command, and an unmatched command asks. All
   six shell templates set `autoAllowReadonly` false, so no read-only detector
@@ -79,7 +89,8 @@ platform:
   listing with a pattern argument asks. The orchestrator leaves those forms to
   ask, because its allow list does not carry them. The five role templates
   also deny the history verbs with explicit entries: add, commit, push, pull,
-  merge, and rebase.
+  merge, and rebase. The orchestrator allows the journal script call and the
+  two date forms, and denies that call when it carries `--home`.
 - On every platform, some forms still ask: tag force-move (a DENY on the five
   Kiro role templates; the Kiro orchestrator asks), `git -c` overrides
   and unknown global options, `commit --amend`, `git reset --soft`, upload-pack
@@ -99,7 +110,15 @@ platform:
   the `gh run` glob also denies a plain read that merely quotes the string.
   The opencode role templates carry three `gh run` deny forms (plain, repo
   flag, joined repo flag) in four entries, because the repo flag has a short
-  word and a long word.
+  word and a long word. On Kiro, the journal allow uses the tilde form; Kiro
+  expands the tilde for home, and one live probe has not yet confirmed the
+  command pattern form, so an expanded path asks. On Kiro, the journal deny
+  and the opencode journal ask match the text `--home` anywhere in the line,
+  so a legitimate line that carries that text asks or is denied. A journal
+  call with `--home` asks on opencode and is denied on Kiro, but pi and Claude
+  allow it. The script path check limits that call to the installed script.
+  The session stamp check and the `replace` digest check limit what it writes.
+  The opencode separator asks are journal scoped and rely on last-match-wins.
 
 Every other agent gets a DENY for `git add`, `git commit`, `git push`,
 `git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr`,

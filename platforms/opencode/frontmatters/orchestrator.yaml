@@ -77,6 +77,47 @@ permissions:
     resource: "date"
     effect: allow
   - action: shell
+    resource: "date +%Y%m%dT%H%M%S%N"
+    effect: allow
+  - action: shell
+    resource: "date -u +%Y-%m-%dT%H:%M:%SZ"
+    effect: allow
+  - action: shell
+    resource: "bash ~/.config/opencode/skills/common/journal-management-generic/scripts/journal-write.sh *"
+    effect: allow
+  # The trailing star also matches a separator tail, so a call such as
+  # `journal-write.sh append; cp x y` would match the allow. The cp, mv, and
+  # rsync asks are anchored at the command start and cannot see a tail, and an
+  # unmatched tail command (rm) has no later entry, so the allow would run it.
+  # These asks sit after the allow because the last match wins.
+  - action: shell
+    resource: "*journal-write.sh*;*"
+    effect: ask
+  - action: shell
+    resource: "*journal-write.sh*&&*"
+    effect: ask
+  - action: shell
+    resource: "*journal-write.sh*|*"
+    effect: ask
+  - action: shell
+    resource: "*journal-write.sh*&*"
+    effect: ask
+  - action: shell
+    resource: "*journal-write.sh*$(*"
+    effect: ask
+  - action: shell
+    resource: "*journal-write.sh*`*"
+    effect: ask
+  # The journal allow takes any argument, and the script honors --home, so a
+  # call could write outside the declared agent folder. The ask sits after the
+  # allow entry because the last match wins.
+  # --agent needs no ask. The value must match ^[a-z][a-z0-9-]*$. It selects a
+  # sibling journal folder only. The block must sit in that folder's incoming
+  # path and carry that agent's stamp, so orchestrator text cannot cross.
+  - action: shell
+    resource: "*journal-write.sh*--home*"
+    effect: ask
+  - action: shell
     resource: "diff"
     effect: allow
   - action: shell

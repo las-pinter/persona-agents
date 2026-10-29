@@ -85,8 +85,10 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
   `platforms/claude/scripts/doctrine.ts`, keyed on the calling agent.
   `tests/claude-doctrine.test.ts` holds the matrix. `AGENTS.md` owns the
   history and release rules. The hook also does this:
-  - It allows a plain history command only when every part of the command is
-    such a command. A command with another part gets no hook decision.
+  - It allows a plain history command, and the installed journal write script
+    for the orchestrator, only when every part of the command is one of those.
+    An allow beside an ungated part gets no hook decision. An ask or deny part
+    keeps its own verdict.
   - An edit outside the `agent-notes/` zone of an agent asks for the
     orchestrator, and denies the planner, researcher, reviewer, and mascot.
   - A hook deny wins over a user allow rule.

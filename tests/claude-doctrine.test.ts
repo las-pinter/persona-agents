@@ -6,6 +6,7 @@
  * orchestrator; git push, gh pr/release/run, the ask exceptions, and wrapped
  * forms ask for the orchestrator; all of these deny the rest;
  * cp/mv/rsync ask for the orchestrator and the implementer and deny the rest;
+ * the installed journal write script is allowed for the orchestrator;
  * edits outside an agent's notes zone ask (orchestrator) or deny (planner,
  * researcher, reviewer, mascot). Agents outside the plugin get no decision.
  *
@@ -15,6 +16,8 @@
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
@@ -476,5 +479,106 @@ describe("doctrine: hook wiring", () => {
 
 	test("no hit prints nothing", () => {
 		assert.equal(run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git status" } }), "");
+	});
+});
+
+describe("doctrine: the journal write script", () => {
+	/** The script word the plugin installs: this repository tree. */
+	const script = path.join(
+		repoRoot, "content", "skills", "common", "journal-management-generic", "scripts", "journal-write.sh",
+	);
+	const home = "/home/u";
+	const block = `${home}/agent-notes/orchestrator/journals/incoming/1.md`;
+	const append = `bash ${script} append --agent orchestrator --section persona-agents --block ${block}`;
+	const reason = (profession: string, command: string): string =>
+		decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
+
+	test("J1 an append from the installed skill path is allowed", () => {
+		assert.equal(bash("orchestrator", append), "allow");
+		assert.match(reason("orchestrator", append), /journal write script runs without a prompt/);
+	});
+
+	test("J2 check and replace are allowed", () => {
+		const check = `bash ${script} check --agent orchestrator --level weekly --name 2026-W43 --show`;
+		const replace = `bash ${script} replace --agent orchestrator --level weekly --name 2026-W43 --block ${block} --expect new`;
+		assert.equal(bash("orchestrator", check), "allow");
+		assert.equal(bash("orchestrator", replace), "allow");
+	});
+
+	test("J3 the hook process prints an allow", () => {
+		const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", doctrineScript], {
+			input: JSON.stringify({ agent_type: "persona-agents:orchestrator", tool_name: "Bash", tool_input: { command: append } }),
+			env: { ...process.env, CLAUDE_PLUGIN_ROOT: repoRoot },
+			encoding: "utf8",
+		});
+		assert.equal(result.status, 0, result.stderr);
+		const out = JSON.parse(result.stdout) as { hookSpecificOutput: Record<string, string> };
+		assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
+		assert.equal(out.hookSpecificOutput.permissionDecision, "allow");
+	});
+
+	test("J4 another path, a copy, a symlink, a relative word, and a bad subcommand get no allow", () => {
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "journal-script-"));
+		try {
+			const copyDir = path.join(tmp, "content", "skills", "common", "journal-management-generic", "scripts");
+			fs.mkdirSync(copyDir, { recursive: true });
+			fs.copyFileSync(script, path.join(copyDir, "journal-write.sh"));
+			const alias = path.join(tmp, "journal-write.sh");
+			fs.symlinkSync(script, alias);
+			const refused = [
+				"bash /tmp/journal-write.sh append",
+				`bash ${path.join(copyDir, "journal-write.sh")} append`,
+				`bash ${alias} append`,
+				`bash ${path.join(repoRoot, "install.sh")} append`,
+				"bash content/skills/common/journal-management-generic/scripts/journal-write.sh append",
+				`bash ${script}`,
+				`bash ${script} --help`,
+				`bash ${script} status`,
+			];
+			for (const command of refused) assert.equal(bash("orchestrator", command), "none", command);
+		} finally {
+			fs.rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	test("J5 a missing flag value is left to the script", () => {
+		assert.equal(bash("orchestrator", `bash ${script} append --agent`), "allow");
+	});
+
+	test("J6 a second segment cancels the allow", () => {
+		const cancelled = [
+			`bash ${script} append --block x; rm -rf y`,
+			`bash ${script} append --block x && git status`,
+			`bash ${script} append --block x | tee log`,
+			`bash ${script} append --block x $(date)`,
+			// A newline, a backtick, a process substitution, and a heredoc each lose the allow.
+			`bash ${script} append --block x\nrm -rf y`,
+			`bash ${script} append --block x \`date\``,
+			`bash ${script} append --block x <(date)`,
+			`bash ${script} append --block x <<'EOF'\nhello\nEOF`,
+			`cd /repo && ${append}`,
+		];
+		for (const command of cancelled) assert.equal(bash("orchestrator", command), "none", command);
+	});
+
+	test("J7 the other six professions stay ungated", () => {
+		for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash(profession, append), "none", profession);
+		}
+	});
+
+	test("J8 no wrapper and no redirect is ever allowed", () => {
+		const wrapped = [
+			`bash -c '${append}'`,
+			`sudo ${append}`,
+			`env ${append}`,
+			`/tmp/bash ${script} append --agent orchestrator --block x`,
+			`bash ${script} append --block x > /tmp/out`,
+		];
+		for (const command of wrapped) assert.notEqual(bash("orchestrator", command), "allow", command);
+	});
+
+	test("J9 a stronger verdict beats the allow", () => {
+		assert.equal(bash("orchestrator", `${append} && git push`), "ask");
 	});
 });

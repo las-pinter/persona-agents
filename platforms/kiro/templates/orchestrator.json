@@ -28,8 +28,11 @@
   "toolsSettings": {
     "shell": {
       "allowedCommands": [
+        "bash ~/\\.kiro/skills/common/journal-management-generic/scripts/journal-write\\.sh( +[A-Za-z0-9_./:@%+=,-]+)*",
         "cat",
         "date",
+        "date \\+%Y%m%dT%H%M%S%N",
+        "date -u \\+%Y-%m-%dT%H:%M:%SZ",
         "diff",
         "echo",
         "find",
@@ -185,7 +188,8 @@
         ".*git tag -.*d.*",
         ".*git -C .* tag -.*d.*",
         ".*cargo .*--config.*",
-        ".*cargo .*>.*"
+        ".*cargo .*>.*",
+        "bash ~/\\.kiro/skills/common/journal-management-generic/scripts/journal-write\\.sh.*--home.*"
       ],
       "autoAllowReadonly": false
     },

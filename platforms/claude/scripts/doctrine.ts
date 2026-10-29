@@ -15,9 +15,13 @@
 //   history command
 //                     orchestrator: ask; every other agent: deny
 //   cp, mv, rsync     orchestrator and implementer: ask; the rest: deny
+//   bash <plugin root>/content/skills/common/journal-management-generic/
+//   scripts/journal-write.sh <append|check|replace> ...
+//                     orchestrator: allow; every other agent: no decision
 //
 // Allow is given only when every segment of the command is a plain history
-// command. A command that mixes an allowed segment with an ungated one
+// command or the installed journal write script. A command that mixes an
+// allowed segment with an ungated one
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
 // `$(...)` or backtick substitution, an env assignment, a path to git, the
@@ -50,8 +54,8 @@
 // $CLAUDE_PLUGIN_DATA/doctrine.log.
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseShellCommand } from "../../pi/extension/command-segments.ts";
 
 const PREFIX = "persona-agents:";
@@ -74,8 +78,9 @@ export interface HookInput {
  * publish: git push, and gh pr, gh release, or gh run, also when a gh global option
  * comes first, plus every history command that is an ask exception or comes
  * wrapped (see the header).
+ * journal: the installed journal write script with its subcommand.
  */
-type Gate = "history" | "publish" | "copy";
+type Gate = "history" | "publish" | "copy" | "journal";
 /** A segment that runs a command no gate covers. */
 const UNGATED = "ungated";
 type Hit = Gate | typeof UNGATED;
@@ -85,11 +90,14 @@ const COMMAND_RULES: Record<Gate, Record<string, Verdict>> = {
 	history: { orchestrator: "allow" },
 	publish: { orchestrator: "ask" },
 	copy: { orchestrator: "ask", implementer: "ask" },
+	journal: { orchestrator: "allow" },
 };
 
 const HISTORY_DENY = "only the orchestrator writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 const PUBLISH_ASK =
 	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
+const JOURNAL_ALLOW = "the journal write script runs without a prompt for the orchestrator";
+const JOURNAL_NO = "the journal write script runs only from its installed skill path";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
@@ -104,6 +112,9 @@ const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 		ask: "cp, mv, and rsync need your approval",
 		deny: "cp, mv, and rsync are for the orchestrator and the implementer only",
 	},
+	// The classifier emits this hit for the orchestrator only, so ask and deny
+	// stay unreachable; they carry the path rule, never a git reason.
+	journal: { allow: JOURNAL_ALLOW, ask: JOURNAL_NO, deny: JOURNAL_NO },
 };
 
 /**
@@ -168,6 +179,19 @@ const SAFE_HEREDOC_HEADER = new RegExp(
 );
 
 const MAX_UNWRAP_DEPTH = 4;
+
+/**
+ * The journal write script as this plugin installs it. The plugin cache folder
+ * carries the version, so the path comes from this script's own location and
+ * never from a fixed path or an environment variable. A symlink alias, a copy
+ * outside the tree, and a relative word all resolve elsewhere and match nothing.
+ */
+const JOURNAL_SCRIPT = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"..", "..", "..",
+	"content", "skills", "common", "journal-management-generic", "scripts", "journal-write.sh",
+);
+const JOURNAL_SUBCOMMANDS = new Set(["append", "check", "replace"]);
 
 /** Split one segment into shell words, removing quotes. */
 export function shellWords(segment: string): string[] {
@@ -262,7 +286,7 @@ function hasSubstitution(command: string): boolean {
 }
 
 /** The hits of one parsed segment, unwrapping prefixes and `sh -c` payloads. */
-function segmentGates(segment: string, depth: number): Hit[] {
+function segmentGates(segment: string, profession: string, depth: number): Hit[] {
 	// A subshell or group keeps its brackets in the segment: `(git push)`.
 	const trimmed = segment.trim();
 	const inner = trimmed.replace(/^[({]\s*/, "").replace(/\s*[)}]$/, "");
@@ -301,15 +325,33 @@ function segmentGates(segment: string, depth: number): Hit[] {
 		}
 		if (SHELLS.has(command)) {
 			const flag = words.findIndex((word) => /^-[a-z]*c[a-z]*$/.test(word));
-			if (flag < 0 || flag + 1 >= words.length) return [UNGATED];
+			if (flag < 0 || flag + 1 >= words.length) {
+				// A plain `bash <installed journal script> <subcommand> ...`.
+				if (!wrapped && !runtimeShaped(inner) && isJournalWords(words, profession)) {
+					return ["journal", ...extra];
+				}
+				return [UNGATED];
+			}
 			// Never allow through a shell: the payload's history hits ask.
-			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "copy"] as Hit[]) : raise(commandGates(words[flag + 1], depth + 1));
-			return [...hits, ...extra];
+			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "copy"] as Hit[]) : raise(commandGates(words[flag + 1], profession, depth + 1));
+			// A payload that is only the journal call is downgraded: never allow through a shell.
+			return [...hits.map((hit) => (hit === "journal" ? UNGATED : hit)), ...extra];
 		}
 		let hits = classify(command, words.slice(1));
 		if (wrapped || (hits.includes("history") && runtimeShaped(inner))) hits = raise(hits);
 		return [...hits, ...extra];
 	}
+}
+
+/**
+ * True only for `bash <installed script> <append|check|replace> ...` run by the
+ * orchestrator. The hook checks the path and the subcommand; the script owns
+ * every flag value and exits 1 or 2 with no write.
+ */
+function isJournalWords(words: string[], profession: string): boolean {
+	return profession === "orchestrator" && words.length >= 3 && words[0] === "bash" &&
+		isAbsolute(words[1]) && resolve(words[1]) === JOURNAL_SCRIPT &&
+		JOURNAL_SUBCOMMANDS.has(words[2]);
 }
 
 /** True when `arg` is `long` or an abbreviation of it git accepts (`--amen`). */
@@ -372,11 +414,11 @@ function classify(command: string, args: string[]): Hit[] {
 }
 
 /** Every hit a whole shell command makes. */
-function commandGates(command: string, depth = 0): Hit[] {
+function commandGates(command: string, profession: string, depth = 0): Hit[] {
 	const parsed = parseShellCommand(command);
 	if (parsed.unsupported) {
 		const header = safeHeredocHeader(command);
-		if (header !== null) return commandGates(header, depth);
+		if (header !== null) return commandGates(header, profession, depth);
 		// Fail closed: an unreadable command that names a gated program is a
 		// hit, and never an allow.
 		const gates = new Set<Hit>();
@@ -385,7 +427,7 @@ function commandGates(command: string, depth = 0): Hit[] {
 		}
 		return [...gates];
 	}
-	const hits = [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, depth)))];
+	const hits = [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, profession, depth)))];
 	// A history command inside a substitution never runs without a prompt.
 	return hasSubstitution(command) ? raise(hits) : hits;
 }
@@ -422,7 +464,7 @@ export function decide(input: HookInput): Decision | null {
 
 	if (tool === "Bash") {
 		const command = typeof toolInput.command === "string" ? toolInput.command : "";
-		const hits = commandGates(command);
+		const hits = commandGates(command, profession);
 		const decisions = hits
 			.filter((hit): hit is Gate => hit !== UNGATED)
 			.map((gate) => {
