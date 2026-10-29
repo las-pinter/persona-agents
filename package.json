@@ -13,7 +13,7 @@
   "scripts": {
     "lint": "shellcheck install.sh",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test \"platforms/pi/extension/*.test.ts\" \"tests/*.test.ts\"",
+    "test": "node --experimental-strip-types --test --test-reporter=dot --test-reporter-destination=stdout --test-reporter=spec --test-reporter-destination=/tmp/persona-agents-test.log \"platforms/pi/extension/*.test.ts\" \"tests/*.test.ts\"",
     "test:permissions": "node --experimental-strip-types --test platforms/pi/extension/command-segments.test.ts"
   },
   "peerDependencies": {
