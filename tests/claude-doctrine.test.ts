@@ -7,14 +7,15 @@
  * forms ask for the orchestrator; all of these deny the rest;
  * cp/mv/rsync ask for the orchestrator and the implementer and deny the rest;
  * the installed journal write script is allowed for the orchestrator;
- * the orchestrator writes anywhere in the repository and anywhere in the
- * agent-notes tree under the home folder, and asks on every other path; the
- * planner, researcher, reviewer, and mascot deny an edit outside their own
- * zone. The agent-notes zone is anchored to the home folder, and a leading `~`
+ * the orchestrator writes anywhere in the repository, anywhere in the
+ * agent-notes tree under the home folder, and anywhere in the shared temporary
+ * folder, and asks on every other path; the planner, researcher, reviewer, and
+ * mascot deny an edit outside their own zone, the temporary folder included.
+ * The agent-notes zone is anchored to the home folder, and a leading `~`
  * expands to it. A cwd places no repository when it holds the home folder or
  * sits at a system-wide folder such as `/tmp`. A path resolves through its
- * deepest existing ancestor, so a symlink that leaves a zone asks.
- * Agents outside the plugin get no decision.
+ * deepest existing ancestor before a parent segment folds, so a symlink that
+ * leaves a zone asks. Agents outside the plugin get no decision.
  *
  * Run: node --experimental-strip-types --test tests/claude-doctrine.test.ts
  */
@@ -448,7 +449,76 @@ describe("doctrine: file writes", () => {
 		assert.equal(edit("orchestrator", "~/agent-notes/planner/x.md", "Write"), "none");
 	});
 
-	test("the orchestrator asks on a path outside the repository and the notes", () => {
+	test("the orchestrator writes anywhere in the temporary folder", () => {
+		for (const tool of ["Edit", "Write", "NotebookEdit"]) {
+			assert.equal(edit("orchestrator", "/tmp", tool, repo), "none", tool);
+			assert.equal(edit("orchestrator", "/tmp/a.txt", tool, repo), "none", tool);
+			assert.equal(edit("orchestrator", "/tmp/a/b/c.txt", tool, repo), "none", tool);
+		}
+	});
+
+	test("a temp path that is not under /tmp asks", () => {
+		for (const target of ["/tmpfoo", "/tmp2/x", "/etc/tmp", "/alphabet/tmp", "/tmp/../etc/passwd", "/tmp/../tmpfoo/x"]) {
+			assert.equal(edit("orchestrator", target, "Write", repo), "ask", target);
+			assert.equal(edit("orchestrator", target, "Edit", repo), "ask", target);
+		}
+	});
+
+	test("a symlink under /tmp that leaves /tmp asks", (t) => {
+		let base = "";
+		try {
+			base = fs.mkdtempSync("/tmp/doctrine-temp-");
+		} catch {
+			t.skip("/tmp is not writable in this environment");
+			return;
+		}
+		try {
+			// The link sits inside /tmp and resolves to a folder outside it.
+			fs.symlinkSync("/etc", path.join(base, "link"));
+			assert.equal(edit("orchestrator", path.join(base, "link", "passwd"), "Edit", repo), "ask");
+			assert.equal(edit("orchestrator", path.join(base, "link", "x.md"), "Write", repo), "ask");
+			// A plain path in the same folder still writes freely.
+			assert.equal(edit("orchestrator", path.join(base, "x.md"), "Write", repo), "none");
+		} finally {
+			fs.rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	test("a parent segment after a link does not escape the temporary zone", (t) => {
+		let base = "";
+		try {
+			// The escape case runs only where the system temporary folder resolves
+			// to /tmp, so the fixture must sit under it.
+			if (fs.realpathSync(os.tmpdir()) !== "/tmp") {
+				t.skip("the system temporary folder is not /tmp");
+				return;
+			}
+			base = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-link-"));
+		} catch {
+			t.skip("the system temporary folder is not writable in this environment");
+			return;
+		}
+		try {
+			// The link sits in /tmp and resolves outside it. The kernel follows the
+			// link, then folds the parent segment, so this target writes at /x. A
+			// fold of the parent segment first would say /tmp/x and pass.
+			fs.symlinkSync("/etc", path.join(base, "link"));
+			assert.equal(edit("orchestrator", `${base}/link/../x.md`, "Write", repo), "ask");
+			assert.equal(edit("orchestrator", `${base}/link/../x.md`, "Edit", repo), "ask");
+			// A parent segment that stays in /tmp still writes freely.
+			fs.mkdirSync(path.join(base, "sub"));
+			assert.equal(edit("orchestrator", `${base}/sub/../y.md`, "Write", repo), "none");
+			// A link that resolves inside /tmp keeps the parent fold inside it.
+			fs.mkdirSync(path.join(base, "inner"));
+			fs.symlinkSync(path.join(base, "inner"), path.join(base, "inside"));
+			assert.equal(edit("orchestrator", `${base}/inside/../z.md`, "Write", repo), "none");
+			assert.equal(edit("orchestrator", `${base}/plain.md`, "Write", repo), "none");
+		} finally {
+			fs.rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	test("the orchestrator asks on a path outside the repository, the notes, and the temporary folder", () => {
 		assert.equal(edit("orchestrator", "/etc/passwd", "Write", repo), "ask");
 		assert.equal(edit("orchestrator", `${repo}/../etc/passwd`, "Write", repo), "ask");
 		assert.equal(edit("orchestrator", "../other/x.md", "Write", repo), "ask");
@@ -457,7 +527,10 @@ describe("doctrine: file writes", () => {
 		assert.equal(edit("orchestrator", `${repo}/src/main.ts`, "Write"), "ask");
 		// An empty path is not a repository path.
 		assert.equal(edit("orchestrator", "", "Write"), "ask");
-		assert.match(reason("orchestrator", "/etc/passwd", repo), /outside the repository and the agent-notes tree/);
+		assert.match(
+			reason("orchestrator", "/etc/passwd", repo),
+			/outside the repository, the agent-notes tree, and the temporary folder/,
+		);
 	});
 
 	test("an ask reason names the approval, not a capability limit", () => {
@@ -470,9 +543,10 @@ describe("doctrine: file writes", () => {
 		// A parent segment after agent-notes leaves the tree.
 		assert.equal(edit("orchestrator", `${home}/../etc/passwd`, "Write", repo), "ask");
 		assert.equal(edit("orchestrator", `${home}/orchestrator/../../etc/passwd`, "Write"), "ask");
-		// agent-notes in another folder is not the tree.
-		assert.equal(edit("orchestrator", "/tmp/agent-notes/x", "Write", repo), "ask");
-		assert.equal(edit("orchestrator", "/tmp/agent-notes/orchestrator/j.md", "Edit", repo), "ask");
+		// agent-notes in another folder is not the tree; the /tmp path writes
+		// through the temporary folder zone, not through this one.
+		assert.equal(edit("orchestrator", "/tmp/agent-notes/x", "Write", repo), "none");
+		assert.equal(edit("orchestrator", "/tmp/agent-notes/orchestrator/j.md", "Edit", repo), "none");
 		// agent-notes as a middle segment of another folder.
 		assert.equal(edit("orchestrator", `${userHome}/x/agent-notes/y.md`, "Write", repo), "ask");
 		assert.equal(edit("orchestrator", "/var/lib/agent-notes/project-notes/x.md", "Write", repo), "ask");
@@ -497,29 +571,45 @@ describe("doctrine: file writes", () => {
 		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", "/"), "ask");
 	});
 
-	test("a cwd that holds the home folder or a system folder places no repository path", () => {
+	test("a cwd that holds the home folder places no repository path", () => {
 		const homeParent = path.dirname(userHome);
-		for (const cwd of [homeParent, "/tmp"]) {
-			assert.equal(edit("orchestrator", "src/main.ts", "Write", cwd), "ask", cwd);
-			assert.equal(edit("orchestrator", path.join(cwd, "repo/src/main.ts"), "Write", cwd), "ask", cwd);
-			// The home parent holds the notes tree, so a notes path is not free either.
-			assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", cwd), "ask", cwd);
-		}
+		assert.equal(edit("orchestrator", "src/main.ts", "Write", homeParent), "ask");
+		assert.equal(edit("orchestrator", path.join(homeParent, "repo/src/main.ts"), "Write", homeParent), "ask");
+		// The home parent holds the notes tree, so a notes path is not free either.
+		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", homeParent), "ask");
+	});
+
+	test("a cwd of /tmp places no repository path but writes in the temp zone", () => {
+		// These paths write through the temporary zone. A system-wide folder
+		// places no repository base, but both zones give the same verdict here,
+		// so this test does not separate the two zones.
+		assert.equal(edit("orchestrator", "src/main.ts", "Write", "/tmp"), "none");
+		assert.equal(edit("orchestrator", "/tmp/repo/src/main.ts", "Write", "/tmp"), "none");
+		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", "/tmp"), "none");
+		// A path that leaves /tmp still asks.
+		assert.equal(edit("orchestrator", "../etc/passwd", "Write", "/tmp"), "ask");
+		// A system folder other than /tmp gives no zone, so a path under it asks.
+		assert.equal(edit("orchestrator", "/etc/repo/x.md", "Write", "/etc"), "ask");
+		assert.equal(edit("orchestrator", "/usr/x.md", "Write", "/usr"), "ask");
+	});
+
+	test("an empty path with a cwd of the temporary folder asks", () => {
+		assert.equal(edit("orchestrator", "", "Write", "/tmp"), "ask");
 	});
 
 	test("a symlink that leaves the zone asks", () => {
 		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-zone-"));
 		try {
 			const repoDir = path.join(tmp, "repo");
-			const outside = path.join(tmp, "outside");
 			fs.mkdirSync(repoDir);
-			fs.mkdirSync(outside);
-			fs.symlinkSync(outside, path.join(repoDir, "link"));
-			fs.symlinkSync(path.join(outside, "new.md"), path.join(repoDir, "dangling"));
+			// The base sits in /tmp, so the link must leave /tmp as well as the
+			// repository to leave the zone of the session.
+			fs.symlinkSync("/etc", path.join(repoDir, "link"));
+			fs.symlinkSync("/etc/new.md", path.join(repoDir, "dangling"));
 			// The link sits inside the repository but resolves outside it.
 			assert.equal(edit("orchestrator", path.join(repoDir, "link", "x.md"), "Write", repoDir), "ask");
 			assert.equal(edit("orchestrator", "link/x.md", "Edit", repoDir), "ask");
-			// A link that resolves to nothing cannot be placed.
+			// A link that resolves to a missing path outside the zone still asks.
 			assert.equal(edit("orchestrator", "dangling", "Write", repoDir), "ask");
 			// A real path in the repository still writes freely.
 			assert.equal(edit("orchestrator", path.join(repoDir, "x.md"), "Write", repoDir), "none");
@@ -558,6 +648,13 @@ describe("doctrine: file writes", () => {
 		for (const profession of ["reviewer", "mascot"]) {
 			assert.equal(edit(profession, `${home}/project-notes/x.md`), "deny", profession);
 			assert.equal(edit(profession, `${repo}/src/main.ts`, "Write"), "deny", profession);
+		}
+	});
+
+	test("the planner, researcher, reviewer, and mascot deny a temp path", () => {
+		for (const profession of ["planner", "researcher", "reviewer", "mascot"]) {
+			assert.equal(edit(profession, "/tmp/x.md", "Write", repo), "deny", profession);
+			assert.equal(edit(profession, "/tmp/a/b/c.txt", "Edit", repo), "deny", profession);
 		}
 	});
 

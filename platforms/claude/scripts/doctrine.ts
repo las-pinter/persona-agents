@@ -39,20 +39,20 @@
 //
 // Write zone (FILE_ZONES). Edit, Write, and NotebookEdit are allowed inside the
 // zone of the agent. The orchestrator holds every tool: its zone is the
-// repository and the whole agent-notes tree under the home folder, and any
-// other path asks. The planner, researcher, reviewer, and mascot deny every
-// path outside their own notes zone. The implementer and the tester write
-// freely.
+// repository, the whole agent-notes tree under the home folder, and the shared
+// temporary folder; any other path asks. The planner, researcher, reviewer, and
+// mascot deny every path outside their own notes zone, the temporary folder
+// included. The implementer and the tester write freely.
 //
 // A zone is anchored to an absolute folder and tested with a path check, never
 // a text match: `agent-notes` in the middle of another folder is not a zone.
-// The deepest existing ancestor of the target resolves through symlinks before
-// the test, so a link inside a zone that points outside it is not inside it.
-// A path that does not resolve counts as outside. The repository zone is the
-// session `cwd`, capped: a cwd that holds the home folder allows no repository
-// path, and neither does a cwd at a system-wide folder such as `/tmp`, `/etc`,
-// `/usr`, `/var`, or `/home`. A leading `~` expands to the home folder before
-// the test.
+// The links resolve before a parent segment folds, as the kernel resolves them,
+// so a target that walks through a link and then carries `..` lands where the
+// write lands. A path that does not resolve counts as outside. The repository
+// zone is the session `cwd`, capped: a cwd that holds the home folder allows no
+// repository path, and neither does a cwd at a system-wide folder such as
+// `/tmp`, `/etc`, `/usr`, `/var`, or `/home`. A leading `~` expands to the home
+// folder before the test.
 //
 // A shell command is split into segments by the pi gate's parser; each segment
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
@@ -146,6 +146,8 @@ interface FileZone {
 	verdict: Verdict;
 	/** True when the repository is also a write zone. */
 	repo?: boolean;
+	/** True when the shared temporary folder is also a write zone. */
+	temp?: boolean;
 	/** The zone names for the ask or deny reason. */
 	label: string;
 }
@@ -154,12 +156,18 @@ interface FileZone {
 const HOME = resolve(homedir());
 /** The agent-notes tree. A write zone is this folder or a folder under it. */
 const NOTES_ROOT = join(HOME, "agent-notes");
+/**
+ * The shared temporary folder. One literal, two meanings: a repository base
+ * here is too wide to be a repository, and a zone with `temp` may write here.
+ */
+const TEMP_ROOT = "/tmp";
 
 /**
  * Where each profession may write with Edit/Write/NotebookEdit. A profession
  * missing here writes freely. The orchestrator holds every tool, so its zone is
- * the repository plus the whole agent-notes tree; any other path asks. The
- * planner, researcher, reviewer, and mascot keep their narrow zone.
+ * the repository, the whole agent-notes tree, and the shared temporary folder;
+ * any other path asks. The planner, researcher, reviewer, and mascot keep their
+ * narrow zone, so the temporary folder denies them.
  *
  * The repository zone. The tool input holds a path and no working directory.
  * The hook input holds the session `cwd`. With an absolute `cwd`, a relative
@@ -173,7 +181,8 @@ const FILE_ZONES: Record<string, FileZone> = {
 		notes: "",
 		verdict: "ask",
 		repo: true,
-		label: "outside the repository and the agent-notes tree",
+		temp: true,
+		label: "outside the repository, the agent-notes tree, and the temporary folder",
 	},
 	planner: { notes: "project-notes", verdict: "deny", label: "outside its agent-notes zone" },
 	researcher: { notes: "researcher", verdict: "deny", label: "outside its agent-notes zone" },
@@ -193,8 +202,11 @@ function under(child: string, parent: string): boolean {
 	return rest === "" || (!rest.startsWith("..") && !isAbsolute(rest));
 }
 
-/** Folders that hold unrelated trees, so a repository base at one is too wide. */
-const SYSTEM_FOLDERS = new Set(["/tmp", "/etc", "/usr", "/var", "/home"]);
+/**
+ * Folders that hold unrelated trees, so a repository base at one is too wide.
+ * The temporary folder is named once, in TEMP_ROOT, for both meanings.
+ */
+const SYSTEM_FOLDERS = new Set([TEMP_ROOT, "/etc", "/usr", "/var", "/home"]);
 
 /**
  * The repository base of a session, or null when the cwd is too wide to be a
@@ -220,27 +232,42 @@ function dangling(path: string): boolean {
 }
 
 /**
- * The path with its deepest existing ancestor resolved through symlinks, or
- * null when the path cannot be placed. A lexical test alone lets a symlink
- * inside a zone carry the write outside the zone. A loop, a denied folder, and
- * a dangling symlink all fail the placement.
+ * The real path of `path`, or null when the path cannot be placed. A relative
+ * path joins onto the session `cwd`; the join keeps every segment, so no parent
+ * segment folds first. The segments resolve in order: every segment that exists
+ * resolves through symlinks, and a parent segment folds against that real path,
+ * as the kernel folds it. Only the absent rest joins onto the last real folder.
+ * A lexical test alone lets a symlink inside a zone carry the write outside the
+ * zone. A loop, a denied folder, and a dangling symlink all fail the placement.
  */
-function canonical(path: string): string | null {
+function resolvedPath(path: string, cwdPath: string | null = null): string | null {
+	const full = isAbsolute(path) ? path : cwdPath === null ? null : `${cwdPath.replace(/\/+$/, "")}/${path}`;
+	if (full === null) return null;
+	let resolved = "/";
+	/** The segments after the last folder that exists. None of them is `..`. */
 	const tail: string[] = [];
-	let current = path;
-	for (;;) {
+	for (const segment of full.split("/")) {
+		if (segment === "" || segment === ".") continue;
+		if (segment === "..") {
+			// A parent segment folds against a real path, or against an absent name.
+			if (tail.length > 0) tail.pop();
+			else resolved = dirname(resolved);
+			continue;
+		}
+		if (tail.length > 0) {
+			tail.push(segment);
+			continue;
+		}
+		const candidate = join(resolved, segment);
 		try {
-			const real = realpathSync(current);
-			return tail.length === 0 ? real : join(real, ...tail.reverse());
+			resolved = realpathSync(candidate);
 		} catch (error) {
-			// Walk up only past a name that is absent; anything else is final.
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dangling(current)) return null;
-			const parent = dirname(current);
-			if (parent === current) return null;
-			tail.push(basename(current));
-			current = parent;
+			// Only an absent name starts the tail; anything else is final.
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dangling(candidate)) return null;
+			tail.push(segment);
 		}
 	}
+	return tail.length === 0 ? resolved : join(resolved, ...tail);
 }
 
 /** The target with a leading `~` or `~/` replaced by the home folder. */
@@ -252,29 +279,37 @@ function expandHome(target: string): string {
 /** True when the resolved path is in the notes subtree of the rule. */
 function inNotesZone(notes: string | null, path: string | null): boolean {
 	if (notes === null || path === null) return false;
-	const root = canonical(notes === "" ? NOTES_ROOT : join(NOTES_ROOT, notes));
+	const root = resolvedPath(notes === "" ? NOTES_ROOT : join(NOTES_ROOT, notes));
 	return root === null ? false : under(path, root);
 }
 
 /**
  * True when the target path is in a write zone of the rule. The path expands a
- * leading `~`, resolves against the session `cwd` when the hook input carries
- * one, and resolves through symlinks before the zone test.
+ * leading `~`, joins onto the session `cwd` when the hook input carries one,
+ * and resolves through symlinks before the zone test. Every zone uses
+ * `resolvedPath`, so the repository zone, the notes zone, and the temporary
+ * zone all resolve the links before a parent segment folds.
  */
 function inWriteZone(rule: FileZone, rawTarget: string, cwd: unknown): boolean {
 	const target = expandHome(rawTarget);
 	const cwdPath = typeof cwd === "string" && isAbsolute(cwd) ? resolve(cwd) : null;
 	const base = repoBase(cwdPath);
 	// Without a cwd a relative path cannot be placed.
-	const path = isAbsolute(target) ? resolve(target) : cwdPath === null ? null : resolve(cwdPath, target);
-	const real = path === null ? null : canonical(path);
+	const placeable = isAbsolute(target) || cwdPath !== null;
+	const real = placeable ? resolvedPath(target, cwdPath) : null;
 	// A path that does not resolve cannot be placed, so it stays outside.
-	if (path !== null && real === null) return false;
-	const realBase = base === null ? null : canonical(base);
+	if (placeable && real === null) return false;
+	const realBase = base === null ? null : resolvedPath(base);
 	if (rule.repo && target !== "") {
 		if (cwdPath === null) {
 			if (REPO_RELATIVE.test(target)) return true;
 		} else if (realBase !== null && real !== null && under(real, realBase)) return true;
+	}
+	// The temporary folder resolves through symlinks, so a link under it that
+	// points outside it is not inside it. An empty target is not a temporary path.
+	if (rule.temp && target !== "" && real !== null) {
+		const realTemp = resolvedPath(TEMP_ROOT);
+		if (realTemp !== null && under(real, realTemp)) return true;
 	}
 	return inNotesZone(rule.notes, real);
 }
