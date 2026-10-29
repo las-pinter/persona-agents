@@ -1,19 +1,22 @@
 /**
  * Permission regression harness for the pi orchestrator write zone.
  *
- * The orchestrator may write the repository and the agent-notes tree. Every
- * other path asks. The gate cannot resolve a path against the working
- * directory, so the rules name the path forms directly:
+ * The orchestrator may write the repository, the agent-notes tree, and the
+ * /tmp zone. Every other path asks. The gate cannot resolve a path against the
+ * working directory, so the rules name the path forms directly:
  *
  *   - a relative path with no parent segment allows;
  *   - a path with a parent segment asks, with no exception;
  *   - an absolute path that holds an agent-notes segment and no parent segment
  *     allows;
+ *   - an absolute path in the /tmp zone allows;
  *   - a home-relative path asks;
  *   - any other absolute path asks.
  *
  * Residual: the agent-notes allow cannot be anchored to one home folder, so
  * any absolute path with an agent-notes segment and no parent segment allows.
+ * A symlink planted in the /tmp zone points outside it, because the gate does
+ * not resolve a link.
  */
 
 import { describe, test } from "node:test";
@@ -71,6 +74,15 @@ describe("pi orchestrator write zone", () => {
 			], "allow");
 		});
 
+		test(`${tool}: the /tmp zone allows`, () => {
+			assertEach("orchestrator", tool, ["/tmp", "/tmp/a.txt", "/tmp/a/b/c.txt", "/tmp/agent-notes/x"], "allow");
+		});
+
+		test(`${tool}: a relative tmp path allows`, () => {
+			// These allow by the relative-path rule, not the /tmp zone rule.
+			assertEach("orchestrator", tool, ["tmp/x", "tmp/x/y.md"], "allow");
+		});
+
 		test(`${tool}: any parent segment asks`, () => {
 			assertEach("orchestrator", tool, [
 				"agent-notes/../../x",
@@ -84,6 +96,7 @@ describe("pi orchestrator write zone", () => {
 				"/home/dev/agent-notes/../x",
 				"/home/dev/../.bashrc",
 				"/tmp/agent-notes/../x",
+				"/tmp/../etc/passwd",
 			], "ask");
 		});
 
@@ -97,10 +110,15 @@ describe("pi orchestrator write zone", () => {
 
 		test(`${tool}: any other absolute path asks`, () => {
 			assertEach("orchestrator", tool, [
-				"/tmp/x",
 				"/etc/passwd",
 				"/home/dev/.bashrc",
 				"/srv/notes/agent-notes.md",
+				"/tmpfoo",
+				"/tmp2/x",
+				"/tmpdir",
+				"/TMPDIR/x",
+				"/etc/tmp",
+				"/alphabet/tmp",
 			], "ask");
 		});
 	}
