@@ -208,8 +208,11 @@ describe("pi orchestrator: plain history commands allow", () => {
 		}
 	});
 
-	test("a chain with an ungated segment does not allow", () => {
-		assert.equal(verdict("orchestrator", "git add . && npm test"), "default");
+	test("a chain with a blocked npm form does not allow", () => {
+		// `npm test -- --watch` sits one token from the allowed `npm test`, so the
+		// chain proves the allow anchor holds inside a chain.
+		assert.equal(verdict("orchestrator", "git add . && npm test"), "allow");
+		assert.equal(verdict("orchestrator", "git add . && npm test -- --watch"), "default");
 	});
 });
 

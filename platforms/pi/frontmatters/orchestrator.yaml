@@ -79,6 +79,18 @@ permissions:
     # The implementer, the tester, the reviewer, and the orchestrator may run these Rust verification commands.
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+nextest(\\s|$)" }
     - { tool: bash, match: "^(?:cd\\s+\\S+\\s*&&\\s*)?cargo\\s+deny\\s+check(\\s|$)", reason: "cargo deny check is a read-only dependency policy gate" }
+    # The orchestrator verifies its own work. Each script is named on its own: a
+    # bare `npm`, a wildcard `npm run *`, a sibling script, `npm install`, and
+    # `npm publish` match no entry. The rule stops at the script word, so a
+    # trailing argument falls to the default verdict instead of riding on the
+    # allow. The rule carries no `cd` prefix: a leading `cd` would run the
+    # package.json of any directory, and the gate folds `cd x ; npm test` into
+    # the same `cd x && npm test` form, so the three scripts run in the session
+    # working directory only. Accepted risk: `npm test` runs the test script
+    # globs, and the orchestrator can write the test files under them, so the
+    # run is self-graded; CI reruns the same suite, and the install step is the
+    # barrier.
+    - { tool: bash, match: "^npm\\s+(?:test|run\\s+(?:typecheck|lint))\\s*$" }
   ask:
     # A write or an edit outside the session working directory and outside the
     # agent-notes tree prompts the user. Each path form carries its own rule: a

@@ -98,7 +98,10 @@ platform:
   brace, bracket, and extglob words. On Claude Code and pi, star and question
   mark words also ask. Tag delete is a DENY on pi, opencode, and Kiro, and
   an ASK on Claude Code.
-- Accepted risks: `rebase --exec` and `rebase -i` are allowed. On Claude Code
+- Accepted risks: `rebase --exec` and `rebase -i` are allowed. On pi, the
+  orchestrator may run the three verification scripts, and the test script
+  covers test files it can write, so a self-graded run is possible; CI reruns
+  the same suite, and the install step is the barrier. On Claude Code
   and pi, `git -C` to another repository is allowed, and the hooks and config
   of that repository run. On opencode, a bare star or question mark in an
   allowed command can expand to an option name from a planted file. On Claude
