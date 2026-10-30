@@ -38,6 +38,10 @@
         "find",
         "gh --version",
         "gh auth status",
+        "git add",
+        "git add [^;&|$`<>\\n\\r]+",
+        "git commit",
+        "git commit [^;&|$`<>\\n\\r]+",
         "git cat-file",
         "git diff",
         "git log",
@@ -187,6 +191,7 @@
         ".*\\|git -C .* tag --delete.*",
         ".*git tag -.*d.*",
         ".*git -C .* tag -.*d.*",
+        "git commit.*--am.*",
         ".*cargo .*--config.*",
         ".*cargo .*>.*",
         "bash ~/\\.kiro/skills/common/journal-management-generic/scripts/journal-write\\.sh.*--home.*"
