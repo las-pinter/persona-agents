@@ -61,14 +61,15 @@ tiers:
 - A read command a role needs is in `allowedCommands`, so it runs with no
   prompt. The five role templates allow the branch, tag, and remote listings,
   the git read verbs, and the plain system reads. A write that no deny names
-  is absent from the allow list, so Kiro asks before it runs.
-- A gated history or release command stays out of `allowedCommands`, so Kiro
-  asks. `AGENTS.md` names these commands. A gated command in
-  `allowedCommands` is a bug. A tag command that creates or moves a tag is
-  unlisted on the orchestrator and denied on the five role templates. The
-  allow list carries the list forms: the bare tag command, `-l`, `--list`,
-  `-v`, `--contains`, `--merged`, and `--points-at`. A tag listing with a
-  pattern argument stays out, so it asks.
+  stays out of a role allow list, so Kiro asks before it runs.
+- A gated history or release command stays out of the `allowedCommands` of
+  the five role templates, so Kiro asks. `AGENTS.md` names these commands. A
+  gated command in a role template allow list is a bug. The orchestrator
+  template is the one exception, and `AGENTS.md` owns that rule. A tag command
+  that creates or moves a tag is denied on the five role templates. The allow
+  list carries the list forms: the bare tag command, `-l`, `--list`, `-v`,
+  `--contains`, `--merged`, and `--points-at`. A tag listing with a pattern
+  argument stays out, so it asks.
 - A destructive command stays in `deniedCommands`, so Kiro denies it. The
   verdict comes from `AGENTS.md`.
 - A tool that is absent from `allowedTools` stays available, so it defaults to

@@ -36,6 +36,16 @@ The effect is `allow`, `ask`, or `deny`. Known actions are `read`, `glob`,
 to `subagent`, `write` to `edit`, and `code` to `execute`. It dropped
 `todowrite`.
 
+### Write zones
+
+The orchestrator, the implementer, and the tester carry a temporary-folder
+zone. A temporary-folder path is outside the working directory, so the
+`external_directory` action and the `edit` action both decide it. The zone
+holds the bare `/tmp` folder, a single-star form, and a doubled-star form, for
+each action. Residual: a rule here matches the resource text only. OpenCode
+does not resolve a symbolic link, so a link planted in `/tmp` can reach a path
+outside the zone. The owner accepted this risk.
+
 ## Permission mapping (Kiro to OpenCode)
 
 | Kiro concept | OpenCode equivalent |

@@ -319,7 +319,7 @@ paths in its row:
 
 | Agent | Zones (edit + write) |
 |---|---|
-| orchestrator | the repository (`agent-notes/**` included), plus an absolute path that holds an `agent-notes` segment; any other path asks |
+| orchestrator | the repository (`agent-notes/**` included), plus the two exceptions that the paragraph below names; any other path asks |
 | planner | `agent-notes/project-notes/**` |
 | researcher | `agent-notes/researcher/**` |
 | implementer / tester | workspace files (edit/write everywhere) |
@@ -329,10 +329,16 @@ On pi the engine cannot resolve a path against the working directory, so the
 orchestrator rules name the path forms directly. A relative path with no parent
 segment allows: it is the repository under the session working directory. A
 path with a parent segment asks, a home-relative (`~`) path asks, and any other
-absolute path asks. One exception allows: an absolute path that holds an
-`agent-notes` segment and no parent segment, because the notes tree sits outside
-the working directory. Residual: that exception cannot be anchored to one home
-folder, so any absolute path with an `agent-notes` segment allows.
+absolute path asks. Two exceptions allow. The first is an absolute path that
+holds an `agent-notes` segment and no parent segment, because the notes tree
+sits outside the working directory. The second is `/tmp` and every path under
+it that carries no parent segment, for the `edit` tool and the `write` tool.
+Residual for the first: that
+exception cannot be anchored to one home folder, so any absolute path with an
+`agent-notes` segment allows. Residual for the second: the gate compares the
+raw path string. It does not resolve a symbolic link, and it does not read the
+link target. A planted link under `/tmp` can reach any path. The owner accepted
+this risk.
 
 ## Personas and themes
 
