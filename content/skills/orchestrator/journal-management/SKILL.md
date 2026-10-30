@@ -18,6 +18,10 @@ Do not restate it here.
 `<USER_HOME>` is the folder that holds `agent-notes`. Follow the
 **journal-management-generic** skill for the exact rule and the fallback.
 
+- **Write script:** Call `journal-write.sh` from the
+  **journal-management-generic** skill folder. It does not live in this
+  skill's `scripts/` folder, which holds only the startup report.
+
 - **Startup report:** The agent runs this skill folder's
   `scripts/startup-report.sh` with bash at the start of every session.
   Pass the full path, unquoted, so the gate can match it.
