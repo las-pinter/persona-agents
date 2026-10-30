@@ -48,7 +48,8 @@ The doctrine lives in the permission templates, the live global file
 `~/.pi/agent/permissions.json`, and, for Claude Code, the PreToolUse hook
 `platforms/claude/scripts/doctrine.ts`. On Claude Code and pi, the orchestrator
 runs a plain `git add`, `git commit`, `git pull`, `git merge`, `git rebase`, or
-`git tag` with no prompt. On every platform, it gets an ASK verdict for
+`git tag` with no prompt. On Kiro it runs a plain `git add` and a plain
+`git commit` with no prompt. On every platform, it gets an ASK verdict for
 `git push` and every `gh pr`, `gh run`, and `gh release` command, with one
 exception on pi: a `gh` global option before the subcommand falls to
 deny-by-default, because no ask entry names that form. Coverage differs per
@@ -84,20 +85,34 @@ platform:
   these wrappers: `;`, `&&`, `|`, `$(`, a backtick, `git -C <path>`, and a
   leading space. A Kiro command pattern is an anchored regex, so an entry can
   name a write form and leave a listing to the allow list. The cost is one
-  regex body per form: a new write shape that no entry names asks, a branch
-  listing with a second token after the listing value denies, and a tag
-  listing with a pattern argument asks. The orchestrator leaves those forms to
-  ask, because its allow list does not carry them. The five role templates
-  also deny the history verbs with explicit entries: add, commit, push, pull,
-  merge, and rebase. The orchestrator allows the journal script call and the
-  two date forms, and denies that call when it carries `--home`.
-- On every platform, some forms still ask: tag force-move (a DENY on the five
-  Kiro role templates; the Kiro orchestrator asks), `git -c` overrides
-  and unknown global options, `commit --amend`, `git reset --soft`, upload-pack
-  and transport helper URLs, merge strategies, wrapped or substituted forms, and
-  brace, bracket, and extglob words. On Claude Code and pi, star and question
-  mark words also ask. Tag delete is a DENY on pi, opencode, and Kiro, and
-  an ASK on Claude Code.
+  regex body per form. A new write shape that no entry names asks. A branch
+  listing with a second token after the listing value denies. A tag listing
+  with a pattern argument asks. The orchestrator asks on these three forms: an
+  unnamed branch write shape, a second-token branch listing, and a pattern tag
+  listing. The five role templates also deny the history verbs with explicit
+  entries: add, commit, push, pull, merge, and rebase. The orchestrator allows
+  the journal script call and the two date forms. It also allows a plain
+  `git add` and a plain `git commit`. It denies the journal script call when it
+  carries `--home`.
+- On every platform, some forms still ask. The forms are: tag force-move,
+  `git -c` overrides, unknown global options, `commit --amend`,
+  `git reset --soft`, upload-pack URLs, and transport helper URLs. The forms
+  also include merge strategies, wrapped forms, substituted forms, and brace,
+  bracket, and extglob words. On Kiro, a `git add` or `git commit` line asks
+  in these shapes. The shapes are a separator, a substitution, a redirect, a
+  leading space, a `cd <path> &&` prefix, and the `-C` git option. A wrapper
+  prefix that no deny entry names, such as `env`, `command`, `nohup`, or
+  `timeout`, asks. An eval wrapper and an interpreter run with the command
+  flag both deny. A tag force-move is a DENY on the five Kiro role templates,
+  and the Kiro orchestrator asks. `commit --amend` is a DENY on the Kiro
+  orchestrator. Its deny entry starts at the commit verb, so only a line that
+  starts with that form denies. An amend line can carry a leading space, a
+  `cd` prefix, the `-C` option, or a wrapper before the verb. It can also
+  carry a separator, a substitution, or a redirect before the verb. Such a
+  line matches no deny entry, so it asks. An eval wrapper or an interpreter
+  run with the command flag still denies. On Claude Code and pi, star and
+  question mark words also ask. Tag delete is a DENY on pi, opencode, and
+  Kiro, and an ASK on Claude Code.
 - Accepted risks: `rebase --exec` and `rebase -i` are allowed. On pi, the
   orchestrator may run the three verification scripts, and the test script
   covers test files it can write, so a self-graded run is possible; CI reruns
@@ -205,7 +220,10 @@ every theme.
 2. Create the Kiro template, `platforms/kiro/templates/<name>.json`. Copy an
    existing template. Set the tools, the allowed and denied commands, the
    subagent trust list, and the edit paths. Never list a gated history or
-   release command in `allowedCommands`. See `platforms/kiro/README.md`.
+   release command in a role template `allowedCommands`. The orchestrator
+   template is the one exception, for a plain `git add` and a plain
+   `git commit`. `platforms/kiro/README.md` gives the reason and the template
+   format.
 3. Create the OpenCode frontmatter,
    `platforms/opencode/frontmatters/<name>.yaml`. Map the Kiro permissions with
    the table in `platforms/opencode/README.md`.

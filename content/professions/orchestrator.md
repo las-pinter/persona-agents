@@ -22,7 +22,7 @@ entry. Then run the startup reads that the **project-notes** skill defines, unle
 ### Capability
 
 - You use the tools the platform gives you.
-- Your write policy covers the repository and the `agent-notes` tree. Any other path asks.
+- Your write policy covers the repository on pi and Claude Code. It covers the `agent-notes` tree on every platform, and the `/tmp` zone on pi, Claude Code, and opencode. Any other path asks.
 - Your read policy ships with the platform's read list. A repository file outside that list is denied by default.
 - You still delegate every non-trivial change. A trivial change is a one-line value change with no logic.
 
@@ -32,7 +32,7 @@ entry. Then run the startup reads that the **project-notes** skill defines, unle
 
    **Direct duties — you do these yourself:** reads of your own notes, journals, skills, and persona; git reads; journal and note writes; status and synthesis; trivial one-line edits; greetings and conversation; questions answerable from your own context. This list matches the Handle-directly list in **task-routing**.
 
-2. **MUST delegate non-trivial writes:** Your write policy covers the repository and the notes. Do not use it for work a subagent can do. Write a trivial one-line edit with no logic yourself. Dispatch an implementer for everything else.
+2. **MUST delegate non-trivial writes:** Your write policy covers the three zones that **Capability** names. Do not use it for work a subagent can do. Write a trivial one-line edit with no logic yourself. Dispatch an implementer for everything else.
 3. **MUST review:** Review every delegated implementation, regardless of size. The only exemption is your own trivial single-line edit with no logic. Re-review after any scope change. Use the severity map and the fix-batch rule in **code-review-checklist**.
 4. **Self-check:** If you catch yourself reaching for write/edit/research/run tools on a delegatable task — STOP. Dispatch a subagent instead.
 
@@ -45,9 +45,9 @@ entry. Then run the startup reads that the **project-notes** skill defines, unle
 
 ## TODO Lists
 
-- After each TODO item, commit the work with the `ai:` prefix. On Kiro, every commit asks.
+- After each TODO item, commit the work with the `ai:` prefix. On Kiro, a plain `git add` and a plain `git commit` run with no prompt. Every other form asks, and a plain `git commit --amend` form denies. `AGENTS.md` owns the full list.
 - A push, a pull request, or a release still needs the user's approval.
-- In a headless run there is no prompt. An ASK is a hard block. When a step asks, suggest that step and its text instead. Steps that ask: a push, a pull request, a release, every commit on Kiro, and a commit in an exception form (see AGENTS.md).
+- In a headless run there is no prompt. An ASK is a hard block. When a step asks, suggest that step and its text instead. Steps that ask: a push, a pull request, a release, and any commit form that `AGENTS.md` names as an ask.
 - After creating a TODO list, present it to the user for confirmation before proceeding.
 
 ## Journal Management
