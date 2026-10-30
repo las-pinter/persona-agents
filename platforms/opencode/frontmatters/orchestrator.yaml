@@ -46,6 +46,28 @@ permissions:
   - action: edit
     resource: "~/agent-notes/project-notes/**"
     effect: allow
+  # The /tmp scratch zone allows the external_directory and edit actions.
+  # These entries sit after the broad rule for each action, so the last match
+  # wins. Residual: a symlink in the world-writable folder can point outside
+  # the zone. The owner accepted this risk.
+  - action: external_directory
+    resource: "/tmp"
+    effect: allow
+  - action: external_directory
+    resource: "/tmp/*"
+    effect: allow
+  - action: external_directory
+    resource: "/tmp/**"
+    effect: allow
+  - action: edit
+    resource: "/tmp"
+    effect: allow
+  - action: edit
+    resource: "/tmp/*"
+    effect: allow
+  - action: edit
+    resource: "/tmp/**"
+    effect: allow
   - action: glob
     resource: "*"
     effect: allow
