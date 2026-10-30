@@ -87,15 +87,17 @@ A round is one review cycle: findings go to the implementer, and the result
 goes back to the reviewer. Each review that returns findings counts as one
 round, including a NIT and SUGGESTION batch.
 
-**Resume is a platform capability.** On pi every subagent runs in a new process
-with no session. The child command carries the no-session flag, and the tool
-takes no resume parameter. So a second round is always a fresh agent, and every
-round pays a full cold read. Check the platform before you rely on resume.
+**Resume is a platform capability.** Use it when the platform offers it, and
+name no engine here. Resume only two roles: the implementer and the reviewer.
+Every other role always starts fresh.
 
 - When the platform can resume: reuse the same implementer and reviewer for up
 to 2 rounds. They keep useful context.
-- When the platform cannot resume: a third round is a sign that the first
-  brief was underspecified. Fix the brief, not the round count.
+- When the platform cannot resume: start a fresh agent of the same type for
+each round. A third round is a sign that the first brief was underspecified.
+Fix the brief, not the round count.
+- A resumed round gets the delta only: the new findings and the changed files.
+  Do not resend the whole brief.
 - Every fresh agent gets a short brief: the goal, the current state (the files
   and the last commit or the uncommitted diff), the decisions already made, and
   the open findings. Do not paste earlier transcripts.
