@@ -85,19 +85,23 @@ tester at the same time — run them one after the other.
 
 A round is one review cycle: findings go to the implementer, and the result
 goes back to the reviewer. Each review that returns findings counts as one
-round, including a NIT and SUGGESTION batch. A resumed subagent keeps its full
-history, so the token cost grows each round.
+round, including a NIT and SUGGESTION batch.
 
-- Resume the same implementer and reviewer for up to 2 rounds. They keep
-  useful context.
-- After 2 rounds, start a fresh subagent of the same type. Give it a short
-  brief: the goal, the current state (the files and the last commit or the
-  uncommitted diff), the decisions already made, and the open findings. Do not
-  paste earlier transcripts.
-- The round count starts again at 0 for each fresh subagent.
+**Resume is a platform capability.** On pi every subagent runs in a new process
+with no session. The child command carries the no-session flag, and the tool
+takes no resume parameter. So a second round is always a fresh agent, and every
+round pays a full cold read. Check the platform before you rely on resume.
+
+- When the platform can resume: reuse the same implementer and reviewer for up
+to 2 rounds. They keep useful context.
+- When the platform cannot resume: a third round is a sign that the first
+  brief was underspecified. Fix the brief, not the round count.
+- Every fresh agent gets a short brief: the goal, the current state (the files
+  and the last commit or the uncommitted diff), the decisions already made, and
+  the open findings. Do not paste earlier transcripts.
 - Write large command output to a temporary file. Pass the path, not the
   content.
-- The 2-round limit in this section governs subagent reuse. The limit on review
+- The reuse limit in this section governs subagent reuse. The limit on review
   rounds lives in **code-review-checklist** under `## Fix Batching`.
 
 ---
