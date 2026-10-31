@@ -181,6 +181,52 @@ describe("concurrent writers", () => {
 			await holder.exited;
 		}
 	});
+	test("refuses a block that gains the Work Log heading after validation", async () => {
+		const home = makeHome();
+		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
+		const before = fs.readFileSync(target);
+		const block = makeBlock(home, ["early row"]);
+		const holder = holdLock(home);
+		try {
+			await holder.ready;
+			const pending = runChild(home, appendArgs(block, ["--timeout", "60"]));
+			await waitForLockOpen(pending.pid, home);
+			fs.writeFileSync(block, `${stampOf(block)}\n\nkept row\n## Work Log\n`);
+			holder.release();
+			const result = await pending.result;
+			assert.equal(result.status, 2, result.stderr);
+			assert.deepEqual(fs.readFileSync(target), before, "a heading copy must leave the target whole");
+			assert.ok(fs.existsSync(block), "a heading copy must keep the block");
+			assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+			assert.ok(result.stderr.includes("Work Log heading"), "stderr must name the cause");
+		} finally {
+			holder.release();
+			await holder.exited;
+		}
+	});
+	test("refuses a block whose text row is removed after validation", async () => {
+		const home = makeHome();
+		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
+		const before = fs.readFileSync(target);
+		const block = makeBlock(home, ["early row"]);
+		const holder = holdLock(home);
+		try {
+			await holder.ready;
+			const pending = runChild(home, appendArgs(block, ["--timeout", "60"]));
+			await waitForLockOpen(pending.pid, home);
+			fs.writeFileSync(block, `${stampOf(block)}\n\n`);
+			holder.release();
+			const result = await pending.result;
+			assert.equal(result.status, 2, result.stderr);
+			assert.deepEqual(fs.readFileSync(target), before, "a bare stamp must leave the target whole");
+			assert.ok(fs.existsSync(block), "a bare stamp must keep the block");
+			assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+			assert.ok(result.stderr.includes("no text line"), "stderr must name the cause");
+		} finally {
+			holder.release();
+			await holder.exited;
+		}
+	});
 });
 
 describe("the lock", () => {

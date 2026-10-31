@@ -85,6 +85,12 @@ export function seedTarget(target: string, text: string): string {
 	return target;
 }
 
+/** A daily target with one kept row, for a case that must change nothing. */
+export function seededDaily(home: string): { target: string; before: Buffer } {
+	const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
+	return { target, before: fs.readFileSync(target) };
+}
+
 /** One block file with a unique stamp, at a chosen name or the next default. */
 function writeBlock(home: string, rows: string[], agent: string, name?: string): string {
 	blockSeq += 1;

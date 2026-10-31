@@ -158,6 +158,46 @@ take_lock() {
     if ! flock -w "$TIMEOUT" 9 2>/dev/null; then fail 5 "lock wait exceeded $TIMEOUT seconds"; fi
 }
 
+# The writer prints both headings itself, so a block must not carry a copy of
+# them. A block with no text line would write a bare stamp. A heading as the
+# first text line would end the group that holds the stamp. One to three
+# leading spaces, any trailing space or tab, and a closing hash run do not change
+# a heading. The heading rules serve append only, because the writer prints a
+# heading on that path alone.
+scan_block() {
+    local finding=""
+    if ! finding="$(JW_SECTION="$SECTION" JW_MODE="$SUBCMD" awk '
+BEGIN { sec = ENVIRON["JW_SECTION"]; mode = ENVIRON["JW_MODE"] }
+NR <= 2 { next }
+{ row = $0; sub(/[[:space:]]+$/, "", row); sub(/[ \t]+#+$/, "", row) }
+row == "" { next }
+{ text = 1 }
+mode == "append" && row ~ /^ {0,3}##[ \t]+Work Log[ \t]*$/ { found = 1; print "worklog"; exit 0 }
+mode == "append" && sec != "" && section_row(row) == sec { found = 1; print "section"; exit 0 }
+# Level 1, level 2, and level 3 only, so a deeper detail heading stays allowed.
+mode == "append" && !first && row ~ /^ {0,3}#[#]{0,2}[ \t]+/ { found = 1; print "heading"; exit 0 }
+{ first = 1 }
+# An exit still runs this block, so the flag reports one finding only.
+END { if (!found && !text) print "empty" }
+# The name is compared as text, so a dot in a name stays a dot. The caller
+# already removed one closing hash run, so a hash run that stays is part of the
+# text. A row that the rule does not match returns a tab, which no section name
+# can hold.
+function section_row(line,   rest) {
+    if (line !~ /^ {0,3}###[ \t]+/) return "\t"
+    rest = line
+    sub(/^ {0,3}###[ \t]+/, "", rest)
+    return rest
+}
+' "$BLOCK_REAL")"; then fail 4 "block record read failed"; fi
+    case "$finding" in
+    worklog) fail 2 "block record 3 or later is the Work Log heading" ;;
+    section) fail 2 "block record 3 or later is the section heading" ;;
+    heading) fail 2 "block first text line is a heading" ;;
+    empty) fail 2 "block holds no text line" ;;
+    esac
+}
+
 validate_block() {
     local count=0 rec2=""
     if [[ "$BLOCK" != /* ]]; then fail 2 "block path is not absolute"; fi
@@ -179,6 +219,7 @@ validate_block() {
     # Record 2 is skipped by the splice, so text there would be lost silently.
     if ! rec2="$(awk 'NR == 2 { print; exit }' "$BLOCK_REAL")"; then fail 4 "block record 2 read failed"; fi
     if [[ -n "$rec2" ]]; then fail 2 "block record 2 holds text"; fi
+    scan_block
 }
 
 # A CRLF target cannot be spliced by heading, so it is refused, not rewritten.
@@ -192,17 +233,11 @@ load_target_text() {
     TARGET_TEXT="$TEXT"
 }
 
-# A temp file in the target folder plus one rename keeps every reader whole.
+# One program serves the anchor probe and the write, so the rule has one copy.
 # Both texts reach awk through the environment, so no escape is interpreted.
-write_target() {
-    local mode="$1" rc=0
-    TARGET_DIR="${TARGET%/*}"
-    if ! mkdir -p -- "$TARGET_DIR" 2>/dev/null; then fail 4 "target folder create failed"; fi
-    TMP="$(mktemp "$TARGET_DIR/.journal-write.XXXXXX" 2>/dev/null || true)"
-    if [[ -z "$TMP" ]]; then TMP=""; fail 4 "temp file create failed"; fi
-    trap 'if [[ -n "${TMP:-}" ]]; then rm -f -- "$TMP"; fi' EXIT
+run_writer() {
     printf '%s' "$TARGET_TEXT" |
-        JW_MODE="$mode" JW_SECTION="$SECTION" JW_STAMP="$STAMP" JW_BLOCK="$BLOCK_REAL" JW_TODAY="$TODAY" \
+        JW_MODE="$1" JW_SECTION="$SECTION" JW_STAMP="$STAMP" JW_BLOCK="$BLOCK_REAL" JW_TODAY="$TODAY" \
             awk '
 BEGIN {
     mode = ENVIRON["JW_MODE"]
@@ -211,8 +246,10 @@ BEGIN {
     block = ENVIRON["JW_BLOCK"]
     datestr = ENVIRON["JW_TODAY"]
     # Record 1 is the stamp, which emit() prints again, and record 2 is the
-    # blank separator; validation rejects a record 2 that holds text.
-    nb = 0; skip = 2; r = 1; bad2 = 0
+    # blank separator; validation rejects a record 2 that holds text. The block
+    # can change during a long lock wait, so record 2, the two headings, and the
+    # text line are checked a second time here.
+    nb = 0; skip = 2; r = 1; bad2 = 0; badhead = 0; blktext = 0
     while ((r = (getline l < block)) > 0) {
         if (skip > 0) {
             # A record 2 that gains text after validation would be dropped here.
@@ -220,6 +257,15 @@ BEGIN {
             skip--; continue
         }
         blk[++nb] = l
+        if (mode == "whole") continue
+        # One strip per row, and the target find calls these two rules on the
+        # same normalized row, so the two sides cannot drift.
+        row = trimmed(l)
+        if (row == "") continue
+        if (is_worklog(row)) badhead = 1
+        else if (is_section(row)) badhead = 2
+        else if (!blktext && is_heading(row)) badhead = 3
+        blktext = 1
     }
     close(block)
     # An exit from BEGIN still runs END, so a failed read stops in END instead.
@@ -231,6 +277,8 @@ BEGIN {
 END {
     if (bad) exit 8
     if (bad2) exit 9
+    if (mode != "whole" && badhead) exit (10 + badhead)
+    if (mode != "whole" && !blktext) exit 14
     total = NR
     if (mode == "whole") { emit(); exit 0 }
     if (total == 0) {
@@ -246,15 +294,19 @@ END {
         exit 0
     }
     if (mode == "end") {
-        head_to(last_nonblank(0, total))
+        p = last_nonblank(0, total)
+        if (bare_stamp(lines[p])) exit 10
+        head_to(p)
         print ""
         emit()
         exit 0
     }
     wl = 0
-    for (i = 1; i <= total; i++) if (lines[i] ~ /^## Work Log[ \t]*$/) { wl = i; break }
+    for (i = 1; i <= total; i++) if (is_worklog(trimmed(lines[i]))) { wl = i; break }
     if (wl == 0) {
-        head_to(last_nonblank(0, total))
+        p = last_nonblank(0, total)
+        if (bare_stamp(lines[p])) exit 10
+        head_to(p)
         print ""
         print "## Work Log"
         print ""
@@ -264,11 +316,13 @@ END {
         exit 0
     }
     wlend = total
-    for (i = wl + 1; i <= total; i++) if (lines[i] ~ /^#[ \t]/ || lines[i] ~ /^##[ \t]/) { wlend = i - 1; break }
+    for (i = wl + 1; i <= total; i++) if (ends_worklog_group(lines[i])) { wlend = i - 1; break }
     hs = 0
-    for (i = wl + 1; i <= wlend; i++) if (sec != "" && heading_name(lines[i]) == sec) { hs = i; break }
+    for (i = wl + 1; i <= wlend; i++) if (sec != "" && is_section(trimmed(lines[i]))) { hs = i; break }
     if (hs == 0) {
         p = last_nonblank(wl, wlend)
+        # A stamp as the anchor would leave the rows under it out of the group.
+        if (bare_stamp(lines[p])) exit 10
         head_to(p)
         print ""
         print "### " sec
@@ -278,8 +332,9 @@ END {
         exit 0
     }
     hend = wlend
-    for (i = hs + 1; i <= wlend; i++) if (lines[i] ~ /^###[ \t]/ || lines[i] ~ /^##[ \t]/ || lines[i] ~ /^#[ \t]/) { hend = i - 1; break }
+    for (i = hs + 1; i <= wlend; i++) if (ends_section_group(lines[i])) { hend = i - 1; break }
     p = last_nonblank(hs, hend)
+    if (bare_stamp(lines[p])) exit 10
     head_to(p)
     print ""
     emit()
@@ -297,19 +352,83 @@ function last_nonblank(from, to,   i) {
     while (i > from && lines[i] ~ /^[ \t]*$/) i--
     return i
 }
-# The heading text is compared literally, so a dot in a name stays a dot.
-function heading_name(line,   rest) {
-    if (line !~ /^###[ \t]+/) return ""
-    rest = line
-    sub(/^###[ \t]+/, "", rest)
-    sub(/[ \t]+$/, "", rest)
-    return rest
+# A stamp as the anchor would strand the rows under it, so it is refused. A
+# trailing space or tab does not hide a stamp.
+function bare_stamp(line,   row) {
+    row = line
+    sub(/[ \t]+$/, "", row)
+    return row ~ /^<!-- session: [0-9-]+T[0-9:]+Z [a-z][a-z0-9-]* [A-Za-z0-9._-]+ -->$/
 }
-' >"$TMP" 2>/dev/null || rc=$?
-    # awk exit 8 means the block read failed before any temp write began.
-    if (( rc == 8 )); then fail 4 "block read failed"; fi
-    if (( rc == 9 )); then fail 2 "block record 2 holds text"; fi
-    if (( rc != 0 )); then fail 4 "temp file write failed"; fi
+# The trailing space and tab are removed first, then a closing hash run, so
+# both block guards agree and a closing hash run cannot hide a heading.
+function trimmed(line) {
+    sub(/[[:space:]]+$/, "", line)
+    sub(/[ \t]+#+$/, "", line)
+    return line
+}
+# The caller normalizes the row with trimmed() first, so one strip runs per row
+# and the block row and the target row take the same path. One to three leading
+# spaces do not change the Work Log heading, and the closing hash run is gone. A
+# hash run that stays is part of the heading text, as it is in the block guard
+# that runs before the lock.
+function is_worklog(row) { return row ~ /^ {0,3}##[ \t]+Work Log[ \t]*$/ }
+# A level-1 or a level-2 heading ends the Work Log group, and a level-1, level-2,
+# or level-3 heading ends a section group. One to three leading spaces do not
+# change a heading, so these scans match the same row as the block guards.
+function ends_worklog_group(row) { return row ~ /^ {0,3}#[#]?[ \t]/ }
+function ends_section_group(row) { return row ~ /^ {0,3}#[#]{0,2}[ \t]/ }
+# A heading as the first text line ends the group that holds the stamp, so the
+# first-text guard refuses the same rows that end a section group.
+function is_heading(row) { return ends_section_group(row) }
+# The caller normalizes the row with trimmed() first, so one strip runs per row
+# and the block row and the target row take the same path. The trimmed row
+# already lost one closing hash run, so this rule removes none. A hash run that
+# stays is part of the text, as it is in the block guard that runs before the
+# lock.
+function is_section(row,   rest) {
+    if (row !~ /^ {0,3}###[ \t]+/) return 0
+    rest = row
+    sub(/^ {0,3}###[ \t]+/, "", rest)
+    return rest == sec
+}
+'
+}
+
+# One status map for both passes, so the two passes agree on every message.
+# awk exit 8 is a failed block read, and exit 10 is the bare anchor stamp. Any
+# other status is a fault in awk itself, which the write pass reports.
+writer_status() {
+    case "$1" in
+    0) return 0 ;;
+    8) fail 4 "block read failed" ;;
+    9) fail 2 "block record 2 holds text" ;;
+    10) fail 2 "insert anchor is a bare session stamp; remove the stamp or add its text" ;;
+    11) fail 2 "block record 3 or later is the Work Log heading" ;;
+    12) fail 2 "block record 3 or later is the section heading" ;;
+    13) fail 2 "block first text line is a heading" ;;
+    14) fail 2 "block holds no text line" ;;
+    *) fail 4 "temp file write failed" ;;
+    esac
+}
+
+# A temp file in the target folder plus one rename keeps every reader whole.
+write_target() {
+    local mode="$1" rc=0
+    TARGET_DIR="${TARGET%/*}"
+    if ! mkdir -p -- "$TARGET_DIR" 2>/dev/null; then fail 4 "target folder create failed"; fi
+    # The anchor is proven before the temp file exists, so a refused call leaves
+    # no temp file behind. The anchor serves append only.
+    if [[ "$mode" != "whole" ]]; then
+        rc=0
+        run_writer "$mode" >/dev/null 2>&1 || rc=$?
+        writer_status "$rc"
+    fi
+    TMP="$(mktemp "$TARGET_DIR/.journal-write.XXXXXX" 2>/dev/null || true)"
+    if [[ -z "$TMP" ]]; then TMP=""; fail 4 "temp file create failed"; fi
+    trap 'if [[ -n "${TMP:-}" ]]; then rm -f -- "$TMP"; fi' EXIT
+    rc=0
+    run_writer "$mode" >"$TMP" 2>/dev/null || rc=$?
+    writer_status "$rc"
     # The count comes from the temp file, so a failed count never follows a rename.
     if ! NEW_LINES="$(awk 'END { print NR + 0 }' "$TMP")"; then fail 4 "temp record count failed"; fi
     if [[ ! "$NEW_LINES" =~ ^[0-9]+$ ]]; then fail 4 "temp record count failed"; fi

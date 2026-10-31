@@ -27,19 +27,11 @@ import {
 	rawBlock,
 	run,
 	runRaw,
-	seedTarget,
-	stampOf,
+	seededDaily,
 	STAMP_TIME,
-	todayName,
 } from "./journal-write.fixtures.ts";
 
 afterEach(cleanup);
-
-/** A daily target with one kept row, for a case that must change nothing. */
-function seededDaily(home: string): { target: string; before: Buffer } {
-	const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
-	return { target, before: fs.readFileSync(target) };
-}
 
 describe("command line", () => {
 	test("exits 1 on an unknown flag", () => {
@@ -214,19 +206,19 @@ describe("input validation", () => {
 		assert.ok(result.stderr.includes(block), "stderr must name the block path");
 	});
 
-	test("accepts a block with no second record", () => {
+	test("exits 2 on a block that holds only the stamp", () => {
 		const home = makeHome();
-		const target = dailyPath(home);
-		const block = rawBlock(home, `<!-- session: ${STAMP_TIME} ${AGENT} rec2absent -->\n`);
-		const stamp = stampOf(block);
+		const { target, before } = seededDaily(home);
+		const block = rawBlock(home, `<!-- session: ${STAMP_TIME} ${AGENT} stamponly -->\n\n`);
+		assert.equal(fileLines(fs.readFileSync(block, "utf8")).length, 2, "the block must hold the stamp and a blank line");
 		const result = run(home, appendArgs(block));
-		assert.equal(result.status, 0, result.stderr);
-		assert.equal(
-			fs.readFileSync(target, "utf8"),
-			`# ${todayName()}\n\n${stamp}\n`,
-			"an absent record 2 must splice the stamp alone",
-		);
-		assert.ok(!fs.existsSync(block), "a written append must remove the block");
+		assert.equal(result.status, 2, result.stderr);
+		assert.deepEqual(fs.readFileSync(target), before, "a bare stamp must leave the target whole");
+		assert.ok(fs.existsSync(block), "a bare stamp must keep the block");
+		assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+		assert.ok(result.stderr.includes("no text line"), "stderr must name the cause");
+		assert.ok(result.stderr.includes(target), "stderr must name the target");
+		assert.ok(result.stderr.includes(block), "stderr must name the block path");
 	});
 
 	test("prints a relative block path as given on one line", () => {

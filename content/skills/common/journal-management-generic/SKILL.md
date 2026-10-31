@@ -161,6 +161,11 @@ clobbers the other sessions' entries. Follow these rules on EVERY update:
    `--expect` mismatch. Use the recovery in `CONSOLIDATE`. If the script is
    absent, write no journal at all and report a stale install.
 
+The script checks the block once before the lock. It checks record 2, the Work
+Log heading, the section heading, the first text line, and the presence of a
+text line again under the lock. It checks the record limit, the stamp, and the
+path once.
+
 ### Block file format
 
 - Folder: `<USER_HOME>/agent-notes/<AGENT_TYPE>/journals/incoming/`.
@@ -175,7 +180,26 @@ clobbers the other sessions' entries. Follow these rules on EVERY update:
 - `<session>` holds 1 to 64 characters from `[A-Za-z0-9._-]`. The block file
   name without `.md` is a valid session name.
 - Line 2 is empty or absent. Line 3 and later hold the block text.
+- Line 3 and later must hold at least one text line. A block with no text line
+  is refused, because the writer would keep a bare session stamp.
+- On `append`, the writer refuses a heading in two places. Line 3 and later
+  must not hold the `## Work Log` heading or the `### <project>` heading of the
+  current section, because the writer prints both headings itself. The first
+  text line must not be a level-1, a level-2, or a level-3 heading, because a
+  group ends on each of them. A block starts with text. A section heading
+  belongs below the text, so an entry can carry its own decisions,
+  verification, issues, and lessons sections. A level-4 heading and deeper
+  stays allowed, because no group ends on one.
+- One to three leading spaces, any trailing space or tab, and a closing hash
+  run after the heading text do not change a heading. The same rule serves the
+  target, so a heading with a leading space is still found and still ends its
+  group.
+- The writer finds the `## Work Log` heading by its exact text. A target that
+  holds a variant, such as `## Work log` or `## Work Log:`, gets a second group
+  at the end of the file. Write no heading variant.
 - The script validates line 1. The script keeps line 1 in the journal.
+- The script checks the block file suffix and the stamp shape. It does not
+  compare the file name to the stamp.
 - At most 200 lines, stamp included. Split a longer `append` block into two
   `append` calls. Never split a `replace` block. Shorten the merge instead.
 
@@ -386,8 +410,16 @@ had it).
   - block record 1: it is not a session stamp;
   - block record 1: it names another agent;
   - block record 2: it holds text;
+  - block record 3 or later: it is the `## Work Log` heading, on `append`;
+  - block record 3 or later: it is the current section heading, on `append`;
+  - the block: its first text line is a level-1, a level-2, or a level-3
+    heading, on `append`;
+  - the block: it holds no text line;
+  - the insert anchor, on `append`: it is a bare session stamp;
   - the target: it holds a carriage return.
-  Target unchanged, block kept.
+  Target unchanged, block kept. Fix a block-side cause in the block. A
+  target-side cause needs the owner: the owner removes the bare stamp or adds
+  its text, or removes the carriage return. Then run the same block file again.
 - **Write script, exit 3** — `--expect` mismatch. The causes are: a target
   that changed since the `check` read, `--expect new` on a present target, and
   `--expect <digest>` on an absent target. Target unchanged, block kept. Run
