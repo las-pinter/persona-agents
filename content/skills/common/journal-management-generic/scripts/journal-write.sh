@@ -233,11 +233,13 @@ load_target_text() {
     TARGET_TEXT="$TEXT"
 }
 
-# One program serves the anchor probe and the write, so the rule has one copy.
-# Both texts reach awk through the environment, so no escape is interpreted.
+# One program serves the duplicate probe, the anchor probe, and the write, so
+# the rule has one copy. Both texts reach awk through the environment, so no
+# escape is interpreted. The second argument sets the program mode, so the
+# duplicate probe can ask the same program a different question.
 run_writer() {
     printf '%s' "$TARGET_TEXT" |
-        JW_MODE="$1" JW_SECTION="$SECTION" JW_STAMP="$STAMP" JW_BLOCK="$BLOCK_REAL" JW_TODAY="$TODAY" \
+        JW_MODE="${2:-$1}" JW_SECTION="$SECTION" JW_STAMP="$STAMP" JW_BLOCK="$BLOCK_REAL" JW_TODAY="$TODAY" \
             awk '
 BEGIN {
     mode = ENVIRON["JW_MODE"]
@@ -249,7 +251,7 @@ BEGIN {
     # blank separator; validation rejects a record 2 that holds text. The block
     # can change during a long lock wait, so record 2, the two headings, and the
     # text line are checked a second time here.
-    nb = 0; skip = 2; r = 1; bad2 = 0; badhead = 0; blktext = 0
+    nb = 0; skip = 2; r = 1; bad2 = 0; badhead = 0; blktext = 0; nbk = 0; dupb = ""
     while ((r = (getline l < block)) > 0) {
         if (skip > 0) {
             # A record 2 that gains text after validation would be dropped here.
@@ -266,6 +268,12 @@ BEGIN {
         else if (is_section(row)) badhead = 2
         else if (!blktext && is_heading(row)) badhead = 3
         blktext = 1
+        # One key per level-2 heading, kept in block order, so the report names
+        # the first duplicate. A key that repeats refuses the block, because the
+        # writer would print two copies of that section.
+        key = l2key(row)
+        if (key != "" && !(key in bkey)) { bkeys[++nbk] = key; bkey[key] = 1 }
+        else if (key != "" && dupb == "") dupb = key
     }
     close(block)
     # An exit from BEGIN still runs END, so a failed read stops in END instead.
@@ -279,7 +287,21 @@ END {
     if (bad2) exit 9
     if (mode != "whole" && badhead) exit (10 + badhead)
     if (mode != "whole" && !blktext) exit 14
+    # A block that carries one level-2 heading twice would write two sections,
+    # so it is a block-side cause and stops on the block guards.
+    if (mode != "whole" && dupb != "") { print dupb; exit 16 }
     total = NR
+    if (mode == "dupcheck") {
+        # A level-2 heading that the target already holds would give the day a
+        # second copy of that section, so the probe prints the key for the
+        # shell message. The target is never written on this path.
+        for (i = 1; i <= nbk; i++) {
+            for (j = 1; j <= total; j++) {
+                if (l2key(trimmed(lines[j])) == bkeys[i]) { print bkeys[i]; exit 15 }
+            }
+        }
+        exit 0
+    }
     if (mode == "whole") { emit(); exit 0 }
     if (total == 0) {
         print "# " datestr
@@ -380,6 +402,17 @@ function ends_section_group(row) { return row ~ /^ {0,3}#[#]{0,2}[ \t]/ }
 # A heading as the first text line ends the group that holds the stamp, so the
 # first-text guard refuses the same rows that end a section group.
 function is_heading(row) { return ends_section_group(row) }
+# A level-2 heading key is the text after the hashes on a normalized row. The
+# block row and the target row take the same strip, so a leading space, a tab
+# after the hashes, a trailing space or tab, and a closing hash run cannot hide
+# one heading from the other. A level-3 heading is a project subsection, so it
+# is not a section and gets no key.
+function l2key(row,   rest) {
+    if (row !~ /^ {0,3}##[ \t]+/) return ""
+    rest = row
+    sub(/^ {0,3}##[ \t]+/, "", rest)
+    return rest
+}
 # The caller normalizes the row with trimmed() first, so one strip runs per row
 # and the block row and the target row take the same path. The trimmed row
 # already lost one closing hash run, so this rule removes none. A hash run that
@@ -394,10 +427,13 @@ function is_section(row,   rest) {
 '
 }
 
-# One status map for both passes, so the two passes agree on every message.
-# awk exit 8 is a failed block read, and exit 10 is the bare anchor stamp. Any
-# other status is a fault in awk itself, which the write pass reports.
+# One status map serves the duplicate probe and the two write passes, so every
+# caller agrees on every message. awk exit 8 is a failed block read, and exit 10
+# is the bare anchor stamp. The two duplicate statuses carry the heading name
+# that awk prints on stdout. Any other status is a fault in awk itself, which
+# the write pass reports.
 writer_status() {
+    local detail="${2:-}"
     case "$1" in
     0) return 0 ;;
     8) fail 4 "block read failed" ;;
@@ -407,8 +443,21 @@ writer_status() {
     12) fail 2 "block record 3 or later is the section heading" ;;
     13) fail 2 "block first text line is a heading" ;;
     14) fail 2 "block holds no text line" ;;
+    15) fail 2 "block level-2 heading${detail:+ $detail} is already in the target; remove that heading from the block and append again as bullets, or ask the owner to merge those rows into the section" ;;
+    16) fail 2 "block level-2 heading${detail:+ $detail} appears twice in the block; keep one copy of that heading" ;;
     *) fail 4 "temp file write failed" ;;
     esac
+}
+
+# A duplicate level-2 heading needs the target text, so this probe runs under
+# the lock, before the temp file exists. It shares one program with the writer,
+# so the heading rule and the normalizer have one copy. A control character in
+# the heading prints as a space, so the line can never grow a second row.
+probe_duplicate() {
+    local rc=0 heading=""
+    heading="$(run_writer "$1" dupcheck 2>/dev/null)" || rc=$?
+    if (( rc == 0 )); then return 0; fi
+    writer_status "$rc" "${heading//[[:cntrl:]]/ }"
 }
 
 # A temp file in the target folder plus one rename keeps every reader whole.
@@ -419,6 +468,10 @@ write_target() {
     # The anchor is proven before the temp file exists, so a refused call leaves
     # no temp file behind. The anchor serves append only.
     if [[ "$mode" != "whole" ]]; then
+        # A duplicate heading needs the target text for the target-side compare
+        # and the shared rule for the block-side count, so the probe runs here,
+        # under the lock, before the temp file exists.
+        probe_duplicate "$mode"
         rc=0
         run_writer "$mode" >/dev/null 2>&1 || rc=$?
         writer_status "$rc"

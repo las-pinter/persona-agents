@@ -382,4 +382,157 @@ describe("block guards", () => {
 		assert.equal(countRow(text, "- beta row"), 1, "the second block must appear once");
 		assert.ok(!fs.existsSync(second), "a written append must remove the block");
 	});
+
+	test("exits 2 on a level-2 heading the target already holds", () => {
+		const home = makeHome();
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n\n## Verification\n\n- check one\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const block = makeBlock(home, ["- late row", "## Verification", "- check two"]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 2, result.stderr);
+		assert.equal(fs.readFileSync(target, "utf8"), seed, "a duplicate heading must leave the target whole");
+		assert.ok(fs.existsSync(block), "a duplicate heading must keep the block");
+		assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+		assert.ok(result.stderr.includes("Verification"), "stderr must name the heading");
+		assert.ok(result.stderr.includes(target), "stderr must name the target");
+		assert.ok(result.stderr.includes(block), "stderr must name the block path");
+		assert.ok(
+			result.stderr.includes("remove that heading from the block and append again"),
+			"stderr must name the action",
+		);
+		const leftovers = fs.readdirSync(path.dirname(target)).filter((name) => name.startsWith(".journal-write."));
+		assert.deepEqual(leftovers, [], "a refused call must leave no temp file");
+	});
+
+	test("appends a level-2 heading the target does not hold", () => {
+		const home = makeHome();
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const block = makeBlock(home, ["- late row", "## Verification", "- check two"]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 0, result.stderr);
+		const text = fs.readFileSync(target, "utf8");
+		assert.equal(countRow(text, "## Verification"), 1, "the block must open the section once");
+		assert.equal(countRow(text, "- check two"), 1, "the block text must appear once");
+		assert.ok(!fs.existsSync(block), "a written append must remove the block");
+	});
+
+	test("appends a level-2 heading when the target holds a different one", () => {
+		const home = makeHome();
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n\n## Key Decisions\n\n- one choice\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const block = makeBlock(home, ["- late row", "## Verification", "- check two"]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 0, result.stderr);
+		const text = fs.readFileSync(target, "utf8");
+		assert.equal(countRow(text, "## Key Decisions"), 1, "the old heading must stay once");
+		assert.equal(countRow(text, "## Verification"), 1, "the block must open the section once");
+		assert.ok(!fs.existsSync(block), "a written append must remove the block");
+	});
+
+	test("matches every heading form to the target heading", () => {
+		const cases: Array<{ target: string; block: string }> = [
+			{ target: "  ## Verification", block: "## Verification" },
+			{ target: "##\tVerification", block: "## Verification" },
+			{ target: "## Verification ##", block: "## Verification" },
+			{ target: "## Verification", block: " ##\tVerification ## " },
+		];
+		for (const { target: targetHeading, block: blockHeading } of cases) {
+			const home = makeHome();
+			const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n\n${targetHeading}\n\n- check one\n`;
+			const target = seedTarget(dailyPath(home), seed);
+			const block = makeBlock(home, ["- late row", blockHeading, "- check two"]);
+			const result = run(home, appendArgs(block, ["--section", "alpha"]));
+			const label = `block ${JSON.stringify(blockHeading)} with target ${JSON.stringify(targetHeading)}`;
+			assert.equal(result.status, 2, `${label}: ${result.stderr}`);
+			assert.equal(fs.readFileSync(target, "utf8"), seed, `${label} must leave the target whole`);
+			assert.ok(fs.existsSync(block), `${label} must keep the block`);
+			assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+			assert.ok(result.stderr.includes("Verification"), `${label} must name the heading`);
+		}
+	});
+
+	test("appends a level-2 heading whose last word carries a hash", () => {
+		const home = makeHome();
+		// The hash has no space before it, so it joins the last word and the text
+		// differs from the target heading. The block must still append.
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n\n## Verification\n\n- check one\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const heading = "## Verification#";
+		const block = makeBlock(home, ["- late row", heading, "- check two"]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 0, result.stderr);
+		const text = fs.readFileSync(target, "utf8");
+		assert.equal(countRow(text, "## Verification"), 1, "the target heading must stay once");
+		assert.equal(countRow(text, heading), 1, "the hash word must append once");
+		assert.ok(!fs.existsSync(block), "a written append must remove the block");
+	});
+
+	test("exits 2 on a level-2 heading as the last block row", () => {
+		const home = makeHome();
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n\n## Verification\n\n- check one\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const block = makeBlock(home, ["- late row", "## Verification"]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 2, result.stderr);
+		assert.equal(fs.readFileSync(target, "utf8"), seed, "a duplicate heading must leave the target whole");
+		assert.ok(fs.existsSync(block), "a duplicate heading must keep the block");
+		assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+		assert.ok(result.stderr.includes("Verification"), "stderr must name the heading");
+	});
+
+	test("exits 2 on a second block that repeats the section heading it opened", () => {
+		const home = makeHome();
+		const target = dailyPath(home);
+		const first = makeBlock(home, ["- alpha row", "## Verification", "- check one"]);
+		const firstRun = run(home, appendArgs(first, ["--section", "alpha"]));
+		assert.equal(firstRun.status, 0, firstRun.stderr);
+		const opened = fs.readFileSync(target, "utf8");
+		assert.equal(countRow(opened, "## Verification"), 1, "the first block must open the section once");
+		const second = makeBlock(home, ["- beta row", "## Verification", "- check two"]);
+		const result = run(home, appendArgs(second, ["--section", "alpha"]));
+		assert.equal(result.status, 2, result.stderr);
+		assert.equal(fs.readFileSync(target, "utf8"), opened, "the second block must leave the target whole");
+		assert.ok(fs.existsSync(second), "the refused block must be kept");
+		assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+		assert.ok(result.stderr.includes("Verification"), "stderr must name the heading");
+		const leftovers = fs.readdirSync(path.dirname(target)).filter((name) => name.startsWith(".journal-write."));
+		assert.deepEqual(leftovers, [], "a refused call must leave no temp file");
+	});
+
+	test("exits 2 on a block that carries one level-2 heading twice", () => {
+		const home = makeHome();
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const block = makeBlock(home, [
+			"- late row",
+			"## Verification",
+			"- check one",
+			"## Verification",
+			"- check two",
+		]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 2, result.stderr);
+		assert.equal(fs.readFileSync(target, "utf8"), seed, "a repeated heading must leave the target whole");
+		assert.ok(fs.existsSync(block), "a repeated heading must keep the block");
+		assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+		assert.ok(result.stderr.includes("appears twice in the block"), "stderr must name the cause");
+		assert.ok(result.stderr.includes("Verification"), "stderr must name the heading");
+		assert.ok(result.stderr.includes(block), "stderr must name the block path");
+		const leftovers = fs.readdirSync(path.dirname(target)).filter((name) => name.startsWith(".journal-write."));
+		assert.deepEqual(leftovers, [], "a refused call must leave no temp file");
+	});
+
+	test("strips a control character from the refused heading", () => {
+		const home = makeHome();
+		const heading = "## Veri\u001Bfication";
+		const seed = `# 2026-10-28\n\n## Work Log\n\n### alpha\n\nalpha row\n\n${heading}\n\n- check one\n`;
+		const target = seedTarget(dailyPath(home), seed);
+		const block = makeBlock(home, ["- late row", heading, "- check two"]);
+		const result = run(home, appendArgs(block, ["--section", "alpha"]));
+		assert.equal(result.status, 2, result.stderr);
+		assert.equal(fileLines(result.stderr).length, 1, "one stderr line only");
+		assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f]/.test(result.stderr), "stderr must hold no control character");
+		assert.equal(fs.readFileSync(target, "utf8"), seed, "a duplicate heading must leave the target whole");
+	});
 });

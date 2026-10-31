@@ -166,9 +166,9 @@ clobbers the other sessions' entries. Follow these rules on EVERY update:
    absent, write no journal at all and report a stale install.
 
 The script checks the block once before the lock. It checks record 2, the Work
-Log heading, the section heading, the first text line, and the presence of a
-text line again under the lock. It checks the record limit, the stamp, and the
-path once.
+Log heading, the section heading, the first text line, the level-2 heading
+count, and the presence of a text line again under the lock. It checks the
+record limit, the stamp, and the path once.
 
 ### Block file format
 
@@ -192,12 +192,20 @@ path once.
   text line must not be a level-1, a level-2, or a level-3 heading, because a
   group ends on each of them. A block starts with text. A section heading
   belongs below the text, so an entry can carry its own decisions,
-  verification, issues, and lessons sections. A level-4 heading and deeper
-  stays allowed, because no group ends on one.
+  verification, issues, and lessons sections. A block may open such a section
+  only when the target does not already hold that heading. A level-4 heading
+  and deeper stays allowed, because no group ends on one.
 - One to three leading spaces, any trailing space or tab, and a closing hash
   run after the heading text do not change a heading. The same rule serves the
   target, so a heading with a leading space is still found and still ends its
   group.
+- On `append`, the writer refuses a block that carries a level-2 heading the
+  target already holds, so the day keeps one copy of each section. The compare
+  is by exact text, like the work log find. The compare does not skip a code
+  fence, so a heading inside a code fence counts as held.
+- On `append`, the writer refuses a block that carries one level-2 heading
+  twice. The writer prints both copies, so the day would hold two sections with
+  one name.
 - The writer finds the `## Work Log` heading by its exact text. A target that
   holds a variant, such as `## Work log` or `## Work Log:`, gets a second group
   at the end of the file. Write no heading variant.
@@ -419,11 +427,16 @@ had it).
   - the block: its first text line is a level-1, a level-2, or a level-3
     heading, on `append`;
   - the block: it holds no text line;
+  - the block: it carries one level-2 heading twice, on `append`;
   - the insert anchor, on `append`: it is a bare session stamp;
-  - the target: it holds a carriage return.
+  - the target: it holds a carriage return;
+  - the target: it already holds a level-2 heading that the block carries, on
+    `append`.
   Target unchanged, block kept. Fix a block-side cause in the block. A
-  target-side cause needs the owner: the owner removes the bare stamp or adds
-  its text, or removes the carriage return. Then run the same block file again.
+  target-side cause needs the owner: the owner removes the bare stamp, adds its
+  text, removes the carriage return, or merges the duplicate heading into the
+  existing section. The caller may edit the block and append again, and may not
+  edit the journal. Then run the same block file again.
 - **Write script, exit 3** — `--expect` mismatch. The causes are: a target
   that changed since the `check` read, `--expect new` on a present target, and
   `--expect <digest>` on an absent target. Target unchanged, block kept. Run
