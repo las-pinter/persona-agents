@@ -23,6 +23,10 @@ directory as the home folder.
 
 If the platform reports no absolute path, ask the user once.
 
+The first parent folder that holds an agent-notes folder wins. A stray
+agent-notes folder above the skill folder therefore captures the root. Do not
+create one.
+
 **Fallback:** if the walk reaches the filesystem root, or the skill file sits
 outside the home folder, ask the user once for the home folder. Do not take the
 working directory as the home folder.
