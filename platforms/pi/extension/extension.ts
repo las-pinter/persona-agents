@@ -194,10 +194,6 @@ function appendRootClear(): void {
 	}
 }
 
-// Tunable budgets, not yet settings-backed.
-const SKILL_INJECTION_BUDGET_BYTES = 24 * 1024;
-const SKILL_BODY_CAP_BYTES = 12 * 1024;
-
 import { registerCommands } from "./commands.ts";
 import { registerInspectorCommands } from "./inspector.ts";
 import { installPermissionGate } from "./permissions.ts";
@@ -216,6 +212,35 @@ import { dimText, type StatusUi } from "./status-text.ts";
 import registerSubagentTool from "./subagent.ts";
 import { registerTodoTool } from "./todo-tool.ts";
 import { disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
+
+// Skill injection budgets. The defaults are the fallback for two flat settings
+// keys, `skillInjectionBudgetBytes` and `skillBodyCapBytes`. A value only raises
+// a warning. A mandatory skill body is always injected whole.
+const DEFAULT_SKILL_INJECTION_BUDGET_BYTES = 24 * 1024;
+const DEFAULT_SKILL_BODY_CAP_BYTES = 12 * 1024;
+const SETTING_SKILL_INJECTION_BUDGET = "skillInjectionBudgetBytes";
+const SETTING_SKILL_BODY_CAP = "skillBodyCapBytes";
+
+/**
+ * Read one byte budget from the pi settings. The read happens at use time, so a
+ * change is seen on the next prompt. A missing key, a wrong type, a negative
+ * number, or a non-finite number falls back to the default. Never throws.
+ */
+function readByteSetting(pi: ExtensionAPI, key: string, fallback: number): number {
+	try {
+		const settings = pi.getSettings() as unknown as Record<string, unknown>;
+		const value = settings?.[key];
+		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return fallback;
+		return value;
+	} catch {
+		return fallback;
+	}
+}
+
+/** UTF-8 byte count: a multi-byte character counts as its encoded size. */
+function skillBodyBytes(text: string): number {
+	return Buffer.byteLength(text, "utf8");
+}
 
 export default function (pi: ExtensionAPI): void {
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
@@ -391,22 +416,32 @@ export default function (pi: ExtensionAPI): void {
 			// loudly when missing or oversized — never drop a steering skill silently.
 			const mandatory = matchSkills(agent.alwaysLoad ?? [], discoveredSkills);
 			if (agent.alwaysLoad && agent.alwaysLoad.length > 0) {
-				let mandatoryBudget = SKILL_INJECTION_BUDGET_BYTES;
+				const bodyCap = readByteSetting(pi, SETTING_SKILL_BODY_CAP, DEFAULT_SKILL_BODY_CAP_BYTES);
+				const injectionBudget = readByteSetting(
+					pi,
+					SETTING_SKILL_INJECTION_BUDGET,
+					DEFAULT_SKILL_INJECTION_BUDGET_BYTES,
+				);
+				let injectedBytes = 0;
 				for (const s of mandatory) {
 					const id = s.group ? `${s.group}/${s.name}` : s.name;
 					if (seen.has(id)) continue;
 					seen.add(id);
-					let body = s.body;
-					if (body.length > SKILL_BODY_CAP_BYTES) {
-						console.warn(`agent-stack: mandatory skill ${id} exceeds the ${SKILL_BODY_CAP_BYTES} byte body cap; truncated`);
-						body = `${body.slice(0, SKILL_BODY_CAP_BYTES)}\n>> SKILL TRUNCATED: ${id} (path: ${s.path})`;
+					// A size overrun only warns; it never cuts or drops a mandatory body.
+					const body = s.body;
+					const bodyBytes = skillBodyBytes(body);
+					if (bodyBytes > bodyCap) {
+						console.warn(
+							`agent-stack: mandatory skill ${id} body is ${bodyBytes} bytes, over the ${bodyCap} byte body cap; injected whole (raise ${SETTING_SKILL_BODY_CAP})`,
+						);
 					}
-					if (mandatoryBudget - body.length < 0) {
-						console.warn(`agent-stack: mandatory skill ${id} would exceed the ${SKILL_INJECTION_BUDGET_BYTES} byte budget; body omitted`);
-						extra += `\n\n## Mandatory skill: ${id}\n>> SKILL TRUNCATED: ${id} (path: ${s.path})`;
-						continue;
+					injectedBytes += bodyBytes;
+					// Every skill that keeps the total over the budget warns, not only the first.
+					if (injectedBytes > injectionBudget) {
+						console.warn(
+							`agent-stack: mandatory skill ${id} brings the mandatory total to ${injectedBytes} bytes, over the ${injectionBudget} byte injection budget; injected whole (raise ${SETTING_SKILL_INJECTION_BUDGET})`,
+						);
 					}
-					mandatoryBudget -= body.length;
 					const scriptsDir = skillScriptsDir(s);
 					extra += `\n\n## Mandatory skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
 				}

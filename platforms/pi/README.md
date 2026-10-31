@@ -123,7 +123,7 @@ Template fields (YAML):
 | `model` | string | optional `provider/model` override for subagent spawns |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
 | `skills` | string[] | glob bindings to skills under `content/skills/` (package), `~/.pi/agent/skills/` (user), and `.pi/skills/` (project). `"orchestrator/*"` matches every skill in the orchestrator group; each matched skill is injected as an on-demand index entry (name, description, path) and the agent reads the `SKILL.md` when the task matches |
-| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. A pattern that resolves to no skill, or a body/budget overrun, logs `console.warn` and leaves a visible marker in the prompt (`MISSING skill for alwaysLoad entry: …` / `>> SKILL TRUNCATED: …`) — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
+| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total logs `console.warn` and the injection continues. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
 | `permissions` | object | see below |
 
@@ -203,14 +203,42 @@ tools are never gated (translation note above).
 An agent's frontmatter `alwaysLoad:` and `skills:` are resolved at `before_agent_start`
 and injected into that agent's system prompt (`alwaysLoad` first, then the skill index,
 then resources, then persona on top). `alwaysLoad` carries the guaranteed full-body
-contract: the skill body is injected whole, missing or oversized skills warn loudly, and
-a skill in both lists is injected once by the shared dedup set (`alwaysLoad` wins) under
-the 24 KB injection budget and the 12 KB body cap. `skills:` injects an on-demand index
+contract: the skill body is always injected whole, missing skills warn loudly, and a
+skill in both lists is injected once by the shared dedup set (`alwaysLoad` wins). A body
+over the injection budgets warns and is still injected whole. `skills:` injects an on-demand index
 instead — one entry per matched skill with its name, description, and path, plus a line
 telling the agent to read the file when the task matches. No skill body loads until the
 agent reads the file. `discoverSkills()` understands both this repo's
 `content/skills/<group>/<name>/SKILL.md` layout and pi's `skills/<name>/SKILL.md`;
 `/skills [agent]` lists the matched skills.
+
+### Skill injection budgets
+
+Two settings warn when the mandatory skills get large. Each value is a byte count. The
+measure is UTF-8 bytes, so a multi-byte character counts as its encoded size. A warning
+never cuts or drops a skill body: the whole body is still injected. Set a key in
+`~/.pi/agent/settings.json` or in a project `.pi/settings.json`, then run `/reload`. A
+project `.pi/settings.json` is read only when the project is trusted:
+
+```json
+{
+  "skillInjectionBudgetBytes": 24576,
+  "skillBodyCapBytes": 12288
+}
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `skillInjectionBudgetBytes` | `24576` (24 KB) | Total bytes of mandatory skill bodies in one prompt. Each skill that brings the running total over the limit logs one warning. The warning names the skill, the running total, and this limit. |
+| `skillBodyCapBytes` | `12288` (12 KB) | Per-skill warn threshold. The warning names the skill, its own byte size, and this limit. |
+
+The cost does not end at startup. An over-budget skill is injected on every prompt for
+the whole session, so every turn pays for it. The only way to remove the cost is to
+shrink the skill.
+
+A missing key, a wrong type, a negative number, or a non-finite number falls back to the
+default. Both values are read on every `before_agent_start`, so `/reload` picks up a
+change.
 
 ## Inspecting subagent runs
 

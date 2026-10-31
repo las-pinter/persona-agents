@@ -39,7 +39,7 @@ interface Harness {
 }
 
 /** A fake pi that records `on` handlers; every other method is a no-op. */
-function makePi(): Harness {
+function makePi(settings: unknown = {}): Harness {
 	const handlers = new Map<string, Handler[]>();
 	const noop = (): void => {};
 	const pi: Record<string, unknown> = {
@@ -53,6 +53,7 @@ function makePi(): Harness {
 		registerTool: noop,
 		registerFlag: noop,
 		getFlag: () => undefined,
+		getSettings: () => settings,
 		appendEntry: noop,
 		exec: async () => ({ code: 0, stdout: "", stderr: "" }),
 		getAllTools: () => [],
@@ -100,10 +101,23 @@ function writeSkill(name: string, description: string, bodyMarker: string, bodyB
 }
 
 const indexSkillPath = writeSkill("fixture-index", "Index fixture description.", "INDEX_BODY_MARKER");
-writeSkill("fixture-mandatory", "Mandatory fixture description.", "MANDATORY_BODY_MARKER");
+const mandatoryPath = writeSkill("fixture-mandatory", "Mandatory fixture description.", "MANDATORY_BODY_MARKER");
 writeSkill("fixture-both", "Both-lists fixture description.", "BOTH_BODY_MARKER");
 const overcapAPath = writeSkill("fixture-overcap-a", "Overcap fixture A.", "OVERCAP_A", 13_000);
 const overcapBPath = writeSkill("fixture-overcap-b", "Overcap fixture B.", "OVERCAP_B", 13_000);
+const overcapCPath = writeSkill("fixture-overcap-c", "Overcap fixture C.", "OVERCAP_C", 13_000);
+// Two bytes per character: 7000 characters cross the cap only as UTF-8.
+const multibytePath = writeSkill("fixture-multibyte", "Multi-byte fixture.", "\u00e9".repeat(7_000));
+// Small body: quiet under both defaults. Big body: over both defaults.
+const fallbackSmallPath = writeSkill("fixture-fallback-small", "Fallback probe, small body.", "FALLBACK_SMALL", 2_000);
+const fallbackBigPath = writeSkill("fixture-fallback-big", "Fallback probe, big body.", "FALLBACK_BIG", 30_000);
+
+/** The injected body of a fixture skill: its file content after the frontmatter. */
+function fixtureBody(file: string): string {
+	const content = fs.readFileSync(file, "utf-8");
+	const end = content.indexOf("---", content.indexOf("---") + 3);
+	return content.slice(end + 3).trim();
+}
 
 /** Write a fixture skill whose `description` frontmatter is raw YAML lines. */
 function writeRawSkill(name: string, descriptionYaml: string, bodyMarker: string): string {
@@ -228,26 +242,218 @@ test("missing alwaysLoad entries warn and leave a visible marker", async () => {
 	assert.match(prompt, /MISSING skill for alwaysLoad entry: fixture-does-not-exist/);
 });
 
-test("alwaysLoad bodies stay under the 12 KB cap and the 24 KB budget", async () => {
+/** Collect every console.warn line while `run` executes, then restore the console. */
+async function withWarnings<T>(run: () => Promise<T>): Promise<{ result: T; warnings: string[] }> {
+	const warnings: string[] = [];
+	const original = console.warn;
+	console.warn = (...args: unknown[]) => {
+		warnings.push(args.map((arg) => String(arg)).join(" "));
+	};
+	try {
+		return { result: await run(), warnings };
+	} finally {
+		console.warn = original;
+	}
+}
+
+test("a normal sized mandatory skill is injected quietly", async () => {
 	const harness = makePi();
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ alwaysLoad: ["fixture-mandatory"] }));
+
+	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
+
+	assert.equal(warnings.length, 0, "a body under both defaults raises no warning");
+	assert.ok(prompt.includes(fixtureBody(mandatoryPath)), "the small body is injected whole");
+});
+
+/** Three 13 KB fixtures: every one is over the cap and the third keeps the total over. */
+test("alwaysLoad bodies are injected whole, over the body cap and over the budget", async () => {
+	const harness = makePi();
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ alwaysLoad: ["fixture-overcap-a", "fixture-overcap-b", "fixture-overcap-c"] }));
+
+	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
+
+	assert.doesNotMatch(prompt, />> SKILL TRUNCATED/, "no size cut and no size drop marker may reach the prompt");
+	assert.ok(prompt.includes(fixtureBody(overcapAPath)), "body A must be injected whole");
+	assert.ok(prompt.includes(fixtureBody(overcapBPath)), "body B must be injected whole");
+	assert.ok(prompt.includes(fixtureBody(overcapCPath)), "body C must be injected whole");
+	const promptBytes = Buffer.byteLength(prompt, "utf8");
+	assert.ok(
+		promptBytes > 24 * 1024,
+		`prompt size ${promptBytes} must exceed the 24 KB default budget, so no body was dropped`,
+	);
+
+	const capWarnings = warnings.filter((line) => line.includes("body cap"));
+	assert.equal(capWarnings.length, 3, "one body-cap warning per oversized skill");
+	assert.match(capWarnings[0] ?? "", /fixture-overcap-a/);
+	assert.match(capWarnings[0] ?? "", new RegExp(`over the ${12 * 1024} byte body cap`));
+	assert.match(capWarnings[0] ?? "", /raise skillBodyCapBytes/);
+
+	// The warning fires for every skill after the total goes over, not only the first.
+	const budgetWarnings = warnings.filter((line) => line.includes("injection budget"));
+	assert.equal(budgetWarnings.length, 2, "one budget warning per skill past the point where the total goes over");
+	assert.match(budgetWarnings[0] ?? "", /fixture-overcap-b/);
+	assert.match(budgetWarnings[1] ?? "", /fixture-overcap-c/);
+	assert.match(budgetWarnings[0] ?? "", new RegExp(`over the ${24 * 1024} byte injection budget`));
+	assert.match(budgetWarnings[0] ?? "", /raise skillInjectionBudgetBytes/);
+});
+
+test("the body size is measured in UTF-8 bytes, not UTF-16 code units", async () => {
+	const harness = makePi();
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ alwaysLoad: ["fixture-multibyte"] }));
+
+	const body = fixtureBody(multibytePath);
+	const codeUnits = body.length;
+	const bytes = Buffer.byteLength(body, "utf8");
+	assert.ok(codeUnits < 12 * 1024, `the fixture holds ${codeUnits} code units, under the cap`);
+	assert.ok(bytes > 12 * 1024, `the fixture holds ${bytes} bytes, over the cap`);
+
+	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
+
+	assert.ok(prompt.includes(body), "the multi-byte body is injected whole");
+	const capWarnings = warnings.filter((line) => line.includes("body cap"));
+	assert.equal(capWarnings.length, 1, "the byte size crosses the cap, so the warning fires");
+	assert.ok(capWarnings[0]?.includes(`${bytes} bytes`), "the warning reports the UTF-8 byte size");
+});
+
+test("a larger setting raises the budget and silences the budget warning", async () => {
+	const harness = makePi({ skillInjectionBudgetBytes: 1024 * 1024, skillBodyCapBytes: 1024 * 1024 });
 	extension(harness.pi);
 	setActivePersona(null);
 	setActiveAgent(testAgent({ alwaysLoad: ["fixture-overcap-a", "fixture-overcap-b"] }));
 
-	const prompt = await promptFor(harness, tmpRoot);
+	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
 
-	assert.match(prompt, />> SKILL TRUNCATED: fixture-overcap-a/);
-	assert.match(prompt, />> SKILL TRUNCATED: fixture-overcap-b/);
+	assert.ok(prompt.includes(fixtureBody(overcapAPath)), "body A still appears whole");
+	assert.ok(prompt.includes(fixtureBody(overcapBPath)), "body B still appears whole");
+	assert.equal(warnings.length, 0, "a raised budget and cap leave no warning");
+});
+
+test("the budget settings are read on every prompt, not once at registration", async () => {
+	const settings: Record<string, unknown> = {
+		skillInjectionBudgetBytes: 1024 * 1024,
+		skillBodyCapBytes: 1024 * 1024,
+	};
+	const harness = makePi(settings);
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ alwaysLoad: ["fixture-overcap-a"] }));
+
+	const first = await withWarnings(() => promptFor(harness, tmpRoot));
+	assert.equal(first.warnings.length, 0, "a raised budget stays quiet on the first prompt");
+
+	settings["skillInjectionBudgetBytes"] = 1024;
+	const second = await withWarnings(() => promptFor(harness, tmpRoot));
 	assert.ok(
-		prompt.includes(`>> SKILL TRUNCATED: fixture-overcap-a (path: ${overcapAPath})`),
-		"the cap-truncated marker must carry the skill path",
+		second.warnings.some((line) => line.includes("injection budget")),
+		"the lowered budget is read on a later prompt from the same handler",
 	);
-	assert.ok(
-		prompt.includes(`>> SKILL TRUNCATED: fixture-overcap-b (path: ${overcapBPath})`),
-		"the budget-dropped marker must carry the path so the agent can still read the skill",
-	);
-	// Two 13 KB bodies would be ~26 KB; the budget forces the second body out.
-	assert.ok(prompt.length < 24 * 1024, `prompt length ${prompt.length} must stay under the budget`);
+
+	settings["skillInjectionBudgetBytes"] = 1024 * 1024;
+	const third = await withWarnings(() => promptFor(harness, tmpRoot));
+	assert.equal(third.warnings.length, 0, "the raised budget silences the warning again");
+
+	for (const prompt of [first.result, second.result, third.result]) {
+		assert.ok(prompt.includes(fixtureBody(overcapAPath)), "the body stays whole on every prompt");
+	}
+});
+
+interface FallbackCase {
+	label: string;
+	/** The settings value handed to `getSettings`; `null` is not an object. */
+	settings: unknown;
+	skill: string;
+	body: string;
+	/** A warning only the default value can produce; `null` means every warning stays quiet. */
+	expect: string | null;
+}
+
+// A small body sits under both defaults, so an accepted small setting would warn.
+// A big body sits over both defaults, so an accepted non-finite setting would not.
+const fallbackCases: FallbackCase[] = [
+	{
+		label: "a missing key",
+		settings: {},
+		skill: "fixture-fallback-small",
+		body: fixtureBody(fallbackSmallPath),
+		expect: null,
+	},
+	{
+		label: "a settings value that is not an object",
+		settings: null,
+		skill: "fixture-fallback-small",
+		body: fixtureBody(fallbackSmallPath),
+		expect: null,
+	},
+	{
+		label: "a string where a number is expected",
+		settings: { skillInjectionBudgetBytes: "1000", skillBodyCapBytes: "1000" },
+		skill: "fixture-fallback-small",
+		body: fixtureBody(fallbackSmallPath),
+		expect: null,
+	},
+	{
+		label: "a negative number",
+		settings: { skillInjectionBudgetBytes: -5, skillBodyCapBytes: -5 },
+		skill: "fixture-fallback-small",
+		body: fixtureBody(fallbackSmallPath),
+		expect: null,
+	},
+	{
+		label: "a not-a-number value",
+		settings: { skillInjectionBudgetBytes: Number.NaN, skillBodyCapBytes: 1024 * 1024 },
+		skill: "fixture-fallback-big",
+		body: fixtureBody(fallbackBigPath),
+		expect: "injection budget",
+	},
+	{
+		label: "an infinite value",
+		settings: { skillInjectionBudgetBytes: 1024 * 1024, skillBodyCapBytes: Number.POSITIVE_INFINITY },
+		skill: "fixture-fallback-big",
+		body: fixtureBody(fallbackBigPath),
+		expect: "body cap",
+	},
+];
+
+test("a bad budget setting falls back to the default without a throw", async () => {
+	for (const row of fallbackCases) {
+		const harness = makePi(row.settings);
+		extension(harness.pi);
+		setActivePersona(null);
+		setActiveAgent(testAgent({ alwaysLoad: [row.skill] }));
+
+		const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
+
+		assert.ok(prompt.includes(row.body), `${row.label}: the body is injected whole`);
+		if (row.expect === null) {
+			assert.deepEqual(warnings, [], `${row.label}: the defaults keep every warning quiet`);
+		} else {
+			assert.ok(
+				warnings.some((line) => line.includes(row.expect as string)),
+				`${row.label}: the default warns (${warnings.join(" | ")})`,
+			);
+		}
+	}
+});
+
+test("a zero budget is legal and warns, so it does not fall back", async () => {
+	const harness = makePi({ skillInjectionBudgetBytes: 0, skillBodyCapBytes: 1024 * 1024 });
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ alwaysLoad: ["fixture-mandatory"] }));
+
+	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
+
+	assert.ok(prompt.includes(fixtureBody(mandatoryPath)), "the body is still injected whole");
+	const budgetWarnings = warnings.filter((line) => line.includes("injection budget"));
+	assert.equal(budgetWarnings.length, 1, "a zero budget warns on the first skill");
+	assert.match(budgetWarnings[0] ?? "", /over the 0 byte injection budget/);
 });
 
 /** One tree-log line for `runId`; `status` follows the record type. */
