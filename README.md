@@ -239,6 +239,7 @@ For Claude Code, use the update commands in
 ## Contributing
 
 Want to add a new warband, profession, or fix something? Platform internals
-are in the four per-platform README files under `platforms/`. Repository rules
-live in `AGENTS.md`: the release ritual, the commit rule, and the steps to add
-a theme, a profession, a persona, or a skill.
+are in the four per-platform README files under `platforms/`. The release
+ritual and the commit rule live in `AGENTS.md`. The steps to add a theme, a
+profession, a persona, or a skill live in
+[docs/adding-content.md](docs/adding-content.md).
