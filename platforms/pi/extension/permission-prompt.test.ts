@@ -7,7 +7,7 @@
  * `buildPromptModel` must never carry the rule regex, must show the human
  * reason, must show the full command with the blocked part highlighted, and
  * must keep the same three decisions for every kind. The integration block
- * drives the real `installPermissionGate` handler to prove `permissions.ts`
+ * drives the real `installToolCallGate` handler to prove `permissions.ts`
  * passes the rule's reason (never its regex), runs a spanning "Allow once",
  * remembers a session rule, and fails closed without a UI.
  */
@@ -30,7 +30,7 @@ import {
 	renderPermissionPrompt,
 	type PromptModel,
 } from "./permission-prompt.ts";
-import { installPermissionGate } from "./permissions.ts";
+import { installToolCallGate } from "./permissions.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 
 const REASON = "orchestrator commit requires user approval";
@@ -468,9 +468,19 @@ function installGate(config: {
 		systemPrompt: "",
 		source: "package",
 		filePath: "",
-		permissions: { mode: config.mode, deny: config.deny, ask: config.ask, allow: config.allow },
 	};
-	installPermissionGate(pi as unknown as ExtensionAPI, () => agent);
+	// The gate reads the compiled table; this fixture source drives the same
+	// wiring with the case's own rule set, so the prompt and grant path is real.
+	installToolCallGate(pi as unknown as ExtensionAPI, () => agent, () => ({
+		ruleSets: {
+			globalDeny: [],
+			agentDeny: config.deny ?? [],
+			globalAsk: [],
+			agentAsk: config.ask ?? [],
+			agentAllow: config.allow ?? [],
+		},
+		mode: config.mode,
+	}));
 	assert.ok(captured, "the gate must register a tool_call handler");
 	return { handler: captured };
 }

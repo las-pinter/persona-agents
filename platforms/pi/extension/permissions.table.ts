@@ -1,11 +1,11 @@
 /**
  * The pi permission rule table. Data only.
  *
- * Seventy-eight rows carry three class groups:
+ * Eighty-one rows carry three class groups:
  *   - 22 global rows  (all three classes),
  *   - 14 reader rows,
- *   - 18 worker rows,
- *   - 24 orchestrator rows.
+ *   - 20 worker rows,
+ *   - 25 orchestrator rows.
  *
  * A row is a name, a tool, a verdict, the classes that get it, and a geometry of
  * plain words. A row may also carry `roles`, which narrows its class scope to
@@ -21,8 +21,8 @@
  * disagrees with itself.
  *
  * Row groups, by class:
- *   global 22, reader 14, worker 18, orchestrator 24, total 78.
- * Rows a class resolves to: reader 36, worker 40, orchestrator 46.
+ *   global 22, reader 14, worker 20, orchestrator 25, total 81.
+ * Rows a class resolves to: reader 36, worker 42, orchestrator 47.
  *
  * Fences. A deny row that names an option requires that option, so the bare
  * command stays untouched. `find` denies on `-exec`, `-fls`, and the `-fprint`
@@ -232,6 +232,31 @@ const SHELL_VERIFY = [
 
 /** The cargo verification commands keep a trailing argument. */
 const SHELL_VERIFY_CARGO = ["cargo nextest", "cargo deny check"];
+
+/**
+ * The worker verification commands. The row anchors at the script word, like the
+ * orchestrator row, so a trailing flag stays outside it.
+ */
+const SHELL_VERIFY_WORKER = [
+	"npm test",
+	"tsc",
+	"tsc --noEmit",
+	"pytest",
+	"python -m pytest",
+	"mypy",
+	"ruff",
+	"cargo check",
+	"cargo clippy",
+	"cargo build",
+	"cargo test",
+	"cargo nextest",
+];
+
+/**
+ * A package script name is free text, so the second worker verification row ends
+ * at the verb and takes any script word. The bare row cannot hold it.
+ */
+const SHELL_VERIFY_SCRIPT = ["npm run"];
 
 /** The six history verbs. */
 const GIT_HISTORY = ["add", "commit", "pull", "merge", "rebase", "tag"];
@@ -606,7 +631,7 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		reason: "sudo is denied: only the orchestrator may ask for it",
 	},
 
-	// --- worker: 18 rows ----------------------------------------------------
+	// --- worker: 20 rows ----------------------------------------------------
 	{
 		id: "read.any",
 		tool: "read find ls grep",
@@ -676,8 +701,30 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		verdict: "allow",
 		classes: [...WORKER],
 		verb: SHELL_BUILD,
+		noCd: true,
 		arg: "any",
 		reason: "A build, test, or toolchain command is allowed",
+	},
+	{
+		id: "shell.verify.worker",
+		tool: "bash",
+		verdict: "allow",
+		classes: [...WORKER],
+		verb: SHELL_VERIFY_WORKER,
+		flags: "bare",
+		noCd: true,
+		arg: "any",
+		reason: "A worker verification command is allowed at the script word",
+	},
+	{
+		id: "shell.verify.script",
+		tool: "bash",
+		verdict: "allow",
+		classes: [...WORKER],
+		verb: SHELL_VERIFY_SCRIPT,
+		noCd: true,
+		arg: "any",
+		reason: "A worker runs a named package script",
 	},
 	{
 		id: "git.read",
@@ -781,7 +828,7 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		reason: "sudo is denied: only the orchestrator may ask for it",
 	},
 
-	// --- orchestrator: 24 rows ----------------------------------------------
+	// --- orchestrator: 25 rows ----------------------------------------------
 	{
 		id: "read.any",
 		tool: "read find ls grep",
@@ -861,6 +908,7 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		classes: [...ORCH],
 		verb: SHELL_VERIFY,
 		flags: "bare",
+		noCd: true,
 		arg: "any",
 		reason: "A named project verification script is allowed",
 	},
@@ -870,6 +918,7 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		verdict: "allow",
 		classes: [...ORCH],
 		verb: SHELL_VERIFY_CARGO,
+		noCd: true,
 		arg: "any",
 		reason: "A cargo verification command is allowed",
 	},
@@ -895,6 +944,10 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		arg: "any",
 		reason: "A branch listing is allowed; a branch write form falls outside the listing tail",
 	},
+	// The shared `-C` slot accepts a path only, under the path grammar of the
+	// compiler. The engine matches case-insensitively, so a config key in the value
+	// cannot ride the path slot; the form asks for the orchestrator, and a reader
+	// or a worker denies it.
 	{
 		id: "git.history.plain",
 		tool: "bash",
@@ -905,6 +958,18 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		flags: "listed",
 		arg: "any",
 		reason: "A plain history command is allowed for the orchestrator",
+	},
+	// A directory-option value that fails the path grammar asks for the
+	// orchestrator. A deny row still wins, so a gated form denies first.
+	{
+		id: "git.dir-option.ask",
+		tool: "bash",
+		verdict: "ask",
+		classes: [...ORCH],
+		verb: ["git"],
+		flags: "dir-option",
+		arg: "any",
+		reason: "A git directory option value that is not a path requires user approval",
 	},
 	{
 		id: "git.history.exception",

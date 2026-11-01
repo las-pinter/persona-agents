@@ -36,13 +36,6 @@ export interface PermissionRule {
 	reason?: string;
 }
 
-export interface PermissionConfig {
-	mode?: "allow-unless-matched" | "deny-by-default";
-	allow?: PermissionRule[];
-	ask?: PermissionRule[];
-	deny?: PermissionRule[];
-}
-
 export interface AgentConfig {
 	name: string;
 	description: string;
@@ -56,8 +49,6 @@ export interface AgentConfig {
 	alwaysLoad?: string[];
 	/** Regex-bound file resources attached to this agent's context (later phase). */
 	resources?: string[];
-	/** Per-agent permission rules from frontmatter. */
-	permissions?: PermissionConfig;
 	/**
 	 * Permission class from frontmatter. Every file this package ships must name
 	 * one. A user or project file may omit the field: it loads as `reader`, the
@@ -109,7 +100,6 @@ type AgentFrontmatter = {
 	skills?: unknown;
 	alwaysLoad?: unknown;
 	resources?: unknown;
-	permissions?: unknown;
 	permissionClass?: unknown;
 	spawnable?: unknown;
 };
@@ -143,32 +133,6 @@ function parseStringList(value: unknown): string[] | undefined {
 		.map((t) => t.trim())
 		.filter(Boolean);
 	return items.length > 0 ? items : undefined;
-}
-
-function parsePermissionConfig(value: unknown): PermissionConfig | undefined {
-	if (typeof value !== "object" || value === null) return undefined;
-	const cfg = value as Record<string, unknown>;
-	const rules = (v: unknown): PermissionRule[] | undefined => {
-		if (!Array.isArray(v)) return undefined;
-		const out: PermissionRule[] = [];
-		for (const item of v) {
-			if (typeof item !== "object" || item === null) continue;
-			const r = item as Record<string, unknown>;
-			if (typeof r.match !== "string" || !r.match) continue;
-			out.push({
-				tool: typeof r.tool === "string" ? r.tool : undefined,
-				match: r.match,
-				reason: typeof r.reason === "string" ? r.reason : undefined,
-			});
-		}
-		return out.length > 0 ? out : undefined;
-	};
-	const mode = cfg.mode === "deny-by-default" ? "deny-by-default" : undefined;
-	const allow = rules(cfg.allow);
-	const ask = rules(cfg.ask);
-	const deny = rules(cfg.deny);
-	if (!mode && !allow && !ask && !deny) return undefined;
-	return { mode: mode ?? "allow-unless-matched", allow, ask, deny };
 }
 
 /**
@@ -262,7 +226,6 @@ export function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig
 			skills: parseStringList(frontmatter.skills),
 			alwaysLoad: parseStringList(frontmatter.alwaysLoad),
 			resources: parseStringList(frontmatter.resources),
-			permissions: parsePermissionConfig(frontmatter.permissions),
 			permissionClass: parsePermissionClass(frontmatter.permissionClass, filePath, source),
 			// `spawnable` must be a boolean `false` to disable spawning; the FAQ-level
 			// typo of a quoted "false" string is treated as disabled too rather than
@@ -428,7 +391,6 @@ export function loadTemplateAgents(root: string | null = getPackageRoot()): Agen
 			skills: parseStringList(frontmatter.skills),
 			alwaysLoad: parseStringList(frontmatter.alwaysLoad),
 			resources: parseStringList(frontmatter.resources),
-			permissions: parsePermissionConfig(frontmatter.permissions),
 			permissionClass: parsePermissionClass(frontmatter.permissionClass, path.join(tplDir, entry.name), "package"),
 			// Same semantics as loadAgentsFromDir: only boolean `false` (or the
 			// quoted "false" string) disables spawning; absent/anything else keeps

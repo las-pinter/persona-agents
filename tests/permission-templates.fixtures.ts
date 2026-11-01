@@ -1,8 +1,11 @@
 /**
- * Shared fixtures and helpers for the permission-template regression suite.
+ * Shared fixtures and helpers for the legacy permission regression suite.
  *
- * The verdict helper mirrors the pi permission gate; the shared agent list
- * backs the split test files.
+ * The gate reads the compiled table now, and the pi frontmatters carry no rule
+ * list. These three regression files still drive the real engine, so they read
+ * the frozen legacy corpus in `tests/legacy-pi-permissions/` and keep the
+ * behaviour the retired lists proved. `permission-table.test.ts` proves the
+ * shipped table; a case that must change verdict belongs there.
  */
 
 import * as fs from "node:fs";
@@ -17,10 +20,7 @@ import {
 	type RuleSets,
 } from "../platforms/pi/extension/command-segments.ts";
 
-const frontmatterDir = path.resolve(
-	path.dirname(fileURLToPath(import.meta.url)),
-	"../platforms/pi/frontmatters",
-);
+const frontmatterDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "legacy-pi-permissions");
 
 interface FrontmatterPermissions {
 	mode?: string;
@@ -29,7 +29,7 @@ interface FrontmatterPermissions {
 	deny?: RawRule[];
 }
 
-/** Read one shipped pi frontmatter and map its rules onto gate `RuleSets`. */
+/** Read one frozen legacy rule block and map it onto gate `RuleSets`. */
 export function loadAgentRules(agent: string): { mode: PermissionMode; ruleSets: RuleSets } {
 	const content = fs.readFileSync(path.join(frontmatterDir, `${agent}.yaml`), "utf-8");
 	const { frontmatter } = parseFrontmatter<{ permissions?: FrontmatterPermissions }>(

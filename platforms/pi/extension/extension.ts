@@ -3,7 +3,7 @@
  *
  * Provides:
  *   - subagent tool (single / parallel / chain), agents from user/project/package
- *   - per-agent frontmatter permissions (deny-by-default + regex allow lists)
+ *   - the compiled permission table with a class per resolved agent
  *   - /agents and /persona commands (+ persisted defaultAgent / defaultPersona)
  *   - default agent/persona applied to the main session via before_agent_start
  *
@@ -246,7 +246,7 @@ function skillBodyBytes(text: string): number {
 export default function (pi: ExtensionAPI): void {
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
 
-	// 1. Permission gate on every tool call (global + active agent frontmatter).
+	// 1. Permission gate on every tool call (the rule table plus the live overlay).
 	installPermissionGate(pi, getActiveAgent);
 
 	// 2. Slash commands.

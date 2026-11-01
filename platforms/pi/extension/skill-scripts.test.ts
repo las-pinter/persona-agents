@@ -25,7 +25,7 @@ import { discoverSkills, matchSkills, skillScriptsDirs } from "./resolver.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import {
 	allSegmentsAreSkillScripts,
-	installPermissionGate,
+	installToolCallGate,
 	isAllowedSkillScript,
 } from "./permissions.ts";
 import { evaluateCommandRules, type Decision, type RawRule, type RuleSets } from "./command-segments.ts";
@@ -350,7 +350,7 @@ describe("skill scripts: real repo integration", () => {
 
 // ---------------------------------------------------------------------------
 // Integration: drive the real gate handler, not a mirror of it.
-// The handler is `tool_call` from `installPermissionGate`; a fresh gate loads an
+// The handler is `tool_call` from `installToolCallGate`; a fresh gate loads an
 // isolated (empty) global permissions file so the repo file cannot interfere.
 // ---------------------------------------------------------------------------
 
@@ -383,9 +383,20 @@ function installGateHandler(allow: PermissionRule[], deny: PermissionRule[] = []
 		source: "package",
 		filePath: "",
 		skills: ["script-fixture"],
-		permissions: { mode: "deny-by-default", allow, deny },
 	};
-	installPermissionGate(pi as unknown as ExtensionAPI, () => agent);
+	// The gate reads the compiled table; this fixture source drives the same
+	// wiring with the case's own allow and deny rows, so the skill-script
+	// fall-through is exercised on the real handler.
+	installToolCallGate(pi as unknown as ExtensionAPI, () => agent, () => ({
+		ruleSets: {
+			globalDeny: [],
+			agentDeny: deny,
+			globalAsk: [],
+			agentAsk: [],
+			agentAllow: allow,
+		},
+		mode: "deny-by-default",
+	}));
 	assert.ok(captured, "the gate must register a tool_call handler");
 	return captured;
 }

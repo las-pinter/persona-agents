@@ -2,12 +2,3 @@ name: mascot
 description: Light-hearted companion agent for entertainment and moral support; minimal tool access
 tools: [read]
 permissionClass: reader
-permissions:
-  mode: deny-by-default
-  allow:
-    - { tool: read, match: "(^|/)(personas|skills|agents|agent-notes)/" }
-  ask: []
-  deny:
-    - { tool: bash, match: "^eval\\b" }
-    - { tool: bash, match: "^(?:/bin/)?(?:bash|sh|dash|zsh)\\s+-c\\b" }
-    - { tool: bash, match: "(?:>>|>)(?!&\\d(?=$|[\\s;&|()<>]))|(?:^|[;&|(\\s])\\s*tee\\s+" }

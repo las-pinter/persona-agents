@@ -14,7 +14,7 @@
  * A row carries no pattern. Every pattern piece comes from this module:
  *
  *   - the wrapper column of a deny or ask row (`env`, `timeout`, `sudo`, ...),
- *   - the leading `cd <dir> &&` fold of every bash row,
+ *   - the leading `cd <dir> &&` fold of a bash row, unless the row sets `noCd`,
  *   - the git global-option slot, named by a flag class,
  *   - the option tail of a flag class (`-exec`, `-i`, `--output`, ...),
  *   - the path zone of a read, edit, or write row,
@@ -77,6 +77,7 @@ export type FlagClass =
 	| "none"
 	| "listed"
 	| "any"
+	| "dir-option"
 	| "exec"
 	| "recursive"
 	| "force"
@@ -129,6 +130,11 @@ export interface RuleRow {
 	 * compiler refuses an ask row with `flags: "any"` and no `span`.
 	 */
 	span?: boolean;
+	/**
+	 * Withhold the leading `cd <dir> &&` fold. A verification or build command
+	 * runs in the session directory, so a moved command falls to the mode default.
+	 */
+	noCd?: boolean;
 	/** The sentence the prompt shows. It is never a pattern. */
 	reason: string;
 }
@@ -183,6 +189,7 @@ const ROW_FIELDS = new Set<string>([
 	"probe",
 	"arg",
 	"span",
+	"noCd",
 	"reason",
 ]);
 
@@ -203,6 +210,7 @@ const FLAGS = new Set<string>([
 	"none",
 	"listed",
 	"any",
+	"dir-option",
 	"exec",
 	"recursive",
 	"force",
@@ -274,13 +282,38 @@ const WRAP_ONE = `(?:${WRAP_ATOM})+`;
 const CD = "(?:cd\\s+\\S+\\s*&&\\s*)?";
 
 /**
- * The git global-option columns.
- *   listed: the three options a plain history command may carry.
- *   any:    any option, for the read rows.
- *   plain:  any option, for a non-git verb.
+ * A git config key, not a directory. Only the exception scan reads it now; the
+ * path slot reads the path grammar below. A value that ends in `.git` is a bare
+ * repository directory, so it stays a path.
+ */
+const CONFIG_KEY = "(?!\\S*\\.git(?:\\s|$))[A-Za-z][A-Za-z0-9-]*\\.[^\\s/]*";
+
+/**
+ * The path grammar of the git directory option. A value is a path only when it
+ * holds no single quote, no double quote, and no backslash; it holds a slash or
+ * it ends in `.git`; and, when it holds an equals sign, it starts with `/`,
+ * `./`, `../`, or the home marker `~`. Every other value is not a path, and the
+ * `git.dir-option.ask` row covers it.
+ */
+const PATH_CHAR = `[^\\s'"\\\\]`;
+export const PATH_VALUE =
+	`(?=${PATH_CHAR}*(?:/|\\.git(?=\\s|$)))` +
+	`(?:[^\\s'"\\\\=]+|(?:/|\\./|\\.\\./|~)${PATH_CHAR}*)(?=\\s|$)`;
+
+/** True when one value satisfies the directory-option path grammar. */
+export function isPathValue(value: string): boolean {
+	return new RegExp(`^${PATH_VALUE}$`).test(value);
+}
+
+/**
+ * The git global-option columns. A `-C` value must satisfy the path grammar:
+ * the engine matches case-insensitively, so `-c` and `-C` are one token and a
+ * config key would otherwise ride the path slot.
+ *   listed: the three options a history command may carry, with a path value.
+ *   any:    any option, for the deny rows and the exception ask row.
  */
 const OPT = {
-	listed: "(?:\\s+(?:-C\\s+\\S+|--no-pager|-p))*",
+	listed: `(?:\\s+(?:-C\\s+${PATH_VALUE}|--no-pager|-p))*`,
 	any: "(?:\\s+(?:-C\\s+\\S+|--?[A-Za-z][A-Za-z0-9-]*(?:=\\S+)?))*",
 } as const;
 
@@ -333,6 +366,12 @@ export const LADDER = {
 const SCAN = "(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?";
 
 /**
+ * A git directory option whose value is not a path. The engine matches
+ * case-insensitively, so one ask row covers the `-C` and the `-c` spelling.
+ */
+const NON_PATH_DIR = `-[cC]\\s+(?!${PATH_VALUE})\\S`;
+
+/**
  * The option tail of each flag class. The tail is a lookahead, so the words
  * between the head and the flag stay outside the match.
  */
@@ -340,6 +379,7 @@ export const TAIL: Record<FlagClass, string | null> = {
 	none: null,
 	listed: null,
 	any: null,
+	"dir-option": NON_PATH_DIR,
 	exception: null,
 	fs: null,
 	prefixed: null,
@@ -384,10 +424,18 @@ const PROBE: Record<Probe, string> = {
 /**
  * The exception forms that are not bound to one verb: a `git -c` override, a
  * runtime-shaped word, and a glob or brace word. They scan the whole tail. The
- * config form needs a config key and an equals sign, so a `-C <path>` that holds
- * an equals sign is still a path and still allows.
+ * engine matches case-insensitively, so the override form also covers a `-C`
+ * whose value is a config key. The `git.dir-option.ask` row owns the wider
+ * non-path values; this list keeps its own two key shapes.
  */
-const EXCEPTION_ANY = ["\\s-c\\s+[A-Za-z_][A-Za-z0-9_.-]*=", "\\$", "`", "[*?\\[{]", "[!@+]\\("].join("|");
+const EXCEPTION_ANY = [
+	"\\s-c\\s+[A-Za-z_][A-Za-z0-9_.-]*=",
+	`\\s-c\\s+${CONFIG_KEY}(?=\\s|$)`,
+	"\\$",
+	"`",
+	"[*?\\[{]",
+	"[!@+]\\(",
+].join("|");
 
 /**
  * The option forms bound to one history verb. Force is a tag form and strategy
@@ -495,6 +543,9 @@ export function validateRow(row: RuleRow): void {
 	if (row.span !== undefined && typeof row.span !== "boolean") {
 		fail(row.id, "span must be a boolean");
 	}
+	if (row.noCd !== undefined && typeof row.noCd !== "boolean") {
+		fail(row.id, "noCd must be a boolean");
+	}
 	if (row.verb !== undefined) checkLiterals(row.id, "verb", row.verb);
 	if (row.sub !== undefined) checkLiterals(row.id, "sub", row.sub);
 
@@ -546,6 +597,7 @@ function geometry(row: RuleRow): string {
 		probe: row.probe ?? null,
 		arg: row.arg,
 		span: row.span ?? false,
+		noCd: row.noCd ?? false,
 		reason: row.reason,
 	});
 }
@@ -669,6 +721,9 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 
 	const start = row.verdict === "allow" ? ANCHOR : SEP_START;
 	const wrap = row.verdict === "allow" ? "" : WRAP;
+	// A verification or build row withholds the `cd` fold: a moved command must
+	// fall to the mode default, as the retired anchored rules did.
+	const cd = row.noCd ? "" : CD;
 	const verbs = row.verb ?? [];
 	// `mkfs.<fs>` carries a suffix, so the filesystem row accepts a dot too. A
 	// `dd` row accepts the bare word and needs its device write in the tail.
@@ -691,18 +746,18 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 		const any =
 			`(?=${SCAN}(?:${EXCEPTION_ANY}))` +
 			`(?=${SCAN}\\s(?:${alternation(row.sub)})(?=\\s|$))`;
-		return `${start}${wrap}${CD}${head}(?:${bound}|${any})`;
+		return `${start}${wrap}${cd}${head}(?:${bound}|${any})`;
 	}
 
 	// A history verb inside a substitution or a subshell is never a silent allow.
 	if (row.flags === "subshell" && row.sub) {
 		const sub = `(?:${alternation(row.sub)})(?=\\s|$)`;
-		return "[(`]\\s*" + `${WRAP}${CD}${head}${OPT.any}\\s+${sub}`;
+		return "[(`]\\s*" + `${WRAP}${cd}${head}${OPT.any}\\s+${sub}`;
 	}
 
 	// A process substitution runs a command in the host shell.
 	if (row.flags === "process-sub") {
-		return `${start}${wrap}${CD}${head}(?=${SCAN}(?:[<=]\\())`;
+		return `${start}${wrap}${cd}${head}(?=${SCAN}(?:[<=]\\())`;
 	}
 
 	// The prefix row names two forms: a wrapper prefix that runs the verb, and a
@@ -712,9 +767,9 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 	// value word (`--work-tree /x`), because a plain option name is not a verb.
 	if (row.flags === "prefixed" && row.sub) {
 		const sub = `(?:${alternation(row.sub)})(?=\\s|$)`;
-		const wrapped = `${start}${CD}(?:${WRAP_ONE})${CD}${head}${OPT.listed}\\s+${sub}`;
+		const wrapped = `${start}${cd}(?:${WRAP_ONE})${cd}${head}${OPT.listed}\\s+${sub}`;
 		const option =
-			`${start}${CD}${wrap}${CD}${head}${OPT.listed}\\s+${UNLISTED_OPT}` +
+			`${start}${cd}${wrap}${cd}${head}${OPT.listed}\\s+${UNLISTED_OPT}` +
 			`(?:\\s+[^-\\s]\\S*)?(?:\\s+${ANY_OPT}(?:\\s+[^-\\s]\\S*)?)*\\s+${sub}`;
 		return `(?:${wrapped}|${option})`;
 	}
@@ -741,7 +796,7 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 		// denies the option, never the bare command.
 		body += `(?=${SCAN}\\s${tail})`;
 	}
-	return `${start}${wrap}${CD}${body}`;
+	return `${start}${wrap}${cd}${body}`;
 }
 
 /** Every engine rule a row produces: one per tool it names. */
@@ -772,7 +827,8 @@ function isToolAllow(row: RuleRow): boolean {
 		row.flags === undefined &&
 		row.zone === undefined &&
 		row.probe === undefined &&
-		row.span === undefined
+		row.span === undefined &&
+		row.noCd === undefined
 	);
 }
 

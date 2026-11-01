@@ -1,19 +1,33 @@
 /**
- * Permission gate for agent frontmatter rules + the global permissions.json.
+ * Permission gate for the pi rule table.
  *
- * Every tool call the model makes is checked against:
+ * Every tool call the model makes is checked against one compiled table
+ * (`permissions.table.ts` + `permission-table.ts`), with the live global file as
+ * an optional local overlay. Precedence (`command-segments.ts` owns the order):
  *
- *   1. global hard rules  (~/.pi/agent/permissions.json `deny`)   – always win
- *   2. global ask rules   (~/.pi/agent/permissions.json `ask`)
- *   3. active agent rules (agent frontmatter `permissions.deny`)
- *   4. active agent rules (agent frontmatter `permissions.ask`)
- *   5. active agent rules (agent frontmatter `permissions.allow`)
- *   6. `permissions.mode` default:
- *        - "deny-by-default":       anything not allowed is blocked
- *        - "allow-unless-matched":  anything not matched runs (Pi's default)
+ *   1. global deny rows     (the table's global group, then the overlay)
+ *   2. class deny rows      (the resolved role's class)
+ *   3. a spanning ask       (global ask rows, then class ask rows)
+ *   4. a per-segment ask    (global ask rows, then class ask rows)
+ *   5. class allow rows
+ *   6. the mode default     (`deny-by-default`; nothing unnamed runs)
  *
- * Ask rules (steps 2 and 4) prompt with plain-language options
- * (`permission-prompt.ts`). Every tool shows the same three choices:
+ * Deny wins over ask wins over allow, and every segment of a compound command
+ * must pass.
+ *
+ * The role comes from the resolved agent: its name must be a shipped profession,
+ * its `permissionClass` must equal that profession's class, and the agent must
+ * come from the package before the profession's notes zone binds. An agent whose
+ * name is not a profession, whose class disagrees, or that comes from a user or
+ * project file gets its class rule set with no notes write zone. A session with
+ * no active agent keeps the global rows and runs under `allow-unless-matched`,
+ * as a bare pi session does.
+ *
+ * `installPermissionGate` compiles the table once at factory time; the returned
+ * factory never builds a pattern per call.
+ *
+ * Ask rows prompt with plain-language options (`permission-prompt.ts`). Every
+ * tool shows the same three choices:
  *   - Allow once                       → grant THIS single call
  *   - Always allow this rule (session) → remember the rule for the session
  *                                        (agent|tool|match key, in-memory
@@ -22,21 +36,19 @@
  * A shell segment also approves the matching segment and re-evaluates the
  * remaining segments. A spanning rule runs the whole call once and approves no
  * segment. The prompt shows the full command, highlights the blocked part, and
- * shows the rule's human `reason`, never the raw regex.
+ * shows the rule's human `reason`, never a pattern.
  *
  * Compound shell commands are split into segments by `command-segments.ts`;
  * every segment must pass. See that module for the parse/decision core.
- * Deny rules (steps 1 and 3) always win; headless runs (no UI) treat ask as a
- * hard block — undefined (no prompt) never auto-allows.
+ * Headless runs (no UI) treat ask as a hard block — undefined (no prompt) never
+ * auto-allows.
  *
- * Rule shape (global file or frontmatter):
- *   { "tool": "bash", "match": "\\brm\\s+-rf\\b", "reason": "optional" }
+ * The overlay file `~/.pi/agent/permissions.json` keeps the shape
+ *   { "deny": [ { "tool": "bash", "match": "...", "reason": "..." } ], "ask": [ ... ] }
+ * Its rows are appended after the table's global rows. A malformed file fails
+ * closed: one line names the path and every call is denied.
  *
- * `tool` is optional (matches every tool). `match` is a JavaScript regex
- * tested against the tool's target: bash/powershell -> the command,
- * read/grep/find/ls/edit/write -> the path, other tools -> the JSON arguments.
- *
- * Run /reload after editing permissions.json or agent frontmatter.
+ * Run /reload after editing permissions.json.
  */
 
 import * as fs from "node:fs";
@@ -52,9 +64,20 @@ import {
 import {
 	evaluateCommandRules,
 	unallowedSegments,
+	type PermissionMode,
 	type RawRule,
 	type RuleSets,
 } from "./command-segments.ts";
+import {
+	CLASS_ORDER,
+	compileClass,
+	compileRole,
+	ROLE_CLASS,
+	type Role,
+	type RoleClass,
+	type RuleRow,
+} from "./permission-table.ts";
+import { RULE_ROWS } from "./permissions.table.ts";
 import {
 	buildPromptModel,
 	blockedLabel,
@@ -245,11 +268,85 @@ export function allSegmentsAreSkillScripts(
 	return indices.every((idx) => isAllowedSkillScript(segments[idx], skillScriptsDirs, cwd));
 }
 
+/**
+ * What one evaluation reads: the five rule sets and the mode default. The gate
+ * builds this from the compiled table; a test may pass its own source.
+ */
+export interface GateRuleSource {
+	ruleSets: RuleSets;
+	mode: PermissionMode;
+}
+
+export type GateRuleSourceFactory = (agent: AgentConfig | null) => GateRuleSource;
+
+/** True only for one of the seven shipped professions. */
+function isRole(name: string): name is Role {
+	return Object.prototype.hasOwnProperty.call(ROLE_CLASS, name);
+}
+
+/**
+ * Compile the rule table once, then pick a set per call.
+ *
+ * Every profession is compiled with `compileRole`, so the role's own notes zone
+ * binds when the agent comes from the package. Every class is compiled with
+ * `compileClass`, which binds no zone, for an agent whose name is not a shipped
+ * profession, whose class disagrees with the role map, or that comes from a user
+ * or project file. The global rows are identical in every compiled set, so the
+ * no-agent case reuses one copy and keeps `allow-unless-matched`, as a bare pi
+ * session does today.
+ */
+export function compileGateSource(rows: readonly RuleRow[] = RULE_ROWS): GateRuleSourceFactory {
+	const byRole = new Map<Role, RuleSets>();
+	for (const role of Object.keys(ROLE_CLASS) as Role[]) byRole.set(role, compileRole(rows, role));
+	const byClass = new Map<RoleClass, RuleSets>();
+	for (const cls of CLASS_ORDER) byClass.set(cls, compileClass(rows, cls));
+	const reader = byClass.get("reader") as RuleSets;
+	const noAgent: GateRuleSource = {
+		ruleSets: {
+			globalDeny: [...reader.globalDeny],
+			agentDeny: [],
+			globalAsk: [...reader.globalAsk],
+			agentAsk: [],
+			agentAllow: [],
+		},
+		mode: "allow-unless-matched",
+	};
+	return (agent) => {
+		if (!agent) return noAgent;
+		const cls = agent.permissionClass ?? "reader";
+		// A name alone never widens the fence: discovery clamps a user or project
+		// file above `reader`, and the class must agree with the role map here. The
+		// notes zone binds only for a package file, so a user file named after a
+		// profession cannot borrow that profession's write zone.
+		if (agent.source === "package" && isRole(agent.name) && ROLE_CLASS[agent.name] === cls) {
+			return { ruleSets: byRole.get(agent.name) as RuleSets, mode: "deny-by-default" };
+		}
+		return { ruleSets: byClass.get(cls) ?? reader, mode: "deny-by-default" };
+	};
+}
+
+/** Install the gate with the compiled table as the rule source. */
 export function installPermissionGate(
 	pi: ExtensionAPI,
 	getActiveAgent: () => AgentConfig | null,
 ): void {
-	let globalRules: { deny: PermissionRule[]; ask: PermissionRule[] } | null = null;
+	installToolCallGate(pi, getActiveAgent, compileGateSource());
+}
+
+/**
+ * Install the tool-call gate over one rule source and the global overlay. The
+ * table entry point is `installPermissionGate`; this composition point exists so
+ * a test can drive the real prompt and grant path with a fixture rule set.
+ */
+export function installToolCallGate(
+	pi: ExtensionAPI,
+	getActiveAgent: () => AgentConfig | null,
+	source: GateRuleSourceFactory,
+): void {
+	// The overlay is read once per factory run. /reload re-runs this factory (via
+	// the extension runner), which re-reads the file, so no per-call read is
+	// needed here.
+	const overlay = loadGlobalRules();
 
 	// Session-scoped "always allow" memory, keyed by `agent|tool|ruleMatch`, created
 	// with this gate installation. In-memory only — nothing is written to disk, so
@@ -257,13 +354,6 @@ export function installPermissionGate(
 	// persistent always-allow list is a separate decision). A key hit skips the
 	// prompt entirely on later calls.
 	const sessionAllow = new Set<string>();
-
-	const loadGlobal = () => {
-		globalRules = loadGlobalRules();
-	};
-	loadGlobal();
-	// /reload re-runs this factory (via the extension runner), which re-reads the
-	// global rules from disk again - no per-tool-call reload is needed here.
 
 	// Derived skill-script dirs, cached per (agent name, cwd). /reload re-runs
 	// this factory, which clears the cache. These dirs are the structural
@@ -293,18 +383,18 @@ export function installPermissionGate(
 		// constrain bash/read/edit/write/etc. tool calls.
 		const probe = probeFor(toolName, input);
 		const agent = getActiveAgent();
-		const agentPerms = agent?.permissions;
-		const mode = agentPerms?.mode ?? "allow-unless-matched";
-
-		const g = globalRules ?? { deny: [], ask: [] };
+		const fromSource = source(agent);
+		const mode = fromSource.mode;
 		const isShell = toolName === "bash" || toolName === "powershell";
 		const skillDirs = isShell && agent ? derivedSkillScriptDirs(agent, ctx.cwd) : [];
+		// The table rows come first, then the live overlay. Deny wins by order, so an
+		// overlay row can only add a verdict; it can never loosen a table row.
 		const ruleSets: RuleSets = {
-			globalDeny: g.deny,
-			agentDeny: agentPerms?.deny ?? [],
-			globalAsk: g.ask,
-			agentAsk: agentPerms?.ask ?? [],
-			agentAllow: agentPerms?.allow ?? [],
+			globalDeny: [...fromSource.ruleSets.globalDeny, ...overlay.deny],
+			agentDeny: fromSource.ruleSets.agentDeny,
+			globalAsk: [...fromSource.ruleSets.globalAsk, ...overlay.ask],
+			agentAsk: fromSource.ruleSets.agentAsk,
+			agentAllow: fromSource.ruleSets.agentAllow,
 		};
 		const sessionKey = (match: string): string => `${agent?.name ?? "<none>"}|${toolName}|${match}`;
 		const isSessionAllowed = (rule: RawRule): boolean => sessionAllow.has(sessionKey(rule.match));

@@ -1,10 +1,13 @@
 /**
  * Differential test: the legacy rules against the compiled table.
  *
- * The legacy rule lists still live in the 7 pi frontmatters, and the global
- * file is recorded in the parity ledger. This test parses them, builds a probe
- * corpus, and computes the verdict twice for every probe: once from the running
- * role's legacy rule sets and once from the table row set for the same role.
+ * The table is now the only rule store, so the 310 frontmatter rule lists are
+ * retired from the live frontmatter. The fidelity of the replay still matters,
+ * so the retired lists are frozen verbatim in `tests/legacy-pi-permissions/`.
+ * This test parses that corpus and the global file recorded in the parity ledger
+ * (`LEGACY_GLOBAL`), builds a probe corpus, and computes the verdict twice for
+ * every probe: once from the legacy rule set and once from the table row set for
+ * the same role.
  *
  * The gate is one-sided on purpose:
  *   - the table must never be LOOSER than a legacy rule. A looser verdict is a
@@ -34,6 +37,8 @@ import { CHANGE_RULINGS, DELETIONS, LEGACY, LEGACY_COUNTS, LEGACY_GLOBAL } from 
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const FRONTMATTER_DIR = path.join(repoRoot, "platforms", "pi", "frontmatters");
+/** Frozen copy of the retired frontmatter rule lists. The gate never reads it. */
+const LEGACY_DIR = path.join(repoRoot, "tests", "legacy-pi-permissions");
 
 const ROLES: readonly Role[] = [
 	"orchestrator",
@@ -44,6 +49,22 @@ const ROLES: readonly Role[] = [
 	"researcher",
 	"mascot",
 ];
+
+/**
+ * A two-part rolling digest of the seven frozen corpus files: it pins the exact
+ * corpus bytes, so an edited pattern cannot move the replay baseline silently.
+ */
+const CORPUS_DIGEST = "1351824224:1094090507";
+
+function corpusDigest(): string {
+	const bytes = Buffer.concat(ROLES.map((role) => readFileSync(path.join(LEGACY_DIR, `${role}.yaml`))));
+	const roll = (seed: number, multiplier: number): number => {
+		let value = seed;
+		for (const byte of bytes) value = (value * multiplier + byte) % 2147483647;
+		return value;
+	};
+	return `${roll(0, 131)}:${roll(1, 137)}`;
+}
 
 type Section = "allow" | "ask" | "deny";
 const SECTIONS: readonly Section[] = ["allow", "ask", "deny"];
@@ -73,18 +94,13 @@ function unescapeYaml(raw: string): string {
 }
 
 /**
- * Parse one `permissions:` block. The live frontmatter is the source while it
- * still holds the block; a role that has moved to a `permissionClass:` line
- * carries no legacy list, so it returns null.
+ * Parse one frozen `permissions:` block. The live frontmatter carries no block,
+ * so the legacy corpus is the source of the replay.
  */
 function parseRole(role: Role): LegacyRole | null {
-	const text = readFileSync(path.join(FRONTMATTER_DIR, `${role}.yaml`), "utf8");
+	const text = readFileSync(path.join(LEGACY_DIR, `${role}.yaml`), "utf8");
 	const hasBlock = /^permissions:/m.test(text);
-	const hasClass = /^permissionClass:/m.test(text);
-	if (!hasBlock) {
-		assert.ok(hasClass, `${role} carries neither a permissions block nor a class line`);
-		return null;
-	}
+	if (!hasBlock) return null;
 	const out: LegacyRole = { allow: [], ask: [], deny: [] };
 	let section: Section | null = null;
 	let inside = false;
@@ -228,6 +244,12 @@ const CANDIDATES: readonly Probe[] = [
 	{ tool: "bash", probe: "git clean -fdx" },
 	{ tool: "bash", probe: "git checkout -- ." },
 	{ tool: "bash", probe: "git reset --soft HEAD~1" },
+	// A `-C` value that is a git config key, not a path: the plain history row
+	// takes a guarded slot, so the form reaches the ask row.
+	{ tool: "bash", probe: "git -C core.hooksPath commit" },
+	{ tool: "bash", probe: "git -C remote.origin.url commit" },
+	// A `-C` path form still allows.
+	{ tool: "bash", probe: "git -C ../other commit" },
 	{ tool: "bash", probe: "git commit" },
 	{ tool: "bash", probe: "git commit --amend" },
 	{ tool: "bash", probe: "git tag --force v1" },
@@ -236,6 +258,8 @@ const CANDIDATES: readonly Probe[] = [
 	{ tool: "bash", probe: "git merge --strategy=ours t" },
 	{ tool: "bash", probe: "git rebase -s recursive t" },
 	{ tool: "bash", probe: "git -c core.editor=v commit" },
+	// A path value with an equals sign is still a path, so the form allows.
+	{ tool: "bash", probe: "git -C /x=y commit" },
 	{ tool: "bash", probe: "git --git-dir=/x commit" },
 	{ tool: "bash", probe: "env A=1 git commit" },
 	{ tool: "bash", probe: "git commit $MSG" },
@@ -301,6 +325,14 @@ const CANDIDATES: readonly Probe[] = [
 	{ tool: "bash", probe: "docker rm x" },
 	{ tool: "bash", probe: "npm publish" },
 	{ tool: "bash", probe: "kill -9 1" },
+	// A config key in the git directory option must never ride the path slot.
+	{ tool: "bash", probe: "git -c diff.external=/fixture/evil diff" },
+	{ tool: "bash", probe: "git -c core.fsmonitor=/fixture/evil status" },
+	// A quoted or escaped value fails the path grammar, so it never rides the
+	// slot either.
+	{ tool: "bash", probe: "git -C 'diff.external=/tmp/x' diff" },
+	{ tool: "bash", probe: 'git -C "core.hooksPath=/tmp/x" commit' },
+	{ tool: "bash", probe: 'git -C \\"core.hooksPath=/tmp/x\\" commit' },
 ];
 
 /** The first corpus entry a rule matches, or null when none does. */
@@ -363,7 +395,7 @@ function intended(entry: string): string | null {
 
 // --- coverage ---------------------------------------------------------------
 
-test("the legacy sources parse to the recorded shape", () => {
+test("the frozen legacy corpus parses to the recorded shape", () => {
 	for (const role of ROLES) {
 		const parsed = PARSED.get(role);
 		assert.ok(parsed, `${role} did not parse`);
@@ -377,6 +409,18 @@ test("the legacy sources parse to the recorded shape", () => {
 	const ask = LEGACY_GLOBAL.filter((rule) => rule.section === "ask").length;
 	assert.equal(deny, 6);
 	assert.equal(ask, 11);
+});
+
+test("the frozen legacy corpus matches the pinned digest", () => {
+	assert.equal(corpusDigest(), CORPUS_DIGEST, "the frozen corpus bytes moved");
+});
+
+test("every live frontmatter names a class and carries no rule list", () => {
+	for (const role of ROLES) {
+		const text = readFileSync(path.join(FRONTMATTER_DIR, `${role}.yaml`), "utf8");
+		assert.equal(/^permissions:/m.test(text), false, `${role} still carries a rule list`);
+		assert.ok(/^permissionClass:/m.test(text), `${role} names no class`);
+	}
 });
 
 test("the probe corpus witnesses every legacy rule", () => {
@@ -455,6 +499,62 @@ test("the table is never looser than the legacy rules", (t) => {
 	// The stricter set is measured and reported, never assumed.
 	t.diagnostic(`tightened verdicts: ${tightened.length}`);
 	for (const line of tightened) t.diagnostic(line);
+});
+
+test("a config key on the git directory option denies for a reader class", () => {
+	// The retired reviewer rule let a `-c <key>=<value>` override ride its `-C`
+	// option slot. The table must not, and both probes sit in the corpus above.
+	for (const probe of [
+		{ tool: "bash", probe: "git -c diff.external=/fixture/evil diff" },
+		{ tool: "bash", probe: "git -c core.fsmonitor=/fixture/evil status" },
+	]) {
+		assert.equal(decide(legacySets("reviewer"), probe), "allow", probe.probe);
+		for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+			assert.equal(decide(compileRole(RULE_ROWS, role), probe), "deny", `${role}: ${probe.probe}`);
+		}
+	}
+});
+
+test("a quoted or escaped directory-option value is never looser than the legacy rule", () => {
+	// The legacy `-C` slot took any token, and the engine matches `-c` and `-C`
+	// alike. The table reads the path grammar, so every form asks or denies.
+	const probes: Probe[] = [
+		{ tool: "bash", probe: "git -C 'diff.external=/tmp/x' diff" },
+		{ tool: "bash", probe: 'git -C "core.hooksPath=/tmp/x" commit' },
+		{ tool: "bash", probe: 'git -C \\"core.hooksPath=/tmp/x\\" commit' },
+		{ tool: "bash", probe: "git -c core.editor=vim commit" },
+	];
+	for (const probe of probes) {
+		for (const role of ROLES) {
+			const legacy = decide(legacySets(role), probe);
+			const next = decide(compileRole(RULE_ROWS, role), probe);
+			assert.ok(
+				RANK[next] <= RANK[legacy],
+				`LOOSER on ${probe.probe} for ${role}: legacy ${legacy}, table ${next}`,
+			);
+		}
+	}
+	// The orchestrator asks for each form, and every reader role denies it.
+	for (const probe of probes) {
+		assert.equal(decide(compileRole(RULE_ROWS, "orchestrator"), probe), "ask", probe.probe);
+		for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+			assert.equal(decide(compileRole(RULE_ROWS, role), probe), "deny", `${role}: ${probe.probe}`);
+		}
+	}
+});
+
+test("a worker role runs npm test and a reader role denies it", () => {
+	// Two differential probes: the same command, judged for a worker class and a
+	// reader class. A worker class must keep the retired allow; a reader class
+	// must not gain it.
+	const workerProbe: Probe = { tool: "bash", probe: "npm test" };
+	for (const role of ["implementer", "tester"] as Role[]) {
+		assert.equal(decide(legacySets(role), workerProbe), "allow", `${role} lost npm test in the legacy list`);
+		assert.equal(decide(compileRole(RULE_ROWS, role), workerProbe), "allow", `${role} cannot run npm test`);
+	}
+	for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+		assert.equal(decide(compileRole(RULE_ROWS, role), workerProbe), "deny", `${role} runs npm test`);
+	}
 });
 
 test("every change class carries a reason and an owner ruling", () => {

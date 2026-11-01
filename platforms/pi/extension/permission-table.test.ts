@@ -24,6 +24,7 @@ import {
 	CLASS_ORDER,
 	FLAG_CLASSES,
 	LADDER,
+	PATH_VALUE,
 	ROLE_CLASS,
 	ROLE_NOTES,
 	TAIL,
@@ -32,6 +33,7 @@ import {
 	compileRole,
 	compileTable,
 	countTable,
+	isPathValue,
 	roleZone,
 	rowsForClass,
 	rowsForGroup,
@@ -43,6 +45,8 @@ import {
 	type RuleRow,
 } from "./permission-table.ts";
 import { GIT_DIFF_FAMILY, GIT_READ, RULE_ROWS } from "./permissions.table.ts";
+import { compileGateSource } from "./permissions.ts";
+import type { AgentConfig } from "./resolver.ts";
 import {
 	DELETIONS,
 	FENCED,
@@ -146,27 +150,27 @@ function gateVerdict(role: Role, tool: string, probe: string): "deny" | "ask" | 
 
 // --- row counts -------------------------------------------------------------
 
-test("the table holds 78 rows: 22 global, 14 reader, 18 worker, 24 orchestrator", () => {
+test("the table holds 81 rows: 22 global, 14 reader, 20 worker, 25 orchestrator", () => {
 	const counts = countTable(RULE_ROWS);
-	assert.equal(counts.total, 78);
+	assert.equal(counts.total, 81);
 	assert.equal(counts.byGroup.global, 22);
 	assert.equal(counts.byGroup.reader, 14);
-	assert.equal(counts.byGroup.worker, 18);
-	assert.equal(counts.byGroup.orchestrator, 24);
+	assert.equal(counts.byGroup.worker, 20);
+	assert.equal(counts.byGroup.orchestrator, 25);
 });
 
-test("every class resolves to 36, 40, and 46 rows", () => {
+test("every class resolves to 36, 42, and 47 rows", () => {
 	const counts = countTable(RULE_ROWS);
 	assert.equal(counts.byClass.reader, 36);
-	assert.equal(counts.byClass.worker, 40);
-	assert.equal(counts.byClass.orchestrator, 46);
+	assert.equal(counts.byClass.worker, 42);
+	assert.equal(counts.byClass.orchestrator, 47);
 	assert.deepEqual(rowsForClass(RULE_ROWS, "reader"), [...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "reader")]);
 });
 
-test("the 78 rows carry 55 ids: a shared rule is one row per class", () => {
+test("the 81 rows carry 58 ids: a shared rule is one row per class", () => {
 	// One id is one rule. A rule that three classes share is three rows with one
 	// id, so the id count is the number of distinct rules, not of rows.
-	assert.equal(countTable(RULE_ROWS).uniqueIds, 55);
+	assert.equal(countTable(RULE_ROWS).uniqueIds, 58);
 	const shared = new Map<string, number>();
 	for (const row of RULE_ROWS) shared.set(row.id, (shared.get(row.id) ?? 0) + 1);
 	assert.equal(shared.get("read.any"), 3);
@@ -571,6 +575,11 @@ test("a reader class runs no test or build runner", () => {
 			"cargo clippy",
 			"cargo deny check",
 			"pytest",
+			"python -m pytest",
+			"mypy",
+			"ruff",
+			"npm run build",
+			"tsc",
 			"tsc --noEmit",
 			"docker ps",
 		]) {
@@ -685,10 +694,44 @@ test("an unlisted global option with a separate value word asks", () => {
 	// sign, and it asks.
 	assert.equal(askMatches(orchestrator, "bash", "git -c key=value commit"), true);
 	// A `-C <path>` is one of the three listed global options, so every path form
-	// allows, including a path that looks like a config key.
-	for (const probe of ["git -C <path> commit", "git -C /x commit", "git -C repo.git commit"]) {
+	// allows, including a relative path, a path with an equals sign, and a bare
+	// repository directory.
+	for (const probe of [
+		"git -C ./x commit",
+		"git -C /x commit",
+		"git -C /x=y commit",
+		"git -C ../other commit",
+		"git -C repo.git commit",
+	]) {
 		assert.equal(askMatches(orchestrator, "bash", probe), false, probe);
 		assert.equal(allowMatches(orchestrator, "bash", probe), true, probe);
+	}
+});
+
+test("a -C value shaped like a config key asks instead of riding the path slot", () => {
+	// Before the fix the plain history row took any `-C` value, so it allowed
+	// every form below. A config key in the value runs code on the next command.
+	const probes = [
+		"git -C core.hooksPath commit",
+		"git -C core.hooksPath commit -m x",
+		"git -C core.hooksPath=/x commit",
+		"git -C remote.origin.url commit",
+		"git -c core.hooksPath=/x commit",
+	];
+	const orchestrator = compileClass(RULE_ROWS, "orchestrator");
+	for (const probe of probes) {
+		assert.equal(allowMatches(orchestrator, "bash", probe), false, probe);
+		assert.equal(askMatches(orchestrator, "bash", probe), true, probe);
+	}
+	// A worker and a reader keep their own verdict: the history deny row.
+	for (const [name, sets] of [
+		["worker", compileClass(RULE_ROWS, "worker")],
+		["reader", compileClass(RULE_ROWS, "reader")],
+	] as const) {
+		for (const probe of probes) {
+			assert.equal(allowMatches(sets, "bash", probe), false, `${name}: ${probe}`);
+			assert.equal(denyMatches(sets, "bash", probe), true, `${name}: ${probe}`);
+		}
 	}
 });
 
@@ -794,6 +837,101 @@ test("the verification row ends at the script word", () => {
 	assert.equal(allowMatches(orchestrator, "bash", "cargo nextest --all"), true);
 });
 
+/** The verification commands the retired tester and implementer lists carried. */
+const WORKER_VERIFY_PROBES = [
+	"npm test",
+	"npm run typecheck",
+	"npm run build",
+	"tsc",
+	"tsc --noEmit",
+	"pytest",
+	"python -m pytest",
+	"mypy",
+	"ruff",
+	"cargo check",
+	"cargo clippy",
+	"cargo build",
+	"cargo test",
+	"cargo nextest",
+];
+
+/** True when one named row's own pattern covers the probe. */
+function rowMatches(id: string, probe: string): boolean {
+	return RULE_ROWS.filter((row) => row.id === id).some((row) => matches(rulesForRow(row), "bash", probe));
+}
+
+test("the tester allows npm test, npm run typecheck, and tsc --noEmit", () => {
+	const tester = compileRole(RULE_ROWS, "tester");
+	for (const probe of WORKER_VERIFY_PROBES) {
+		assert.equal(allowMatches(tester, "bash", probe), true, `the tester cannot run ${probe}`);
+	}
+});
+
+test("the implementer allows npm test, npm run typecheck, and tsc --noEmit", () => {
+	const implementer = compileRole(RULE_ROWS, "implementer");
+	for (const probe of WORKER_VERIFY_PROBES) {
+		assert.equal(allowMatches(implementer, "bash", probe), true, `the implementer cannot run ${probe}`);
+	}
+});
+
+test("a verification or build command does not carry the cd fold", () => {
+	for (const probe of [
+		"cd /fixture && npm test",
+		"cd /fixture && npm run build",
+		"cd /fixture && pytest",
+		"cd /fixture && tsc",
+		// The four fold-defeat forms: a leading assignment, a doubled space
+		// before the operator, two chained prefixes, and a substituted form.
+		"A=1 cd /fixture && npm test",
+		"cd /fixture  && npm test",
+		"cd /fixture && cd /other && npm test",
+		"$(cd /fixture && npm test)",
+	]) {
+		for (const role of ["orchestrator", "implementer", "tester"] as Role[]) {
+			assert.equal(allowMatches(compileRole(RULE_ROWS, role), "bash", probe), false, `${role}: ${probe}`);
+		}
+	}
+	// The git fold stays: doctrine allows a leading `cd x &&` for the six verbs.
+	assert.equal(
+		allowMatches(compileClass(RULE_ROWS, "orchestrator"), "bash", "cd /fixture && git status"),
+		true,
+	);
+});
+
+test("a reader role still denies npm test", () => {
+	for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+		for (const probe of ["npm test", "npm run typecheck", "npm run build", "tsc", "tsc --noEmit", "pytest"]) {
+			assert.equal(allowMatches(compileRole(RULE_ROWS, role), "bash", probe), false, `${role} runs ${probe}`);
+		}
+	}
+});
+
+test("a trailing flag on npm test is judged by the orchestrator row rule, not the worker row", () => {
+	// Both rows carry the bare flag class, so both end at the script word.
+	assert.equal(rowMatches("shell.verify", "npm test"), true, "the orchestrator row lost npm test");
+	assert.equal(rowMatches("shell.verify.worker", "npm test"), true, "the worker row lost npm test");
+	for (const probe of ["npm test --watch", "npm test extra"]) {
+		assert.equal(rowMatches("shell.verify", probe), false, `the orchestrator row covers ${probe}`);
+		assert.equal(rowMatches("shell.verify.worker", probe), false, `the worker row covers ${probe}`);
+	}
+	// The worker row keeps the bare forms the retired lists carried.
+	for (const probe of [
+		"tsc",
+		"tsc --noEmit",
+		"pytest",
+		"python -m pytest",
+		"mypy",
+		"ruff",
+		"cargo nextest",
+	]) {
+		assert.equal(rowMatches("shell.verify.worker", probe), true, probe);
+	}
+	// A package script name is free text, so the script row takes any word.
+	for (const probe of ["npm run typecheck", "npm run build"]) {
+		assert.equal(rowMatches("shell.verify.script", probe), true, probe);
+	}
+});
+
 test("a soft reset, a prefix option, and a wrapper prefix on a history verb ask", () => {
 	const orchestrator = compileClass(RULE_ROWS, "orchestrator");
 	for (const probe of [
@@ -825,6 +963,110 @@ test("the plain history forms never ask and always allow", () => {
 	]) {
 		assert.equal(askMatches(orchestrator, "bash", probe), false, probe);
 		assert.equal(allowMatches(orchestrator, "bash", probe), true, probe);
+	}
+});
+
+test("the git directory option takes a path, never a config key", () => {
+	const orchestrator = compileClass(RULE_ROWS, "orchestrator");
+	for (const path of ["/x", "/x=y", "../other", "repo.git", "x.y/z", "/x.y"]) {
+		for (const probe of [`git -C ${path} status`, `git -C ${path} commit`]) {
+			assert.equal(allowMatches(orchestrator, "bash", probe), true, probe);
+			assert.equal(askMatches(orchestrator, "bash", probe), false, probe);
+			assert.equal(verdictOf(orchestrator, "bash", probe), "allow", probe);
+		}
+	}
+	// A value that fails the path grammar asks for the orchestrator. The two
+	// spellings are one token to the engine, and a quoted or escaped value is
+	// not a path either.
+	for (const probe of [
+		"git -C core.hooksPath commit",
+		"git -C core.hooksPath=/x commit",
+		"git -C 'diff.external=/tmp/x' diff",
+		'git -C "core.hooksPath=/tmp/x" commit',
+		"git -c core.editor=vim commit",
+		"git -C \"core.hooksPath=/tmp/x\" commit",
+	]) {
+		assert.equal(allowMatches(orchestrator, "bash", probe), false, probe);
+		assert.equal(askMatches(orchestrator, "bash", probe), true, probe);
+		assert.equal(verdictOf(orchestrator, "bash", probe), "ask", probe);
+	}
+	// A reader holds no ask row for the form, so the deny-by-default default
+	// blocks it, including the quoted spelling.
+	for (const probe of [
+		"git -c 'diff.external=/tmp/x' diff",
+		"git -c 'core.fsmonitor=/tmp/x' status",
+	]) {
+		for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+			assert.equal(allowMatches(compileRole(RULE_ROWS, role), "bash", probe), false, `${role}: ${probe}`);
+			assert.equal(gateVerdict(role, "bash", probe), "deny", `${role}: ${probe}`);
+		}
+	}
+});
+
+/** Values that satisfy the git directory-option path grammar. */
+const PATH_PROBES = [
+	"/x",
+	"/x=y",
+	"../other",
+	"repo.git",
+	"x.y/z",
+	"/x.y",
+	"./x",
+	"~/x",
+	"/x/y.git",
+];
+
+/** Values that do not: a quote, a backslash, no slash, or a bare key with an equals sign. */
+const NON_PATH_PROBES = [
+	"core.hooksPath",
+	"core.hooksPath=/x",
+	"remote.origin.url",
+	"x=y",
+	"repo",
+	"/x\\y",
+	"'/x'",
+	'"/x"',
+	'\\"/x\\"',
+	"~x=y",
+];
+
+/** The allow rows that read the git directory-option slot. */
+const SLOT_ALLOW_ROWS = RULE_ROWS.filter(
+	(row) =>
+		row.verdict === "allow" &&
+		row.tool.split(/\s+/).includes("bash") &&
+		(row.verb ?? []).includes("git"),
+);
+
+/** A probe the row matches when the slot value is a path. */
+function slotProbe(row: RuleRow, value: string): string {
+	const sub = (row.sub ?? [])[0] ?? "";
+	const tail = row.id === "git.branch" ? " -l" : "";
+	return `git -C ${value} ${sub}${tail}`.trim();
+}
+
+test("the path grammar accepts a path and rejects every other value", () => {
+	for (const value of PATH_PROBES) assert.equal(isPathValue(value), true, value);
+	for (const value of NON_PATH_PROBES) assert.equal(isPathValue(value), false, value);
+	// One piece of text serves the slot and the test, so the two cannot drift.
+	assert.ok(PATH_VALUE.length > 0);
+});
+
+test("no allow row that takes the git directory-option slot accepts a non-path value", () => {
+	assert.ok(SLOT_ALLOW_ROWS.length > 0, "no allow row takes the slot");
+	for (const row of SLOT_ALLOW_ROWS) {
+		const rules = rulesForRow(row);
+		assert.equal(matches(rules, "bash", slotProbe(row, "/x")), true, `${row.id} lost the path form`);
+		for (const value of PATH_PROBES) {
+			assert.equal(matches(rules, "bash", slotProbe(row, value)), true, `${row.id} lost the path ${value}`);
+		}
+		for (const value of NON_PATH_PROBES) {
+			assert.equal(
+				matches(rules, "bash", slotProbe(row, value)),
+				false,
+				`${row.id} accepted the non-path value ${value}`,
+			);
+		}
 	}
 });
 
@@ -1074,6 +1316,65 @@ test("a narrowed form stays blocked until a fence row lands", () => {
 	}
 });
 
+// --- the gate source --------------------------------------------------------
+
+/** A minimal resolved agent for the gate-source cases. */
+function agentFor(options: Partial<AgentConfig> & Pick<AgentConfig, "name">): AgentConfig {
+	return {
+		description: "gate source case",
+		systemPrompt: "",
+		source: "user",
+		filePath: `${FIXTURE_ROOT}/${options.name}.md`,
+		...options,
+	};
+}
+
+test("the gate source binds a shipped profession whose class matches", () => {
+	const resolved = compileGateSource()(
+		agentFor({ name: "planner", permissionClass: "reader", source: "package" }),
+	);
+	assert.equal(resolved.mode, "deny-by-default");
+	assert.deepEqual(resolved.ruleSets, compileRole(RULE_ROWS, "planner"));
+	assert.equal(allowMatches(resolved.ruleSets, "edit", `${FIXTURE_ROOT}/agent-notes/planner/x.md`), true);
+});
+
+test("the gate source binds a custom agent name to its class", () => {
+	const resolved = compileGateSource()(agentFor({ name: "my-helper", permissionClass: "reader" }));
+	assert.equal(resolved.mode, "deny-by-default");
+	assert.deepEqual(resolved.ruleSets, compileClass(RULE_ROWS, "reader"));
+});
+
+test("the gate source binds a mismatched class to the named class", () => {
+	const resolved = compileGateSource()(
+		agentFor({ name: "planner", permissionClass: "worker", source: "package" }),
+	);
+	assert.equal(resolved.mode, "deny-by-default");
+	assert.deepEqual(resolved.ruleSets, compileClass(RULE_ROWS, "worker"));
+});
+
+test("the gate source loads a missing class as reader", () => {
+	const resolved = compileGateSource()(agentFor({ name: "my-helper" }));
+	assert.equal(resolved.mode, "deny-by-default");
+	assert.deepEqual(resolved.ruleSets, compileClass(RULE_ROWS, "reader"));
+});
+
+test("the gate source keeps only the global rows with no active agent", () => {
+	const resolved = compileGateSource()(null);
+	assert.equal(resolved.mode, "allow-unless-matched");
+	assert.deepEqual(resolved.ruleSets.globalDeny, compileClass(RULE_ROWS, "reader").globalDeny);
+	assert.deepEqual(resolved.ruleSets.globalAsk, compileClass(RULE_ROWS, "reader").globalAsk);
+	assert.deepEqual(resolved.ruleSets.agentDeny, []);
+	assert.deepEqual(resolved.ruleSets.agentAsk, []);
+	assert.deepEqual(resolved.ruleSets.agentAllow, []);
+});
+
+test("a user file named planner with no class gets the reader fence and no planner notes zone", () => {
+	const resolved = compileGateSource()(agentFor({ name: "planner", source: "user" }));
+	assert.equal(resolved.mode, "deny-by-default");
+	assert.deepEqual(resolved.ruleSets, compileClass(RULE_ROWS, "reader"));
+	assert.equal(allowMatches(resolved.ruleSets, "edit", `${FIXTURE_ROOT}/agent-notes/planner/x.md`), false);
+});
+
 // --- the frontmatter migration ----------------------------------------------
 
 function frontmatterText(role: Role): string {
@@ -1081,30 +1382,15 @@ function frontmatterText(role: Role): string {
 }
 
 /**
- * Roles whose pi frontmatter still carries a `permissions:` block. The rule
- * table is the rule store, so this list can only shrink: a role that drops its
- * block must leave the list in the same change. Until then the case below fails.
+ * The rule table is the only pi rule store: no frontmatter carries a rule list,
+ * and every frontmatter names the class its profession belongs to. This is the
+ * end state the migration must reach, so a rule list cannot come back.
  */
-const PENDING_FRONTMATTER_BLOCK: readonly Role[] = [
-	"orchestrator",
-	"planner",
-	"implementer",
-	"tester",
-	"reviewer",
-	"researcher",
-	"mascot",
-];
-
-test("every role names its class and the pending block list can only shrink", () => {
-	const stillBlocked = ROLES.filter((role) => /^permissions:/m.test(frontmatterText(role)));
-	assert.deepEqual(
-		stillBlocked,
-		PENDING_FRONTMATTER_BLOCK,
-		"update PENDING_FRONTMATTER_BLOCK when a role gains or loses a permissions block",
-	);
-
+test("no pi frontmatter carries a permissions block, and every role names its class", () => {
 	for (const role of ROLES) {
-		const line = /^permissionClass:\s*(\S+)\s*$/m.exec(frontmatterText(role));
+		const text = frontmatterText(role);
+		assert.equal(/^permissions:/m.test(text), false, `${role} still carries a permissions block`);
+		const line = /^permissionClass:\s*(\S+)\s*$/m.exec(text);
 		assert.ok(line !== null, `${role} must carry a permissionClass line`);
 		assert.ok(CLASS_ORDER.includes(line[1] as RoleClass), `${role} names an unknown class ${line[1]}`);
 		assert.equal(line[1], ROLE_CLASS[role], `${role} names a class that differs from the role table`);

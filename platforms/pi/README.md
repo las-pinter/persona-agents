@@ -7,7 +7,9 @@ module below lives in `extension/`):
 |---|---|
 | `extension.ts` | Entry point: wires gate, commands, subagent tool, session hooks |
 | `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package. Package agents are `platforms/pi/frontmatters/<profession>.yaml` composed with `content/professions/<profession>.md`; `platforms/pi/agents/` is an optional override folder |
-| `permissions.ts` | Tool-call gate: global `permissions.json` (hard deny/ask) + active agent's frontmatter `permissions:` (deny → ask → allow → mode default) |
+| `permissions.ts` | Tool-call gate: compiles the rule table once, appends the live `permissions.json` overlay, and resolves the class from the active agent (deny → ask → allow → default) |
+| `permissions.table.ts` | The rule rows: data only, one row per rule and per class |
+| `permission-table.ts` | The compiler: row to one anchored pattern, then the five rule sets the engine reads |
 | `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
 | `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |
 | `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
@@ -65,18 +67,20 @@ immediately. All 7 professions ship pi templates; a profession without a
 frontmatter template is simply not exposed as a pi agent.
 
 The pi templates were translated from `platforms/opencode/frontmatters`
-(shared permission intent, pi-native schema). Translation notes:
+(shared permission intent, pi-native schema). The opencode `action/resource/effect`
+triples informed the pi rule rows; the rows live in `permissions.table.ts` and the
+compiler writes the pattern. Translation notes:
 
-- opencode `action/resource/effect` triples become `tool/match(es)` pi regexes;
-  like-commands are combined into single tidy regexes (e.g. all read-only git
-  variants, the python/jest/tsc toolchain, the read-only viewers).
+- opencode `action/resource/effect` triples became pi rule rows: one row per
+  rule and class, with like-commands combined in one verb list (e.g. all read-only
+  git variants, the python/tsc toolchain, the read-only viewers). The row
+  carries words, not a regex; `permission-table.ts` compiles the pattern.
 - opencode's default `ask` for core actions (e.g. `edit` for implementer/tester)
   becomes `allow`: headless subagents block on confirm prompts, so their raison
-  d'être would be unusable. `deny` lists keep the hard blocks (push/pull for
+  d'être would be unusable. `deny` rows keep the hard blocks (push/pull for
   non-orchestrators,
   `find -exec/-execdir/-delete/-ok/-okdir/-fls/-fprint(0|f)`, `curl|sh`,
-  `xargs → rm|sh|bash|zsh|mv|cp` (first non-option token after xargs options),
-  `rm -r/-f/-rf/-fr`, `sudo`, mkfs/dd).
+  `rm -r/-R/-rf/-fr/--recursive`, `sudo`, mkfs/dd).
 - The bash redirection deny tests the operator itself: any `>` or `>>` is a
   write and denies, whatever character precedes it. The only allowed form is
   file-descriptor duplication, a `>` followed by an ampersand and one digit at
@@ -84,12 +88,17 @@ The pi templates were translated from `platforms/opencode/frontmatters`
   also denies. A digit-leading target (`>1file`) is a write, not a duplication.
   A `>` inside a quoted literal over-denies; the fail-closed choice is kept.
 - The `cd X && …` / `git -C X …` forms (pi permits the first token only) are
-  folded into the git regexes so delegates don't get stuck on command prefixes.
-  A leading `cd X` before any separator folds the segment to `cd X && …`, so a
+  folded into the allow regexes so delegates don't get stuck on command
+  prefixes. The verification and build rows carry no fold, so a moved test or
+  build command falls to the mode default. The `-C` value must be a path: a
+  value with a quote, a backslash, no slash and no `.git` ending, or an equals
+  sign and no leading `/`, `./`, `../`, or `~` is not a path, and the form asks
+  for the orchestrator because the engine matches `-c` and `-C` alike. A
+  leading `cd X` before any separator folds the segment to `cd X && …`, so a
   `cd X || sudo true` line is rewritten to `cd X && sudo true` for allow
-  matching. The fold is lossy for allow only: the raw pre-fold segments stay in
-  the deny and ask probes, so an anchored deny such as `^sudo\b` still blocks
-  `cd X || sudo true`.
+  matching. The fold is lossy for allow only:
+  the raw pre-fold segments stay in the deny and ask probes, so an anchored
+  deny such as `^sudo\b` still blocks `cd X || sudo true`.
 - Compound commands are enforced per segment: `echo hi && id`, `a; b`, and pipe
   chains are split on unquoted control operators and **every** segment must be
   allowed. The `cd X && …` fold above is what keeps the git regexes valid. A
@@ -125,54 +134,55 @@ Template fields (YAML):
 | `skills` | string[] | glob bindings to skills under `content/skills/` (package), `~/.pi/agent/skills/` (user), and `.pi/skills/` (project). `"orchestrator/*"` matches every skill in the orchestrator group; each matched skill is injected as an on-demand index entry (name, description, path) and the agent reads the `SKILL.md` when the task matches |
 | `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total logs `console.warn` and the injection continues. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
-| `permissions` | object | see below |
 | `permissionClass` | string | permission fence class: `reader`, `worker`, or `orchestrator`. A template this repository ships must name one. A user or project agent file may omit it, and a blank value counts as omitted: it loads as `reader`. A user or project file that names a class above `reader` is clamped to `reader` with one warning that names the file. An unknown value throws, and discovery then logs one line while the permission gate still installs |
 
 Note: `description` is required; `name` defaults to the template filename.
 
-`permissions:` (frontmatter) — rules evaluated per tool call:
+## Permission model
 
-```yaml
-permissions:
-  mode: deny-by-default            # or allow-unless-matched (Pi default)
-  allow:
-    - { tool: bash, match: "^curl\\b.*" }
-  ask:
-    - { tool: bash, match: "\\brm\\s+-[rf]{1,2}\\b" }
-  deny:
-    - { tool: bash, match: "curl\\b.*\\|\\s*(ba)?sh\\b" }
-```
+No rule list lives in an agent file. `permissionClass` names the class, and the
+gate reads one compiled table:
 
-Order: global `permissions.json` deny → agent deny → global ask → agent ask → agent allow
-→ mode default.
+| File | Role |
+|---|---|
+| `permissions.table.ts` | the rows: data only, one row per rule and per class |
+| `permission-table.ts` | the compiler: row to one anchored pattern, five rule sets |
+| `permissions.ts` | compiles once at factory time and gates each tool call |
+| `command-segments.ts` | the parse and decision core, unchanged |
 
-Deny patterns differ between the stacks:
+- **Three classes.** `reader` is the planner, the reviewer, the researcher, and
+the mascot. `worker` is the implementer and the tester. `orchestrator` is the
+orchestrator. The gate takes the role from the resolved agent name and requires
+its `permissionClass` to match that role. A name that is not a shipped profession,
+or a class that disagrees with the role map, gets its class rule set with no notes
+write zone. A user or project file always gets its class rule set and never a
+profession's notes zone, even when its name matches a profession.
+- **A row is data.** A row carries an id, a tool, a verdict, its classes, plain
+geometry words, and a one-line reason. No row carries a pattern. The compiler
+writes every wrapper, `cd` fold, git option slot, option ladder, path zone, and
+probe shape, so one ladder has one home.
+- **Precedence.** global deny → class deny → a spanning ask (global row first,
+then class row) → a per-segment ask (global row first, then class row) → class
+allow → the `deny-by-default` default. Deny wins over ask, ask wins over allow,
+and every segment of a compound command must pass.
+- **Write zones** come from the resolved role: the session cwd, the role's
+`agent-notes` folders, and `/tmp` allow; a parent segment, a home path, and any
+other absolute path ask. See `## Editable write zones`.
+- **The overlay is optional.** The live file `~/.pi/agent/permissions.json` is
+unversioned local policy. Its `deny` and `ask` rows are appended after the table's
+global rows at factory time, and a malformed file logs one line that names the
+path and denies every call until it is fixed. The table already carries the 17
+entries that file used to hold.
+- `/reload` re-runs the factory, so an edited table or overlay is read again.
 
-- pi: the deny fields are **regex**. The engine compiles a pattern
-  case-insensitively and unanchored, so the shell-string rules use a
-  start-of-segment anchor: `^eval\b` and
-  `^(?:/bin/)?(?:bash|sh|dash|zsh)\s+-c\b`. The engine splits compound commands
-  and tests every segment and the raw pre-fold segments. Therefore
-  `cd /x && eval y` still hits the `eval y` segment.
-- opencode and kiro: the deny fields are **globs** (anchored). They match the
-  exact prefix forms `bash -c *`, `sh -c *`, `dash -c *`, `zsh -c *`, and
-  `*eval*`. A glob cannot express a word boundary or flexible whitespace. A
-  command that misses these globs falls to the default of the stack (ask). It
-  does not become a silent allow.
-
-An `ask` rule is a manual override for calls the allow list does not cover (e.g.
-`sudo`/`rm -rf` in the orchestrator or planner templates). Deny rules always win;
-headless runs (subagent children, `-p`, `--mode json`) have no UI, so `ask` there is a
-hard block.
-
-An `ask` prompt offers three choices: **Allow once**, **Always allow this rule
+An `ask` row prompts with three choices: **Allow once**, **Always allow this rule
 (session)**, and **Deny**. Deny blocks the call ("Denied by user"). Allow once grants
 exactly that single call, including a rule whose pattern spans a separator. Always
 allow remembers the `agent|tool|rule` for the rest of the session — **in-memory only,
 nothing is persisted to disk** (a persistent always-allow list is a future decision).
 The ask prompt is a highlighted panel in TUI mode and a plain selector otherwise. It
 shows the full command and highlights the blocked part (the plain fallback marks it
-with brackets), shows the rule's human `reason` as "Why:", and never the raw regex.
+with brackets), shows the rule's human `reason` as "Why:", and never a pattern.
 For a compound command, a segment always-allow also approves exactly the matching
 segment and re-evaluates the remaining segments; it never grants a different segment
 (an unallowed remaining segment blocks the whole command). The whole-command ask probe
@@ -184,6 +194,14 @@ spanning always-allow runs the current call and remembers the rule, approving no
 segment; later calls skip the spanning ask, but they still must pass the allow checks,
 so deny-by-default can still block them.
 
+A run with no UI (`-p`, `--mode json`, a child process) treats `ask` as a hard
+block: nothing auto-allows.
+
+The table is a pi mechanism. Kiro and opencode keep their glob rule files, so a
+rule that misses a glob there falls to that stack's default (ask). On pi a form
+that no row names falls to `deny-by-default`, so it blocks. A session with no
+active agent runs under `allow-unless-matched` with only the global rows.
+
 **Git writes**: `AGENTS.md` owns the history doctrine, the forms that still
 ask, and the accepted-risk list. The pi mapping allows the six history
 commands also with `git -C <path>`, `--no-pager`, `-p`, and a leading
@@ -192,8 +210,7 @@ commands also with `git -C <path>`, `--no-pager`, `-p`, and a leading
 **Headless orchestrator runs (delegated/`-p`/`--mode json`) can run a plain
 commit**, but a commit in an exception form still blocks, for example a message
 with a question mark or a bracket. Headless runs cannot push, open a pull
-request, or release. The global file `~/.pi/agent/permissions.json` is live and
-unversioned; it carries a global ask for `git push` and `gh pr` as a safety net.
+request, or release.
 
 Gate scope: only `bash`/`powershell` (command), `read`/`grep`/`find`/`ls`/`edit`/`write`
 (path/pattern), and other plain tools (JSON args) are probed. `mcp__…` and namespaced
@@ -343,20 +360,24 @@ tarball ships no `LICENSE` file.
 
 ## Editable write zones
 
-Per the templates and the pi frontmatter, each profession may freely edit the
-paths in its row:
+Each profession's write zone comes from the table rows for its role, not from a
+list in its agent file:
 
 | Agent | Zones (edit + write) |
 |---|---|
-| orchestrator | the repository (`agent-notes/**` included), plus the two exceptions that the paragraph below names; any other path asks |
-| planner | `agent-notes/project-notes/**` |
+| orchestrator | the session working directory, any `agent-notes/**` path, and `/tmp/**`; any other path asks |
+| planner | `agent-notes/planner/**` and `agent-notes/project-notes/**` |
 | researcher | `agent-notes/researcher/**` |
-| implementer / tester | workspace files (edit/write everywhere) |
-| reviewer / mascot | none (read-only) |
+| reviewer | `agent-notes/reviewer/**` |
+| implementer | the session working directory, `agent-notes/implementer/**`, and `/tmp/**` |
+| tester | the session working directory, `agent-notes/tester/**`, and `/tmp/**` |
+| mascot | none (read-only) |
 
-On pi the engine cannot resolve a path against the working directory, so the
-orchestrator rules name the path forms directly. A relative path with no parent
-segment allows: it is the repository under the session working directory. A
+Any other path asks for the worker and the orchestrator, and a reader denies
+it. On pi the engine cannot resolve a path against the working directory, so
+the rows name the path forms directly. A
+relative path with no parent segment allows: it is the repository under the
+session working directory. A
 path with a parent segment asks, a home-relative (`~`) path asks, and any other
 absolute path asks. Two exceptions allow. The first is an absolute path that
 holds an `agent-notes` segment and no parent segment, because the notes tree
@@ -425,4 +446,4 @@ resolved in the order flag > settings > env. Alternatives:
   persona via the flags, so **global `defaultAgent`/`defaultPersona` can never leak into a
   subagent** — "off" explicitly clears them. The child's own `before_agent_start` injects
   the profession body + persona (no temp prompt file), and because the child has a real
-  active agent, its frontmatter permissions are enforced by the gate there too.
+  active agent, the gate applies that agent's class rule set there too.

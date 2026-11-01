@@ -2,9 +2,10 @@
  * Parity ledger: every legacy pi permission entry and where it went.
  *
  * Sources, 327 entries in total:
- *   - the `permissions:` block of the 7 pi frontmatters, 310 entries, keyed
- *     `<role>/<allow|ask|deny>/<ordinal>` in file order, ordinal from 1. The
- *     counts below record that shape, so this file needs no frontmatter read;
+ *   - the retired `permissions:` block of the 7 pi frontmatters, 310 entries,
+ *     keyed `<role>/<allow|ask|deny>/<ordinal>` in file order, ordinal from 1.
+ *     The lists are frozen in `tests/legacy-pi-permissions/`; the counts below
+ *     record that shape, so this file needs no rule read;
  *   - the live global file `~/.pi/agent/permissions.json`, 17 entries,
  *     keyed `global/<deny|ask>/<ordinal>` in file order, ordinal from 1.
  *
@@ -147,6 +148,12 @@ export const ROW_RATIONALE: Record<string, string> = {
 		"Split from the global deny entry that also covers mkfs and dd, so the prompt names one action.",
 	"write.escape.deny":
 		"A reader writes only its own notes zone, so a write outside that zone is an explicit deny row instead of a fall-through.",
+	"shell.verify.worker":
+		"The worker verification row names each retired test and type-check command, and it anchors at the script word like the orchestrator row.",
+	"git.dir-option.ask":
+		"A git directory option value that fails the path grammar had no ask row, so one row now sends every such value to the ask tier for the orchestrator.",
+	"shell.verify.script":
+		"The retired worker list allowed npm run with any script name, so one row names the verb and leaves the script word free.",
 };
 
 /** A form the table blocks, with the reason and the sample the test checks. */
@@ -294,6 +301,62 @@ export const NARROWED: readonly GapRecord[] = [
 		sample: "gh --version",
 		row: "release.ask",
 		reason: "No row names a read-only gh verb, so the default blocks the gh version and auth probes.",
+	},
+	{
+		form: "git -C config key",
+		sample: "git -C core.hooksPath commit",
+		row: "git.history.plain",
+		classes: ["orchestrator"],
+		reason: "A -C value shaped like a git config key is not a path, so the plain history row takes a guarded slot.",
+	},
+	{
+		form: "git -c diff.external",
+		sample: "git -c diff.external=/fixture/evil diff",
+		row: "git.read",
+		reason: "A -c value shaped like a git config key is not a path, so every git row takes the guarded slot.",
+	},
+	{
+		form: "git -c core.fsmonitor",
+		sample: "git -c core.fsmonitor=/fixture/evil status",
+		row: "git.read",
+		reason: "The engine matches -c and -C alike, so the shared slot rejects the key for every git row.",
+	},
+	{
+		form: "git -C quoted value",
+		sample: "git -C 'diff.external=/tmp/x' diff",
+		row: "git.read",
+		classes: ["orchestrator"],
+		reason: "A quote, a double quote, or a backslash fails the path grammar, so no git allow row takes the value.",
+	},
+	{
+		form: "cd npm test",
+		sample: "cd /fixture && npm test",
+		row: "shell.verify",
+		reason: "A verification row carries no cd fold, so a moved test falls to deny-by-default.",
+	},
+	{
+		form: "cd npm run build",
+		sample: "cd /fixture && npm run build",
+		row: "shell.verify.script",
+		reason: "A named package script runs in the session directory, so the script row carries no cd fold.",
+	},
+	{
+		form: "cd pytest",
+		sample: "cd /fixture && pytest",
+		row: "shell.verify.worker",
+		reason: "A worker verification row carries no cd fold, so a moved test falls to deny-by-default.",
+	},
+	{
+		form: "cd tsc",
+		sample: "cd /fixture && tsc",
+		row: "shell.verify.worker",
+		reason: "The type-check row carries no cd fold, so a moved type check falls to deny-by-default.",
+	},
+	{
+		form: "cd cargo nextest",
+		sample: "cd /fixture && cargo nextest",
+		row: "shell.verify.cargo",
+		reason: "The cargo verification row carries no cd fold, so a moved run falls to deny-by-default.",
 	},
 ];
 
