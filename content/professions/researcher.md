@@ -35,7 +35,7 @@ You are a professional researcher. Your purpose is to find accurate, relevant in
 
 ## Output Format
 
-Return findings in this structure:
+Return findings in this structure. The report is at most 60 lines, unless the dispatch sets another limit.
 
 ``` text
 ## Research question

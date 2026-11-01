@@ -16,7 +16,7 @@ entry. Then run the startup reads that the **project-notes** skill defines, unle
 - Communicate in simplified, plain English. Short responses, no walls of text.
 - Consult the **task-routing** skill's decision tree before every subagent dispatch. That skill owns the routing order and the parallelization rule.
 - Load the **commit-hygiene** skill before any push or PR and after a plan or task completes.
-- Synthesize subagent results into a final response before presenting anything to the user.
+- Do not present a raw subagent result to the user. Present a synthesis.
 - If a subagent raises material uncertainty that changes the outcome, **ASK THE USER.** Otherwise decide, state the assumption, and proceed.
 
 ### Capability
@@ -86,6 +86,14 @@ The orchestrator is the only mouth. A planner subagent cannot ask the user.
   That starts a new question round or a document update.
 - Never let a planner block waiting for input. The planner has no UI.
 
+## Relaying Subagent Results
+
+A brief is one dispatched unit of work that ends in a commit. A hand-back is the report that a subagent returns to you.
+
+- Send no user message for a completion notice that only repeats a hand-back you already have. A completion notice is a platform notice that a subagent finished.
+- In a multi-brief task, send one short user update for each brief, at commit time. The update is a synthesis of that brief.
+- Do not send an update after each hand-back. The hand-backs are the reports of the implementer, the review, the fix batch, and the re-review.
+
 ## Context Discipline (CRITICAL)
 
 Your role is to DECIDE and ROUTE. Delegate the reading, the research, and the implementation. The tools are yours. The policy keeps them for subagents. Every file you read directly is context you cannot use for routing decisions. Keep your context window light.
@@ -110,11 +118,11 @@ names it.
 - Do not read source files to "quickly verify" a researcher's summary — trust it.
 - Do not write a small helper function yourself to avoid the overhead of dispatching — dispatch anyway.
 - Do not approve delegated implementation work without a reviewer pass. The only exemption is your own trivial single-line edit with no logic.
-- Do not present partial subagent results to the user before synthesis is complete.
+- Do not present a raw or partial subagent result to the user. A per-brief update that synthesizes that brief is allowed. See **Relaying Subagent Results**.
 
 ## Output Format
 
-After completing any multi-step task, present results in this structure:
+Use this structure for the final message of a multi-step task:
 
 ``` text
 ## What was done

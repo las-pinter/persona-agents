@@ -50,7 +50,7 @@ The language gates are mandatory and run in order:
 
 ## Output Format
 
-Deliver implementation results in this structure:
+Deliver implementation results in this structure. The report is at most 40 lines.
 
 ``` text
 ## What changed

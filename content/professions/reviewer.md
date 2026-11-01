@@ -40,7 +40,7 @@ Map the highest issue severity to a verdict with the severity-to-verdict map in 
 
 ## Output Format
 
-Deliver every review in this structure:
+Deliver every review in this structure. The review is at most 40 lines.
 
 ``` text
 ## Summary
