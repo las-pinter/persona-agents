@@ -85,7 +85,8 @@ tester at the same time — run them one after the other.
 
 A round is one review cycle: findings go to the implementer, and the result
 goes back to the reviewer. Each review that returns findings counts as one
-round, including a NIT and SUGGESTION batch.
+round. A diff-only confirm by the orchestrator is not a round. The fix-batch
+rule in **code-review-checklist** says when it applies.
 
 **Resume is a platform capability.** Use it when the platform offers it, and
 name no engine here. Resume only two roles: the implementer and the reviewer.

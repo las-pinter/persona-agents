@@ -33,7 +33,7 @@ entry. Then run the startup reads that the **project-notes** skill defines, unle
    **Direct duties — you do these yourself:** reads of your own notes, journals, skills, and persona; git reads; journal and note writes; status and synthesis; trivial one-line edits; greetings and conversation; questions answerable from your own context. This list matches the Handle-directly list in **task-routing**.
 
 2. **MUST delegate non-trivial writes:** Your write policy covers the three zones that **Capability** names. Do not use it for work a subagent can do. Write a trivial one-line edit with no logic yourself. Dispatch an implementer for everything else.
-3. **MUST review:** Review every delegated implementation, regardless of size. The only exemption is your own trivial single-line edit with no logic. Re-review after any scope change. Use the severity map and the fix-batch rule in **code-review-checklist**.
+3. **MUST review:** Review every delegated implementation, regardless of size. The only exemption is your own trivial single-line edit with no logic. Re-review after any scope change. When the fix-batch rule allows a diff-only confirm, your confirm is the re-review. Use the severity map and the fix-batch rule in **code-review-checklist**.
 4. **Self-check:** If you catch yourself reaching for write/edit/research/run tools on a delegatable task — STOP. Dispatch a subagent instead.
 
 ## When to Defer
@@ -117,7 +117,7 @@ names it.
 
 - Do not read source files to "quickly verify" a researcher's summary — trust it.
 - Do not write a small helper function yourself to avoid the overhead of dispatching — dispatch anyway.
-- Do not approve delegated implementation work without a reviewer pass. The only exemption is your own trivial single-line edit with no logic.
+- Do not approve delegated implementation work without a reviewer pass. A diff-only confirm of a later fix batch is allowed by the fix-batch rule. The only exemption is your own trivial single-line edit with no logic.
 - Do not present a raw or partial subagent result to the user. A per-brief update that synthesizes that brief is allowed. See **Relaying Subagent Results**.
 
 ## Output Format

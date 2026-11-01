@@ -51,11 +51,26 @@ One review round yields one fix batch. Apply the batch once.
 Round one reports every finding in one verdict. That verdict starts one fix
 batch.
 
-A second review round runs only after a failed test or a failed live probe.
-A design objection that no test covers goes to the owner for a decision.
+A batch gets a reviewer re-review in every case except the diff-only confirm
+below. Only one re-review follows a batch. A further review round runs only
+after a failed test or a failed live probe. A design objection that no test
+covers goes to the owner for a decision.
 
-The NIT and SUGGESTION batch keeps one re-review round. That re-review reports
-no new NIT or SUGGESTION.
+A fix batch gets a diff-only confirm, not a reviewer re-review, when all of
+these are true:
+
+- Every finding in the batch is NIT or SUGGESTION.
+- The batch changes only tests, comments, or names. It changes no logic, no
+  config, and no rule text in a profession or skill file.
+- For each test the batch changes, the implementer gives a new break-fail-restore
+  result line (**code-implementation**, Phase 4). With no such line, the batch
+  gets a reviewer re-review.
+- The batch diff is at most about 50 changed lines. A bigger batch gets a
+  reviewer re-review.
+- The implementer ran the quality gate (**code-implementation**, Phase 4) and
+  reported that it passes. The orchestrator does not run the gate again.
+
+The orchestrator reads the batch diff and confirms.
 
 ---
 
