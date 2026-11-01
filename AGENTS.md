@@ -228,8 +228,11 @@ every theme.
    `platforms/opencode/frontmatters/<name>.yaml`. Map the Kiro permissions with
    the table in `platforms/opencode/README.md`.
 4. Create the pi frontmatter, `platforms/pi/frontmatters/<name>.yaml`. Copy an
-   existing one for `name`, `description`, `tools`, `skills`, `alwaysLoad`, and
-   `permissions`. A profession without a pi frontmatter is not a pi agent.
+   existing one for `name`, `description`, `tools`, `skills`, `alwaysLoad`,
+   `permissions`, and `permissionClass`. The `permissionClass` value must match
+   the role class map `ROLE_CLASS` in
+   `platforms/pi/extension/permission-table.ts`. A profession without a pi
+   frontmatter is not a pi agent.
 5. Create the Claude Code agent file, `platforms/claude/agents/<name>.md`. Use
    frontmatter only: `name`, `description`, and optional `tools` or
    `disallowedTools`. Leave the body empty. Add the path to `agents` in

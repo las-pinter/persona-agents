@@ -6,6 +6,7 @@ description: Turns requirements into studies and specifications
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
 skills: ["planner/*", "common/project-notes", "common/simplified-technical-english", "common/persona-free-documents", "common/shell-discipline", "common/retro"]
 alwaysLoad: ["common/simplified-technical-english", "planner/interview", "common/shell-discipline"]
+permissionClass: reader
 permissions:
   mode: deny-by-default
   allow:

@@ -22,6 +22,14 @@ import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/
 export type AgentScope = "user" | "project" | "both";
 export type AgentSource = "user" | "project" | "package";
 
+/**
+ * The permission class a role belongs to. The gate maps one class to one rule
+ * set, so a wrong class grants the wrong fence.
+ */
+export type PermissionClass = "reader" | "worker" | "orchestrator";
+
+export const PERMISSION_CLASSES: readonly PermissionClass[] = ["reader", "worker", "orchestrator"];
+
 export interface PermissionRule {
 	tool?: string;
 	match: string;
@@ -50,6 +58,15 @@ export interface AgentConfig {
 	resources?: string[];
 	/** Per-agent permission rules from frontmatter. */
 	permissions?: PermissionConfig;
+	/**
+	 * Permission class from frontmatter. Every file this package ships must name
+	 * one. A user or project file may omit the field: it loads as `reader`, the
+	 * narrowest class, and warns once. A user or project file may not claim a
+	 * class above `reader`: such a file is clamped to `reader` and warns once. An
+	 * unknown value stops discovery for every source, because a silent default
+	 * would grant a wrong fence.
+	 */
+	permissionClass?: PermissionClass;
 	/**
 	 * Whether this agent may be spawned as a subagent via the subagent tool.
 	 * Defaults to true when frontmatter omits `spawnable`. The orchestrator
@@ -93,6 +110,7 @@ type AgentFrontmatter = {
 	alwaysLoad?: unknown;
 	resources?: unknown;
 	permissions?: unknown;
+	permissionClass?: unknown;
 	spawnable?: unknown;
 };
 
@@ -153,7 +171,60 @@ function parsePermissionConfig(value: unknown): PermissionConfig | undefined {
 	return { mode: mode ?? "allow-unless-matched", allow, ask, deny };
 }
 
-function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
+/**
+ * File paths already warned about a missing `permissionClass`. Discovery runs on
+ * every command, so one file must warn once, not once per call.
+ */
+const warnedMissingClass = new Set<string>();
+
+/** File paths already warned about a class clamped to `reader`. */
+const warnedClampedClass = new Set<string>();
+
+/** The classes a user or project file may not claim. */
+const CLASSES_ABOVE_READER: readonly PermissionClass[] = ["worker", "orchestrator"];
+
+/** Log one line for a file, at most once per process. */
+function warnOnce(seen: Set<string>, filePath: string, line: string): void {
+	if (seen.has(filePath)) return;
+	seen.add(filePath);
+	console.warn(line);
+}
+
+/**
+ * Read a frontmatter permission class.
+ *
+ * A package file must name a class: this repository ships those files, so a
+ * missing class is a package error. A user or project file may omit the field,
+ * or leave it blank; it loads as `reader` and warns once. Such a file may not
+ * claim a class above `reader`: the class is clamped to `reader` and it warns
+ * once. A bad value stops discovery for every source.
+ */
+function parsePermissionClass(value: unknown, filePath: string, source: AgentSource): PermissionClass {
+	// A blank `permissionClass:` line parses to null, which means no class. An
+	// empty string is blank too.
+	const absent = value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+	if (!absent && typeof value === "string" && (PERMISSION_CLASSES as readonly string[]).includes(value)) {
+		const named = value as PermissionClass;
+		if (source !== "package" && CLASSES_ABOVE_READER.includes(named)) {
+			warnOnce(
+				warnedClampedClass,
+				filePath,
+				`agent-stack: ${filePath}: permissionClass "${named}" is above reader for a ${source} file; loaded as reader`,
+			);
+			return "reader";
+		}
+		return named;
+	}
+	if (absent && source !== "package") {
+		warnOnce(warnedMissingClass, filePath, `agent-stack: ${filePath}: no permissionClass; loaded as reader`);
+		return "reader";
+	}
+	const shown = absent ? "missing" : JSON.stringify(value);
+	throw new Error(`${filePath}: invalid permissionClass ${shown}; expected reader, worker, or orchestrator`);
+}
+
+/** Load every agent file in one directory. A package source must name a class. */
+export function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 	if (!fs.existsSync(dir)) return agents;
 
@@ -192,6 +263,7 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 			alwaysLoad: parseStringList(frontmatter.alwaysLoad),
 			resources: parseStringList(frontmatter.resources),
 			permissions: parsePermissionConfig(frontmatter.permissions),
+			permissionClass: parsePermissionClass(frontmatter.permissionClass, filePath, source),
 			// `spawnable` must be a boolean `false` to disable spawning; the FAQ-level
 			// typo of a quoted "false" string is treated as disabled too rather than
 			// silently re-enabling spawning. Absent/undefined/any other value keeps
@@ -312,8 +384,7 @@ function findNearestConfigDir(cwd: string, subdir: string): string | null {
  * Keeps professions as the single source of truth, personas separate, and
  * requires no generated agent files.
  */
-function loadTemplateAgents(): AgentConfig[] {
-	const root = getPackageRoot();
+export function loadTemplateAgents(root: string | null = getPackageRoot()): AgentConfig[] {
 	if (!root) return [];
 	const tplDir = path.join(root, PACKAGE_LAYOUT.piFrontmatters);
 	if (!isDirectory(tplDir)) return [];
@@ -358,6 +429,7 @@ function loadTemplateAgents(): AgentConfig[] {
 			alwaysLoad: parseStringList(frontmatter.alwaysLoad),
 			resources: parseStringList(frontmatter.resources),
 			permissions: parsePermissionConfig(frontmatter.permissions),
+			permissionClass: parsePermissionClass(frontmatter.permissionClass, path.join(tplDir, entry.name), "package"),
 			// Same semantics as loadAgentsFromDir: only boolean `false` (or the
 			// quoted "false" string) disables spawning; absent/anything else keeps
 			// the agent spawnable.

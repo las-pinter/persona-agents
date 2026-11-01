@@ -206,6 +206,7 @@ import {
 	resolvePersonaForAgent,
 	resolveResources,
 	skillScriptsDir,
+	type AgentDiscoveryResult,
 } from "./resolver.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
 import { dimText, type StatusUi } from "./status-text.ts";
@@ -293,7 +294,17 @@ export default function (pi: ExtensionAPI): void {
 	 * session_start (which knows the cwd, so project agents resolve too).
 	 */
 	const applyDefaults = (cwd: string | undefined) => {
-		const discovery = cwd ? discoverAgents(cwd, "both") : discoverAgents(getAgentDir(), "both");
+		// A malformed agent file must never disarm the gate. Discovery throws on a
+		// bad permission class, so a throw here would reach the factory and the
+		// session-start handler. Log one line and continue with no agents.
+		let discovery: AgentDiscoveryResult;
+		try {
+			discovery = cwd ? discoverAgents(cwd, "both") : discoverAgents(getAgentDir(), "both");
+		} catch (error) {
+			const fault = error instanceof Error ? error.message : String(error);
+			console.warn(`agent-stack: agent discovery failed; the permission gate stays installed: ${fault}`);
+			discovery = { agents: [], personas: [], projectAgentsDir: null };
+		}
 
 		// CLI flags may not be parsed yet when the factory runs, so session_start
 		// re-applies: without the "already active" guards, flag values (including

@@ -1080,35 +1080,34 @@ function frontmatterText(role: Role): string {
 	return readFileSync(path.join(FRONTMATTER_DIR, `${role}.yaml`), "utf8");
 }
 
-test("a frontmatter carries one rule source: a permissions block or a class line", (t) => {
-	const pending: string[] = [];
+/**
+ * Roles whose pi frontmatter still carries a `permissions:` block. The rule
+ * table is the rule store, so this list can only shrink: a role that drops its
+ * block must leave the list in the same change. Until then the case below fails.
+ */
+const PENDING_FRONTMATTER_BLOCK: readonly Role[] = [
+	"orchestrator",
+	"planner",
+	"implementer",
+	"tester",
+	"reviewer",
+	"researcher",
+	"mascot",
+];
+
+test("every role names its class and the pending block list can only shrink", () => {
+	const stillBlocked = ROLES.filter((role) => /^permissions:/m.test(frontmatterText(role)));
+	assert.deepEqual(
+		stillBlocked,
+		PENDING_FRONTMATTER_BLOCK,
+		"update PENDING_FRONTMATTER_BLOCK when a role gains or loses a permissions block",
+	);
+
 	for (const role of ROLES) {
-		const text = frontmatterText(role);
-		const block = /^permissions:/m.test(text);
-		const line = /^permissionClass:\s*(\S+)\s*$/m.exec(text);
-		assert.notEqual(
-			block,
-			line !== null,
-			`${role} must carry a permissions block or a permissionClass line, and never both`,
-		);
-		if (line) {
-			assert.ok(CLASS_ORDER.includes(line[1] as RoleClass), `${role} names an unknown class ${line[1]}`);
-			assert.equal(line[1], ROLE_CLASS[role], `${role} names a class that differs from the role table`);
-		} else {
-			pending.push(role);
-		}
-	}
-	// The claim in this test lands with the next change that moves the
-	// frontmatter rule lists into the table. Until then the skip is the honest
-	// result, and the class line is checked on every run.
-	if (pending.length > 0) {
-		t.skip(`a permissions block is still the rule source for: ${pending.join(", ")}`);
-		return;
-	}
-	// After the migration: no frontmatter carries a permissions block, because
-	// the table is the only rule store.
-	for (const role of ROLES) {
-		assert.equal(/^permissions:/m.test(frontmatterText(role)), false, `${role} still carries a permissions block`);
+		const line = /^permissionClass:\s*(\S+)\s*$/m.exec(frontmatterText(role));
+		assert.ok(line !== null, `${role} must carry a permissionClass line`);
+		assert.ok(CLASS_ORDER.includes(line[1] as RoleClass), `${role} names an unknown class ${line[1]}`);
+		assert.equal(line[1], ROLE_CLASS[role], `${role} names a class that differs from the role table`);
 	}
 });
 

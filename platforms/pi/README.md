@@ -126,6 +126,7 @@ Template fields (YAML):
 | `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total logs `console.warn` and the injection continues. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
 | `permissions` | object | see below |
+| `permissionClass` | string | permission fence class: `reader`, `worker`, or `orchestrator`. A template this repository ships must name one. A user or project agent file may omit it, and a blank value counts as omitted: it loads as `reader`. A user or project file that names a class above `reader` is clamped to `reader` with one warning that names the file. An unknown value throws, and discovery then logs one line while the permission gate still installs |
 
 Note: `description` is required; `name` defaults to the template filename.
 
