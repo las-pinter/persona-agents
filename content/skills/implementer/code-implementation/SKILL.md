@@ -76,6 +76,22 @@ The three language gate skills (`python-quality-gates`, `rust-quality-gates`,
 for the project language. When the project language has no gate skill, use this
 order: type check, lint, tests, build.
 
+**Prove each test can fail.** Do this for each acceptance test the dispatch names,
+and for each new test. A compile check, a lint, or a type check is a gate, not a
+test. Skip this step for it.
+
+1. Break the code under test by hand.
+2. Run the test. See it fail.
+3. Restore the code. Run the test again. See it pass.
+4. Record one result line: the test name, a one-line description of the break, and `fail` or `pass`.
+
+- If the test still passes with the code broken, the test is wrong. Fix the test
+  before the hand-back.
+- A bug-fix test that failed before the fix already shows step 2. Record that
+  run as the fail result, and the run after the fix as the pass result. Still do step 1 for any other new test.
+- Check `git diff` after the restore. The break must not be in the final diff.
+- A prose or config change with no test is exempt. Say so in the report.
+
 ---
 
 ## Phase 5: Deliver

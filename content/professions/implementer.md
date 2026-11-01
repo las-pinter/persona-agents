@@ -60,7 +60,7 @@ Deliver implementation results in this structure. The report is at most 40 lines
 [Minimal diff or full file if new]
 
 ## Verification
-[How you confirmed it works, or explicit statement that environment was unavailable]
+[How you confirmed it works, or explicit statement that environment was unavailable. Add one result line for each test, as Phase 4 of the **code-implementation** skill requires. Tests that share one break may share one line. When the lines go past the report cap, write them to a file outside the repository and give the path. For a change with no test, state the exemption.]
 
 ## Flags (if any)
 [Anything requiring escalation: security concerns, unresolved ambiguities, adjacent issues spotted]
