@@ -1,8 +1,10 @@
 /**
  * Compiler for the pi permission rule table.
  *
- * The table (`permissions.table.ts`) holds data only: one row per rule and per
- * class. This module turns a row into an anchored, case-insensitive pattern and
+ * The table data (`platforms/pi/permissions.table.json`) holds one row per rule
+ * and per class. `permission-config.ts` loads it, applies the user override, and
+ * stamps every row with the layer it came from. This module turns a row into an
+ * anchored, case-insensitive pattern and
  * groups the rows into the five rule sets the engine already consumes
  * (`RuleSets` in `command-segments.ts`). The engine is not changed here: the
  * shapes below are the shapes it reads today.
@@ -49,7 +51,9 @@
  * pattern. The gate compiles per role with `compileRole`.
  */
 
-import type { RawRule, RuleSets } from "./command-segments.ts";
+import type { Layer, RawRule, RuleSets } from "./command-segments.ts";
+
+export type { Layer };
 
 export type Verdict = "allow" | "ask" | "deny";
 
@@ -137,6 +141,12 @@ export interface RuleRow {
 	noCd?: boolean;
 	/** The sentence the prompt shows. It is never a pattern. */
 	reason: string;
+	/**
+	 * The configuration layer that produced this row. `permission-config.ts`
+	 * stamps it; the shipped default file never carries one. It is reported, not
+	 * matched, so it never joins a pattern or the geometry check.
+	 */
+	layer?: Layer;
 }
 
 export type Role =
@@ -191,6 +201,7 @@ const ROW_FIELDS = new Set<string>([
 	"span",
 	"noCd",
 	"reason",
+	"layer",
 ]);
 
 const VERDICTS = new Set<string>(["allow", "ask", "deny"]);
@@ -243,6 +254,7 @@ export const FLAG_CLASSES: readonly string[] = [...FLAGS];
  */
 export const TAIL_ONLY_CLASSES: readonly string[] = ["amend", "force", "strategy", "upload-pack"];
 const PROBES = new Set<string>(["stream-write", "function-def"]);
+const LAYERS = new Set<string>(["default", "override", "overlay"]);
 const SECRET_FAMILIES = new Set<string>(["env", "key"]);
 
 /**
@@ -546,6 +558,9 @@ export function validateRow(row: RuleRow): void {
 	if (row.noCd !== undefined && typeof row.noCd !== "boolean") {
 		fail(row.id, "noCd must be a boolean");
 	}
+	if (row.layer !== undefined && !LAYERS.has(row.layer)) {
+		fail(row.id, `unknown layer "${String(row.layer)}"`);
+	}
 	if (row.verb !== undefined) checkLiterals(row.id, "verb", row.verb);
 	if (row.sub !== undefined) checkLiterals(row.id, "sub", row.sub);
 
@@ -805,7 +820,11 @@ export function rulesForRow(row: RuleRow, zone: NotesZone | null = null): RawRul
 	return row.tool
 		.trim()
 		.split(/\s+/)
-		.map((tool) => ({ tool, match, reason: row.reason }));
+		.map((tool) => {
+			const rule: RawRule = { tool, match, reason: row.reason };
+			if (row.layer !== undefined) rule.layer = row.layer;
+			return rule;
+		});
 }
 
 // --- grouping ---------------------------------------------------------------

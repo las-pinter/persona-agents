@@ -3,7 +3,7 @@
 # The gate never reads this file. `permission-table.differential.test.ts` and the
 # pi template regression suite replay it as the legacy reference, so the table is
 # proven never looser than the rules it replaced. Do not edit: a rule change goes
-# into `permissions.table.ts`.
+# into `platforms/pi/permissions.table.json`.
 permissions:
   mode: deny-by-default
   allow:

@@ -215,8 +215,9 @@ import { registerTodoTool } from "./todo-tool.ts";
 import { disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 
 // Skill injection budgets. The defaults are the fallback for two flat settings
-// keys, `skillInjectionBudgetBytes` and `skillBodyCapBytes`. A value only raises
-// a warning. A mandatory skill body is always injected whole.
+// keys, `skillInjectionBudgetBytes` and `skillBodyCapBytes`. Neither value cuts
+// or drops a body, because a mandatory skill body is always injected whole. The
+// measured sizes go to the debug log only, never to a warning.
 const DEFAULT_SKILL_INJECTION_BUDGET_BYTES = 24 * 1024;
 const DEFAULT_SKILL_BODY_CAP_BYTES = 12 * 1024;
 const SETTING_SKILL_INJECTION_BUDGET = "skillInjectionBudgetBytes";
@@ -423,8 +424,8 @@ export default function (pi: ExtensionAPI): void {
 			const seen = new Set<string>();
 			const discoveredSkills = discoverSkills(ctx.cwd);
 
-			// P3: bind the agent's `alwaysLoad:` globs. Mandatory skills warn
-			// loudly when missing or oversized — never drop a steering skill silently.
+			// P3: bind the agent's `alwaysLoad:` globs. A missing mandatory skill
+			// warns loudly and leaves a marker — never drop a steering skill silently.
 			const mandatory = matchSkills(agent.alwaysLoad ?? [], discoveredSkills);
 			if (agent.alwaysLoad && agent.alwaysLoad.length > 0) {
 				const bodyCap = readByteSetting(pi, SETTING_SKILL_BODY_CAP, DEFAULT_SKILL_BODY_CAP_BYTES);
@@ -438,24 +439,14 @@ export default function (pi: ExtensionAPI): void {
 					const id = s.group ? `${s.group}/${s.name}` : s.name;
 					if (seen.has(id)) continue;
 					seen.add(id);
-					// A size overrun only warns; it never cuts or drops a mandatory body.
+					// The cap and the budget never cut or drop a body: the whole body goes in,
+					// and the sizes stay in the debug log so a large skill is diagnosable.
 					const body = s.body;
-					const bodyBytes = skillBodyBytes(body);
-					if (bodyBytes > bodyCap) {
-						console.warn(
-							`agent-stack: mandatory skill ${id} body is ${bodyBytes} bytes, over the ${bodyCap} byte body cap; injected whole (raise ${SETTING_SKILL_BODY_CAP})`,
-						);
-					}
-					injectedBytes += bodyBytes;
-					// Every skill that keeps the total over the budget warns, not only the first.
-					if (injectedBytes > injectionBudget) {
-						console.warn(
-							`agent-stack: mandatory skill ${id} brings the mandatory total to ${injectedBytes} bytes, over the ${injectionBudget} byte injection budget; injected whole (raise ${SETTING_SKILL_INJECTION_BUDGET})`,
-						);
-					}
+					injectedBytes += skillBodyBytes(body);
 					const scriptsDir = skillScriptsDir(s);
 					extra += `\n\n## Mandatory skill: ${id}\n${scriptsDir ? `Scripts: ${scriptsDir} (invoke with this absolute path)\n` : ""}${body}`;
 				}
+				debugLog("mandatory skill bytes:", injectedBytes, "cap:", bodyCap, "budget:", injectionBudget);
 				for (const pattern of agent.alwaysLoad) {
 					if (matchSkills([pattern], discoveredSkills).length === 0) {
 						console.warn(`agent-stack: alwaysLoad entry resolves to no skill: ${pattern}`);

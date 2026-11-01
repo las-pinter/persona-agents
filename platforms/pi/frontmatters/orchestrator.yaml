@@ -5,7 +5,7 @@ description: Coordinates work by delegating to subagents; routes tasks, manages 
 # command runs without a prompt; push, `gh pr`, `gh run`, `gh release`, and the
 # history exception forms prompt the user, so a dispatcher must never escalate
 # them by spawning one. The rules are the orchestrator class rows of the compiled
-# table (`permissions.table.ts`); this file carries no rule list.
+# table (`platforms/pi/permissions.table.json`); this file carries no rule list.
 spawnable: false
 tools: [bash, read, edit, write, subagent, ask_user_question, todo]
 skills: ["orchestrator/*", "common/project-notes", "common/simplified-technical-english", "common/journal-management-generic", "common/persona-free-documents", "common/shell-discipline", "common/retro"]

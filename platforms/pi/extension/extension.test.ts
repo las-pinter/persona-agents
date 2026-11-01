@@ -25,7 +25,7 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
 import type { AgentConfig } from "./resolver.ts";
-import { setActiveAgent, setActivePersona } from "./state.ts";
+import { DEBUG_AGENT_STACK_PATH, setActiveAgent, setActivePersona } from "./state.ts";
 import { ENV_PARENT_RUN_ID, ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
 import { MAX_EVENTS_READ, MAX_LOG_BYTES, readAllEvents, readEvents } from "./tree-log.ts";
 
@@ -269,7 +269,7 @@ test("a normal sized mandatory skill is injected quietly", async () => {
 });
 
 /** Three 13 KB fixtures: every one is over the cap and the third keeps the total over. */
-test("alwaysLoad bodies are injected whole, over the body cap and over the budget", async () => {
+test("alwaysLoad bodies are injected whole over the body cap and the budget, with no warning", async () => {
 	const harness = makePi();
 	extension(harness.pi);
 	setActivePersona(null);
@@ -287,22 +287,10 @@ test("alwaysLoad bodies are injected whole, over the body cap and over the budge
 		`prompt size ${promptBytes} must exceed the 24 KB default budget, so no body was dropped`,
 	);
 
-	const capWarnings = warnings.filter((line) => line.includes("body cap"));
-	assert.equal(capWarnings.length, 3, "one body-cap warning per oversized skill");
-	assert.match(capWarnings[0] ?? "", /fixture-overcap-a/);
-	assert.match(capWarnings[0] ?? "", new RegExp(`over the ${12 * 1024} byte body cap`));
-	assert.match(capWarnings[0] ?? "", /raise skillBodyCapBytes/);
-
-	// The warning fires for every skill after the total goes over, not only the first.
-	const budgetWarnings = warnings.filter((line) => line.includes("injection budget"));
-	assert.equal(budgetWarnings.length, 2, "one budget warning per skill past the point where the total goes over");
-	assert.match(budgetWarnings[0] ?? "", /fixture-overcap-b/);
-	assert.match(budgetWarnings[1] ?? "", /fixture-overcap-c/);
-	assert.match(budgetWarnings[0] ?? "", new RegExp(`over the ${24 * 1024} byte injection budget`));
-	assert.match(budgetWarnings[0] ?? "", /raise skillInjectionBudgetBytes/);
+	assert.deepEqual(warnings, [], "an over-cap body and an over-budget total log no warning");
 });
 
-test("the body size is measured in UTF-8 bytes, not UTF-16 code units", async () => {
+test("a multi-byte body over the cap in bytes is injected whole and silent", async () => {
 	const harness = makePi();
 	extension(harness.pi);
 	setActivePersona(null);
@@ -317,12 +305,10 @@ test("the body size is measured in UTF-8 bytes, not UTF-16 code units", async ()
 	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
 
 	assert.ok(prompt.includes(body), "the multi-byte body is injected whole");
-	const capWarnings = warnings.filter((line) => line.includes("body cap"));
-	assert.equal(capWarnings.length, 1, "the byte size crosses the cap, so the warning fires");
-	assert.ok(capWarnings[0]?.includes(`${bytes} bytes`), "the warning reports the UTF-8 byte size");
+	assert.deepEqual(warnings, [], "a body over the cap in bytes logs no warning");
 });
 
-test("a larger setting raises the budget and silences the budget warning", async () => {
+test("a larger setting changes nothing: both bodies stay whole and no warning is logged", async () => {
 	const harness = makePi({ skillInjectionBudgetBytes: 1024 * 1024, skillBodyCapBytes: 1024 * 1024 });
 	extension(harness.pi);
 	setActivePersona(null);
@@ -332,10 +318,10 @@ test("a larger setting raises the budget and silences the budget warning", async
 
 	assert.ok(prompt.includes(fixtureBody(overcapAPath)), "body A still appears whole");
 	assert.ok(prompt.includes(fixtureBody(overcapBPath)), "body B still appears whole");
-	assert.equal(warnings.length, 0, "a raised budget and cap leave no warning");
+	assert.deepEqual(warnings, [], "a raised budget and cap leave no warning");
 });
 
-test("the budget settings are read on every prompt, not once at registration", async () => {
+test("a budget setting changed between prompts never cuts a body", async () => {
 	const settings: Record<string, unknown> = {
 		skillInjectionBudgetBytes: 1024 * 1024,
 		skillBodyCapBytes: 1024 * 1024,
@@ -346,18 +332,15 @@ test("the budget settings are read on every prompt, not once at registration", a
 	setActiveAgent(testAgent({ alwaysLoad: ["fixture-overcap-a"] }));
 
 	const first = await withWarnings(() => promptFor(harness, tmpRoot));
-	assert.equal(first.warnings.length, 0, "a raised budget stays quiet on the first prompt");
+	assert.deepEqual(first.warnings, [], "a raised budget stays quiet on the first prompt");
 
 	settings["skillInjectionBudgetBytes"] = 1024;
 	const second = await withWarnings(() => promptFor(harness, tmpRoot));
-	assert.ok(
-		second.warnings.some((line) => line.includes("injection budget")),
-		"the lowered budget is read on a later prompt from the same handler",
-	);
+	assert.deepEqual(second.warnings, [], "a lowered budget on a later prompt logs no warning");
 
 	settings["skillInjectionBudgetBytes"] = 1024 * 1024;
 	const third = await withWarnings(() => promptFor(harness, tmpRoot));
-	assert.equal(third.warnings.length, 0, "the raised budget silences the warning again");
+	assert.deepEqual(third.warnings, [], "the raised budget stays quiet again");
 
 	for (const prompt of [first.result, second.result, third.result]) {
 		assert.ok(prompt.includes(fixtureBody(overcapAPath)), "the body stays whole on every prompt");
@@ -370,54 +353,46 @@ interface FallbackCase {
 	settings: unknown;
 	skill: string;
 	body: string;
-	/** A warning only the default value can produce; `null` means every warning stays quiet. */
-	expect: string | null;
 }
 
-// A small body sits under both defaults, so an accepted small setting would warn.
-// A big body sits over both defaults, so an accepted non-finite setting would not.
+// A small body sits under both defaults and a big body sits over both, so every
+// accepted setting must leave the body whole and the console quiet.
 const fallbackCases: FallbackCase[] = [
 	{
 		label: "a missing key",
 		settings: {},
 		skill: "fixture-fallback-small",
 		body: fixtureBody(fallbackSmallPath),
-		expect: null,
 	},
 	{
 		label: "a settings value that is not an object",
 		settings: null,
 		skill: "fixture-fallback-small",
 		body: fixtureBody(fallbackSmallPath),
-		expect: null,
 	},
 	{
 		label: "a string where a number is expected",
 		settings: { skillInjectionBudgetBytes: "1000", skillBodyCapBytes: "1000" },
 		skill: "fixture-fallback-small",
 		body: fixtureBody(fallbackSmallPath),
-		expect: null,
 	},
 	{
 		label: "a negative number",
 		settings: { skillInjectionBudgetBytes: -5, skillBodyCapBytes: -5 },
 		skill: "fixture-fallback-small",
 		body: fixtureBody(fallbackSmallPath),
-		expect: null,
 	},
 	{
 		label: "a not-a-number value",
 		settings: { skillInjectionBudgetBytes: Number.NaN, skillBodyCapBytes: 1024 * 1024 },
 		skill: "fixture-fallback-big",
 		body: fixtureBody(fallbackBigPath),
-		expect: "injection budget",
 	},
 	{
 		label: "an infinite value",
 		settings: { skillInjectionBudgetBytes: 1024 * 1024, skillBodyCapBytes: Number.POSITIVE_INFINITY },
 		skill: "fixture-fallback-big",
 		body: fixtureBody(fallbackBigPath),
-		expect: "body cap",
 	},
 ];
 
@@ -431,18 +406,11 @@ test("a bad budget setting falls back to the default without a throw", async () 
 		const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
 
 		assert.ok(prompt.includes(row.body), `${row.label}: the body is injected whole`);
-		if (row.expect === null) {
-			assert.deepEqual(warnings, [], `${row.label}: the defaults keep every warning quiet`);
-		} else {
-			assert.ok(
-				warnings.some((line) => line.includes(row.expect as string)),
-				`${row.label}: the default warns (${warnings.join(" | ")})`,
-			);
-		}
+		assert.deepEqual(warnings, [], `${row.label}: a budget setting value logs no warning`);
 	}
 });
 
-test("a zero budget is legal and warns, so it does not fall back", async () => {
+test("a zero budget is legal, never cuts a body, and logs no warning", async () => {
 	const harness = makePi({ skillInjectionBudgetBytes: 0, skillBodyCapBytes: 1024 * 1024 });
 	extension(harness.pi);
 	setActivePersona(null);
@@ -451,9 +419,51 @@ test("a zero budget is legal and warns, so it does not fall back", async () => {
 	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
 
 	assert.ok(prompt.includes(fixtureBody(mandatoryPath)), "the body is still injected whole");
-	const budgetWarnings = warnings.filter((line) => line.includes("injection budget"));
-	assert.equal(budgetWarnings.length, 1, "a zero budget warns on the first skill");
-	assert.match(budgetWarnings[0] ?? "", /over the 0 byte injection budget/);
+	assert.deepEqual(warnings, [], "a zero budget is accepted and stays quiet");
+});
+
+test("the debug log proves the budget is a UTF-8 byte count read at use time", async () => {
+	const settings: Record<string, unknown> = {
+		skillInjectionBudgetBytes: 1024,
+		skillBodyCapBytes: 1024 * 1024,
+	};
+	const harness = makePi(settings);
+	extension(harness.pi);
+	setActivePersona(null);
+	setActiveAgent(testAgent({ alwaysLoad: ["fixture-multibyte"] }));
+
+	const body = fixtureBody(multibytePath);
+	const codeUnits = body.length;
+	const bytes = Buffer.byteLength(body, "utf8");
+	assert.ok(codeUnits < bytes, "the fixture must hold more UTF-8 bytes than code units");
+
+	const saved = new Map<string, string | undefined>();
+	try {
+		setEnv(saved, DEBUG_ENV, "1");
+		const first = await withWarnings(() => promptFor(harness, tmpRoot));
+		assert.deepEqual(first.warnings, [], "the first prompt logs no warning");
+
+		settings["skillInjectionBudgetBytes"] = 2048;
+		const second = await withWarnings(() => promptFor(harness, tmpRoot));
+		assert.deepEqual(second.warnings, [], "the second prompt logs no warning");
+
+		const lines = fs.readFileSync(DEBUG_AGENT_STACK_PATH, "utf8")
+			.split("\n")
+			.filter((line) => line.includes("mandatory skill bytes:"));
+		const recent = lines.slice(-2);
+		assert.equal(recent.length, 2, "two prompts write two budget lines");
+
+		const pattern = /mandatory skill bytes: (\d+) cap: (\d+) budget: (\d+)/;
+		const firstMatch = pattern.exec(recent[0] ?? "");
+		const secondMatch = pattern.exec(recent[1] ?? "");
+		assert.ok(firstMatch !== null && secondMatch !== null, "the debug line carries the sizes");
+		assert.equal(Number(firstMatch[1]), bytes, "the logged size is the UTF-8 byte count");
+		assert.notEqual(Number(firstMatch[1]), codeUnits, "the logged size is not the code-unit count");
+		assert.equal(Number(firstMatch[3]), 1024, "the first prompt reads the first budget");
+		assert.equal(Number(secondMatch[3]), 2048, "the second prompt reads the current budget");
+	} finally {
+		restoreEnv(saved);
+	}
 });
 
 /** One tree-log line for `runId`; `status` follows the record type. */

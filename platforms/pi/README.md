@@ -1,14 +1,16 @@
 # persona-agents — the pi extension
 
 One extension, one entry: `extension/extension.ts`. Internally modular (every
-module below lives in `extension/`):
+module below lives in `extension/`, except the shipped table data file):
 
 | Module | Responsibility |
 |---|---|
 | `extension.ts` | Entry point: wires gate, commands, subagent tool, session hooks |
 | `resolver.ts` | Discovers agents + personas from user (`~/.pi/agent`), project (`.pi/`), and this package. Package agents are `platforms/pi/frontmatters/<profession>.yaml` composed with `content/professions/<profession>.md`; `platforms/pi/agents/` is an optional override folder |
 | `permissions.ts` | Tool-call gate: compiles the rule table once, appends the live `permissions.json` overlay, and resolves the class from the active agent (deny → ask → allow → default) |
-| `permissions.table.ts` | The rule rows: data only, one row per rule and per class |
+| `../permissions.table.json` | The shipped default rows: data only, one row per rule and per class |
+| `permission-config.ts` | The layer loader: shipped default, user override, global overlay, layer stamp, fail-closed fence |
+| `permissions.table.ts` | A typed test view of the default rows; the gate never imports it |
 | `permission-table.ts` | The compiler: row to one anchored pattern, then the five rule sets the engine reads |
 | `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
 | `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |
@@ -68,7 +70,7 @@ frontmatter template is simply not exposed as a pi agent.
 
 The pi templates were translated from `platforms/opencode/frontmatters`
 (shared permission intent, pi-native schema). The opencode `action/resource/effect`
-triples informed the pi rule rows; the rows live in `permissions.table.ts` and the
+triples informed the pi rule rows; the rows live in `permissions.table.json` and the
 compiler writes the pattern. Translation notes:
 
 - opencode `action/resource/effect` triples became pi rule rows: one row per
@@ -132,7 +134,7 @@ Template fields (YAML):
 | `model` | string | optional `provider/model` override for subagent spawns |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
 | `skills` | string[] | glob bindings to skills under `content/skills/` (package), `~/.pi/agent/skills/` (user), and `.pi/skills/` (project). `"orchestrator/*"` matches every skill in the orchestrator group; each matched skill is injected as an on-demand index entry (name, description, path) and the agent reads the `SKILL.md` when the task matches |
-| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total logs `console.warn` and the injection continues. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
+| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total writes no warning; the measured total, cap, and budget go to the debug log when it is enabled. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
 | `permissionClass` | string | permission fence class: `reader`, `worker`, or `orchestrator`. A template this repository ships must name one. A user or project agent file may omit it, and a blank value counts as omitted: it loads as `reader`. A user or project file that names a class above `reader` is clamped to `reader` with one warning that names the file. An unknown value throws, and discovery then logs one line while the permission gate still installs |
 
@@ -145,9 +147,10 @@ gate reads one compiled table:
 
 | File | Role |
 |---|---|
-| `permissions.table.ts` | the rows: data only, one row per rule and per class |
+| `permissions.table.json` | the shipped default rows: data only, one row per rule and per class |
+| `permission-config.ts` | the layer loader: default, override, overlay; row-id patch; layer stamp |
 | `permission-table.ts` | the compiler: row to one anchored pattern, five rule sets |
-| `permissions.ts` | compiles once at factory time and gates each tool call |
+| `permissions.ts` | loads the three layers once at factory time and gates each tool call |
 | `command-segments.ts` | the parse and decision core, unchanged |
 
 - **Three classes.** `reader` is the planner, the reviewer, the researcher, and
@@ -157,10 +160,36 @@ its `permissionClass` to match that role. A name that is not a shipped professio
 or a class that disagrees with the role map, gets its class rule set with no notes
 write zone. A user or project file always gets its class rule set and never a
 profession's notes zone, even when its name matches a profession.
-- **A row is data.** A row carries an id, a tool, a verdict, its classes, plain
-geometry words, and a one-line reason. No row carries a pattern. The compiler
-writes every wrapper, `cd` fold, git option slot, option ladder, path zone, and
-probe shape, so one ladder has one home.
+- **A row is data in three layers.** The shipped default
+`platforms/pi/permissions.table.json` is the source of truth: `{ "version": 1,
+"rows": [...] }`, one row per rule and per class. A user override at
+`~/.pi/agent/permissions.table.json` has the shape `{ "version": 1, "patch":
+[...] }` and patches rows by row id: it changes a verdict, disables a row, or
+supplies a complete row (a new id adds one row). A complete row for an existing
+id must keep that id's class list. One short entry:
+
+  ```json
+  { "version": 1, "patch": [ { "id": "release.ask", "verdict": "deny" } ] }
+  ```
+
+  The global `permissions.json` stays the third layer and keeps its shape. Every
+compiled row records its layer: `default`, `override`, or `overlay`.
+`PI_PERMISSIONS_TABLE` and `PI_PERMISSIONS_TABLE_OVERRIDE` set the two table
+paths for a test.
+- **A row carries no pattern.** A row carries an id, a tool, a verdict, its
+classes, plain geometry words, and a one-line reason. The compiler writes every
+wrapper, `cd` fold, git option slot, option ladder, path zone, and probe shape,
+so one ladder has one home.
+- **No project-level table.** The default path resolves from the extension file,
+and the override and overlay paths resolve from the home agent folder. The loader
+never reads a table from the working directory or a repository path. A configured
+table or override path must be absolute, and its real path is checked, so a
+relative path and a symlink into a repository are refused. The refusal logs one
+line and the shipped default stays in force.
+- **A broken layer fails closed.** A parse error, a schema error, an unknown row
+id, or an unknown field logs one line that names the file and the row id. The
+gate then carries a deny-all fence, so no tool call runs until the file is fixed.
+A malformed `permissions.json` behaves the same way.
 - **Precedence.** global deny → class deny → a spanning ask (global row first,
 then class row) → a per-segment ask (global row first, then class row) → class
 allow → the `deny-by-default` default. Deny wins over ask, ask wins over allow,
@@ -170,10 +199,39 @@ and every segment of a compound command must pass.
 other absolute path ask. See `## Editable write zones`.
 - **The overlay is optional.** The live file `~/.pi/agent/permissions.json` is
 unversioned local policy. Its `deny` and `ask` rows are appended after the table's
-global rows at factory time, and a malformed file logs one line that names the
-path and denies every call until it is fixed. The table already carries the 17
-entries that file used to hold.
-- `/reload` re-runs the factory, so an edited table or overlay is read again.
+global rows at factory time. The table already carries the 17 entries that file
+used to hold.
+- `/reload` re-runs the factory, so an edited table, override, or overlay is read
+again.
+
+### Table doctrine
+
+- **Row groups.** The shipped file holds 81 rows: 22 global, 14 reader, 20
+  worker, and 25 orchestrator. A class resolves to 36 reader, 42 worker, or 47
+  orchestrator rows.
+- **Fences.** A deny row that names an option requires that option, so the bare
+  command stays untouched. `find` denies on `-exec`, `-fls`, and the `-fprint`
+  forms. `git tag` denies a short or long delete form at every abbreviation.
+  `rg` denies the preprocessor and decompressor options, and `date` denies `-s`.
+  The git diff family denies `--output`, `--ext-diff`, `--textconv`, and
+  `--filters` at every unique abbreviation. The family names `annotate`, so the
+  verb a read row allows is fenced too. A stream write (`>` and `tee`) denies for
+  every class, because it leaves the write zone. `git fetch` denies a
+  colon-shaped refspec for a reader or a worker, and a plain `git fetch` asks for
+  a worker only. `dd` denies only with a device write, so a plain copy runs.
+  `git branch` is one read row with a listing-only tail: a branch write form falls
+  outside the tail and reaches deny-by-default, so no class can create, move, or
+  delete a branch through the read row.
+- **Deliberately omitted commands.** The shared read rows omit `xxd`, `printf`,
+  `sha256sum`, `mktemp`, `test`, `mdl`, and a `.venv/bin/<tool>` wrapper, so
+  deny-by-default blocks them. They also omit `git remote`, `git reflog`,
+  `git config`, `git grep`, `git cat-file`, `git ls-remote`, `git fetch`,
+  `git hash-object`, and `git fsck`. A build or test runner is not a read-only
+  probe: the reader toolchain row names version and metadata probes only, so no
+  reader class runs a test.
+- **Recorded narrowings.** `printf`, `sha256sum`, `test`, and `mdl` reach a
+  worker in the legacy frontmatter only. The three write-shaped read verbs
+  `mkdir`, `sort`, and `uniq` ride the orchestrator's own journal row only.
 
 An `ask` row prompts with three choices: **Allow once**, **Always allow this rule
 (session)**, and **Deny**. Deny blocks the call ("Denied by user"). Allow once grants
@@ -223,18 +281,19 @@ and injected into that agent's system prompt (`alwaysLoad` first, then the skill
 then resources, then persona on top). `alwaysLoad` carries the guaranteed full-body
 contract: the skill body is always injected whole, missing skills warn loudly, and a
 skill in both lists is injected once by the shared dedup set (`alwaysLoad` wins). A body
-over the injection budgets warns and is still injected whole. `skills:` injects an on-demand index
-instead — one entry per matched skill with its name, description, and path, plus a line
-telling the agent to read the file when the task matches. No skill body loads until the
-agent reads the file. `discoverSkills()` understands both this repo's
+over the injection budgets is still injected whole, and nothing is cut. `skills:` injects
+an on-demand index instead — one entry per matched skill with its name, description, and
+path, plus a line telling the agent to read the file when the task matches. No skill body
+loads until the agent reads the file. `discoverSkills()` understands both this repo's
 `content/skills/<group>/<name>/SKILL.md` layout and pi's `skills/<name>/SKILL.md`;
 `/skills [agent]` lists the matched skills.
 
 ### Skill injection budgets
 
-Two settings warn when the mandatory skills get large. Each value is a byte count. The
-measure is UTF-8 bytes, so a multi-byte character counts as its encoded size. A warning
-never cuts or drops a skill body: the whole body is still injected. Set a key in
+Two settings measure when the mandatory skills get large. They are size markers only:
+they never cut, drop, or warn. Each value is a byte count. The measure is UTF-8 bytes, so
+a multi-byte character counts as its encoded size. A body over a limit is injected whole,
+and the measured sizes go to the debug log only. Set a key in
 `~/.pi/agent/settings.json` or in a project `.pi/settings.json`, then run `/reload`. A
 project `.pi/settings.json` is read only when the project is trusted:
 
@@ -247,8 +306,8 @@ project `.pi/settings.json` is read only when the project is trusted:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `skillInjectionBudgetBytes` | `24576` (24 KB) | Total bytes of mandatory skill bodies in one prompt. Each skill that brings the running total over the limit logs one warning. The warning names the skill, the running total, and this limit. |
-| `skillBodyCapBytes` | `12288` (12 KB) | Per-skill warn threshold. The warning names the skill, its own byte size, and this limit. |
+| `skillInjectionBudgetBytes` | `24576` (24 KB) | Total bytes of mandatory skill bodies in one prompt. The bodies still inject whole. The debug log records the running total, the cap, and this budget when it is enabled. Nothing is cut and no warning is logged. |
+| `skillBodyCapBytes` | `12288` (12 KB) | Per-skill size marker. A body over this limit is injected whole. The debug log records the running total, this cap, and the budget when it is enabled. Nothing is cut and no warning is logged. |
 
 The cost does not end at startup. An over-budget skill is injected on every prompt for
 the whole session, so every turn pays for it. The only way to remove the cost is to

@@ -15,7 +15,16 @@ export interface RawRule {
 	tool?: string;
 	match: string;
 	reason?: string;
+	/** Which configuration layer produced the rule; set by `permission-config.ts`. */
+	layer?: Layer;
 }
+
+/**
+ * The three permission layers, in load order: the shipped default file, the user
+ * override file, and the live global overlay. A compiled rule records its layer
+ * so a reader can tell a shipped row from a local one.
+ */
+export type Layer = "default" | "override" | "overlay";
 
 export interface CompiledRule {
 	tool: string;

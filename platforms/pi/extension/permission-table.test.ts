@@ -818,8 +818,11 @@ test("each option ladder has one home and the tails compose it", () => {
 		const tail = tailFor[name];
 		assert.ok(tail !== null && tail !== undefined && tail.includes(ladder), `${name} is not composed from its ladder`);
 	}
-	// No row spells a ladder: the table file holds no ladder text.
-	const table = readFileSync(new URL("./permissions.table.ts", import.meta.url), "utf8");
+	// No row spells a ladder: the shipped data file holds no ladder text.
+	const table = readFileSync(new URL("../permissions.table.json", import.meta.url), "utf8");
+	const rows = (JSON.parse(table) as { rows?: unknown[] }).rows;
+	assert.ok(table.length > 0, "the guard must read the shipped data file, not an empty file");
+	assert.ok(Array.isArray(rows) && rows.length > 0, "the shipped data file must hold rows");
 	for (const [name, ladder] of Object.entries(LADDER)) {
 		assert.equal(table.includes(ladder), false, `the table spells the ${name} ladder`);
 	}

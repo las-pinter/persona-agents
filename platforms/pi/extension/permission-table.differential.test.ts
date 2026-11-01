@@ -54,7 +54,7 @@ const ROLES: readonly Role[] = [
  * A two-part rolling digest of the seven frozen corpus files: it pins the exact
  * corpus bytes, so an edited pattern cannot move the replay baseline silently.
  */
-const CORPUS_DIGEST = "1351824224:1094090507";
+const CORPUS_DIGEST = "229199867:1862630626";
 
 function corpusDigest(): string {
 	const bytes = Buffer.concat(ROLES.map((role) => readFileSync(path.join(LEGACY_DIR, `${role}.yaml`))));

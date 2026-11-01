@@ -1,0 +1,428 @@
+{
+  "version": 1,
+  "rows": [
+    {
+      "id": "secret.env", "tool": "read", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "zone": "secret", "verb": ["env"], "arg": "path",
+      "reason": "Reading an environment file is denied by policy"
+    },
+    {
+      "id": "secret.key", "tool": "read", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "zone": "secret", "verb": ["key"], "arg": "path",
+      "reason": "Reading a credential file is denied by policy"
+    },
+    {
+      "id": "find.exec", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["find"], "flags": "exec", "arg": "any",
+      "reason": "find with an exec or delete option is denied by policy"
+    },
+    {
+      "id": "disk.destroy", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["mkfs"], "flags": "fs", "arg": "any",
+      "reason": "Formatting a disk is denied"
+    },
+    {
+      "id": "disk.raw-write", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["dd"], "flags": "disk-write", "arg": "any",
+      "reason": "Writing a raw device is denied"
+    },
+    {
+      "id": "system.power", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["shutdown", "reboot", "halt", "poweroff"], "arg": "any",
+      "reason": "Powering off or restarting the host is denied"
+    },
+    {
+      "id": "shell.fork-bomb", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "probe": "function-def", "arg": "any",
+      "reason": "A shell function definition is denied"
+    },
+    {
+      "id": "shell.redirect.deny", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "probe": "stream-write", "arg": "any",
+      "reason": "A stream write leaves the write zone and is denied"
+    },
+    {
+      "id": "shell.read.exec-flag", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["rg"], "flags": "rg-exec", "arg": "any",
+      "reason": "rg with a preprocessor or a decompressor is denied"
+    },
+    {
+      "id": "shell.read.clock-flag", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["date"], "flags": "clock", "arg": "any",
+      "reason": "Setting the system clock is denied"
+    },
+    {
+      "id": "git.read.write-flag", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["git"],
+      "sub": ["log", "rev-list", "diff-tree", "diff-index", "diff-files", "diff", "show", "whatchanged", "cat-file", "grep", "blame", "annotate", "shortlog"],
+      "flags": "diff-write", "arg": "any",
+      "reason": "A diff-family file write or driver run is denied"
+    },
+    {
+      "id": "perm.world-write", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["chmod", "chown"], "flags": "any", "sub": ["777"], "arg": "any",
+      "reason": "World-writable permissions are denied"
+    },
+    {
+      "id": "remote.pipe-shell", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["curl", "wget"], "sub": ["sh", "bash"], "span": true, "arg": "any",
+      "reason": "Piping a remote script into a shell is denied"
+    },
+    {
+      "id": "shell.rm.recursive", "tool": "bash", "verdict": "deny", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["rm"], "flags": "recursive", "arg": "any",
+      "reason": "Recursive delete is denied"
+    },
+    {
+      "id": "git.irreversible", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["git"], "sub": ["reset --hard", "clean", "checkout -- ."], "flags": "listed", "arg": "any",
+      "reason": "Irreversible git history operation"
+    },
+    {
+      "id": "pkg.publish", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["npm", "pnpm", "yarn", "bun"], "sub": ["publish"], "span": true, "arg": "any",
+      "reason": "Publishing a package"
+    },
+    {
+      "id": "container.remove", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["docker", "podman"], "sub": ["rm", "rmi", "volume rm", "system prune", "network rm"], "span": true, "arg": "any",
+      "reason": "Removing a container, image, volume, or network"
+    },
+    {
+      "id": "pkg.install", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["pip", "pip3", "uv", "apt-get", "apt", "pacman", "dnf", "yum", "brew", "apk"], "sub": ["install"], "span": true, "arg": "any",
+      "reason": "Installing a package"
+    },
+    {
+      "id": "npx.run", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["npx"], "arg": "any",
+      "reason": "Executing a remote npm package"
+    },
+    {
+      "id": "sed.inplace", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["sed"], "flags": "inplace", "arg": "any",
+      "reason": "An in-place edit with sed requires user approval"
+    },
+    {
+      "id": "kill.force", "tool": "bash", "verdict": "ask", "classes": ["reader", "worker", "orchestrator"],
+      "verb": ["kill"], "sub": ["-9"], "arg": "any",
+      "reason": "Force-killing a process"
+    },
+    {
+      "id": "tool.analysis",
+      "tool": "lens_diagnostics module_report project_report read_symbol read_enclosing symbol_search effective_config ast_grep_search ast_grep_outline pi_lens_activate_tools",
+      "verdict": "allow", "classes": ["reader", "worker", "orchestrator"], "arg": "none",
+      "reason": "The read-only analysis tools carry no shell or filesystem write"
+    },
+
+    {
+      "id": "read.any", "tool": "read find ls grep", "verdict": "allow", "classes": ["reader"],
+      "zone": "any", "arg": "path",
+      "reason": "Reading is allowed for a read-only role"
+    },
+    {
+      "id": "write.own-notes", "tool": "edit write", "verdict": "allow", "classes": ["reader"],
+      "zone": "notes:own", "arg": "path",
+      "reason": "A write inside the role's own notes zone is allowed"
+    },
+    {
+      "id": "write.escape.deny", "tool": "edit write", "verdict": "deny", "classes": ["reader"],
+      "zone": "escape", "arg": "path",
+      "reason": "A write outside the notes zone is denied for a read-only role"
+    },
+    {
+      "id": "shell.read", "tool": "bash", "verdict": "allow", "classes": ["reader"],
+      "verb": ["cat", "head", "tail", "wc", "grep", "rg", "ls", "stat", "od", "pwd", "date", "diff", "echo", "cut", "seq", "ps", "which", "command -v", "jq", "bash -n", "sleep"],
+      "arg": "any",
+      "reason": "A read-only shell command is allowed"
+    },
+    {
+      "id": "shell.find", "tool": "bash", "verdict": "allow", "classes": ["reader"],
+      "verb": ["find"], "arg": "any",
+      "reason": "find is a read-only search"
+    },
+    {
+      "id": "git.read", "tool": "bash", "verdict": "allow", "classes": ["reader"],
+      "verb": ["git"],
+      "sub": ["status", "log", "diff", "show", "rev-parse", "merge-base", "rev-list", "blame", "annotate", "describe", "shortlog", "ls-files", "ls-tree", "show-ref", "for-each-ref", "whatchanged", "diff-tree", "diff-index", "diff-files", "cherry", "name-rev", "check-ignore", "check-attr", "var", "version", "help", "tag -l", "stash list", "stash show", "notes list", "notes show", "worktree list", "submodule status", "submodule summary", "sparse-checkout list"],
+      "flags": "listed", "arg": "any",
+      "reason": "A read-only git command is allowed"
+    },
+    {
+      "id": "git.branch", "tool": "bash", "verdict": "allow", "classes": ["reader"],
+      "verb": ["git"], "sub": ["branch"], "flags": "branch-read", "arg": "any",
+      "reason": "A branch listing is allowed; a branch write form falls outside the listing tail"
+    },
+    {
+      "id": "toolchain.read", "tool": "bash", "verdict": "allow", "classes": ["reader"],
+      "verb": ["rustc --version", "rustc -V", "cargo --version", "cargo -V", "rustup --version", "rustup -V", "rustup show", "cargo metadata", "cargo tree", "cargo locate-project", "cargo pkgid", "npm root", "npm prefix", "systemctl --user list-units"],
+      "arg": "any",
+      "reason": "A read-only toolchain probe is allowed"
+    },
+    {
+      "id": "todo", "tool": "todo subagent", "verdict": "allow", "classes": ["reader"],
+      "arg": "none",
+      "reason": "The session-local tools carry no shell or filesystem surface"
+    },
+    {
+      "id": "ask", "tool": "ask_user_question", "verdict": "allow", "classes": ["reader"],
+      "arg": "none",
+      "reason": "Asking the user is always allowed"
+    },
+    {
+      "id": "git.fetch.deny", "tool": "bash", "verdict": "deny", "classes": ["reader"],
+      "verb": ["git"], "sub": ["fetch"], "flags": "refspec", "arg": "any",
+      "reason": "A fetch with a refspec writes a named ref and is denied"
+    },
+    {
+      "id": "history.deny", "tool": "bash", "verdict": "deny", "classes": ["reader"],
+      "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "any", "arg": "any",
+      "reason": "History verbs are denied: only the orchestrator holds them"
+    },
+    {
+      "id": "release.deny", "tool": "bash", "verdict": "deny", "classes": ["reader"],
+      "verb": ["git", "gh"], "sub": ["push", "pr", "run", "release"], "flags": "any", "arg": "any",
+      "reason": "Release and remote verbs are denied: only the orchestrator asks for them"
+    },
+    {
+      "id": "shell.sudo.deny", "tool": "bash", "verdict": "deny", "classes": ["reader"],
+      "verb": ["sudo"], "arg": "any",
+      "reason": "sudo is denied: only the orchestrator may ask for it"
+    },
+
+    {
+      "id": "read.any", "tool": "read find ls grep", "verdict": "allow", "classes": ["worker"],
+      "zone": "any", "arg": "path",
+      "reason": "Reading is allowed for a read-only role"
+    },
+    {
+      "id": "write.own-notes", "tool": "edit write", "verdict": "allow", "classes": ["worker"],
+      "zone": "notes:own", "arg": "path",
+      "reason": "A write inside the role's own notes zone is allowed"
+    },
+    {
+      "id": "write.repo", "tool": "edit write", "verdict": "allow", "classes": ["worker"],
+      "zone": "cwd", "arg": "path",
+      "reason": "A write inside the session working directory is allowed"
+    },
+    {
+      "id": "write.tmp", "tool": "edit write", "verdict": "allow", "classes": ["worker"],
+      "zone": "tmp", "arg": "path",
+      "reason": "A write inside the tmp zone is allowed"
+    },
+    {
+      "id": "path.ask", "tool": "edit write", "verdict": "ask", "classes": ["worker"],
+      "zone": "path:ask", "arg": "path",
+      "reason": "A write outside the allowed zones requires user approval"
+    },
+    {
+      "id": "shell.read", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["cat", "head", "tail", "wc", "grep", "rg", "ls", "stat", "od", "pwd", "date", "diff", "echo", "cut", "seq", "ps", "which", "command -v", "jq", "bash -n", "sleep"],
+      "arg": "any",
+      "reason": "A read-only shell command is allowed"
+    },
+    {
+      "id": "shell.find", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["find"], "arg": "any",
+      "reason": "find is a read-only search"
+    },
+    {
+      "id": "shell.build", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["cargo build", "cargo check", "cargo clippy", "cargo fmt", "cargo doc", "cargo test", "cargo nextest", "cargo bench", "cargo run", "cargo deny check", "cargo llvm-cov", "cargo geiger", "cargo audit", "cargo metadata", "cargo tree", "cargo locate-project", "cargo pkgid", "cargo --version", "cargo -V", "rustc --version", "rustc -V", "rustup --version", "rustup -V", "rustup show", "npm install", "npm test", "npm run typecheck", "npm run lint", "pytest", "pip", "pip3", "mypy", "ruff", "bandit", "pip-audit", "python -m pytest", "python -m unittest", "python -m mypy", "python -m flake8", "python -m pylint", "python -m black", "python -m isort", "python -m ruff", "python3 -m pytest", "python3 -m mypy", "uv build", "uv sync --frozen", "uv sync --offline", "uv run pytest", "uv run ruff", "uv run mypy", "uv run bandit", "uv run pip-audit", "tsc --noEmit", "node --version", "docker ps", "docker logs", "docker inspect"],
+      "noCd": true, "arg": "any",
+      "reason": "A build, test, or toolchain command is allowed"
+    },
+    {
+      "id": "shell.verify.worker", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["npm test", "tsc", "tsc --noEmit", "pytest", "python -m pytest", "mypy", "ruff", "cargo check", "cargo clippy", "cargo build", "cargo test", "cargo nextest"],
+      "flags": "bare", "noCd": true, "arg": "any",
+      "reason": "A worker verification command is allowed at the script word"
+    },
+    {
+      "id": "shell.verify.script", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["npm run"], "noCd": true, "arg": "any",
+      "reason": "A worker runs a named package script"
+    },
+    {
+      "id": "git.read", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["git"],
+      "sub": ["status", "log", "diff", "show", "rev-parse", "merge-base", "rev-list", "blame", "annotate", "describe", "shortlog", "ls-files", "ls-tree", "show-ref", "for-each-ref", "whatchanged", "diff-tree", "diff-index", "diff-files", "cherry", "name-rev", "check-ignore", "check-attr", "var", "version", "help", "tag -l", "stash list", "stash show", "notes list", "notes show", "worktree list", "submodule status", "submodule summary", "sparse-checkout list"],
+      "flags": "listed", "arg": "any",
+      "reason": "A read-only git command is allowed"
+    },
+    {
+      "id": "git.branch", "tool": "bash", "verdict": "allow", "classes": ["worker"],
+      "verb": ["git"], "sub": ["branch"], "flags": "branch-read", "arg": "any",
+      "reason": "A branch listing is allowed; a branch write form falls outside the listing tail"
+    },
+    {
+      "id": "todo", "tool": "todo subagent", "verdict": "allow", "classes": ["worker"],
+      "arg": "none",
+      "reason": "The session-local tools carry no shell or filesystem surface"
+    },
+    {
+      "id": "ask", "tool": "ask_user_question", "verdict": "allow", "classes": ["worker"],
+      "arg": "none",
+      "reason": "Asking the user is always allowed"
+    },
+    {
+      "id": "git.fetch.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
+      "verb": ["git"], "sub": ["fetch"], "flags": "listed", "arg": "any",
+      "reason": "fetch writes refs; approve after review"
+    },
+    {
+      "id": "git.fetch.deny", "tool": "bash", "verdict": "deny", "classes": ["worker"],
+      "verb": ["git"], "sub": ["fetch"], "flags": "refspec", "arg": "any",
+      "reason": "A fetch with a refspec writes a named ref and is denied"
+    },
+    {
+      "id": "file.move.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
+      "roles": ["implementer"], "verb": ["cp", "mv", "rsync"], "arg": "any",
+      "reason": "A file copy, move, or sync requires user approval"
+    },
+    {
+      "id": "history.deny", "tool": "bash", "verdict": "deny", "classes": ["worker"],
+      "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "any", "arg": "any",
+      "reason": "History verbs are denied: only the orchestrator holds them"
+    },
+    {
+      "id": "release.deny", "tool": "bash", "verdict": "deny", "classes": ["worker"],
+      "verb": ["git", "gh"], "sub": ["push", "pr", "run", "release"], "flags": "any", "arg": "any",
+      "reason": "Release and remote verbs are denied: only the orchestrator asks for them"
+    },
+    {
+      "id": "shell.sudo.deny", "tool": "bash", "verdict": "deny", "classes": ["worker"],
+      "verb": ["sudo"], "arg": "any",
+      "reason": "sudo is denied: only the orchestrator may ask for it"
+    },
+
+    {
+      "id": "read.any", "tool": "read find ls grep", "verdict": "allow", "classes": ["orchestrator"],
+      "zone": "any", "arg": "path",
+      "reason": "Reading is allowed for a read-only role"
+    },
+    {
+      "id": "write.all-notes", "tool": "edit write", "verdict": "allow", "classes": ["orchestrator"],
+      "zone": "notes:all", "arg": "path",
+      "reason": "A write inside the agent-notes tree is allowed"
+    },
+    {
+      "id": "write.repo", "tool": "edit write", "verdict": "allow", "classes": ["orchestrator"],
+      "zone": "cwd", "arg": "path",
+      "reason": "A write inside the session working directory is allowed"
+    },
+    {
+      "id": "write.tmp", "tool": "edit write", "verdict": "allow", "classes": ["orchestrator"],
+      "zone": "tmp", "arg": "path",
+      "reason": "A write inside the tmp zone is allowed"
+    },
+    {
+      "id": "path.ask", "tool": "edit write", "verdict": "ask", "classes": ["orchestrator"],
+      "zone": "path:ask", "arg": "path",
+      "reason": "A write outside the allowed zones requires user approval"
+    },
+    {
+      "id": "shell.read", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["cat", "head", "tail", "wc", "grep", "rg", "ls", "stat", "od", "pwd", "date", "diff", "echo", "cut", "seq", "ps", "which", "command -v", "jq", "bash -n", "sleep"],
+      "arg": "any",
+      "reason": "A read-only shell command is allowed"
+    },
+    {
+      "id": "shell.find", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["find"], "arg": "any",
+      "reason": "find is a read-only search"
+    },
+    {
+      "id": "shell.journal.tools", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["mkdir", "sort", "uniq"], "arg": "any",
+      "reason": "The orchestrator creates its journal folder and sorts or dedupes a stream"
+    },
+    {
+      "id": "shell.verify", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["npm test", "npm run typecheck", "npm run lint"], "flags": "bare", "noCd": true, "arg": "any",
+      "reason": "A named project verification script is allowed"
+    },
+    {
+      "id": "shell.verify.cargo", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["cargo nextest", "cargo deny check"], "noCd": true, "arg": "any",
+      "reason": "A cargo verification command is allowed"
+    },
+    {
+      "id": "git.read", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["git"],
+      "sub": ["status", "log", "diff", "show", "rev-parse", "merge-base", "rev-list", "blame", "annotate", "describe", "shortlog", "ls-files", "ls-tree", "show-ref", "for-each-ref", "whatchanged", "diff-tree", "diff-index", "diff-files", "cherry", "name-rev", "check-ignore", "check-attr", "var", "version", "help", "tag -l", "stash list", "stash show", "notes list", "notes show", "worktree list", "submodule status", "submodule summary", "sparse-checkout list"],
+      "flags": "listed", "arg": "any",
+      "reason": "A read-only git command is allowed"
+    },
+    {
+      "id": "git.branch", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["branch"], "flags": "branch-read", "arg": "any",
+      "reason": "A branch listing is allowed; a branch write form falls outside the listing tail"
+    },
+    {
+      "id": "git.history.plain", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "listed", "arg": "any",
+      "reason": "A plain history command is allowed for the orchestrator"
+    },
+    {
+      "id": "git.dir-option.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "flags": "dir-option", "arg": "any",
+      "reason": "A git directory option value that is not a path requires user approval"
+    },
+    {
+      "id": "git.history.exception", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "exception", "span": true, "arg": "any",
+      "reason": "An exception form of a history command requires user approval"
+    },
+    {
+      "id": "git.history.subshell", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "subshell", "span": true, "arg": "any",
+      "reason": "A history command inside a substitution or a subshell requires user approval"
+    },
+    {
+      "id": "git.process-substitution", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "flags": "process-sub", "span": true, "arg": "any",
+      "reason": "A process substitution runs a command and requires user approval"
+    },
+    {
+      "id": "git.history.reset-soft", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["reset --soft"], "flags": "listed", "arg": "any",
+      "reason": "A soft reset rewrites the commit chain and requires user approval"
+    },
+    {
+      "id": "git.history.prefixed", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "prefixed", "arg": "any",
+      "reason": "An unknown global option or a wrapper prefix on a history command requires user approval"
+    },
+    {
+      "id": "git.tag.delete", "tool": "bash", "verdict": "deny", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["tag"], "flags": "delete", "arg": "any",
+      "reason": "Deleting a tag is denied"
+    },
+    {
+      "id": "release.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git", "gh"], "sub": ["push", "pr", "run", "release"], "flags": "listed", "arg": "any",
+      "reason": "A release or remote operation requires user approval"
+    },
+    {
+      "id": "shell.sudo", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["sudo"], "arg": "any",
+      "reason": "Running with sudo"
+    },
+    {
+      "id": "file.move.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["cp", "mv", "rsync"], "arg": "any",
+      "reason": "A file copy, move, or sync requires user approval"
+    },
+    {
+      "id": "todo", "tool": "todo subagent", "verdict": "allow", "classes": ["orchestrator"],
+      "arg": "none",
+      "reason": "The session-local tools carry no shell or filesystem surface"
+    },
+    {
+      "id": "ask", "tool": "ask_user_question", "verdict": "allow", "classes": ["orchestrator"],
+      "arg": "none",
+      "reason": "Asking the user is always allowed"
+    }
+  ]
+}

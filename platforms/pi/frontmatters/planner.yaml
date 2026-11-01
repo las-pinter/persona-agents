@@ -3,7 +3,7 @@ description: Turns requirements into studies and specifications
 # The pi planner can spawn subagents: `subagent` is in this loadout and the
 # reader class allows it. The depth cap (platforms/pi/extension/depth.ts) stops a
 # level-2 agent from spawning further subagents. The rules are the reader class
-# rows of the compiled table (`permissions.table.ts`).
+# rows of the compiled table (`platforms/pi/permissions.table.json`).
 tools: [bash, read, edit, write, find, ls, grep, subagent, todo]
 skills: ["planner/*", "common/project-notes", "common/simplified-technical-english", "common/persona-free-documents", "common/shell-discipline", "common/retro"]
 alwaysLoad: ["common/simplified-technical-english", "planner/interview", "common/shell-discipline"]

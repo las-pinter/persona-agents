@@ -1,9 +1,11 @@
 /**
  * Permission gate for the pi rule table.
  *
- * Every tool call the model makes is checked against one compiled table
- * (`permissions.table.ts` + `permission-table.ts`), with the live global file as
- * an optional local overlay. Precedence (`command-segments.ts` owns the order):
+ * Every tool call the model makes is checked against one compiled table, with the
+ * live global file as an optional local overlay. `permission-config.ts` reads the
+ * three layers in order: the shipped default data file, the user override file,
+ * and the global overlay. Every rule records its layer. Precedence
+ * (`command-segments.ts` owns the order):
  *
  *   1. global deny rows     (the table's global group, then the overlay)
  *   2. class deny rows      (the resolved role's class)
@@ -48,18 +50,17 @@
  * Its rows are appended after the table's global rows. A malformed file fails
  * closed: one line names the path and every call is denied.
  *
- * Run /reload after editing permissions.json.
+ * Run /reload after editing permissions.json or permissions.table.json.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	discoverSkills,
 	matchSkills,
 	skillScriptsDirs,
 	type AgentConfig,
-	type PermissionRule,
 } from "./resolver.ts";
 import {
 	evaluateCommandRules,
@@ -77,7 +78,7 @@ import {
 	type RoleClass,
 	type RuleRow,
 } from "./permission-table.ts";
-import { RULE_ROWS } from "./permissions.table.ts";
+import { loadDefaultRows, loadGlobalRules, loadPermissionConfig, type OverlayRules } from "./permission-config.ts";
 import {
 	buildPromptModel,
 	blockedLabel,
@@ -86,41 +87,7 @@ import {
 	type PermissionChoice,
 } from "./permission-prompt.ts";
 
-function configPath(): string {
-	if (process.env.PI_PERMISSIONS_FILE) return process.env.PI_PERMISSIONS_FILE;
-	return path.join(getAgentDir(), "permissions.json");
-}
-
-/**
- * Read the live global permission file.
- *
- * The error must never be swallowed: the global deny and ask rules are the hard
- * floor under every agent, so an empty set would drop the secret, disk, and
- * release guards without a word. One line names the file and the fault, and the
- * returned rule set denies every tool call, so the fence stays closed.
- * A rule with no `tool` matches every tool, and `.` matches any probe.
- */
-export function loadGlobalRules(file: string = configPath()): {
-	deny: PermissionRule[];
-	ask: PermissionRule[];
-} {
-	try {
-		const cfg = JSON.parse(fs.readFileSync(file, "utf-8")) as { deny?: unknown; ask?: unknown };
-		if (!Array.isArray(cfg.deny ?? []) || !Array.isArray(cfg.ask ?? [])) {
-			throw new Error("deny and ask must be lists");
-		}
-		return { deny: (cfg.deny ?? []) as PermissionRule[], ask: (cfg.ask ?? []) as PermissionRule[] };
-	} catch (error) {
-		const fault = error instanceof Error ? error.message : String(error);
-		console.error(
-			`permission gate: cannot load ${file}: ${fault}; every tool call is denied until the file is fixed`,
-		);
-		return {
-			deny: [{ match: ".*", reason: "The global permissions file is unreadable, so every call is denied" }],
-			ask: [],
-		};
-	}
-}
+export { loadGlobalRules } from "./permission-config.ts";
 
 function probeFor(toolName: string, input: Record<string, unknown>): string {
 	switch (toolName) {
@@ -295,7 +262,7 @@ function isRole(name: string): name is Role {
  * no-agent case reuses one copy and keeps `allow-unless-matched`, as a bare pi
  * session does today.
  */
-export function compileGateSource(rows: readonly RuleRow[] = RULE_ROWS): GateRuleSourceFactory {
+export function compileGateSource(rows: readonly RuleRow[] = loadDefaultRows()): GateRuleSourceFactory {
 	const byRole = new Map<Role, RuleSets>();
 	for (const role of Object.keys(ROLE_CLASS) as Role[]) byRole.set(role, compileRole(rows, role));
 	const byClass = new Map<RoleClass, RuleSets>();
@@ -325,12 +292,13 @@ export function compileGateSource(rows: readonly RuleRow[] = RULE_ROWS): GateRul
 	};
 }
 
-/** Install the gate with the compiled table as the rule source. */
+/** Install the gate with the loaded three-layer table as the rule source. */
 export function installPermissionGate(
 	pi: ExtensionAPI,
 	getActiveAgent: () => AgentConfig | null,
 ): void {
-	installToolCallGate(pi, getActiveAgent, compileGateSource());
+	const config = loadPermissionConfig();
+	installToolCallGate(pi, getActiveAgent, compileGateSource(config.rows), config.overlay);
 }
 
 /**
@@ -342,11 +310,11 @@ export function installToolCallGate(
 	pi: ExtensionAPI,
 	getActiveAgent: () => AgentConfig | null,
 	source: GateRuleSourceFactory,
+	overlay: OverlayRules = loadGlobalRules(),
 ): void {
 	// The overlay is read once per factory run. /reload re-runs this factory (via
 	// the extension runner), which re-reads the file, so no per-call read is
 	// needed here.
-	const overlay = loadGlobalRules();
 
 	// Session-scoped "always allow" memory, keyed by `agent|tool|ruleMatch`, created
 	// with this gate installation. In-memory only — nothing is written to disk, so
