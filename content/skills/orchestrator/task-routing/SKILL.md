@@ -128,6 +128,8 @@ Fix the brief, not the round count.
   implementer starts. The map from severity to verdict lives in the
   **code-review-checklist** skill. Point at that map. Do not copy a row of it.
   When the brief adds a check, name the file or command the check uses.
+- A dispatch brief names the sources to read (mockup, spec, file and line, or the brief file). It
+  does not state design facts from memory.
 - A brief is one concern that ends in one commit. A brief covers one code area and carries at
   most 5 acceptance checks. A brief that needs a sixth check or a second code
   area is two briefs.

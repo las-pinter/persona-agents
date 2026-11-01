@@ -120,7 +120,7 @@ Each brief names:
 Rules for a brief:
 
 - Search the code for each symbol before you write its mark.
-- Name the sources to read. Do not state design facts from memory.
+- Follow the source rule in **task-routing** under `## Dispatch Brief`.
 - For the size of a brief, follow **task-routing** under `## Dispatch Brief`.
   Do not copy its numbers.
 - Reference every brief from `study.md`.
