@@ -25,7 +25,7 @@
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
 // `$(...)` or backtick substitution, an env assignment, a path to git, the
-// unwrap depth limit, the fail-closed scan) or a runtime-shaped one (a `$`
+// unwrap depth limit) or a runtime-shaped one (a `$`
 // expansion, a glob, an output redirect to a file) is raised to ask.
 // Claude Code still applies settings deny and ask rules after a hook allow,
 // and an allow from this hook never overrides an ask or deny from another
@@ -57,7 +57,10 @@
 // A shell command is split into segments by the pi gate's parser; each segment
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
 // before it is classified. A command the parser cannot read (a heredoc, an
-// unbalanced quote) that names a gated command counts as a hit: fail closed.
+// unbalanced quote) that holds a gated form counts as a hit: fail closed. A gated
+// form is git with a history verb or push, gh with pr, run, or release, or cp,
+// mv, rsync. The hit is publish (orchestrator: ask; every other agent: deny).
+// Unreadable text with only git read verbs (status, diff, log) is not a hit.
 // The fail-closed hit is ask, never allow. One exception: a single quoted
 // heredoc fed to a data reader (cat, tee, python3 -, node -) is checked by its
 // header only (safeHeredocHeader).
@@ -322,6 +325,7 @@ function zoneReason(rule: FileZone, profession: string): string {
 
 const GIT_HISTORY = new Set(["add", "commit", "pull", "merge", "rebase", "tag"]);
 const GIT_PUBLISH = new Set(["push"]);
+const GH_PUBLISH = new Set(["pr", "release", "run"]);
 /**
  * The only git global options a history command may carry and still get its
  * verdict by subcommand. Any other leading option (-c, --config-env,
@@ -352,7 +356,7 @@ const PREFIX_VALUE_OPTIONS: Record<string, Set<string>> = {
 	xargs: new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"]),
 };
 /** Names a fail-closed scan looks for in a command the parser cannot read. */
-const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync)(?=\s|$)/;
+const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync)(?=\s|$|['"])/;
 /** A plain file path in a heredoc header: no quotes, expansions, or operators. */
 const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
 const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;
@@ -559,7 +563,7 @@ function classify(command: string, args: string[]): Hit[] {
 		let g = 0;
 		while (g < args.length && args[g].startsWith("-")) g += args[g] === "-R" || args[g] === "--repo" ? 2 : 1;
 		const sub = args[g];
-		return sub === "pr" || sub === "release" || sub === "run" ? ["publish"] : [UNGATED];
+		return sub !== undefined && GH_PUBLISH.has(sub) ? ["publish"] : [UNGATED];
 	}
 	if (command !== "git") return [UNGATED];
 	let i = 0;
@@ -602,6 +606,36 @@ function classify(command: string, args: string[]): Hit[] {
 	return ["history"];
 }
 
+/**
+ * True when the text after an unreadable command's `git` or `gh` word may
+ * start a gated form. It skips the global options it knows. It answers true
+ * for anything it cannot read (unknown option, substitution, odd quoting),
+ * because a false deny is safe and a false allow is not.
+ */
+function gatedFormFollows(program: "git" | "gh", after: string): boolean {
+	// A closing quote of a quoted program name (`"git" commit`) is not a word.
+	const tokens = after.replace(/^['"]/, "").split(/\s+/).filter((token) => token !== "");
+	// An option value is trusted only as one clean token. A quoted value with a
+	// space splits into two tokens, and the second would read as the subcommand.
+	const cleanValue = (value: string | undefined): boolean => value !== undefined && /^[^\s'"`$\\]+$/.test(value);
+	for (let i = 0; i < tokens.length; i++) {
+		// A separator or quote glued to the word does not change the word.
+		const word = tokens[i].replace(/[;&|)'"]+$/, "");
+		if (word.startsWith("-")) {
+			const eq = tokens[i].indexOf("=");
+			const name = eq < 0 ? tokens[i] : tokens[i].slice(0, eq);
+			const takesValue = program === "gh" ? name === "-R" || name === "--repo" : GIT_PATH_OPTIONS.has(name);
+			if (takesValue) {
+				if (eq >= 0 ? !cleanValue(tokens[i].slice(eq + 1)) : !cleanValue(tokens[++i])) return true;
+			} else if (program === "git" && !GIT_PLAIN_OPTIONS.has(word)) return true;
+			continue;
+		}
+		const gated = program === "git" ? GIT_HISTORY.has(word) || GIT_PUBLISH.has(word) : GH_PUBLISH.has(word);
+		return gated || !/^[a-z][a-z0-9-]*$/.test(word);
+	}
+	return false;
+}
+
 /** Every hit a whole shell command makes. */
 function commandGates(command: string, profession: string, depth = 0): Hit[] {
 	const parsed = parseShellCommand(command);
@@ -612,7 +646,11 @@ function commandGates(command: string, profession: string, depth = 0): Hit[] {
 		// hit, and never an allow.
 		const gates = new Set<Hit>();
 		for (const match of command.matchAll(new RegExp(GATED_WORD.source, "g"))) {
-			gates.add(match[1] === "git" || match[1] === "gh" ? "publish" : "copy");
+			const program = match[1];
+			if (program === "git" || program === "gh") {
+				// A read such as `git status` stays ungated; only a gated form fires.
+				if (gatedFormFollows(program, command.slice(match.index + program.length))) gates.add("publish");
+			} else gates.add("copy");
 		}
 		return [...gates];
 	}

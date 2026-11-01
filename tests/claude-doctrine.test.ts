@@ -297,6 +297,46 @@ describe("doctrine: fail closed", () => {
 		assert.equal(bash("implementer", "cat <<EOF > notes.txt\nhello\nEOF"), "none");
 	});
 
+	test("an unreadable command with only a git read is left alone", () => {
+		const command = "git status && python3 - <<EOF\nprint(1)\nEOF";
+		assert.equal(bash("implementer", command), "none");
+		assert.equal(bash("orchestrator", command), "none");
+	});
+
+	/** Unreadable commands whose raw text holds a gated form or a form the scan cannot read. */
+	const FAIL_CLOSED_TEXT = [
+		"git status && python3 - <<EOF\nprint(1)\nEOF\ngit commit -m x",
+		"git status && python3 - <<EOF\nprint(1)\nEOF\ngit push",
+		"git status && python3 - <<EOF\nprint(1)\nEOF\ngh pr create",
+		"git -c x=y status && python3 - <<EOF\nprint(1)\nEOF",
+		"git status && python3 - <<EOF\ngit commit -m x\nEOF",
+		"git $(echo commit) && python3 - <<EOF\nprint(1)\nEOF",
+		"git --no-pager -C /x commit && python3 - <<EOF\nprint(1)\nEOF",
+		// A quoted option value with a space must not leak its second half as a word.
+		'git -C "a b" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		"git -C 'a b' commit\npython3 - <<EOF\nprint(1)\nEOF",
+		'git --git-dir "a b" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		'git -C "$(echo a b)" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		'git -C "a  b" push\npython3 - <<EOF\nprint(1)\nEOF',
+		'gh -R "o r" pr create\npython3 - <<EOF\nprint(1)\nEOF',
+		'git --git-dir="a b" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		"git --git-dir=x commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"gh --repo=o/r pr\npython3 - <<EOF\nprint(1)\nEOF",
+		"command git commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"env git commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"/usr/bin/git commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"git -ccore.x=y commit\npython3 - <<EOF\nprint(1)\nEOF",
+		// A quoted program name is still found.
+		'"git" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		"'git' commit\npython3 - <<EOF\nprint(1)\nEOF",
+	];
+	for (const command of FAIL_CLOSED_TEXT) {
+		test(`an unreadable command with a gated form stays a hit: ${JSON.stringify(command)}`, () => {
+			assert.equal(bash("orchestrator", command), "ask");
+			assert.equal(bash("implementer", command), "deny");
+		});
+	}
+
 	/** Quoted heredoc bodies that the shell passes as plain data. */
 	const DATA_HEREDOCS = [
 		"python3 - <<'PY'\n# then run git commit\nprint(1)\nPY",
