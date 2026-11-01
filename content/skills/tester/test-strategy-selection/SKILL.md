@@ -151,3 +151,10 @@ business logic or utility code is a goal, not a failure.
 
 1. Mock external deps in unit tests; use real ones in integration tests.
 2. Coverage is a signal, not a goal — 100% with no assertions is worthless.
+
+## GUI Tests Under Xvfb
+
+Xvfb has no window manager, so a window does not get focus by itself. Send
+`xdotool windowfocus <win>` (or the same call in the test harness) before you
+send keys. When a key test fails under Xvfb with no focus step, do not report it
+as a product defect before a re-run with the focus step.
