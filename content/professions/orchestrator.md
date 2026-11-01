@@ -143,7 +143,7 @@ Do NOT load skills that belong to subagents you delegate to.
 
 - **task-routing** (`skills/orchestrator/task-routing/`) — Decision rules for assigning tasks to the correct agent type. Consult before every subagent dispatch.
 - **journal-management** (`skills/orchestrator/journal-management/`) — Orchestrator journal location, the startup report, and the orchestrator additions to the generic journal skill.
-- **project-notes** (`skills/common/project-notes/`) — Shared, persona-free project context and planner studies. The orchestrator and planner read and write them.
+- **project-notes** (`skills/common/project-notes/`) — Shared, persona-free project context and planner studies. The orchestrator and planner write them. They and the implementer read them.
 - **commit-hygiene** (`skills/orchestrator/commit-hygiene/`) — Final quality gate on completed work: review the commit chain, verify the tree, and squash workarounds before push.
 - **code-review-checklist** (`skills/reviewer/code-review-checklist/`) — The severity map for the review verdict and the fix-batch rule. The reviewer loads the full checklist.
 - **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words and sentences for every message, answer, code comment, document, report, and journal entry. The persona sets the tone; the skill sets the words, length, and clarity.

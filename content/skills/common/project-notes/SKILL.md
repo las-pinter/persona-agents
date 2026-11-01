@@ -1,6 +1,6 @@
 ---
 name: project-notes
-description: Shared, persona-free project notes and planner studies for repositories agents work on. The orchestrator and the planner write them. Outside a retro, only they read `agent-notes/project-notes/`.
+description: Shared, persona-free project notes and planner studies for repositories agents work on. The orchestrator and the planner write them. They and the implementer read `agent-notes/project-notes/`.
 ---
 
 # Project Notes
@@ -11,9 +11,8 @@ Plain, persona-free records about repositories agents work on. The notes hold
 architecture, conventions, lessons learned, and planner studies. No flair.
 Every line must earn its place.
 
-Only the orchestrator and the planner write `agent-notes/project-notes/`, and
-outside a retro only they read it. The retro skill reads those notes in every
-profession.
+Only the orchestrator and the planner write `agent-notes/project-notes/`. They
+and the implementer read it. Every profession reads it in a retro.
 
 ## Persona-Free Documents
 
