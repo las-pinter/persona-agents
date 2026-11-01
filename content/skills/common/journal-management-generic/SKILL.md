@@ -115,6 +115,11 @@ last line.
 
 For the correct current date use the `date` bash command.
 
+Keep an append block short: about 10 text lines is a target, not a hard limit.
+Use one line per fact. No line repeats a fact that a commit message or an earlier block already holds. The
+100-line limit above stays. The 200-line writer limit under **Block file
+format** is a hard maximum, not a target.
+
 ### Append through the write script (shared journal cave)
 
 Journal files under agent-notes may be written by MORE THAN ONE session (e.g.
