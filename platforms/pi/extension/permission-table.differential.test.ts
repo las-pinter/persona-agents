@@ -557,6 +557,35 @@ test("a worker role runs npm test and a reader role denies it", () => {
 	}
 });
 
+test("a named file removal asks for the orchestrator and denies for a reader", () => {
+	// Two differential probes: one ask for the orchestrator, one deny for a
+	// reader. The retired named-file entry was an ask for both removing
+	// professions, and the table keeps that verdict.
+	const probes: Probe[] = [
+		{ tool: "bash", probe: "rm notes.txt" },
+		{ tool: "bash", probe: "git rm notes.txt" },
+	];
+	for (const probe of probes) {
+		for (const role of ["orchestrator", "implementer"] as Role[]) {
+			assert.equal(decide(compileRole(RULE_ROWS, role), probe), "ask", `${role}: ${probe.probe}`);
+		}
+		for (const role of ["planner", "reviewer", "researcher", "mascot", "tester"] as Role[]) {
+			assert.equal(decide(compileRole(RULE_ROWS, role), probe), "deny", `${role}: ${probe.probe}`);
+		}
+	}
+	// The retired named-file entry matched no leading option, so the plain form
+	// keeps the legacy verdict it already carried.
+	const plain: Probe = { tool: "bash", probe: "rm notes.txt" };
+	for (const role of ["orchestrator", "implementer"] as Role[]) {
+		assert.equal(decide(legacySets(role), plain), "ask", `${role} lost the legacy ask`);
+	}
+	// A recursive form stays a hard deny for every role, including the two that
+	// hold the removal ask.
+	for (const role of ROLES) {
+		assert.equal(decide(compileRole(RULE_ROWS, role), { tool: "bash", probe: "rm -rf build" }), "deny", role);
+	}
+});
+
 test("every change class carries a reason and an owner ruling", () => {
 	for (const [name, record] of Object.entries(CHANGE_RULINGS)) {
 		assert.ok(record.reason.length > 0 && !record.reason.includes("\n"), `${name} needs a one-line reason`);

@@ -152,6 +152,8 @@ export const ROW_RATIONALE: Record<string, string> = {
 		"The worker verification row names each retired test and type-check command, and it anchors at the script word like the orchestrator row.",
 	"git.dir-option.ask":
 		"A git directory option value that fails the path grammar had no ask row, so one row now sends every such value to the ask tier for the orchestrator.",
+	"git.remove.ask":
+		"A git file removal carries the same intent as a plain one, so the removal ask row covers it for the two professions that may remove a file.",
 	"shell.verify.script":
 		"The retired worker list allowed npm run with any script name, so one row names the verb and leaves the script word free.",
 };
@@ -519,7 +521,7 @@ export const LEGACY: readonly LegacyRecord[] = [
 	{ entry: "orchestrator/ask/10", del: "del-unreachable-fence" },
 	{ entry: "orchestrator/ask/11", del: "del-unreachable-fence" },
 	{ entry: "orchestrator/ask/12", row: "shell.rm.recursive" },
-	{ entry: "orchestrator/ask/13", del: "del-unreachable-fence" },
+	{ entry: "orchestrator/ask/13", row: "file.remove.ask", note: "The row also names a forced removal, which the retired entry did not cover." },
 	{ entry: "orchestrator/ask/14", row: "file.move.ask" },
 	{ entry: "orchestrator/ask/15", row: "file.move.ask" },
 	{ entry: "orchestrator/ask/16", row: "file.move.ask" },
@@ -627,7 +629,7 @@ export const LEGACY: readonly LegacyRecord[] = [
 	{ entry: "implementer/ask/2", del: "del-unreachable-fence" },
 	{ entry: "implementer/ask/3", del: "del-unreachable-fence" },
 	{ entry: "implementer/ask/4", del: "del-unreachable-fence" },
-	{ entry: "implementer/ask/5", del: "del-unreachable-fence" },
+	{ entry: "implementer/ask/5", row: "file.remove.ask", note: "The row also names a forced removal, which the retired entry did not cover." },
 	{ entry: "implementer/ask/6", row: "file.move.ask" },
 	{ entry: "implementer/ask/7", row: "file.move.ask" },
 	{ entry: "implementer/ask/8", row: "file.move.ask" },

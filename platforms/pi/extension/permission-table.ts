@@ -19,6 +19,7 @@
  *   - the leading `cd <dir> &&` fold of a bash row, unless the row sets `noCd`,
  *   - the git global-option slot, named by a flag class,
  *   - the option tail of a flag class (`-exec`, `-i`, `--output`, ...),
+ *   - the named-form guard that keeps a recursive removal out of an ask row,
  *   - the path zone of a read, edit, or write row,
  *   - the probe shape of a stream write or a shell function definition,
  *   - the exception tail of `git.history.exception`,
@@ -99,6 +100,7 @@ export type FlagClass =
 	| "prefixed"
 	| "exception"
 	| "bare"
+	| "named"
 	| "branch-read"
 	| "subshell"
 	| "process-sub";
@@ -239,6 +241,7 @@ const FLAGS = new Set<string>([
 	"prefixed",
 	"exception",
 	"bare",
+	"named",
 	"branch-read",
 	"subshell",
 	"process-sub",
@@ -384,6 +387,13 @@ const SCAN = "(?:\\\\.|[^\\\\'\";&|\\n]|'[^']*'|\"(?:\\\\.|[^\"\\\\])*\")*?";
 const NON_PATH_DIR = `-[cC]\\s+(?!${PATH_VALUE})\\S`;
 
 /**
+ * Every recursive removal option: a short bundle that holds `r` or `R`, or the
+ * long option. The recursive deny tail and the named-form guard read this one
+ * piece, so the ask row can never own a form the deny row fences.
+ */
+const RECURSIVE_FLAG = "(?:-[A-Za-z]*r[A-Za-z]*|--recursive)(?=[\\s=]|$)";
+
+/**
  * The option tail of each flag class. The tail is a lookahead, so the words
  * between the head and the flag stay outside the match.
  */
@@ -396,12 +406,17 @@ export const TAIL: Record<FlagClass, string | null> = {
 	fs: null,
 	prefixed: null,
 	bare: null,
+	// A named-form row owns the plain form only, so it carries no tail; the
+	// pattern builder appends its guard instead.
+	named: null,
 	"branch-read": null,
 	subshell: null,
 	"process-sub": null,
 	exec: "(?:-exec|-execdir|-fls|-fprint(?:0|f)?|-ok|-okdir|-delete|--exec)(?=[\\s;|&()]|$)",
-	recursive: "(?:-[A-Za-z]*r[A-Za-z]*|--recursive)(?=[\\s=]|$)",
-	force: `(?:-(?=[^-\\s])[^\\s=]*f|${LADDER.force})(?=[\\s=]|$)`,
+	recursive: RECURSIVE_FLAG,
+	// A short bundle asks when it holds the force letter anywhere: tag accepts
+	// `-fm` and `-mf`, so a trailing-only match leaves a force move open.
+	force: `(?:-(?=[^-\\s])[^\\s=]*f[^\\s=]*|${LADDER.force})(?=[\\s=]|$)`,
 	// A long delete option accepts every abbreviation, so `--del` counts.
 	delete: `(?:-[A-Za-z0-9]*d[A-Za-z0-9]*|${LADDER.delete})(?=[\\s=]|$)`,
 	amend: `${LADDER.amend}(?=[\\s=]|$)`,
@@ -806,6 +821,12 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 		// Only the listing option group may follow `branch`, and it must end the
 		// segment, so a branch write form falls outside the row.
 		body += `(?=(?:\\s+(?:${LADDER["branch-list"]}))*\\s*$)`;
+	} else if (row.flags === "named") {
+		// A named-form row owns the plain form only. A recursive option in the same
+		// segment makes the row match nothing, so the recursive deny row keeps that
+		// form and the ask row never covers it. The scan skips quoted words, as the
+		// recursive tail does, so a quoted separator cannot hide the flag.
+		body += `(?!${SCAN}\\s${RECURSIVE_FLAG})`;
 	} else if (tail) {
 		// The tail is required for every flag class: a row that names an option
 		// denies the option, never the bare command.

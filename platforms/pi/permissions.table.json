@@ -281,6 +281,16 @@
       "reason": "A file copy, move, or sync requires user approval"
     },
     {
+      "id": "file.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
+      "roles": ["implementer"], "verb": ["rm"], "flags": "named", "arg": "any",
+      "reason": "A named file removal requires user approval"
+    },
+    {
+      "id": "git.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
+      "roles": ["implementer"], "verb": ["git"], "sub": ["rm"], "flags": "named", "arg": "any",
+      "reason": "A git file removal requires user approval"
+    },
+    {
       "id": "history.deny", "tool": "bash", "verdict": "deny", "classes": ["worker"],
       "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "any", "arg": "any",
       "reason": "History verbs are denied: only the orchestrator holds them"
@@ -413,6 +423,16 @@
       "id": "file.move.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
       "verb": ["cp", "mv", "rsync"], "arg": "any",
       "reason": "A file copy, move, or sync requires user approval"
+    },
+    {
+      "id": "file.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["rm"], "flags": "named", "arg": "any",
+      "reason": "A named file removal requires user approval"
+    },
+    {
+      "id": "git.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["rm"], "flags": "named", "arg": "any",
+      "reason": "A git file removal requires user approval"
     },
     {
       "id": "todo", "tool": "todo subagent", "verdict": "allow", "classes": ["orchestrator"],

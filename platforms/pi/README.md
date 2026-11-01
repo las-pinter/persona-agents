@@ -206,8 +206,8 @@ again.
 
 ### Table doctrine
 
-- **Row groups.** The shipped file holds 81 rows: 22 global, 14 reader, 20
-  worker, and 25 orchestrator. A class resolves to 36 reader, 42 worker, or 47
+- **Row groups.** The shipped file holds 85 rows: 22 global, 14 reader, 22
+  worker, and 27 orchestrator. A class resolves to 36 reader, 44 worker, or 49
   orchestrator rows.
 - **Fences.** A deny row that names an option requires that option, so the bare
   command stays untouched. `find` denies on `-exec`, `-fls`, and the `-fprint`
@@ -222,6 +222,11 @@ again.
   `git branch` is one read row with a listing-only tail: a branch write form falls
   outside the tail and reaches deny-by-default, so no class can create, move, or
   delete a branch through the read row.
+- **File removal.** A single named `rm` asks for the orchestrator and the
+  implementer. It is denied to every other class. The `-f`, `--force`, and
+  multi-name forms ask the same way. A recursive form (`-r`, `-rf`, `-fr`,
+  `--recursive`) stays a hard deny for every class. `git rm` carries the same
+  rule.
 - **Deliberately omitted commands.** The shared read rows omit `xxd`, `printf`,
   `sha256sum`, `mktemp`, `test`, `mdl`, and a `.venv/bin/<tool>` wrapper, so
   deny-by-default blocks them. They also omit `git remote`, `git reflog`,
