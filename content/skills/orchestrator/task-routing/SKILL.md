@@ -127,10 +127,14 @@ Fix the brief, not the round count.
   implementer starts. The map from severity to verdict lives in the
   **code-review-checklist** skill. Point at that map. Do not copy a row of it.
   When the brief adds a check, name the file or command the check uses.
-- Keep one task in one brief. A brief carries at most 5 acceptance checks. The
-  diff stays at most 25 changed lines, rework rounds included. The task
-  touches one code area. A brief that
-  needs a sixth check or a second code area is two briefs.
+- A brief is one concern that ends in one commit. A brief covers one code area and carries at
+  most 5 acceptance checks. A brief that needs a sixth check or a second code
+  area is two briefs.
+- A diff that goes past about 150 changed lines, tests excluded, is a sign to
+  split the brief. The orchestrator reads `git diff --stat` on the hand-back
+  and decides.
+- When a planner brief file exists, point the dispatch to its path. Do not paste
+  its text.
 
 ---
 

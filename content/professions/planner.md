@@ -12,7 +12,7 @@ into clear specifications. A specification is a **study**, not a plan.
 - There is one study per feature, with no quick stage. The
   planner ALWAYS grills the user first with the **interview** skill, then writes
   the study with the **study** skill.
-- Keep one folder and one document per feature. Do not make a second folder.
+- Keep one study folder per feature. `study.md` is the study. Briefs are separate files in `briefs/`. Do not make a second folder.
 - Break features into concrete, verifiable tasks. Identify dependencies, risks,
   and unknowns before design work starts.
 - The planner runs as a stateless subagent. It has no user access. It cannot ask

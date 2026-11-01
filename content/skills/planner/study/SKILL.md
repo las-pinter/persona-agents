@@ -103,6 +103,28 @@ Stop splitting a task when it is estimable, verifiable, independent, has one
 responsibility, and has no unknowns. If a task has unknowns, add a small
 investigation task before it.
 
+### Briefs
+
+**task-routing** defines a brief under `## Dispatch Brief`. Write each brief to
+its own file, `briefs/NN-<slug>.md`, inside the study folder. `NN` is a two-digit order
+number. A brief file is not a second study.
+
+Each brief names:
+
+- the goal;
+- the source files to read;
+- the acceptance checks;
+- every symbol it touches (function, type, file, test). Mark each symbol
+  `exists` or `new`.
+
+Rules for a brief:
+
+- Search the code for each symbol before you write its mark.
+- Name the sources to read. Do not state design facts from memory.
+- For the size of a brief, follow **task-routing** under `## Dispatch Brief`.
+  Do not copy its numbers.
+- Reference every brief from `study.md`.
+
 ### Acceptance Criteria
 
 | Weak | Strong |
@@ -155,6 +177,7 @@ A study is done only when every line is true:
 - [ ] The title and date are set.
 - [ ] The goal states the problem, the users, and the success measures.
 - [ ] Every task has an acceptance condition and a complexity estimate.
+- [ ] Every symbol that a brief names is marked `exists` or `new`.
 - [ ] Dependencies are mapped with no circular chain.
 - [ ] At least one risk is listed, or "None identified".
 - [ ] Every High or Critical risk has a mitigation.

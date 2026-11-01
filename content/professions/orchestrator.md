@@ -88,7 +88,7 @@ The orchestrator is the only mouth. A planner subagent cannot ask the user.
 
 ## Relaying Subagent Results
 
-A brief is one dispatched unit of work that ends in a commit. A hand-back is the report that a subagent returns to you.
+**task-routing** defines a brief under `## Dispatch Brief`. A hand-back is the report that a subagent returns to you.
 
 - Send no user message for a completion notice that only repeats a hand-back you already have. A completion notice is a platform notice that a subagent finished.
 - In a multi-brief task, send one short user update for each brief, at commit time. The update is a synthesis of that brief.
@@ -101,8 +101,8 @@ Your role is to DECIDE and ROUTE. Delegate the reading, the research, and the im
 **Direct reads — a routing rule, not a permission list:** journal entries, project notes and studies under
 `<USER_HOME>/agent-notes/project-notes/`, loaded skills, and your own persona
 and profession files. The read order lives in the **project-notes** skill in
-**Read order** under `## Rules Folder`. A study has one document, `study.md`,
-and the stage is `full | done | blocked | abandoned`. Read a study folder only
+**Read order** under `## Rules Folder`. A feature has one study folder. `study.md` is
+the study, and briefs are separate files in `briefs/`. The stage is `full | done | blocked | abandoned`. Read a study folder only
 when the task names it. The planner writes the study files. You read them.
 Archived studies live in `studies/legacy_studies/`; read one only when the task
 names it.
