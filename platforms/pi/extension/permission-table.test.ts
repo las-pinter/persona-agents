@@ -118,6 +118,23 @@ function verdictOf(sets: RuleSets, tool: string, probe: string): "deny" | "ask" 
 	return "none";
 }
 
+/** The ten read-only analysis tools the table allows by name, for every class. */
+const ANALYSIS_TOOLS = [
+	"lens_diagnostics",
+	"module_report",
+	"project_report",
+	"read_symbol",
+	"read_enclosing",
+	"symbol_search",
+	"effective_config",
+	"ast_grep_search",
+	"ast_grep_outline",
+	"pi_lens_activate_tools",
+];
+
+/** The analysis tools that write or act, so no allow row names them. */
+const ANALYSIS_WRITE_TOOLS = ["ast_grep_replace", "lens_diagnostic_mark", "lsp_navigation"];
+
 /**
  * The verdict one profession reaches. Deny-by-default mode turns an unmatched
  * segment into a deny, so `none` reads as `deny` for a profession.
@@ -129,27 +146,27 @@ function gateVerdict(role: Role, tool: string, probe: string): "deny" | "ask" | 
 
 // --- row counts -------------------------------------------------------------
 
-test("the table holds 77 rows: 21 global, 14 reader, 18 worker, 24 orchestrator", () => {
+test("the table holds 78 rows: 22 global, 14 reader, 18 worker, 24 orchestrator", () => {
 	const counts = countTable(RULE_ROWS);
-	assert.equal(counts.total, 77);
-	assert.equal(counts.byGroup.global, 21);
+	assert.equal(counts.total, 78);
+	assert.equal(counts.byGroup.global, 22);
 	assert.equal(counts.byGroup.reader, 14);
 	assert.equal(counts.byGroup.worker, 18);
 	assert.equal(counts.byGroup.orchestrator, 24);
 });
 
-test("every class resolves to 35, 39, and 45 rows", () => {
+test("every class resolves to 36, 40, and 46 rows", () => {
 	const counts = countTable(RULE_ROWS);
-	assert.equal(counts.byClass.reader, 35);
-	assert.equal(counts.byClass.worker, 39);
-	assert.equal(counts.byClass.orchestrator, 45);
+	assert.equal(counts.byClass.reader, 36);
+	assert.equal(counts.byClass.worker, 40);
+	assert.equal(counts.byClass.orchestrator, 46);
 	assert.deepEqual(rowsForClass(RULE_ROWS, "reader"), [...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "reader")]);
 });
 
-test("the 77 rows carry 54 ids: a shared rule is one row per class", () => {
+test("the 78 rows carry 55 ids: a shared rule is one row per class", () => {
 	// One id is one rule. A rule that three classes share is three rows with one
 	// id, so the id count is the number of distinct rules, not of rows.
-	assert.equal(countTable(RULE_ROWS).uniqueIds, 54);
+	assert.equal(countTable(RULE_ROWS).uniqueIds, 55);
 	const shared = new Map<string, number>();
 	for (const row of RULE_ROWS) shared.set(row.id, (shared.get(row.id) ?? 0) + 1);
 	assert.equal(shared.get("read.any"), 3);
@@ -218,6 +235,28 @@ test("a class-only allow row does not leak into another class", () => {
 	assert.equal(allowMatches(classes.orchestrator, "bash", "cargo nextest"), true);
 	assert.equal(allowMatches(classes.reader, "write", "src/main.rs"), false);
 	assert.equal(allowMatches(classes.orchestrator, "write", "src/main.rs"), true);
+});
+
+test("the ten analysis tools allow for every class and the write tools stay denied", () => {
+	for (const cls of CLASS_ORDER) {
+		const sets = compileClass(RULE_ROWS, cls);
+		for (const tool of ANALYSIS_TOOLS) {
+			assert.equal(verdictOf(sets, tool, "{}"), "allow", `${cls}: ${tool}`);
+		}
+		for (const tool of ANALYSIS_WRITE_TOOLS) {
+			assert.equal(allowMatches(sets, tool, "{}"), false, `${cls}: ${tool} must not allow`);
+			// No row names the tool, so deny-by-default closes it for every role.
+			assert.equal(verdictOf(sets, tool, "{}"), "none", `${cls}: ${tool} must carry no rule`);
+		}
+	}
+	for (const role of ROLES) {
+		for (const tool of ANALYSIS_TOOLS) {
+			assert.equal(gateVerdict(role, tool, "{}"), "allow", `${role}: ${tool}`);
+		}
+		for (const tool of ANALYSIS_WRITE_TOOLS) {
+			assert.equal(gateVerdict(role, tool, "{}"), "deny", `${role}: ${tool}`);
+		}
+	}
 });
 
 // --- refused rows -----------------------------------------------------------

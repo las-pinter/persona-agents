@@ -34,9 +34,12 @@
  *
  * Rule groups. A row with all three classes is a global row and goes into
  * `globalDeny` or `globalAsk`. A row with one class goes into `agentDeny`,
- * `agentAsk`, or `agentAllow` for that class. A global allow row is refused,
- * because the engine has no global allow set. A row with `roles` keeps its
- * class group and narrows per profession in `compileRole`.
+ * `agentAsk`, or `agentAllow` for that class. The engine has no global allow
+ * set, so a global allow row is refused unless it names tools only: such a row
+ * carries no command geometry and is copied into `agentAllow` for every class.
+ * A command allow row would widen every class at once, so the schema refuses it.
+ * A row with `roles` keeps its class group and narrows per profession in
+ * `compileRole`.
  *
  * Write zones. A zone is one role: `roleZone` holds a role name, and the zone
  * segments are read from `ROLE_NOTES` inside this module. So no function here
@@ -473,8 +476,8 @@ export function validateRow(row: RuleRow): void {
 			named.add(role);
 		}
 	}
-	if (CLASS_ORDER.every((cls) => row.classes.includes(cls)) && row.verdict === "allow") {
-		fail(row.id, "a global row cannot be an allow row");
+	if (CLASS_ORDER.every((cls) => row.classes.includes(cls)) && row.verdict === "allow" && !isToolAllow(row)) {
+		fail(row.id, "a global allow row must name tools only and carry no command geometry");
 	}
 	if (!ARGS.has(row.arg)) fail(row.id, `unknown arg "${String(row.arg)}"`);
 	if (row.flags !== undefined && !FLAGS.has(row.flags)) {
@@ -756,11 +759,30 @@ function isGlobal(row: RuleRow): boolean {
 	return CLASS_ORDER.every((cls) => row.classes.includes(cls));
 }
 
+/**
+ * A tool-name allow row: no command match, no path zone, no probe shape. The
+ * schema admits a global allow row only in this shape, because the engine has
+ * no global allow set and the row is copied into every class's `agentAllow`.
+ */
+function isToolAllow(row: RuleRow): boolean {
+	return (
+		row.arg === "none" &&
+		row.verb === undefined &&
+		row.sub === undefined &&
+		row.flags === undefined &&
+		row.zone === undefined &&
+		row.probe === undefined &&
+		row.span === undefined
+	);
+}
+
 function targetSet(ruleSets: RuleSets, row: RuleRow, agentSide: boolean): RawRule[] {
+	// An allow row always lands in `agentAllow`, because the engine has no global
+	// allow set. A global allow row is a tool-name row, so every class gets it.
+	if (row.verdict === "allow") return ruleSets.agentAllow;
 	if (!agentSide) return row.verdict === "deny" ? ruleSets.globalDeny : ruleSets.globalAsk;
 	if (row.verdict === "deny") return ruleSets.agentDeny;
-	if (row.verdict === "ask") return ruleSets.agentAsk;
-	return ruleSets.agentAllow;
+	return ruleSets.agentAsk;
 }
 
 function emptyRuleSets(): RuleSets {
@@ -805,9 +827,6 @@ export function compileClass(rows: readonly RuleRow[], cls: RoleClass): RuleSets
 	for (const row of rows) {
 		const global = isGlobal(row);
 		if (!global && !row.classes.includes(cls)) continue;
-		if (global && row.verdict === "allow") {
-			fail(row.id, "a global row cannot be an allow row");
-		}
 		targetSet(sets, row, !global).push(...rulesForRow(row, null));
 	}
 	return sets;
@@ -820,11 +839,7 @@ export function compileRole(rows: readonly RuleRow[], role: Role): RuleSets {
 	validateRows(rows);
 	const sets = emptyRuleSets();
 	for (const row of rowsForRole(rows, role)) {
-		const global = isGlobal(row);
-		if (global && row.verdict === "allow") {
-			fail(row.id, "a global row cannot be an allow row");
-		}
-		targetSet(sets, row, !global).push(...rulesForRow(row, zone));
+		targetSet(sets, row, !isGlobal(row)).push(...rulesForRow(row, zone));
 	}
 	return sets;
 }

@@ -68,6 +68,37 @@ function configPath(): string {
 	return path.join(getAgentDir(), "permissions.json");
 }
 
+/**
+ * Read the live global permission file.
+ *
+ * The error must never be swallowed: the global deny and ask rules are the hard
+ * floor under every agent, so an empty set would drop the secret, disk, and
+ * release guards without a word. One line names the file and the fault, and the
+ * returned rule set denies every tool call, so the fence stays closed.
+ * A rule with no `tool` matches every tool, and `.` matches any probe.
+ */
+export function loadGlobalRules(file: string = configPath()): {
+	deny: PermissionRule[];
+	ask: PermissionRule[];
+} {
+	try {
+		const cfg = JSON.parse(fs.readFileSync(file, "utf-8")) as { deny?: unknown; ask?: unknown };
+		if (!Array.isArray(cfg.deny ?? []) || !Array.isArray(cfg.ask ?? [])) {
+			throw new Error("deny and ask must be lists");
+		}
+		return { deny: (cfg.deny ?? []) as PermissionRule[], ask: (cfg.ask ?? []) as PermissionRule[] };
+	} catch (error) {
+		const fault = error instanceof Error ? error.message : String(error);
+		console.error(
+			`permission gate: cannot load ${file}: ${fault}; every tool call is denied until the file is fixed`,
+		);
+		return {
+			deny: [{ match: ".*", reason: "The global permissions file is unreadable, so every call is denied" }],
+			ask: [],
+		};
+	}
+}
+
 function probeFor(toolName: string, input: Record<string, unknown>): string {
 	switch (toolName) {
 		case "bash":
@@ -228,15 +259,7 @@ export function installPermissionGate(
 	const sessionAllow = new Set<string>();
 
 	const loadGlobal = () => {
-		try {
-			const cfg = JSON.parse(fs.readFileSync(configPath(), "utf-8")) as {
-				deny?: PermissionRule[];
-				ask?: PermissionRule[];
-			};
-			globalRules = { deny: cfg.deny ?? [], ask: cfg.ask ?? [] };
-		} catch {
-			globalRules = { deny: [], ask: [] };
-		}
+		globalRules = loadGlobalRules();
 	};
 	loadGlobal();
 	// /reload re-runs this factory (via the extension runner), which re-reads the

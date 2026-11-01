@@ -141,6 +141,8 @@ export const CHANGE_RULINGS: Record<string, { reason: string; ruling: string }> 
 
 /** A row with no legacy entry of its own still needs a stated reason. */
 export const ROW_RATIONALE: Record<string, string> = {
+	"tool.analysis":
+		"A new capability: the ten read-only analysis tools had no legacy entry, so one tool-name allow row covers every class.",
 	"system.power":
 		"Split from the global deny entry that also covers mkfs and dd, so the prompt names one action.",
 	"write.escape.deny":

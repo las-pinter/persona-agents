@@ -1,8 +1,8 @@
 /**
  * The pi permission rule table. Data only.
  *
- * Seventy-seven rows carry three class groups:
- *   - 21 global rows  (all three classes),
+ * Seventy-eight rows carry three class groups:
+ *   - 22 global rows  (all three classes),
  *   - 14 reader rows,
  *   - 18 worker rows,
  *   - 24 orchestrator rows.
@@ -21,8 +21,8 @@
  * disagrees with itself.
  *
  * Row groups, by class:
- *   global 21, reader 14, worker 18, orchestrator 24, total 77.
- * Rows a class resolves to: reader 35, worker 39, orchestrator 45.
+ *   global 22, reader 14, worker 18, orchestrator 24, total 78.
+ * Rows a class resolves to: reader 36, worker 40, orchestrator 46.
  *
  * Fences. A deny row that names an option requires that option, so the bare
  * command stays untouched. `find` denies on `-exec`, `-fls`, and the `-fprint`
@@ -240,7 +240,7 @@ const GIT_HISTORY = ["add", "commit", "pull", "merge", "rebase", "tag"];
 const RELEASE = ["push", "pr", "run", "release"];
 
 export const RULE_ROWS: readonly RuleRow[] = [
-	// --- global: 21 rows, all three classes ---------------------------------
+	// --- global: 22 rows, all three classes ---------------------------------
 	{
 		id: "secret.env",
 		tool: "read",
@@ -453,6 +453,18 @@ export const RULE_ROWS: readonly RuleRow[] = [
 		sub: ["-9"],
 		arg: "any",
 		reason: "Force-killing a process",
+	},
+	// The ten pi-lens analysis tools read code and write nothing, so one
+	// tool-name allow row covers every class and every profession. The three
+	// write-capable tools (`ast_grep_replace`, `lens_diagnostic_mark`, and
+	// `lsp_navigation`) stay out and fall to deny-by-default.
+	{
+		id: "tool.analysis",
+		tool: "lens_diagnostics module_report project_report read_symbol read_enclosing symbol_search effective_config ast_grep_search ast_grep_outline pi_lens_activate_tools",
+		verdict: "allow",
+		classes: [...ALL],
+		arg: "none",
+		reason: "The read-only analysis tools carry no shell or filesystem write",
 	},
 	// The release and remote asks live in the orchestrator group: a global ask
 	// row for `git push` or `gh pr` would be shadowed by `release.deny` for the
