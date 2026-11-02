@@ -105,7 +105,10 @@ holds_notes() { [[ -n "$1" && -d "$1/agent-notes" ]]; }
 walk_up_for_notes() {
     local dir="$1" next=""
     while :; do
-        if holds_notes "$dir"; then printf '%s\n' "$dir"; return 0; fi
+        if holds_notes "$dir"; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
         if [[ "$dir" == "/" ]]; then break; fi
         next="${dir%/*}"
         if [[ -z "$next" ]]; then next="/"; fi
@@ -118,7 +121,10 @@ walk_up_for_notes() {
 # Without --home, the walk-up rule runs before the $HOME rule.
 pick_home() {
     if HOME_DIR="$(walk_up_for_notes "$SCRIPT_DIR")"; then return 0; fi
-    if holds_notes "${HOME-}"; then HOME_DIR="${HOME-}"; return 0; fi
+    if holds_notes "${HOME-}"; then
+        HOME_DIR="${HOME-}"
+        return 0
+    fi
     return 1
 }
 
@@ -212,7 +218,7 @@ validate_block() {
     if [[ ! -r "$BLOCK_REAL" ]]; then fail 2 "block is not readable"; fi
     if ! count="$(awk 'END { print NR + 0 }' "$BLOCK_REAL")"; then fail 4 "block record count failed"; fi
     if [[ ! "$count" =~ ^[0-9]+$ ]]; then fail 4 "block record count failed"; fi
-    if (( count > BLOCK_LINE_LIMIT )); then fail 2 "block is longer than $BLOCK_LINE_LIMIT records"; fi
+    if ((count > BLOCK_LINE_LIMIT)); then fail 2 "block is longer than $BLOCK_LINE_LIMIT records"; fi
     STAMP="$(head -n 1 -- "$BLOCK_REAL" 2>/dev/null || true)"
     if [[ ! "$STAMP" =~ $STAMP_RE ]]; then fail 2 "block record 1 is not a session stamp"; fi
     if [[ "${BASH_REMATCH[1]}" != "$AGENT" ]]; then fail 2 "block stamp names another agent"; fi
@@ -456,7 +462,7 @@ writer_status() {
 probe_duplicate() {
     local rc=0 heading=""
     heading="$(run_writer "$1" dupcheck 2>/dev/null)" || rc=$?
-    if (( rc == 0 )); then return 0; fi
+    if ((rc == 0)); then return 0; fi
     writer_status "$rc" "${heading//[[:cntrl:]]/ }"
 }
 
@@ -477,7 +483,10 @@ write_target() {
         writer_status "$rc"
     fi
     TMP="$(mktemp "$TARGET_DIR/.journal-write.XXXXXX" 2>/dev/null || true)"
-    if [[ -z "$TMP" ]]; then TMP=""; fail 4 "temp file create failed"; fi
+    if [[ -z "$TMP" ]]; then
+        TMP=""
+        fail 4 "temp file create failed"
+    fi
     trap 'if [[ -n "${TMP:-}" ]]; then rm -f -- "$TMP"; fi' EXIT
     rc=0
     run_writer "$mode" >"$TMP" 2>/dev/null || rc=$?
@@ -496,7 +505,7 @@ write_target() {
 }
 
 gate_of() {
-    if (( $1 > LINE_LIMIT )); then printf 'over'; else printf 'ok'; fi
+    if (($1 > LINE_LIMIT)); then printf 'over'; else printf 'ok'; fi
 }
 
 run_append() {
@@ -530,7 +539,7 @@ run_check() {
     printf 'lines %s\n' "$lines"
     printf 'limit %s\n' "$LINE_LIMIT"
     printf 'digest %s\n' "$digest"
-    if (( SHOW == 1 )); then
+    if ((SHOW == 1)); then
         printf '%s\n' '--- body ---'
         printf '%s' "$body"
         if [[ -n "$body" && "$body" != *$'\n' ]]; then printf '\n'; fi
@@ -543,9 +552,9 @@ run_replace() {
     take_lock
     load_target_text
     if [[ "$EXPECT" == "new" ]]; then
-        if (( TARGET_PRESENT == 1 )); then fail 3 "--expect new but the target is present"; fi
+        if ((TARGET_PRESENT == 1)); then fail 3 "--expect new but the target is present"; fi
     else
-        if (( TARGET_PRESENT == 0 )); then fail 3 "--expect digest but the target is absent"; fi
+        if ((TARGET_PRESENT == 0)); then fail 3 "--expect digest but the target is absent"; fi
         if ! digest_of_text "$TARGET_TEXT"; then fail 4 "digest failed"; fi
         if [[ "$DIGEST" != "$EXPECT" ]]; then fail 3 "target digest does not match --expect"; fi
     fi
@@ -567,8 +576,14 @@ run_replace() {
 if [[ $# -eq 0 ]]; then fail 1 "no subcommand given"; fi
 SUBCMD=""
 case "$1" in
--h | --help) usage; exit 0 ;;
-append | check | replace) SUBCMD="$1"; shift ;;
+-h | --help)
+    usage
+    exit 0
+    ;;
+append | check | replace)
+    SUBCMD="$1"
+    shift
+    ;;
 *) fail 1 "unknown subcommand: $1" ;;
 esac
 
@@ -591,19 +606,37 @@ esac
 while [[ $# -gt 0 ]]; do
     flag="$1"
     case "$flag" in
-    -h | --help) usage; exit 0 ;;
+    -h | --help)
+        usage
+        exit 0
+        ;;
     --show)
-        if [[ "$ALLOWED" != *" $flag "* ]]; then USAGE_ERR="$flag is not valid for $SUBCMD"; break; fi
-        if [[ "$SEEN" == *" $flag "* ]]; then USAGE_ERR="repeated flag: $flag"; break; fi
+        if [[ "$ALLOWED" != *" $flag "* ]]; then
+            USAGE_ERR="$flag is not valid for $SUBCMD"
+            break
+        fi
+        if [[ "$SEEN" == *" $flag "* ]]; then
+            USAGE_ERR="repeated flag: $flag"
+            break
+        fi
         SEEN="$SEEN$flag "
         SHOW=1
         shift
         ;;
     --agent | --block | --section | --level | --name | --expect | --home | --timeout)
-        if [[ "$ALLOWED" != *" $flag "* ]]; then USAGE_ERR="$flag is not valid for $SUBCMD"; break; fi
-        if [[ "$SEEN" == *" $flag "* ]]; then USAGE_ERR="repeated flag: $flag"; break; fi
+        if [[ "$ALLOWED" != *" $flag "* ]]; then
+            USAGE_ERR="$flag is not valid for $SUBCMD"
+            break
+        fi
+        if [[ "$SEEN" == *" $flag "* ]]; then
+            USAGE_ERR="repeated flag: $flag"
+            break
+        fi
         # A following flag is a missing value, not a value that starts with a dash.
-        if [[ $# -lt 2 || -z "${2-}" || "${2-}" == -* ]]; then USAGE_ERR="missing value for $flag"; break; fi
+        if [[ $# -lt 2 || -z "${2-}" || "${2-}" == -* ]]; then
+            USAGE_ERR="missing value for $flag"
+            break
+        fi
         SEEN="$SEEN$flag "
         case "$flag" in
         --agent) AGENT="$2" ;;
@@ -640,7 +673,7 @@ if [[ ! "$AGENT" =~ $AGENT_RE ]]; then fail 2 "agent name is not valid"; fi
 if [[ -n "$SECTION" && ! "$SECTION" =~ $SECTION_RE ]]; then fail 2 "section name is not valid"; fi
 if [[ ! "$TIMEOUT" =~ ^[0-9]{1,3}$ ]]; then fail 2 "timeout is not 1 to $TIMEOUT_LIMIT seconds"; fi
 TIMEOUT=$((10#$TIMEOUT))
-if (( TIMEOUT < 1 || TIMEOUT > TIMEOUT_LIMIT )); then fail 2 "timeout is not 1 to $TIMEOUT_LIMIT seconds"; fi
+if ((TIMEOUT < 1 || TIMEOUT > TIMEOUT_LIMIT)); then fail 2 "timeout is not 1 to $TIMEOUT_LIMIT seconds"; fi
 if [[ -n "$LEVEL" ]] && ! level_ok "$LEVEL"; then fail 2 "level is not valid"; fi
 if [[ "$SUBCMD" == "replace" && "$LEVEL" == "daily" ]]; then fail 2 "replace takes weekly, monthly, or yearly"; fi
 if [[ -n "$EXPECT" && "$EXPECT" != "new" && ! "$EXPECT" =~ $EXPECT_RE ]]; then fail 2 "--expect is neither new nor a digest"; fi
