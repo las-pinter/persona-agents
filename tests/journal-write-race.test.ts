@@ -162,7 +162,8 @@ describe("concurrent writers", () => {
 		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
 		const before = fs.readFileSync(target);
 		const block = makeBlock(home, ["early row"]);
-		const holder = holdLock(home);
+		// Hold 5000 ms: release ends it early, so this only raises the ceiling.
+		const holder = holdLock(home, 5000);
 		try {
 			await holder.ready;
 			const pending = runChild(home, appendArgs(block, ["--timeout", "60"]));
@@ -186,7 +187,8 @@ describe("concurrent writers", () => {
 		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
 		const before = fs.readFileSync(target);
 		const block = makeBlock(home, ["early row"]);
-		const holder = holdLock(home);
+		// Hold 5000 ms: release ends it early, so this only raises the ceiling.
+		const holder = holdLock(home, 5000);
 		try {
 			await holder.ready;
 			const pending = runChild(home, appendArgs(block, ["--timeout", "60"]));
@@ -209,7 +211,8 @@ describe("concurrent writers", () => {
 		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
 		const before = fs.readFileSync(target);
 		const block = makeBlock(home, ["early row"]);
-		const holder = holdLock(home);
+		// Hold 5000 ms: release ends it early, so this only raises the ceiling.
+		const holder = holdLock(home, 5000);
 		try {
 			await holder.ready;
 			const pending = runChild(home, appendArgs(block, ["--timeout", "60"]));
@@ -233,15 +236,31 @@ describe("the lock", () => {
 	test("makes an append wait for the lock", async () => {
 		const home = makeHome();
 		seedTarget(dailyPath(home), `# ${todayName()}\n\nseed row\n`);
+		// Time one append with no lock held, so a slow runner sets the floor.
+		const baselineBlock = makeBlock(home, ["baseline row"]);
+		const baselineStart = Date.now();
+		const baseline = run(home, appendArgs(baselineBlock));
+		const baselineMs = Date.now() - baselineStart;
+		assert.equal(baseline.status, 0, baseline.stderr);
 		const block = makeBlock(home, ["waited row"]);
-		const holder = holdLock(home, 2);
+		// Hold 5000 ms: release ends it early, so this only raises the ceiling.
+		const holder = holdLock(home, 5000);
 		try {
 			await holder.ready;
 			const started = Date.now();
-			const result = run(home, appendArgs(block));
+			const pending = runAsync(home, appendArgs(block));
+			const done = didSettle(pending);
+			// Stay past the floor while the lock is held, so the wait is real.
+			await settle(baselineMs + 300);
+			assert.equal(done(), false, "the append must still wait on the lock");
+			holder.release();
+			const result = await pending;
 			const elapsed = Date.now() - started;
 			assert.equal(result.status, 0, result.stderr);
-			assert.ok(elapsed >= 1500, `the append must wait for the lock, waited ${elapsed} ms`);
+			assert.ok(
+				elapsed >= baselineMs + 300,
+				`the append must wait ${baselineMs + 300} ms, waited ${elapsed} ms`,
+			);
 		} finally {
 			holder.release();
 			await holder.exited;
@@ -253,7 +272,8 @@ describe("the lock", () => {
 		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nseed row\n`);
 		const before = fs.readFileSync(target);
 		const block = makeBlock(home, ["late row"]);
-		const holder = holdLock(home);
+		// Hold 1500 ms: longer than the 1 s lock timeout this case passes.
+		const holder = holdLock(home, 1500);
 		try {
 			await holder.ready;
 			const result = run(home, appendArgs(block, ["--timeout", "1"]));
@@ -275,12 +295,13 @@ describe("the lock", () => {
 		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nseed row\n`);
 		const before = fs.readFileSync(target);
 		const block = makeBlock(home, ["late row"]);
-		const holder = holdLock(home);
+		// Hold 800 ms: covers the 200 ms settle that proves the wait.
+		const holder = holdLock(home, 800);
 		try {
 			await holder.ready;
 			const pending = runAsync(home, appendArgs(block));
 			const done = didSettle(pending);
-			await settle(1000);
+			await settle(200);
 			assert.equal(done(), false, "the append must still wait on the lock");
 			assert.deepEqual(fs.readFileSync(target), before, "a waiting append must not touch the target");
 			holder.release();
@@ -300,7 +321,8 @@ describe("the lock", () => {
 		const target = seedTarget(dailyPath(home), `# ${todayName()}\n\nkept row\n`);
 		const before = fs.readFileSync(target);
 		const block = makeBlock(home, ["lost row"]);
-		const holder = holdLock(home);
+		// Hold 5000 ms: release ends it early, so this only raises the ceiling.
+		const holder = holdLock(home, 5000);
 		try {
 			await holder.ready;
 			const pending = runChild(home, appendArgs(block, ["--timeout", "60"]));

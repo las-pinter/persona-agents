@@ -253,20 +253,45 @@ export interface LockHolder {
 }
 
 /** A lock holder on the documented lock path; it drops the lock on release. */
-export function holdLock(home: string, seconds = 5): LockHolder {
+export function holdLock(home: string, holdMs = 500): LockHolder {
+	// The unit is milliseconds, so reject a seconds value that would hold too short.
+	if (holdMs < 100) throw new Error(`holdLock needs at least 100 ms, got ${holdMs} ms`);
 	const lock = lockPath(home);
-	const child = spawn("flock", ["-w", "5", lock, "sh", "-c", `printf ready; sleep ${seconds}`], {
+	const hold = (holdMs / 1000).toFixed(3);
+	// The hold runs in its own process group, so one release can end the whole group.
+	const child = spawn("flock", ["-w", "5", lock, "sh", "-c", `printf ready; sleep ${hold}`], {
 		stdio: ["ignore", "pipe", "ignore"],
+		detached: true,
 	});
+	let closed = false;
 	const exited = new Promise<void>((resolve) => {
-		child.on("close", () => resolve());
+		child.on("close", () => {
+			closed = true;
+			resolve();
+		});
 	});
 	const ready = new Promise<void>((resolve) => {
 		const done = (): void => resolve();
 		child.stdout.setEncoding("utf8").on("data", done);
 		child.on("close", done);
 	});
-	return { ready, release: () => child.kill(), exited };
+	let released = false;
+	// A group kill ends flock, sh, and sleep, so no orphan keeps the inherited lock description.
+	const release = (): void => {
+		if (released) return;
+		// After the child close, the pid can be recycled, so skip the kill.
+		if (closed || child.pid === undefined) {
+			released = true;
+			return;
+		}
+		try {
+			process.kill(-child.pid, "SIGKILL");
+			released = true;
+		} catch {
+			// The kill failed, so a later release retries and the hold keeps running.
+		}
+	};
+	return { ready, release, exited };
 }
 
 export async function settle(ms: number): Promise<void> {
