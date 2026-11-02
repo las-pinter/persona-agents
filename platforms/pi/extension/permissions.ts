@@ -28,11 +28,14 @@
  * `installPermissionGate` compiles the table once at factory time; the returned
  * factory never builds a pattern per call.
  *
- * Ask rows prompt with plain-language options (`permission-prompt.ts`). Every
- * tool shows the same three choices:
+ * Ask rows prompt with plain-language options (`permission-prompt.ts`). A root
+ * session renders its own ask. A child session has no UI, so it enqueues the
+ * request on the root queue (`child-ask.ts`), and the root renders one prompt
+ * at a time. The grant key carries the session id, so a child answer stays
+ * with its own session. Every tool shows the same three choices:
  *   - Allow once                       → grant THIS single call
  *   - Always allow this rule (session) → remember the rule for the session
- *                                        (agent|tool|match key, in-memory
+ *                                        (session|role|tool|rule key, in-memory
  *                                        only, nothing persisted to disk)
  *   - Deny                             → block this call ("Denied by user")
  * A shell segment also approves the matching segment and re-evaluates the
@@ -82,10 +85,12 @@ import { loadDefaultRows, loadGlobalRules, loadPermissionConfig, type OverlayRul
 import {
 	buildPromptModel,
 	blockedLabel,
+	DENIED_BY_USER_REASON,
 	humanReason,
 	renderPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
+import { childAskQueue, grantKey } from "./child-ask.ts";
 
 export { loadGlobalRules } from "./permission-config.ts";
 
@@ -246,6 +251,11 @@ export interface GateRuleSource {
 
 export type GateRuleSourceFactory = (agent: AgentConfig | null) => GateRuleSource;
 
+/** The session id of one tool call, or null when the context carries none. */
+function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } }): string | null {
+	return ctx.sessionManager?.getSessionId?.() ?? null;
+}
+
 /** True only for one of the seven shipped professions. */
 function isRole(name: string): name is Role {
 	return Object.prototype.hasOwnProperty.call(ROLE_CLASS, name);
@@ -364,7 +374,18 @@ export function installToolCallGate(
 			agentAsk: fromSource.ruleSets.agentAsk,
 			agentAllow: fromSource.ruleSets.agentAllow,
 		};
-		const sessionKey = (match: string): string => `${agent?.name ?? "<none>"}|${toolName}|${match}`;
+		// A child answer must not cover its sibling or the root, so the session id is
+		// part of the key. The child role comes from the record, never shared state.
+		const sessionId = sessionIdOf(ctx);
+		const routing = childAskQueue();
+		if (routing && sessionId) routing.noteContext(sessionId, ctx);
+		const record = routing && sessionId ? routing.record(sessionId) : undefined;
+		// The depth comes from the registry walk, never from the record's own copy:
+		// a record that under-reports its depth must still reach the root queue.
+		const depth = routing && sessionId ? routing.depth(sessionId) : null;
+		const grantRole = record?.role ?? agent?.name ?? "<none>";
+		const sessionKey = (match: string): string =>
+			grantKey(sessionId ?? "<none>", grantRole, toolName, match);
 		const isSessionAllowed = (rule: RawRule): boolean => sessionAllow.has(sessionKey(rule.match));
 
 		// User-approved segments ("Always allow" on a segment) for THIS call.
@@ -408,14 +429,6 @@ export function installToolCallGate(
 			const rule = decision.rule;
 			const key = sessionKey(rule.match);
 
-			if (!ctx.hasUI) {
-				// Fail closed. The label is stable and never the rule regex.
-				return {
-					block: true,
-					reason: blockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
-				};
-			}
-
 			// The rule's regex is never shown; the prompt uses the human reason.
 			const promptModel = buildPromptModel({
 				toolName,
@@ -425,6 +438,38 @@ export function installToolCallGate(
 				reason: humanReason(rule.reason, rule.match),
 				isSpanning: decision.segmentIndex === -1,
 			});
+
+			// A child has no UI of its own, so its call goes to the root queue and
+			// waits for the owner. The verdict below matches the root path exactly.
+			// A walk that stops short routes here too, so the queue names the break
+			// instead of a generic label. Depth 0 is the caller itself: the root path.
+			if (routing && record && sessionId && depth !== 0) {
+				const outcome = await routing.enqueue({
+					sessionId,
+					role: record.role,
+					toolName,
+					ruleId: rule.match,
+					key,
+					model: promptModel,
+					remember: (grant) => sessionAllow.add(grant),
+				});
+				if (outcome.kind === "block") return { block: true, reason: outcome.reason };
+				if (outcome.alwaysAllow && isShell && decision.segmentIndex >= 0) {
+					// Approve the matched segment, then re-evaluate the rest.
+					approvedSegments.add(decision.segmentIndex);
+					continue;
+				}
+				return undefined;
+			}
+
+			if (!ctx.hasUI) {
+				// Fail closed. The label is stable and never the rule regex.
+				return {
+					block: true,
+					reason: blockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
+				};
+			}
+
 			const choice: PermissionChoice = await renderPermissionPrompt(ctx, promptModel);
 
 			if (choice === "always-allow") {
@@ -439,7 +484,7 @@ export function installToolCallGate(
 			if (choice === "allow-once") {
 				return undefined; // user approved — allow this call once
 			}
-			return { block: true, reason: "Denied by user" };
+			return { block: true, reason: DENIED_BY_USER_REASON };
 		}
 	});
 }

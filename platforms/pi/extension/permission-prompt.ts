@@ -18,6 +18,9 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
 
+/** The one block reason both the root prompt and the child queue report. */
+export const DENIED_BY_USER_REASON = "Denied by user";
+
 /** A selectable option: display label plus the decision it maps to. */
 export interface PromptOption {
 	label: string;
@@ -285,17 +288,29 @@ function createPermissionPanel(
 
 /**
  * Show the permission prompt and return the chosen decision. TUI mode uses a
- * pi-tui panel; every other mode falls back to `ctx.ui.select`. A cancel or a
- * missing answer is a deny (fail closed).
+ * pi-tui panel; every other mode falls back to `ctx.ui.select`. A cancel, an
+ * abort, or a missing answer is a deny (fail closed). An abort closes the TUI
+ * panel. In every other mode the answer is raced against the signal, so a
+ * timed-out ask denies at once and a late answer is ignored; the host select
+ * itself cannot be closed here.
  */
 export async function renderPermissionPrompt(
 	ctx: ExtensionContext,
 	model: PromptModel,
+	signal?: AbortSignal,
 ): Promise<PermissionChoice> {
 	if (ctx.mode === "tui") {
 		const mod = await import("@earendil-works/pi-tui");
 		const chosen = await ctx.ui.custom<PermissionChoice>(
-			(tui, theme, _keybindings, done) => createPermissionPanel(model, tui, theme, mod, done),
+			(tui, theme, _keybindings, done) => {
+				const panel = createPermissionPanel(model, tui, theme, mod, done);
+				// An aborted ask closes the panel and denies, so no stale prompt stays.
+				if (signal) {
+					if (signal.aborted) done("deny");
+					else signal.addEventListener("abort", () => done("deny"), { once: true });
+				}
+				return panel;
+			},
 			{
 				overlay: true,
 				overlayOptions: { width: "80%", maxHeight: "100%", anchor: "center", margin: { top: 1 } },
@@ -304,9 +319,30 @@ export async function renderPermissionPrompt(
 		return chosen ?? "deny";
 	}
 
-	const picked = await ctx.ui.select(
-		plainPromptTitle(model),
-		model.options.map((option) => option.label),
+	const picked = await untilAborted(
+		ctx.ui.select(plainPromptTitle(model), model.options.map((option) => option.label)),
+		signal,
 	);
 	return model.options.find((option) => option.label === picked)?.decision ?? "deny";
+}
+
+/**
+ * Resolve with the pending answer, or with undefined as soon as the signal
+ * aborts. The pending promise keeps running, so a late answer is dropped here.
+ */
+function untilAborted(
+	pending: Promise<string | undefined>,
+	signal?: AbortSignal,
+): Promise<string | undefined> {
+	if (!signal) return pending;
+	if (signal.aborted) return Promise.resolve(undefined);
+	return new Promise<string | undefined>((resolve) => {
+		const onAbort = (): void => resolve(undefined);
+		signal.addEventListener("abort", onAbort, { once: true });
+		const done = (value: string | undefined): void => {
+			signal.removeEventListener("abort", onAbort);
+			resolve(value);
+		};
+		void pending.then(done, () => done(undefined));
+	});
 }

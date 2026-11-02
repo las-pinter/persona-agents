@@ -1,6 +1,9 @@
 /**
  * Tests for the permission-prompt model + the real-gate wire-up.
  *
+ * Cohesion: one subject, the prompt path, in four parts — the pure model, the
+ * renderer, the abort and cancel behaviour, and the real gate wire-up.
+ *
  * Runs under plain Node (type stripping):
  *   npm test
  *
@@ -419,6 +422,77 @@ test("pressing Enter on the default TUI prompt allows the call once", async () =
 
 	component.handleInput("\r"); // Enter on the default row
 	assert.equal(await answered, "allow-once");
+});
+
+// A break leaves the TUI promise pending, so the case must time out red.
+test("an abort closes the TUI prompt and denies", { timeout: 2000 }, async () => {
+	const model = shellModel();
+	let panel:
+		| { render(width: number): string[]; handleInput(data: string): void }
+		| undefined;
+	let resolveCustom!: () => void;
+	const customReady = new Promise<void>((resolve) => {
+		resolveCustom = resolve;
+	});
+	const ctx = {
+		mode: "tui",
+		ui: {
+			custom<T>(
+				factory: (
+					tui: unknown,
+					theme: Theme,
+					keybindings: unknown,
+					done: (choice: T) => void,
+				) => unknown,
+			): Promise<T> {
+				return new Promise<T>((resolve) => {
+					panel = factory(
+						{ requestRender(): void {} },
+						ansiTheme,
+						{},
+						(choice: T) => resolve(choice),
+					) as typeof panel;
+					resolveCustom();
+				});
+			},
+		},
+	} as unknown as Parameters<typeof renderPermissionPrompt>[0];
+
+	const controller = new AbortController();
+	const answered = renderPermissionPrompt(ctx, model, controller.signal);
+	await customReady;
+	assert.ok(panel, "the TUI prompt must build the panel component");
+
+	controller.abort();
+	assert.equal(await answered, "deny");
+});
+
+// A break leaves the select pending, so the bounded race must go red.
+test("an abort in a non-TUI mode denies with the select still pending", { timeout: 2000 }, async () => {
+	const model = shellModel();
+	// The host select never settles: the owner does not answer.
+	const pending = new Promise<string | undefined>(() => {});
+	let selectCalls = 0;
+	const ctx = {
+		mode: "rpc",
+		ui: {
+			select(): Promise<string | undefined> {
+				selectCalls += 1;
+				return pending;
+			},
+		},
+	} as unknown as Parameters<typeof renderPermissionPrompt>[0];
+
+	const controller = new AbortController();
+	const answered = renderPermissionPrompt(ctx, model, controller.signal);
+	controller.abort();
+	// The host select stays pending; the abort must still deny at once.
+	const raced = await Promise.race([
+		answered,
+		new Promise<"stalled">((resolve) => setTimeout(() => resolve("stalled"), 500)),
+	]);
+	assert.equal(raced, "deny");
+	assert.equal(selectCalls, 1, "one host select per ask");
 });
 
 // ---------------------------------------------------------------------------
