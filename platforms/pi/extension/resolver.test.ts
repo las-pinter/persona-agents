@@ -295,7 +295,10 @@ test("a malformed agent file does not stop the gate from installing", async (t) 
 		try {
 			assert.doesNotThrow(() => extension(pi), "a malformed agent file must not reach the factory");
 			for (const handler of handlers.get("session_start") ?? []) {
-				await handler({ type: "session_start" }, { cwd: project });
+				await handler(
+					{ type: "session_start" },
+					{ cwd: project, sessionManager: { getSessionId: () => "resolver-gate-session" } },
+				);
 			}
 		} finally {
 			console.warn = originalWarn;

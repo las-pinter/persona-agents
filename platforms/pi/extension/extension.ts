@@ -18,6 +18,7 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts";
 import { MAX_LOG_BYTES, appendEvent, compactLog, compactionLiveRuns, createRootLogPath } from "./tree-log.ts";
+import { inChildBuild, skipsDefaults } from "./child-session.ts";
 
 function debugLog(...parts: unknown[]): void {
 	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
@@ -244,7 +245,25 @@ function skillBodyBytes(text: string): number {
 	return Buffer.byteLength(text, "utf8");
 }
 
+/**
+ * The pi session id of a start, or null when the context cannot supply one. A
+ * start without an id skips the defaults, because a missing id is not trusted
+ * as the root start.
+ */
+function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } } | undefined): string | null {
+	try {
+		return ctx?.sessionManager?.getSessionId?.() ?? null;
+	} catch {
+		return null;
+	}
+}
+
 export default function (pi: ExtensionAPI): void {
+	// A child build shares the parent loader; this factory must not re-apply defaults.
+	if (inChildBuild()) {
+		debugLog("factory: child build, no second gate: the parent gate serves the child");
+		return;
+	}
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
 
 	// 1. Permission gate on every tool call (the rule table plus the live overlay).
@@ -366,9 +385,13 @@ export default function (pi: ExtensionAPI): void {
 	};
 
 	pi.on("session_start", (_event, ctx) => {
-		debugLog("session_start cwd=", ctx.cwd);
-		applyDefaults(ctx.cwd);
+		// A child shares this module state. Its start must not rewrite the active role.
+		// The gate reads that one role for the parent and every child.
+		const skipDefaults = skipsDefaults(sessionIdOf(ctx));
+		debugLog("session_start cwd=", ctx.cwd, "skipDefaults=", skipDefaults);
+		if (!skipDefaults) applyDefaults(ctx.cwd);
 		initTreeRoot();
+		// A child has no footer of its own, so the footer shows the root status.
 		syncStatus(ctx);
 	});
 
