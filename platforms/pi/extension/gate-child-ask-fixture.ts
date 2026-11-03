@@ -15,7 +15,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { bindChildAskRegistry, type ChildAskDeps } from "./child-ask.ts";
-import { installToolCallGate } from "./permissions.ts";
+import { installToolCallGate, type GateRuleSourceFactory } from "./permissions.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import { RunRegistry, newRunRecord } from "./run-registry.ts";
 
@@ -36,6 +36,8 @@ export const CHILD_C = "child-c";
 export const CHILD_D = "child-d";
 export const CHILD_G = "grandchild";
 export const CHILD_E = "child-e";
+/** The reason of the worker class row. A case asserts it to prove the agent read. */
+export const WORKER_CLASS_DENY_REASON = "The worker class row denies a read the root class allows";
 /** The parent id that no record holds. */
 export const MISSING_PARENT = "gone-parent";
 export const THREE_LABELS = ["Allow once", "Always allow this rule (session)", "Deny"];
@@ -115,6 +117,9 @@ export function registryOf(): RunRegistry {
 				sessionId,
 				role,
 				class: sessionId === ROOT ? "orchestrator" : "worker",
+				source: "package",
+				skills: [],
+				alwaysLoad: [],
 				depth,
 				parentSessionId,
 				sessionFile: null,
@@ -125,8 +130,8 @@ export function registryOf(): RunRegistry {
 	return registry;
 }
 
-/** Install the real gate over one fixture table: push asks, status allows. */
-export function installGate(): ToolCallHandler {
+/** Install the real gate over one fixture table: push asks, status follows the class. */
+export function installGate(registry: RunRegistry = registryOf()): ToolCallHandler {
 	let captured: ToolCallHandler | null = null;
 	const pi = {
 		on(name: string, handler: ToolCallHandler): void {
@@ -142,11 +147,26 @@ export function installGate(): ToolCallHandler {
 	};
 	const ask: PermissionRule[] = [{ tool: "bash", match: "^git\\s+push\\b", reason: "publishing" }];
 	const allow: PermissionRule[] = [{ tool: "bash", match: "^git\\s+status\\b" }];
+	// The worker class denies a read the root class allows, so a case can prove
+	// which agent the gate read. A factory that ignored its agent could not.
+	const workerDeny: PermissionRule[] = [
+		{ tool: "bash", match: "^git\\s+status\\b", reason: WORKER_CLASS_DENY_REASON },
+	];
+	const source: GateRuleSourceFactory = (sourceAgent) => {
+		const worker = sourceAgent?.permissionClass === "worker";
+		return {
+			ruleSets: {
+				globalDeny: [],
+				agentDeny: worker ? workerDeny : [],
+				globalAsk: [],
+				agentAsk: ask,
+				agentAllow: worker ? [] : allow,
+			},
+			mode: "deny-by-default",
+		};
+	};
 	// SAFETY: the gate reads only `on` from the pi object, and this fake has it.
-	installToolCallGate(pi as unknown as ExtensionAPI, () => agent, () => ({
-		ruleSets: { globalDeny: [], agentDeny: [], globalAsk: [], agentAsk: ask, agentAllow: allow },
-		mode: "deny-by-default",
-	}));
+	installToolCallGate(pi as unknown as ExtensionAPI, () => agent, source, registry);
 	assert.ok(captured, "the gate must register a tool_call handler");
 	return captured;
 }
@@ -183,6 +203,8 @@ export interface SetupOptions {
 	never?: boolean;
 	timeoutMs?: number;
 	render?: ChildAskDeps["render"];
+	/** Defaults to true. False installs the gate without a separate bind. */
+	bindFirst?: boolean;
 }
 export interface Setup {
 	handler: ToolCallHandler;
@@ -190,6 +212,8 @@ export interface Setup {
 	root: ToolCallContext;
 	/** The same root surface, marked headless. */
 	headless: ToolCallContext;
+	/** The registry the gate answers from. */
+	registry: RunRegistry;
 }
 
 export function setup(options: SetupOptions = {}): Setup {
@@ -197,15 +221,19 @@ export function setup(options: SetupOptions = {}): Setup {
 	prompter.answers = options.answers ?? [];
 	prompter.never = options.never ?? false;
 	const timeout = options.timeoutMs;
-	bindChildAskRegistry(registryOf(), {
-		...(timeout === undefined ? {} : { timeoutMs: timeout }),
-		...(options.render ? { render: options.render } : {}),
-	});
+	const registry = registryOf();
+	if (options.bindFirst !== false) {
+		bindChildAskRegistry(registry, {
+			...(timeout === undefined ? {} : { timeoutMs: timeout }),
+			...(options.render ? { render: options.render } : {}),
+		});
+	}
 	return {
-		handler: installGate(),
+		handler: installGate(registry),
 		prompter,
 		root: rootContext(prompter),
 		headless: rootContext(prompter, false),
+		registry,
 	};
 }
 

@@ -7,6 +7,7 @@
 import { afterEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { bindChildAskRegistry, childAskQueue } from "./child-ask.ts";
+import { UNKNOWN_RUN_REASON } from "./run-registry.ts";
 import {
 	CHILD_A,
 	CHILD_B,
@@ -16,8 +17,10 @@ import {
 	CHILD_G,
 	MISSING_PARENT,
 	ROOT,
+	WORKER_CLASS_DENY_REASON,
 	captureRoot,
 	childAsk,
+	childContext,
 	rootAsk,
 	setup,
 } from "./gate-child-ask-fixture.ts";
@@ -98,6 +101,7 @@ test("depth: a grandchild asks at the top root, not the middle session", { timeo
 
 // --- fail closed -------------------------------------------------------------
 
+// Only this case catches a broken walk that reads the root agent at a null depth.
 test("fail closed: a broken parent link blocks with the missing session id", { timeout: 2000 }, async () => {
 	const s = setup({ answers: ["Allow once"] });
 	await captureRoot(s);
@@ -109,4 +113,29 @@ test("fail closed: a broken parent link blocks with the missing session id", { t
 	assert.equal(s.prompter.titles.length, 0, "a broken walk shows no prompt");
 	assert.equal(childAskQueue()?.waiting(ROOT), 0);
 	assert.equal(childAskQueue()?.rootCount(), 0);
+
+	// The child's own class row answers. A root-agent fallback would allow this read.
+	const classVerdict = await s.handler(
+		{ toolName: "bash", input: { command: "git status" } },
+		childContext(CHILD_E, s.prompter),
+	);
+	assert.deepEqual(classVerdict, { block: true, reason: WORKER_CLASS_DENY_REASON });
+});
+
+// Only this case catches a session with no record that falls back to the root role.
+test("fail closed: an unknown session id denies instead of taking the root role", { timeout: 2000 }, async () => {
+	const s = setup({ answers: ["Allow once"] });
+	await captureRoot(s);
+	const unknown = "never-registered";
+	assert.equal(s.registry.get(unknown), undefined, "the registry holds no record for this id");
+
+	// The same command the root just ran is allowed, so the deny comes from the id.
+	const result = await s.handler(
+		{ toolName: "bash", input: { command: "git status" } },
+		childContext(unknown, s.prompter),
+	);
+
+	assert.deepEqual(result, { block: true, reason: UNKNOWN_RUN_REASON });
+	assert.equal(s.prompter.titles.length, 0, "an unknown session shows no prompt");
+	assert.equal(s.prompter.childUiCalls, 0, "the child surface is never asked");
 });

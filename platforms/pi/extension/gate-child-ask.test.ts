@@ -64,6 +64,21 @@ test("one root prompt: the root's own ask still renders the shared prompt", { ti
 	assert.deepEqual(s.prompter.options[0], ["Allow once", "Always allow this rule (session)", "Deny"]);
 });
 
+// --- bind order --------------------------------------------------------------
+
+// Only this case catches a gate installed without its registry bind.
+test("bind order: the gate install binds the registry, so no separate bind is needed", { timeout: 2000 }, async () => {
+	const s = setup({ answers: ["Allow once"], bindFirst: false });
+	await captureRoot(s);
+	assert.equal(childAskQueue()?.serves(s.registry), true, "the gate install bound this registry");
+
+	const result = await childAsk(s, CHILD_A);
+
+	assert.equal(result, undefined, "the child ask was answered");
+	assert.equal(s.prompter.titles.length, 1, "the child ask reached the root prompt");
+	assert.match(s.prompter.titles[0], /implementer/, "the prompt names the child role");
+});
+
 // --- three answers -----------------------------------------------------------
 
 test("three answers: deny blocks the child with the user reason", { timeout: 2000 }, async () => {
@@ -117,22 +132,58 @@ test("timeout: an unanswered request leaves the queue and blocks with the deadli
 	assert.equal(CHILD_ASK_TIMEOUT_REASON, "Blocked: the permission request timed out after 120 s");
 });
 
+/** Let the queue's microtask pump run without advancing a timer. */
+async function drainMicrotasks(): Promise<void> {
+	for (let i = 0; i < 4; i += 1) await Promise.resolve();
+}
+
 test(
 	"timeout: a queued request counts its deadline from arrival, not display",
 	{ timeout: 2000 },
-	async () => {
+	async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
 		const s = setup({ never: true, timeoutMs: 40 });
 		await captureRoot(s);
+
+		let firstSettled = false;
+		let secondSettled = false;
+		let firstOutcome: unknown = null;
 		const first = childAsk(s, CHILD_A);
-		await new Promise<void>((resolve) => setTimeout(resolve, 20));
+		void first.then((outcome) => {
+			firstOutcome = outcome;
+			firstSettled = true;
+		});
+		await drainMicrotasks();
+		assert.equal(s.prompter.titles.length, 1, "the head shows on arrival");
+
+		// The head's deadline counts from t=0, so it fires at t=40.
+		t.mock.timers.tick(20);
+		await drainMicrotasks();
 		const second = childAsk(s, CHILD_B);
-		assert.equal(s.prompter.titles.length, 1, "the queued request is not shown while the head waits");
-		assert.deepEqual(await first, { block: true, reason: CHILD_ASK_TIMEOUT_REASON });
+		void second.then(() => {
+			secondSettled = true;
+		});
+		await drainMicrotasks();
+		assert.equal(s.prompter.titles.length, 1, "the queued request waits behind the head");
+		assert.equal(childAskQueue()?.waiting(ROOT), 2, "both requests are queued");
+
+		t.mock.timers.tick(20);
+		await drainMicrotasks();
+		assert.equal(firstSettled, true, "the head times out at its arrival deadline");
+		assert.deepEqual(firstOutcome, { block: true, reason: CHILD_ASK_TIMEOUT_REASON });
+		assert.equal(secondSettled, false, "the queued request is not settled by the head's deadline");
 		assert.equal(s.prompter.titles.length, 2, "the head leaves, then the next request is shown");
-		const shownAt = Date.now();
-		assert.deepEqual(await second, { block: true, reason: CHILD_ASK_TIMEOUT_REASON });
-		const visibleFor = Date.now() - shownAt;
-		assert.ok(visibleFor < 35, `the queued request kept its arrival deadline (${visibleFor} ms)`);
+		assert.equal(childAskQueue()?.visible(ROOT), CHILD_B, "the second request is on screen");
+
+		// A display-based deadline would start here and fire at t=80.
+		t.mock.timers.tick(19);
+		await drainMicrotasks();
+		assert.equal(secondSettled, false, "19 ms on screen is not yet its arrival deadline");
+		assert.equal(s.prompter.titles.length, 2, "the queued request still waits");
+
+		t.mock.timers.tick(1);
+		await drainMicrotasks();
+		assert.equal(secondSettled, true, "the queued request times out at arrival + 40 ms");
 		assert.equal(childAskQueue()?.waiting(ROOT), 0, "both requests left the queue");
 		assert.equal(childAskQueue()?.visible(ROOT), null, "no request stays visible");
 		assert.equal(childAskQueue()?.rootCount(), 0, "the drained root is dropped");

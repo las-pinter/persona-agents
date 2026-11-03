@@ -4,8 +4,8 @@
  * Runs under plain Node (type stripping) with no dependencies:
  *   node --experimental-strip-types --test platforms/pi/extension/depth.test.ts
  *
- * Covers the plan's depth cases: env parsing, the spawn gate, the parent
- * `--tools` strip, and the refusal at the cap.
+ * Covers the depth cases: env parsing, the spawn gate, the loadout strip, and
+ * the refusal at the cap.
  */
 
 import { test } from "node:test";
@@ -16,8 +16,6 @@ import {
 	MAX_AGENT_DEPTH,
 	canSpawn,
 	childDepth,
-	childToolArgs,
-	depthEnv,
 	isRootProcessEnv,
 	parseDepth,
 	planSpawn,
@@ -61,7 +59,7 @@ test("childDepth adds one", () => {
 	assert.equal(childDepth(1), 2);
 });
 
-// --- parent --tools strip ----------------------------------------------------
+// --- child tool strip for the in-process loadout ----------------------------
 
 test("stripSpawnTool removes subagent when the child would be at the cap", () => {
 	// myDepth 1 -> childDepth 2 -> at the cap.
@@ -100,32 +98,6 @@ test("planSpawn permits at depth 1 and strips subagent for the child", () => {
 	assert.equal(plan.allowed, true);
 	assert.equal(plan.childDepth, 2);
 	assert.deepEqual(plan.tools, ["read"]);
-});
-
-// --- child tool argv ---------------------------------------------------------
-
-test("childToolArgs passes no override for an empty request", () => {
-	assert.deepEqual(childToolArgs([], 0), []);
-});
-
-test("childToolArgs passes --tools for a kept list", () => {
-	assert.deepEqual(childToolArgs(["read"], 0), ["--tools", "read"]);
-});
-
-test("childToolArgs keeps subagent below the cap", () => {
-	assert.deepEqual(childToolArgs(["subagent"], 0), ["--tools", "subagent"]);
-});
-
-test("childToolArgs passes --no-tools when the strip empties the list", () => {
-	// myDepth 1 -> childDepth 2 -> at the cap -> subagent is stripped.
-	assert.deepEqual(childToolArgs(["subagent"], 1), ["--no-tools"]);
-});
-
-// --- env fragment ------------------------------------------------------------
-
-test("depthEnv carries the child depth", () => {
-	assert.deepEqual(depthEnv(0), { PI_AGENT_DEPTH: "1" });
-	assert.deepEqual(depthEnv(1), { PI_AGENT_DEPTH: "2" });
 });
 
 // --- root vs child detection -------------------------------------------------

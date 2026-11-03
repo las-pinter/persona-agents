@@ -94,6 +94,30 @@ export function isFailedResult(result: SingleResult): boolean {
 	return result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 }
 
+/** One failure result, so every refusal returns the same field set. */
+export function failureResult(
+	agent: string,
+	agentSource: SingleResult["agentSource"],
+	task: string,
+	step: number | undefined,
+	stderr: string,
+): SingleResult {
+	return {
+		agent,
+		agentSource,
+		task,
+		exitCode: 1,
+		messages: [],
+		stderr,
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+		model: undefined,
+		stopReason: "error",
+		step,
+		runStartedAt: Date.now(),
+		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
+	};
+}
+
 export function toInspectTask(r: SingleResult): InspectTask {
 	return {
 		agent: r.agent,

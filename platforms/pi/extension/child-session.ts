@@ -1,9 +1,10 @@
 /**
  * In-process child session builder.
  *
- * A child shares the parent loader, so one gate instance and one run registry
- * serve both sessions. The build runs under a guard that stops the reloaded
- * extension factory from applying defaults into module state.
+ * A child loads no extension, so it builds no gate of its own. Each child tool
+ * is wrapped to ask the parent gate, and one run registry serves both sessions.
+ * The child loader carries no extension set. The build runs under a guard that
+ * stops a reloaded extension factory from applying defaults into module state.
  *
  * The builder writes the run record before the build. It records the id as a
  * child id, so the extension factory skips the defaults on the child start. It
@@ -83,7 +84,8 @@ const childSessionIds = new Set<string>();
 /**
  * True when a start must skip the defaults. A known child id is one case. The
  * other is no readable id, because a missing id is not trusted as the root
- * start. A root start would rewrite the active role that every child shares.
+ * start. A child reads its role from its record, so it must not apply the root
+ * defaults.
  */
 export function skipsDefaults(sessionId: string | null): boolean {
 	return sessionId === null || childSessionIds.has(sessionId);
@@ -114,7 +116,7 @@ export interface ChildLoadout {
 export interface ChildParent {
 	/** The directory the child runs in. Project discovery and the gate both use it. */
 	cwd: string;
-	/** The parent's own loader object. Identity matters: a copy is a second gate. */
+	/** The loader the child builds against. It carries no extension set. */
 	loader: ResourceLoader;
 	/** The parent's settings manager, so both sessions read one settings source. */
 	settingsManager: SettingsManager;

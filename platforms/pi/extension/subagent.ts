@@ -1,24 +1,17 @@
 /**
- * Subagent Tool - Delegate tasks to specialized agents
+ * Subagent tool: delegate tasks to specialized agents.
  *
- * Spawns a separate `pi` process for each subagent invocation,
- * giving it an isolated context window.
- *
- * Supports three modes:
- *   - Single: { agent: "name", task: "..." }
- *   - Parallel: { tasks: [{ agent: "name", task: "..." }, ...] }
- *   - Chain: { chain: [{ agent: "name", task: "... {previous} ..." }, ...] }
- *
- * Uses JSON mode to capture structured output from subagents.
- *
- * This module owns the tool definition and mode dispatch; the schema, the
- * renderers, child runner, result helpers, tree writer, and thinking state live in sibling modules.
+ * Builds one in-process child session per invocation. Modes: single, parallel,
+ * and chain with a `{previous}` placeholder. The child runner owns the build
+ * and the dispose; this module owns the tool definition and the mode dispatch.
  */
 
 import * as path from "node:path";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import {
 	CONFIG_DIR_NAME,
 	type ExtensionAPI,
+	type ExtensionContext,
 	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -42,13 +35,34 @@ import {
 	truncateChainPrevious,
 	truncateParallelOutput,
 } from "./subagent-result.ts";
-import { type DispatchDefaults, type OnUpdateCallback, runSingleAgent } from "./subagent-run.ts";
+import {
+	type ChildRuntime,
+	type DispatchDeps,
+	type OnUpdateCallback,
+	getRunRegistry,
+	runSingleAgent,
+} from "./subagent-run.ts";
 import { renderSubagentCall, renderSubagentResult } from "./subagent-render.ts";
 import { SubagentParams } from "./subagent-schema.ts";
-
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
+/** One step of a chain or parallel call. */
+export interface StepInput {
+	agent: string;
+	task: string;
+	cwd?: string;
+}
+/** The shared inputs of one dispatch call. The mode code reads it once. */
+export interface ModeRun {
+	deps: DispatchDeps;
+	signal: AbortSignal | undefined;
+	onUpdate: OnUpdateCallback | undefined;
+	makeDetails: (mode: "single" | "parallel" | "chain") => (results: SingleResult[]) => SubagentDetails;
+	/** Writes a finished run to the inspector archive. Absent in a test. */
+	archive?: (mode: "chain" | "parallel" | "single", results: SingleResult[]) => void;
+}
 
+/** A bounded worker pool. The queue order is the task order. */
 async function mapWithConcurrencyLimit<TIn, TOut>(
 	items: TIn[],
 	concurrency: number,
@@ -58,20 +72,185 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 	const limit = Math.max(1, Math.min(concurrency, items.length));
 	const results: TOut[] = new Array(items.length);
 	let nextIndex = 0;
-	const workers = new Array(limit).fill(null).map(async () => {
-		while (true) {
-			const current = nextIndex++;
-			if (current >= items.length) return;
+	const runWorker = async (): Promise<void> => {
+		for (let current = nextIndex++; current < items.length; current = nextIndex++) {
 			results[current] = await fn(items[current], current);
 		}
-	});
+	};
+	const workers: Promise<void>[] = [];
+	for (let i = 0; i < limit; i++) workers.push(runWorker());
 	await Promise.all(workers);
 	return results;
 }
 
+/** Chain mode: run each step in order and pass the prior output to the next. */
+export async function runChainMode(
+	chain: StepInput[],
+	mode: ModeRun,
+): Promise<AgentToolResult<SubagentDetails>> {
+	const results: SingleResult[] = [];
+	let previousOutput = "";
+	for (let i = 0; i < chain.length; i++) {
+		const step = chain[i];
+		const taskWithContext = step.task.replace(/\{previous\}/g, truncateChainPrevious(previousOutput));
+		// Combine the completed steps with the one that is streaming now.
+		const chainUpdate: OnUpdateCallback | undefined = mode.onUpdate
+			? (partial) => {
+					const current = partial.details?.results[0];
+					if (!current) return;
+					mode.onUpdate?.({
+						content: partial.content,
+						details: mode.makeDetails("chain")([...results, current]),
+					});
+				}
+			: undefined;
+		const result = await runSingleAgent(
+			mode.deps,
+			step.agent,
+			taskWithContext,
+			step.cwd,
+			i + 1,
+			mode.signal,
+			chainUpdate,
+			mode.makeDetails("chain"),
+		);
+		results.push(result);
+		if (isFailedResult(result)) {
+			const errorMsg = getResultOutput(result);
+			return {
+				content: [
+					{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` },
+				],
+				details: mode.makeDetails("chain")(results),
+				isError: true,
+			};
+		}
+		previousOutput = getFinalOutput(result.messages);
+	}
+	mode.archive?.("chain", results);
+	return {
+		content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
+		details: mode.makeDetails("chain")(results),
+	};
+}
+
+/** Parallel mode: run every task with a bounded worker pool. */
+export async function runParallelMode(
+	tasks: StepInput[],
+	mode: ModeRun,
+): Promise<AgentToolResult<SubagentDetails>> {
+	if (tasks.length > MAX_PARALLEL_TASKS) {
+		return {
+			content: [
+				{ type: "text", text: `Too many parallel tasks (${tasks.length}). Max is ${MAX_PARALLEL_TASKS}.` },
+			],
+			details: mode.makeDetails("parallel")([]),
+		};
+	}
+	const allResults: SingleResult[] = tasks.map((task) => ({
+		agent: task.agent,
+		agentSource: "unknown",
+		task: task.task,
+		exitCode: -1, // -1 = still running
+		messages: [],
+		stderr: "",
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
+	}));
+	const emitParallelUpdate = () => {
+		if (!mode.onUpdate) return;
+		const running = allResults.filter((r) => r.exitCode === -1).length;
+		const done = allResults.filter((r) => r.exitCode !== -1).length;
+		mode.onUpdate({
+			content: [{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` }],
+			details: mode.makeDetails("parallel")([...allResults]),
+		});
+	};
+	const results = await mapWithConcurrencyLimit(tasks, MAX_CONCURRENCY, async (task, index) => {
+		// The worker starts now; queue wait must not count as run time.
+		allResults[index].runStartedAt = Date.now();
+		const result = await runSingleAgent(
+			mode.deps,
+			task.agent,
+			task.task,
+			task.cwd,
+			undefined,
+			mode.signal,
+			(partial) => {
+				const current = partial.details?.results[0];
+				if (!current) return;
+				allResults[index] = current;
+				emitParallelUpdate();
+			},
+			mode.makeDetails("parallel"),
+		);
+		allResults[index] = result;
+		emitParallelUpdate();
+		return result;
+	});
+
+	const successCount = results.filter((r) => !isFailedResult(r)).length;
+	const summaries = results.map((r) => {
+		const output = truncateParallelOutput(getResultOutput(r));
+		const status = isFailedResult(r)
+			? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
+			: "completed";
+		return `### [${r.agent}] ${status}\n\n${output}`;
+	});
+	mode.archive?.("parallel", results);
+	return {
+		content: [
+			{
+				type: "text",
+				text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`,
+			},
+		],
+		details: mode.makeDetails("parallel")(results),
+	};
+}
+
+/** Single mode: run one agent and return its output. */
+export async function runSingleMode(
+	agentName: string,
+	task: string,
+	cwd: string | undefined,
+	mode: ModeRun,
+): Promise<AgentToolResult<SubagentDetails>> {
+	const result = await runSingleAgent(
+		mode.deps,
+		agentName,
+		task,
+		cwd,
+		undefined,
+		mode.signal,
+		mode.onUpdate,
+		mode.makeDetails("single"),
+	);
+	if (isFailedResult(result)) {
+		const errorMsg = getResultOutput(result);
+		return {
+			content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
+			details: mode.makeDetails("single")([result]),
+			isError: true,
+		};
+	}
+	mode.archive?.("single", [result]);
+	return {
+		content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+		details: mode.makeDetails("single")([result]),
+	};
+}
+
+/** The parent session id, or null when the manager cannot answer. */
+function parentSessionIdOf(ctx: ExtensionContext): string | null {
+	try {
+		return ctx.sessionManager.getSessionId() ?? null;
+	} catch {
+		return null;
+	}
+}
 /** Duration formatting lives in `duration.ts`; re-exported for callers. */
 export { formatDuration as formatToolDuration } from "./duration.ts";
-
 /** Thinking state lives in `subagent-thinking.ts`; re-exported for callers. */
 export {
 	INITIAL_THINKING,
@@ -83,46 +262,32 @@ export {
 	reduceThinking,
 	thinkingElapsedMs,
 } from "./subagent-thinking.ts";
-
 /** Result types live in `subagent-result.ts`; re-exported for callers. */
 export { type SingleResult, toInspectTask } from "./subagent-result.ts";
-
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
-		description: [
-			"Delegate tasks to specialized subagents with isolated context.",
-			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-			`Default agent scope is "user" (from ${path.join(getAgentDir(), "agents")}).`,
-			`To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project").`,
-			"Agent names also accept theme-profession aliases (e.g. goblin-mascot = mascot with the goblin persona).",
-		].join(" "),
+		description: `Delegate tasks to specialized subagents with isolated context. Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder). Default agent scope is "user" (from ${path.join(getAgentDir(), "agents")}). To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project"). Agent names also accept theme-profession aliases (e.g. goblin-mascot = mascot with the goblin persona).`,
 		parameters: SubagentParams,
-
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const agentScope: AgentScope = params.agentScope ?? "user";
-			// Resolve discovered agents/personas up front: later initializers below
-			// (callerTheme, resolveTarget, resolveSpawnPersona) close over them.
+			// Resolve the roster first: the helpers below close over it.
 			const discovery = discoverAgents(ctx.cwd, agentScope);
 			const agents = discovery.agents;
-
-			// The caller's theme (from its active persona) flows into every spawned
-			// agent so a goblin orchestrator spawns goblin subagents.
+			// A requested theme/agent alias decides the child persona; the caller's theme is the fallback.
 			const activeAgent = getActiveAgent();
 			const callerTheme =
 				getActivePersona()?.theme ??
 				(activeAgent?.persona
 					? resolvePersonaForAgent(discovery.personas, activeAgent.persona, activeAgent.name)?.theme
 					: undefined);
-
-			// Resolve a requested agent name, supporting "theme-profession" aliases
-			// (goblin-mascot -> mascot agent + goblin theme) from the kiro/opencode
-			// ecosystems, in addition to pi's plain agent names.
+			// A requested name may be a plain agent name or a theme-profession alias
+			// such as goblin-mascot (mascot agent plus goblin theme).
 			const targetCache = new Map<string, { agent: AgentConfig; theme?: string } | null>();
 			const resolveTarget = (requestedName: string): { agent: AgentConfig; theme?: string } | null => {
 				if (targetCache.has(requestedName)) return targetCache.get(requestedName) ?? null;
-				let resolved = resolveAgentAlias(requestedName, agents, discovery.personas);
+				const resolved = resolveAgentAlias(requestedName, agents, discovery.personas);
 				targetCache.set(requestedName, resolved);
 				return resolved;
 			};
@@ -142,17 +307,15 @@ export default function (pi: ExtensionAPI) {
 					agentScope,
 					results: results.map(toInspectTask),
 				});
-			const dispatchDefaults: DispatchDefaults = {
-				model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
-				thinkingLevel: ctx.thinkingLevel,
+			const runtime: ChildRuntime = {
+				registry: getRunRegistry(),
+				parentSessionId: parentSessionIdOf(ctx),
 			};
 			const confirmProjectAgents = params.confirmProjectAgents ?? true;
-
 			const hasChain = (params.chain?.length ?? 0) > 0;
 			const hasTasks = (params.tasks?.length ?? 0) > 0;
 			const hasSingle = Boolean(params.agent && params.task);
 			const modeCount = Number(hasChain) + Number(hasTasks) + Number(hasSingle);
-
 			const makeDetails =
 				(mode: "single" | "parallel" | "chain") =>
 				(results: SingleResult[]): SubagentDetails => ({
@@ -161,7 +324,25 @@ export default function (pi: ExtensionAPI) {
 					projectAgentsDir: discovery.projectAgentsDir,
 					results,
 				});
-
+			const modeRun: ModeRun = {
+				deps: {
+					defaultCwd: ctx.cwd,
+					defaults: {
+						model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+						modelObject: ctx.model,
+						thinkingLevel: ctx.thinkingLevel,
+						modelRegistry: ctx.modelRegistry,
+					},
+					agents,
+					resolveTarget,
+					resolveSpawnPersona,
+					runtime,
+				},
+				signal,
+				onUpdate,
+				makeDetails,
+				archive,
+			};
 			if (modeCount !== 1) {
 				const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 				return {
@@ -185,11 +366,9 @@ export default function (pi: ExtensionAPI) {
 				if (params.chain) for (const step of params.chain) requestedAgentNames.add(step.agent);
 				if (params.tasks) for (const t of params.tasks) requestedAgentNames.add(t.agent);
 				if (params.agent) requestedAgentNames.add(params.agent);
-
 				const projectAgentsRequested = Array.from(requestedAgentNames)
 					.map((name) => agents.find((a) => a.name === name))
 					.filter((a): a is AgentConfig => a?.source === "project");
-
 				if (projectAgentsRequested.length > 0) {
 					const names = projectAgentsRequested.map((a) => a.name).join(", ");
 					const dir = discovery.projectAgentsDir ?? "(unknown)";
@@ -204,194 +383,16 @@ export default function (pi: ExtensionAPI) {
 						};
 				}
 			}
-
-			if (params.chain && params.chain.length > 0) {
-				const results: SingleResult[] = [];
-				let previousOutput = "";
-
-				for (let i = 0; i < params.chain.length; i++) {
-					const step = params.chain[i];
-					const taskWithContext = step.task.replace(/\{previous\}/g, truncateChainPrevious(previousOutput));
-
-					// Create update callback that includes all previous results
-					const chainUpdate: OnUpdateCallback | undefined = onUpdate
-						? (partial) => {
-								// Combine completed results with current streaming result
-								const currentResult = partial.details?.results[0];
-								if (currentResult) {
-									const allResults = [...results, currentResult];
-									onUpdate({
-										content: partial.content,
-										details: makeDetails("chain")(allResults),
-									});
-								}
-							}
-						: undefined;
-
-					const result = await runSingleAgent(
-						ctx.cwd,
-						dispatchDefaults,
-						agents,
-						resolveTarget,
-						resolveSpawnPersona,
-						step.agent,
-						taskWithContext,
-						step.cwd,
-						i + 1,
-						signal,
-						chainUpdate,
-						makeDetails("chain"),
-					);
-					results.push(result);
-
-					const isError = isFailedResult(result);
-					if (isError) {
-						const errorMsg = getResultOutput(result);
-						return {
-							content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
-							details: makeDetails("chain")(results),
-							isError: true,
-						};
-					}
-					previousOutput = getFinalOutput(result.messages);
-				}
-				archive("chain", results);
-				return {
-					content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
-					details: makeDetails("chain")(results),
-				};
-			}
-
-			if (params.tasks && params.tasks.length > 0) {
-				if (params.tasks.length > MAX_PARALLEL_TASKS)
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Too many parallel tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
-							},
-						],
-						details: makeDetails("parallel")([]),
-					};
-
-				// Track all results for streaming updates
-				const allResults: SingleResult[] = new Array(params.tasks.length);
-
-				// Initialize placeholder results
-				for (let i = 0; i < params.tasks.length; i++) {
-					allResults[i] = {
-						agent: params.tasks[i].agent,
-						agentSource: "unknown",
-						task: params.tasks[i].task,
-						exitCode: -1, // -1 = still running
-						messages: [],
-						stderr: "",
-						usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-						thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
-					};
-				}
-
-				const emitParallelUpdate = () => {
-					if (onUpdate) {
-						const running = allResults.filter((r) => r.exitCode === -1).length;
-						const done = allResults.filter((r) => r.exitCode !== -1).length;
-						onUpdate({
-							content: [
-								{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` },
-							],
-							details: makeDetails("parallel")([...allResults]),
-						});
-					}
-				};
-
-				const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
-					// The worker starts now; queue wait must not count as run time.
-					allResults[index].runStartedAt = Date.now();
-					const result = await runSingleAgent(
-						ctx.cwd,
-						dispatchDefaults,
-						agents,
-						resolveTarget,
-						resolveSpawnPersona,
-						t.agent,
-						t.task,
-						t.cwd,
-						undefined,
-						signal,
-						// Per-task update callback
-						(partial) => {
-							if (partial.details?.results[0]) {
-								allResults[index] = partial.details.results[0];
-								emitParallelUpdate();
-							}
-						},
-						makeDetails("parallel"),
-					);
-					allResults[index] = result;
-					emitParallelUpdate();
-					return result;
-				});
-
-				const successCount = results.filter((r) => !isFailedResult(r)).length;
-				const summaries = results.map((r) => {
-					const output = truncateParallelOutput(getResultOutput(r));
-					const status = isFailedResult(r)
-						? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
-						: "completed";
-					return `### [${r.agent}] ${status}\n\n${output}`;
-				});
-				archive("parallel", results);
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`,
-						},
-					],
-					details: makeDetails("parallel")(results),
-				};
-			}
-
-			if (params.agent && params.task) {
-				const result = await runSingleAgent(
-					ctx.cwd,
-					dispatchDefaults,
-					agents,
-					resolveTarget,
-					resolveSpawnPersona,
-					params.agent,
-					params.task,
-					params.cwd,
-					undefined,
-					signal,
-					onUpdate,
-					makeDetails("single"),
-				);
-				const isError = isFailedResult(result);
-				if (isError) {
-					const errorMsg = getResultOutput(result);
-					return {
-						content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
-						details: makeDetails("single")([result]),
-						isError: true,
-					};
-				}
-				archive("single", [result]);
-				return {
-					content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
-					details: makeDetails("single")([result]),
-				};
-			}
-
+			if (params.chain && params.chain.length > 0) return runChainMode(params.chain, modeRun);
+			if (params.tasks && params.tasks.length > 0) return runParallelMode(params.tasks, modeRun);
+			if (params.agent && params.task) return runSingleMode(params.agent, params.task, params.cwd, modeRun);
 			const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 			return {
 				content: [{ type: "text", text: `Invalid parameters. Available agents: ${available}` }],
 				details: makeDetails("single")([]),
 			};
 		},
-
 		renderCall: renderSubagentCall,
-
 		renderResult: renderSubagentResult,
 	});
 }

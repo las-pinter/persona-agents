@@ -139,6 +139,11 @@ export class ChildAskQueue {
 		return this.registry.get(sessionId);
 	}
 
+	/** True when this queue answers from the given registry. */
+	serves(registry: RunRegistry): boolean {
+		return this.registry === registry;
+	}
+
 	/**
 	 * The walked depth of one session, or null when no root is reachable. The
 	 * walk counts hops, so a record cannot under-report its own depth.
@@ -307,15 +312,29 @@ let routing: ChildAskQueue | null = null;
 /**
  * Bind the registry the gate reads for session identity, and optionally the
  * renderer or the deadline. A null registry returns the gate to the root path.
+ * A repeat bind of the same registry keeps the queue and its options.
  */
 export function bindChildAskRegistry(
 	registry: RunRegistry | null,
 	options: Omit<ChildAskDeps, "registry"> = {},
 ): void {
-	routing = registry ? new ChildAskQueue({ registry, ...options }) : null;
+	if (!registry) {
+		routing = null;
+		return;
+	}
+	if (routing?.serves(registry) && Object.keys(options).length === 0) return;
+	routing = new ChildAskQueue({ registry, ...options });
 }
 
 /** The bound queue. The gate calls this on every tool call. */
 export function childAskQueue(): ChildAskQueue | null {
 	return routing;
+}
+
+/**
+ * The walked depth of one session from the bound registry, or null. A caller
+ * uses it to tell a child session from the root without a second registry.
+ */
+export function sessionDepthOf(sessionId: string): number | null {
+	return routing ? routing.depth(sessionId) : null;
 }

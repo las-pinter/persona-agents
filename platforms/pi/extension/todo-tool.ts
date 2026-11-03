@@ -13,6 +13,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { isRootProcessEnv } from "./depth.ts";
+import { sessionDepthOf } from "./child-ask.ts";
 
 /** One todo item. `id` is a string so it can feed the pure renderer directly. */
 export interface Todo {
@@ -306,13 +307,46 @@ function emitTodos(pi: ExtensionAPI, state: TodoState): void {
 	}
 }
 
+/**
+ * The state key for a context that carries no session id.
+ * Assumption: pi always supplies an id, so this key stays unreachable.
+ */
+const UNSCOPED_SESSION_KEY = "";
+
+/** The pi session id of one context, or null when it carries none. */
+function sessionIdOf(ctx: ExtensionContext | undefined): string | null {
+	try {
+		return ctx?.sessionManager?.getSessionId?.() ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** True when the call comes from a session below the root. */
+function isChildSession(sessionId: string | null): boolean {
+	const depth = sessionId === null ? null : sessionDepthOf(sessionId);
+	return depth !== null && depth > 0;
+}
+
 /** Register the `todo` tool and its session-entry reconstruction hooks. */
 export function registerTodoTool(pi: ExtensionAPI): void {
-	let state = emptyTodoState();
+	// One list per session: an in-process child must not write the root list.
+	const states = new Map<string, TodoState>();
+	const stateFor = (sessionId: string | null): TodoState => {
+		const key = sessionId ?? UNSCOPED_SESSION_KEY;
+		const existing = states.get(key);
+		if (existing) return existing;
+		const fresh = emptyTodoState();
+		states.set(key, fresh);
+		return fresh;
+	};
+	const setState = (sessionId: string | null, next: TodoState): void => {
+		states.set(sessionId ?? UNSCOPED_SESSION_KEY, next);
+	};
 
 	const reconstruct = (ctx: ExtensionContext): void => {
 		try {
-			state = reconstructTodosFromEntries(ctx.sessionManager.getBranch());
+			setState(sessionIdOf(ctx), reconstructTodosFromEntries(ctx.sessionManager.getBranch()));
 		} catch {
 			/* keep the in-memory cache when a branch is unavailable */
 		}
@@ -321,12 +355,15 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => reconstruct(ctx));
 	pi.on("session_tree", (_event, ctx) => reconstruct(ctx));
 
-	pi.on("before_agent_start", () => {
-		// Root only: a child process has no sidebar. Its parent id is set.
+	pi.on("before_agent_start", (_event, ctx) => {
+		// Root only: a moved process env is a child, and so is a walked child session.
 		if (!isRootProcessEnv(process.env)) return;
-		state = beginTurn(state);
-		persistTurnBoundary(pi, state);
-		emitTodos(pi, state);
+		const sessionId = sessionIdOf(ctx);
+		if (isChildSession(sessionId)) return;
+		const next = beginTurn(stateFor(sessionId));
+		setState(sessionId, next);
+		persistTurnBoundary(pi, next);
+		emitTodos(pi, next);
 	});
 
 	pi.registerTool({
@@ -336,10 +373,13 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 			"Manage a todo list for the current task. Actions: list, add (text), toggle (id), remove (id), clear.",
 		parameters: TodoParams,
 
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const outcome = applyTodoOperation(state, params);
-			state = outcome.state;
-			if (outcome.mutated) emitTodos(pi, state);
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			// The write target is the calling session, which may be a child.
+			const sessionId = sessionIdOf(ctx);
+			const outcome = applyTodoOperation(stateFor(sessionId), params);
+			setState(sessionId, outcome.state);
+			// A child list must not publish a snapshot to the root sidebar.
+			if (outcome.mutated && !isChildSession(sessionId)) emitTodos(pi, outcome.state);
 			return {
 				content: [{ type: "text" as const, text: outcome.result.content }],
 				details: outcome.result.details,

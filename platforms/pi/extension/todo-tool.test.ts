@@ -18,9 +18,12 @@ import {
 	registerTodoTool,
 	TODOS_EVENT_CHANNEL,
 	TODOS_TURN_ENTRY,
+	type TodoDetails,
 	type TodoSessionEntry,
 	type TodoState,
 } from "./todo-tool.ts";
+import { bindChildAskRegistry } from "./child-ask.ts";
+import { RunRegistry, newRunRecord } from "./run-registry.ts";
 
 /** Apply one operation and give back the next state and the result. */
 function run(state: TodoState, input: Parameters<typeof applyTodoOperation>[1]) {
@@ -476,12 +479,25 @@ test("reconstruct skips a malformed turn boundary payload", () => {
 
 // --- before_agent_start wiring ----------------------------------------------
 
+/** One captured `todo` definition, with the fields a case drives. */
+interface TodoToolDefinition {
+	execute(
+		toolCallId: string,
+		params: { action: string; text?: string; id?: string },
+		signal: undefined,
+		onUpdate: undefined,
+		ctx: ExtensionContext,
+	): Promise<{ content: Array<{ type: string; text: string }>; details: TodoDetails; isError: boolean }>;
+}
+
 /** One captured `before_agent_start` handler and the writes it caused. */
 interface TodoPiHarness {
 	pi: ExtensionAPI;
 	handlers: Map<string, (event: unknown, ctx: unknown) => unknown>;
 	appended: Array<{ customType: string; data: unknown }>;
 	emitted: Array<{ channel: string; payload: unknown }>;
+	/** The `todo` definition the tool registration handed over. */
+	readonly tool: TodoToolDefinition | null;
 }
 
 /** A fake pi that records handler registration, appends, and emits. */
@@ -489,12 +505,15 @@ function makeTodoPi(): TodoPiHarness {
 	const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
 	const appended: Array<{ customType: string; data: unknown }> = [];
 	const emitted: Array<{ channel: string; payload: unknown }> = [];
+	let captured: TodoToolDefinition | null = null;
 	const pi: Record<string, unknown> = {
 		on: (event: string, handler: (e: unknown, c: unknown) => unknown) => {
 			handlers.set(event, handler);
 			return () => {};
 		},
-		registerTool: () => {},
+		registerTool: (definition: unknown) => {
+			captured = definition as TodoToolDefinition;
+		},
 		appendEntry: (customType: string, data?: unknown) => {
 			appended.push({ customType, data });
 		},
@@ -505,7 +524,15 @@ function makeTodoPi(): TodoPiHarness {
 			},
 		},
 	};
-	return { pi: pi as unknown as ExtensionAPI, handlers, appended, emitted };
+	return {
+		pi: pi as unknown as ExtensionAPI,
+		handlers,
+		appended,
+		emitted,
+		get tool(): TodoToolDefinition | null {
+			return captured;
+		},
+	};
 }
 
 /** A fake context whose session branch is fixed. */
@@ -617,7 +644,8 @@ test("before_agent_start on an all-done list emits the marker with no todos", ()
 	});
 });
 
-test("before_agent_start does nothing in a child process", () => {
+test("before_agent_start does nothing in a child launch", () => {
+	// An in-process child shares this env; only an outer launch sets a parent id.
 	const original = process.env.PI_AGENT_PARENT_RUN_ID;
 	process.env.PI_AGENT_PARENT_RUN_ID = "parent";
 	try {
@@ -638,5 +666,74 @@ test("before_agent_start does nothing in a child process", () => {
 	} finally {
 		if (original === undefined) delete process.env.PI_AGENT_PARENT_RUN_ID;
 		else process.env.PI_AGENT_PARENT_RUN_ID = original;
+	}
+});
+
+// --- write target ------------------------------------------------------------
+
+/** A context for one session, so a case can see which list a write lands in. */
+function makeSessionCtxAt(sessionId: string, branch: unknown[] = []): ExtensionContext {
+	return {
+		sessionManager: { getBranch: () => branch, getSessionId: () => sessionId },
+	} as unknown as ExtensionContext;
+}
+
+/** The record fields a session-scope case needs. */
+function scopeStart(role: string, cls: "orchestrator" | "worker") {
+	return {
+		role,
+		class: cls,
+		source: "package" as const,
+		skills: [],
+		alwaysLoad: [],
+		sessionFile: null,
+		startedAt: 0,
+	};
+}
+
+// Only this case catches a child write that lands in the root list. The child
+// keeps the root role, so only the session id can separate the two lists.
+test("write target: a child writes its own list and leaves the root list alone", async () => {
+	const harness = makeTodoPi();
+	registerTodoTool(harness.pi);
+	const registry = new RunRegistry();
+	const rootId = "root-session";
+	const childId = "child-session";
+	registry.register(
+		newRunRecord({ ...scopeStart("orchestrator", "orchestrator"), sessionId: rootId, depth: 0, parentSessionId: null }),
+	);
+	registry.register(
+		newRunRecord({
+			...scopeStart("orchestrator", "orchestrator"),
+			sessionId: childId,
+			depth: 1,
+			parentSessionId: rootId,
+		}),
+	);
+	bindChildAskRegistry(registry);
+	try {
+		const root = makeSessionCtxAt(rootId);
+		const child = makeSessionCtxAt(childId);
+		const tool = harness.tool;
+		assert.ok(tool, "the tool registration hands over the todo definition");
+
+		await tool.execute("call-1", { action: "add", text: "root item" }, undefined, undefined, root);
+		await tool.execute("call-2", { action: "add", text: "child item" }, undefined, undefined, child);
+		const rootList = await tool.execute("call-3", { action: "list" }, undefined, undefined, root);
+		const childList = await tool.execute("call-4", { action: "list" }, undefined, undefined, child);
+
+		assert.deepEqual(
+			rootList.details.todos,
+			[{ id: "1", text: "root item", done: false }],
+			"the root list holds no child write",
+		);
+		assert.deepEqual(
+			childList.details.todos,
+			[{ id: "1", text: "child item", done: false }],
+			"the child list holds its own write",
+		);
+		assert.equal(harness.emitted.length, 1, "only the root write publishes a snapshot");
+	} finally {
+		bindChildAskRegistry(null);
 	}
 });

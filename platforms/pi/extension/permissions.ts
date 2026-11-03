@@ -58,7 +58,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 import {
 	discoverSkills,
 	matchSkills,
@@ -90,7 +90,9 @@ import {
 	renderPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
-import { childAskQueue, grantKey } from "./child-ask.ts";
+import { bindChildAskRegistry, childAskQueue, grantKey } from "./child-ask.ts";
+import { type ParentGateHandler, bindParentGate } from "./child-tools.ts";
+import { UNKNOWN_RUN_REASON, type RunRecord, type RunRegistry } from "./run-registry.ts";
 
 export { loadGlobalRules } from "./permission-config.ts";
 
@@ -251,6 +253,24 @@ export interface GateRuleSource {
 
 export type GateRuleSourceFactory = (agent: AgentConfig | null) => GateRuleSource;
 
+/** The agent fields the gate reads, for a child whose record names its own role. */
+const NO_AGENT: AgentConfig = { name: "", description: "", systemPrompt: "", source: "user", filePath: "" };
+
+/**
+ * The child agent. Its identity comes from the run record. A project child
+ * therefore keeps its own source and its own skill lists, never the root's.
+ */
+function childAgentOf(record: Readonly<RunRecord>): AgentConfig {
+	return {
+		...NO_AGENT,
+		name: record.role,
+		permissionClass: record.class,
+		source: record.source,
+		skills: record.skills,
+		alwaysLoad: record.alwaysLoad,
+	};
+}
+
 /** The session id of one tool call, or null when the context carries none. */
 function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } }): string | null {
 	return ctx.sessionManager?.getSessionId?.() ?? null;
@@ -306,31 +326,37 @@ export function compileGateSource(rows: readonly RuleRow[] = loadDefaultRows()):
 export function installPermissionGate(
 	pi: ExtensionAPI,
 	getActiveAgent: () => AgentConfig | null,
+	registry: RunRegistry,
 ): void {
 	const config = loadPermissionConfig();
-	installToolCallGate(pi, getActiveAgent, compileGateSource(config.rows), config.overlay);
+	installToolCallGate(pi, getActiveAgent, compileGateSource(config.rows), registry, config.overlay);
 }
 
 /**
  * Install the tool-call gate over one rule source and the global overlay. The
  * table entry point is `installPermissionGate`; this composition point exists so
  * a test can drive the real prompt and grant path with a fixture rule set.
+ *
+ * The run registry is required and bound here, so the gate never reads a bind
+ * that a caller forgot or reordered. A child call then resolves its own record.
  */
 export function installToolCallGate(
 	pi: ExtensionAPI,
 	getActiveAgent: () => AgentConfig | null,
 	source: GateRuleSourceFactory,
+	registry: RunRegistry,
 	overlay: OverlayRules = loadGlobalRules(),
 ): void {
+	bindChildAskRegistry(registry);
+
 	// The overlay is read once per factory run. /reload re-runs this factory (via
 	// the extension runner), which re-reads the file, so no per-call read is
 	// needed here.
 
-	// Session-scoped "always allow" memory, keyed by `agent|tool|ruleMatch`, created
-	// with this gate installation. In-memory only — nothing is written to disk, so
-	// an "Always allow (session)" choice never survives a restart or /reload (a
-	// persistent always-allow list is a separate decision). A key hit skips the
-	// prompt entirely on later calls.
+	// Session-scoped "always allow" memory, keyed by the grant key (session, role,
+	// tool, rule). In-memory only: nothing is written to disk, so an "Always
+	// allow (session)" choice never survives a restart or /reload (a persistent
+	// always-allow list is a separate decision). A key hit skips the prompt.
 	const sessionAllow = new Set<string>();
 
 	// Derived skill-script dirs, cached per (agent name, cwd). /reload re-runs
@@ -338,7 +364,14 @@ export function installToolCallGate(
 	// allow-list; no regex rule is appended to `agentAllow`.
 	let skillDirsCache: { key: string; dirs: string[] } | null = null;
 	const derivedSkillScriptDirs = (agent: AgentConfig, cwd: string): string[] => {
-		const key = `${agent.name}\u0000${cwd}`;
+		// The key names every field the derivation reads, so two sources for one role differ.
+		const key = [
+			agent.source,
+			agent.name,
+			cwd,
+			(agent.skills ?? []).join(","),
+			(agent.alwaysLoad ?? []).join(","),
+		].join("\u0000");
 		if (skillDirsCache?.key === key) return skillDirsCache.dirs;
 		const loaded = matchSkills(
 			[...(agent.skills ?? []), ...(agent.alwaysLoad ?? [])],
@@ -349,18 +382,37 @@ export function installToolCallGate(
 		return dirs;
 	};
 
-	pi.on("tool_call", async (event, ctx) => {
+	const gate = async (event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> => {
 		const toolName = event.toolName;
 		const input = (event.input ?? {}) as Record<string, unknown>;
 		if (toolName.startsWith("mcp__") || toolName.includes(".")) return undefined;
 
+		// A child answer must not cover its sibling or the root.
+		const sessionId = sessionIdOf(ctx);
+		const routing = childAskQueue();
+		if (routing && sessionId) routing.noteContext(sessionId, ctx);
+		const record = routing && sessionId ? routing.record(sessionId) : undefined;
+		// The depth comes from the registry walk, never from the record's own copy.
+		// A record that under-reports its depth must still reach the root queue.
+		const depth = routing && sessionId ? routing.depth(sessionId) : null;
+		// Assumption: a context with no session id is the root. pi always supplies
+		// one, so that fallback keeps its pre-child behaviour and stays unreachable.
+		// A bound registry with no record for the caller denies. The live root role
+		// must not cover an id the registry never saw.
+		if (routing && sessionId && !record) {
+			return { block: true, reason: UNKNOWN_RUN_REASON };
+		}
+		// The child agent comes from its own record, never from the root.
+		// A record at depth 0 is the root itself, so the root keeps its live agent.
+		const childRecord = depth === 0 ? undefined : record;
+		const agent: AgentConfig | null = childRecord ? childAgentOf(childRecord) : getActiveAgent();
+
 		// MCP and namespaced tools (mcp__context7__…, server.tool, …) are never
 		// gated by this regex gate — deliberate: they are research/read-only
 		// services or extension namespaces, and child subagents are already
-		// limited to their `tools:` loadout via `--tools`. The gate exists to
+		// limited to their `tools:` loadout. The gate exists to
 		// constrain bash/read/edit/write/etc. tool calls.
 		const probe = probeFor(toolName, input);
-		const agent = getActiveAgent();
 		const fromSource = source(agent);
 		const mode = fromSource.mode;
 		const isShell = toolName === "bash" || toolName === "powershell";
@@ -374,16 +426,8 @@ export function installToolCallGate(
 			agentAsk: fromSource.ruleSets.agentAsk,
 			agentAllow: fromSource.ruleSets.agentAllow,
 		};
-		// A child answer must not cover its sibling or the root, so the session id is
-		// part of the key. The child role comes from the record, never shared state.
-		const sessionId = sessionIdOf(ctx);
-		const routing = childAskQueue();
-		if (routing && sessionId) routing.noteContext(sessionId, ctx);
-		const record = routing && sessionId ? routing.record(sessionId) : undefined;
-		// The depth comes from the registry walk, never from the record's own copy:
-		// a record that under-reports its depth must still reach the root queue.
-		const depth = routing && sessionId ? routing.depth(sessionId) : null;
-		const grantRole = record?.role ?? agent?.name ?? "<none>";
+		// The root keeps its live role; a child keeps the role its record fixed at the build.
+		const grantRole = (depth === 0 ? undefined : record?.role) ?? agent?.name ?? "<none>";
 		const sessionKey = (match: string): string =>
 			grantKey(sessionId ?? "<none>", grantRole, toolName, match);
 		const isSessionAllowed = (rule: RawRule): boolean => sessionAllow.has(sessionKey(rule.match));
@@ -486,5 +530,9 @@ export function installToolCallGate(
 			}
 			return { block: true, reason: DENIED_BY_USER_REASON };
 		}
-	});
+	};
+	// A child tool wrapper asks this same handler, so one gate serves both sessions.
+	// SAFETY: the wrapper passes `{ toolName, input }`, the two fields this handler reads.
+	bindParentGate(gate as unknown as ParentGateHandler);
+	pi.on("tool_call", gate);
 }

@@ -29,6 +29,7 @@ import {
 	isAllowedSkillScript,
 } from "./permissions.ts";
 import { evaluateCommandRules, type Decision, type RawRule, type RuleSets } from "./command-segments.ts";
+import { RunRegistry } from "./run-registry.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const fixtureRoot = path.join(repoRoot, "platforms", "pi", "extension", "fixtures", "skill-scripts");
@@ -396,7 +397,7 @@ function installGateHandler(allow: PermissionRule[], deny: PermissionRule[] = []
 			agentAllow: allow,
 		},
 		mode: "deny-by-default",
-	}));
+	}), new RunRegistry());
 	assert.ok(captured, "the gate must register a tool_call handler");
 	return captured;
 }

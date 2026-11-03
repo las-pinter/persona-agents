@@ -46,14 +46,14 @@ let createdRootLog: string | null = null;
  * `/reload` re-runs the extension factory and fires `session_start` again, so
  * this function must be reload-safe. The run id and the log path come from the
  * environment of the previous life, so the log is inherited (never unlinked
- * here) and the root `start` is re-appended. A child always has a parent id and
- * must not create a root identity.
+ * here) and the root `start` is re-appended. A child runs in this process, so
+ * it shares this env and starts no log of its own.
  */
 function initTreeRoot(): void {
 	try {
 		if (rootRunId) return;
 		if (!isRootProcessEnv(process.env)) {
-			// Child process: the parent writes this run's records.
+			// An outer process marked this launch as a child, so it owns no root log.
 			return;
 		}
 
@@ -198,6 +198,8 @@ function appendRootClear(): void {
 import { registerCommands } from "./commands.ts";
 import { registerInspectorCommands } from "./inspector.ts";
 import { installPermissionGate } from "./permissions.ts";
+import { CHILD_ASK_TOOL, captureRegisteredTools, registerChildTool } from "./child-tools.ts";
+import { getRunRegistry, finishRootSession, registerRootSession } from "./subagent-run.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import {
 	discoverAgents,
@@ -231,6 +233,8 @@ const SETTING_SKILL_BODY_CAP = "skillBodyCapBytes";
  */
 function readByteSetting(pi: ExtensionAPI, key: string, fallback: number): number {
 	try {
+		// SAFETY: getSettings returns the settings JSON object; only the two budget
+		// keys below are read, and each value is type-checked before use.
 		const settings = pi.getSettings() as unknown as Record<string, unknown>;
 		const value = settings?.[key];
 		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return fallback;
@@ -259,7 +263,7 @@ function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } } |
 }
 
 export default function (pi: ExtensionAPI): void {
-	// A child build shares the parent loader; this factory must not re-apply defaults.
+	// A child build has no gate of its own, so this factory must not re-apply defaults.
 	if (inChildBuild()) {
 		debugLog("factory: child build, no second gate: the parent gate serves the child");
 		return;
@@ -267,24 +271,30 @@ export default function (pi: ExtensionAPI): void {
 	debugLog(`factory enter module=${MODULE_LOAD_ID} pid=${process.pid}`);
 
 	// 1. Permission gate on every tool call (the rule table plus the live overlay).
-	installPermissionGate(pi, getActiveAgent);
+	// It binds the run registry too, so a child ask reaches the root.
+	installPermissionGate(pi, getActiveAgent, getRunRegistry());
 
 	// 2. Slash commands.
 	registerCommands(pi);
 	registerInspectorCommands(pi);
 
-	// 3. Orchestrator tool (spawn-based subagents, isolated contexts).
-	registerSubagentTool(pi);
+	// 3. Orchestrator tool (single, parallel, chain over the child builder).
+	// The proxy keeps each definition, so a child loadout can name it.
+	const toolPi = captureRegisteredTools(pi);
+	registerSubagentTool(toolPi);
 
 	// 3b. Todo tool (session-entry state, feeds the TODOS sidebar panel).
 	// Guarded: a registration failure must never break the extension.
 	try {
-		registerTodoTool(pi);
+		registerTodoTool(toolPi);
 	} catch (error) {
 		debugLog("todo tool registration failed:", error instanceof Error ? error.message : String(error));
 	}
 
-	// 3c. Sidebar glue: compositor, data, commands, and lifecycle.
+	// 3c. The child ask tool. A child has no UI, so it returns its questions.
+	registerChildTool(CHILD_ASK_TOOL);
+
+	// 3d. Sidebar glue: compositor, data, commands, and lifecycle.
 	// Guarded: a registration failure must never break the extension.
 	try {
 		registerTreeUi(pi);
@@ -386,16 +396,23 @@ export default function (pi: ExtensionAPI): void {
 
 	pi.on("session_start", (_event, ctx) => {
 		// A child shares this module state. Its start must not rewrite the active role.
-		// The gate reads that one role for the parent and every child.
-		const skipDefaults = skipsDefaults(sessionIdOf(ctx));
+		// The gate reads the child's own role from its record. The root keeps this
+		// live role, because a root record sits at depth 0.
+		const sessionId = sessionIdOf(ctx);
+		const skipDefaults = skipsDefaults(sessionId);
 		debugLog("session_start cwd=", ctx.cwd, "skipDefaults=", skipDefaults);
 		if (!skipDefaults) applyDefaults(ctx.cwd);
+		// After the defaults, so the record names the role this session runs as.
+		if (!skipDefaults && sessionId) registerRootSession(sessionId, getActiveAgent());
 		initTreeRoot();
 		// A child has no footer of its own, so the footer shows the root status.
 		syncStatus(ctx);
 	});
 
-	pi.on("session_shutdown", (event) => {
+	pi.on("session_shutdown", (event, ctx) => {
+		// The root record closes here, so the retention sweep can reclaim it later.
+		const sessionId = sessionIdOf(ctx);
+		if (sessionId) finishRootSession(getRunRegistry(), sessionId, Date.now());
 		// Only a real process end writes the root `end`. On `/reload`, `new`,
 		// `resume`, or `fork` the process lives on and inherits the log; a stale
 		// root `end` would pin the sidebar spinner to done. A missing reason

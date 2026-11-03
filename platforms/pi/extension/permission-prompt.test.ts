@@ -35,6 +35,7 @@ import {
 } from "./permission-prompt.ts";
 import { installToolCallGate } from "./permissions.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
+import { RunRegistry } from "./run-registry.ts";
 
 const REASON = "orchestrator commit requires user approval";
 const REGEX = "(?:^|[;&|(\\n])\\s*git\\s+(push|pull)\\b";
@@ -554,7 +555,7 @@ function installGate(config: {
 			agentAllow: config.allow ?? [],
 		},
 		mode: config.mode,
-	}));
+	}), new RunRegistry());
 	assert.ok(captured, "the gate must register a tool_call handler");
 	return { handler: captured };
 }

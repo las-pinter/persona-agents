@@ -23,6 +23,9 @@ function record(sessionId: string, extra: Partial<RunStart> = {}): RunRecord {
 		sessionId,
 		role: "implementer",
 		class: "worker",
+		source: "package",
+		skills: [],
+		alwaysLoad: [],
 		depth: 0,
 		parentSessionId: null,
 		sessionFile: `/tmp/${sessionId}.json`,
@@ -56,6 +59,7 @@ test("a new record carries every field a run needs", () => {
 	const one = record("root");
 
 	assert.deepEqual(Object.keys(one).sort(), [
+		"alwaysLoad",
 		"class",
 		"depth",
 		"endedAt",
@@ -63,6 +67,8 @@ test("a new record carries every field a run needs", () => {
 		"role",
 		"sessionFile",
 		"sessionId",
+		"skills",
+		"source",
 		"startedAt",
 		"status",
 		"toolCount",
@@ -85,6 +91,9 @@ test("the compiler rejects a record with no session id", () => {
 	const fields: Omit<RunStart, "sessionId"> = {
 		role: "implementer",
 		class: "worker",
+		source: "package",
+		skills: [],
+		alwaysLoad: [],
 		depth: 0,
 		parentSessionId: null,
 		sessionFile: "/tmp/keyless.json",

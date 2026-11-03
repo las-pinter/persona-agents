@@ -17,7 +17,7 @@
  */
 
 import { canSpawn } from "./depth.ts";
-import type { PermissionClass } from "./resolver.ts";
+import type { AgentSource, PermissionClass } from "./resolver.ts";
 
 /** Retention window for a finished run: 14 days in milliseconds. */
 export const RUN_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -48,6 +48,12 @@ export interface RunRecord {
 	role: string;
 	/** The class the role belongs to. The gate maps one class to one rule set. */
 	class: PermissionClass;
+	/** The agent file source. Only a package file binds the role's notes zone. */
+	source: AgentSource;
+	/** The skills the agent may load. The gate derives script dirs from this list. */
+	skills: string[];
+	/** The always-load patterns. The gate derives script dirs from this list too. */
+	alwaysLoad: string[];
 	/** Hops from the root session. The parent walk recomputes it; this is a copy. */
 	depth: number;
 	/** The session that spawned this run, or null for a root. */
@@ -70,6 +76,9 @@ export interface RunStart {
 	sessionId: string;
 	role: string;
 	class: PermissionClass;
+	source: AgentSource;
+	skills: string[];
+	alwaysLoad: string[];
 	depth: number;
 	parentSessionId: string | null;
 	sessionFile: string | null;
@@ -126,6 +135,9 @@ export function newRunRecord(start: RunStart): RunRecord {
 		sessionId: start.sessionId,
 		role: start.role,
 		class: start.class,
+		source: start.source,
+		skills: [...start.skills],
+		alwaysLoad: [...start.alwaysLoad],
 		depth: start.depth,
 		parentSessionId: start.parentSessionId,
 		sessionFile: start.sessionFile,
@@ -244,7 +256,8 @@ export class RunRegistry {
 	 * The records a retention sweep may delete at `now`.
 	 *
 	 * Age counts from the last write of the run, so a fresh record survives. A
-	 * running record never qualifies, because its file is still in use.
+	 * running record never qualifies, because its file is still in use. A root
+	 * record closes at session shutdown, so it becomes eligible too.
 	 */
 	sweepable(now: number): Readonly<RunRecord>[] {
 		const eligible: Readonly<RunRecord>[] = [];

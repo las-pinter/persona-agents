@@ -1,9 +1,8 @@
 /**
  * Agent nesting depth — pure helpers.
  *
- * Depth is carried to a child through the environment (`PI_AGENT_DEPTH`) and
- * enforced by the parent's `--tools` strip plus a child self-guard. The env is
- * a carrier, not a boundary.
+ * A child runs in this process, so its depth comes from the run record walk.
+ * The process env carries the depth of a launch that an outer process started.
  *
  * No pi import: this module is pure so `depth.test.ts` needs no runtime.
  */
@@ -23,9 +22,10 @@ export const ENV_TREE_LOG = "PI_AGENT_TREE_LOG";
 /**
  * True when `env` belongs to a root process.
  *
- * A child always receives `PI_AGENT_PARENT_RUN_ID` from `buildChildEnv`; the
- * root never has it. Do not test `PI_AGENT_RUN_ID`: the root sets it on its
- * own env, and it survives `/reload` when module state resets.
+ * An in-process child shares this env, so no spawn sets the parent run id here.
+ * Only an outer launch sets it, and that launch, not this one, owns the log. Do
+ * not test `PI_AGENT_RUN_ID`: the root sets it on its own env, and it survives
+ * `/reload` when module state resets.
  */
 export function isRootProcessEnv(env: NodeJS.ProcessEnv): boolean {
 	return !env[ENV_PARENT_RUN_ID];
@@ -85,28 +85,10 @@ export function planSpawn(myDepth: number, tools: string[]): SpawnPlan {
 	};
 }
 
-/**
- * The argv fragment for a child's locked tool set.
- *
- * An empty request means "no override". A non-empty request that strips to
- * empty passes `--no-tools`; an absent `--tools` would re-enable pi defaults.
- */
-export function childToolArgs(requestedTools: string[], myDepth: number): string[] {
-	if (requestedTools.length === 0) return [];
-	const tools = stripSpawnTool(requestedTools, myDepth);
-	if (tools.length === 0) return ["--no-tools"];
-	return ["--tools", tools.join(",")];
-}
-
 let runCounter = 0;
 
-/** A unique run id for one spawned agent process. */
+/** A unique run id for one agent run in this process. */
 export function newRunId(): string {
 	runCounter += 1;
 	return `${process.pid}-${runCounter}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Env fragment that carries the child depth for a spawn from `depth`. */
-export function depthEnv(depth: number): { PI_AGENT_DEPTH: string } {
-	return { [ENV_AGENT_DEPTH]: String(childDepth(depth)) };
 }
