@@ -10,6 +10,9 @@
  * child id, so the extension factory skips the defaults on the child start. It
  * drops that id and disposes the session when the caller exits. A later parent
  * abort only aborts the child, and the builder forwards the signal.
+ *
+ * The builder reads the caller depth from the record walk. A caller at the cap
+ * gets a refusal, so the build creates no session and no record.
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -31,7 +34,9 @@ import {
 	type RunStart,
 	newRunRecord,
 } from "./run-registry.ts";
+import { wildcardChildTools, wildcardLoadoutReason } from "./child-tools.ts";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
+import { DEPTH_CAP_REASON, MAX_AGENT_DEPTH, canSpawn, stripSpawnTool } from "./depth.ts";
 
 /** The reason a build raises when the parent aborted before the child ran. */
 export const CHILD_ABORTED_REASON = "Child session aborted: the parent signal fired before the run started";
@@ -43,6 +48,26 @@ export const CHILD_ABORTED_ERROR_NAME = "ChildSessionAborted";
 export function childAbortedError(): Error {
 	const error = new Error(CHILD_ABORTED_REASON);
 	error.name = CHILD_ABORTED_ERROR_NAME;
+	return error;
+}
+
+/** The reason a build raises when the caller sits at the spawn cap. */
+export const CHILD_DEPTH_CAP_ERROR_NAME = "ChildSessionDepthCap";
+
+/** Build the cap refusal. The name tells a refusal from a failed build. */
+export function childDepthCapError(): Error {
+	const error = new Error(DEPTH_CAP_REASON);
+	error.name = CHILD_DEPTH_CAP_ERROR_NAME;
+	return error;
+}
+
+/** The reason a build raises when the loadout names a wildcard. */
+export const CHILD_WILDCARD_ERROR_NAME = "ChildSessionWildcardLoadout";
+
+/** Build the wildcard refusal. The name tells a refusal from a failed build. */
+export function childWildcardLoadoutError(entries: readonly string[]): Error {
+	const error = new Error(wildcardLoadoutReason(entries));
+	error.name = CHILD_WILDCARD_ERROR_NAME;
 	return error;
 }
 
@@ -100,9 +125,13 @@ export type ChildTool = NonNullable<SessionOptions["customTools"]>[number];
 /** The thinking level the caller resolved. pi clamps it to the model. */
 export type ChildThinking = SessionOptions["thinkingLevel"];
 
-/** The resolved child loadout. The caller owns resolution and the depth strip. */
+/**
+ * The resolved child loadout. The caller owns resolution; the builder owns the
+ * depth strip. The caller checks the tool names; the builder checks the depth
+ * and the wildcard.
+ */
 export interface ChildLoadout {
-	/** The frontmatter tool allowlist, with the spawn tool removed at the cap. */
+	/** The frontmatter tool allowlist. The builder removes the spawn tool at the cap. */
 	tools: string[];
 	/** In-process tools the loadout names, for example `todo`. */
 	customTools: ChildTool[];
@@ -160,13 +189,28 @@ export async function buildChildSession(input: BuildChildInput): Promise<BuiltCh
 	const { loadout, parent, start, sessionManager, registry } = input;
 	const createSession = input.createSession ?? createAgentSession;
 
+	// The caller depth comes from the record walk; the start depth is only a copy.
+	const parentId = start.parentSessionId;
+	const callerWalk = parentId === null ? null : registry.walk(parentId);
+	if (callerWalk?.ok && !canSpawn(callerWalk.depth)) {
+		throw childDepthCapError();
+	}
+	// This falls back to the cap, not the process depth, so a broken chain still strips.
+	const callerDepth = callerWalk?.ok ? callerWalk.depth : MAX_AGENT_DEPTH;
+
+	// A direct caller exists, so the wildcard fence sits here too.
+	const wildcards = wildcardChildTools(loadout.tools);
+	if (wildcards.length > 0) {
+		throw childWildcardLoadoutError(wildcards);
+	}
+
 	// The nine build fields. The five absent fields stay absent on purpose.
 	const options: SessionOptions = {
 		cwd: parent.cwd,
 		agentDir: input.agentDir ?? getAgentDir(),
 		model: loadout.model,
 		thinkingLevel: loadout.thinkingLevel,
-		tools: loadout.tools,
+		tools: stripSpawnTool(loadout.tools, callerDepth),
 		customTools: loadout.customTools,
 		resourceLoader: parent.loader,
 		sessionManager,

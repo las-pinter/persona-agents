@@ -10,6 +10,12 @@
 /** Maximum nesting depth: levels 0, 1, 2. A level-2 agent may not spawn. */
 export const MAX_AGENT_DEPTH = 2;
 
+/** The refusal text for a spawn at the cap. One text serves every caller. */
+export const DEPTH_CAP_REASON = `Depth cap reached (level ${MAX_AGENT_DEPTH}): subagents cannot spawn further subagents.`;
+
+/** The spawn tool name. The registration and the strip both read it. */
+export const SPAWN_TOOL_NAME = "subagent";
+
 /** Env var for the agent nesting depth. */
 export const ENV_AGENT_DEPTH = "PI_AGENT_DEPTH";
 /** Env var for a run's own run id. */
@@ -52,12 +58,12 @@ export function childDepth(depth: number): number {
 }
 
 /**
- * Remove the `subagent` tool when the child would sit at or above the cap.
+ * Remove the spawn tool when the child would sit at or above the cap.
  * Returns a new array; never mutates the input.
  */
 export function stripSpawnTool(tools: string[], depth: number): string[] {
 	if (childDepth(depth) >= MAX_AGENT_DEPTH) {
-		return tools.filter((tool) => tool !== "subagent");
+		return tools.filter((tool) => tool !== SPAWN_TOOL_NAME);
 	}
 	return tools.slice();
 }
@@ -71,7 +77,7 @@ export interface SpawnPlan {
 
 /**
  * Plan a spawn from `myDepth` with `tools`. At the cap the spawn is refused and
- * the tools are unchanged. Otherwise the child depth is set and `subagent` is
+ * the tools are unchanged. Otherwise the child depth is set and the spawn tool is
  * stripped when the child would be at the cap.
  */
 export function planSpawn(myDepth: number, tools: string[]): SpawnPlan {

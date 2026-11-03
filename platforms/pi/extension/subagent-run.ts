@@ -34,7 +34,7 @@ import {
 	wrapChildTools,
 } from "./child-tools.ts";
 import { childRoleText, childTaskPrompt } from "./child-prompt.ts";
-import { ENV_AGENT_DEPTH, MAX_AGENT_DEPTH, canSpawn, newRunId, parseDepth, planSpawn } from "./depth.ts";
+import { DEPTH_CAP_REASON, ENV_AGENT_DEPTH, canSpawn, newRunId, parseDepth, planSpawn } from "./depth.ts";
 import { createSubagentMcpCounter } from "./mcp-usage.ts";
 import { RunRegistry, UNKNOWN_RUN_ROLE, newRunRecord, type RunRegistry as RegistryType } from "./run-registry.ts";
 import { type AgentConfig, type PersonaConfig, discoverSkills, formatPersonaId, matchSkills } from "./resolver.ts";
@@ -247,7 +247,7 @@ export async function runSingleAgent(
 			agent.source,
 			task,
 			step,
-			`Depth cap reached (level ${MAX_AGENT_DEPTH}): subagents cannot spawn further subagents.`,
+			DEPTH_CAP_REASON,
 		);
 	}
 	// A resolved agent whose frontmatter sets `spawnable: false` runs as the main

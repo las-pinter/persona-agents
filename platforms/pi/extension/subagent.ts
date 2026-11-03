@@ -24,6 +24,7 @@ import {
 	resolvePersonaForAgent,
 } from "./resolver.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
+import { SPAWN_TOOL_NAME } from "./depth.ts";
 import { archiveRun } from "./inspector.ts";
 import {
 	type SingleResult,
@@ -266,7 +267,7 @@ export {
 export { type SingleResult, toInspectTask } from "./subagent-result.ts";
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
-		name: "subagent",
+		name: SPAWN_TOOL_NAME,
 		label: "Subagent",
 		description: `Delegate tasks to specialized subagents with isolated context. Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder). Default agent scope is "user" (from ${path.join(getAgentDir(), "agents")}). To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project"). Agent names also accept theme-profession aliases (e.g. goblin-mascot = mascot with the goblin persona).`,
 		parameters: SubagentParams,

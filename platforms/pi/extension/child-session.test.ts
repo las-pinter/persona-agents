@@ -20,6 +20,8 @@ import type {
 import {
 	CHILD_ABORTED_ERROR_NAME,
 	CHILD_ABORTED_REASON,
+	CHILD_DEPTH_CAP_ERROR_NAME,
+	CHILD_WILDCARD_ERROR_NAME,
 	type BuildChildInput,
 	type ChildLoadout,
 	type ChildModel,
@@ -29,9 +31,9 @@ import {
 	withChildBuild,
 } from "./child-session.ts";
 import extension from "./extension.ts";
-import { ENV_PARENT_RUN_ID } from "./depth.ts";
+import { DEPTH_CAP_REASON, ENV_PARENT_RUN_ID } from "./depth.ts";
 import type { AgentConfig } from "./resolver.ts";
-import { RunRegistry, type RunStart } from "./run-registry.ts";
+import { RunRegistry, type RunStart, newRunRecord } from "./run-registry.ts";
 import { getActiveAgent, setActiveAgent, setActivePersona } from "./state.ts";
 
 /** The nine build fields, sorted. */
@@ -120,6 +122,33 @@ function setup(options: SetupOptions = {}): Setup {
 		agentDir: AGENT_DIR,
 	};
 	return { input, seen, counters, loader, settingsManager, sessionManager, loadout, registry };
+}
+
+/** The record fields a caller chain shares. Only the id, depth, and parent change. */
+const CHAIN_START: RunStart = {
+	sessionId: "caller-0",
+	role: "orchestrator",
+	class: "orchestrator",
+	source: "package",
+	skills: [],
+	alwaysLoad: [],
+	depth: 0,
+	parentSessionId: null,
+	sessionFile: null,
+	startedAt: 1000,
+};
+
+/**
+ * Register a caller chain in `registry`: a root at depth 0 and `callerId` at
+ * `callerDepth`. A later record walks to the root, so the walk answers the depth.
+ */
+function registerCallerChain(registry: RunRegistry, callerId: string, callerDepth: number): void {
+	let parentSessionId: string | null = null;
+	for (let depth = 0; depth <= callerDepth; depth += 1) {
+		const id = depth === callerDepth ? callerId : `caller-${depth}`;
+		registry.register(newRunRecord({ ...CHAIN_START, sessionId: id, depth, parentSessionId }));
+		parentSessionId = id;
+	}
 }
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
@@ -224,7 +253,7 @@ test("build: passes the nine fields and leaves the five absent", async () => {
 	assert.equal(options.agentDir, AGENT_DIR);
 	assert.equal(options.model, s.loadout.model);
 	assert.equal(options.thinkingLevel, "medium");
-	assert.equal(options.tools, s.loadout.tools);
+	assert.deepEqual(options.tools, s.loadout.tools);
 	assert.equal(options.customTools, s.loadout.customTools);
 	assert.equal(options.resourceLoader, s.loader);
 	assert.equal(options.sessionManager, s.sessionManager);
@@ -280,6 +309,81 @@ test("guard: a clear guard installs the gate, the flags, and the start handler",
 	assert.ok(fake.calls.includes("flag:persona"), "the defaults path registers the persona flag");
 	assert.ok(fake.calls.includes("on:tool_call"), "the gate is installed");
 	assert.ok(fake.calls.includes("on:session_start"), "session start is watched");
+});
+
+test("depth: a caller at the cap is refused and no record or session is made", async () => {
+	const s = setup();
+	registerCallerChain(s.registry, "root-session", 2);
+	const before = s.registry.size;
+
+	await assert.rejects(buildChildSession(s.input), (error: unknown) => {
+		assert.equal((error as Error).name, CHILD_DEPTH_CAP_ERROR_NAME, "the name tells a refusal from a failure");
+		assert.equal((error as Error).message, DEPTH_CAP_REASON, "the caller sees the cap text");
+		return true;
+	});
+
+	assert.equal(s.seen.length, 0, "the factory is never called");
+	assert.equal(s.registry.size, before, "the registry gains no record");
+	assert.equal(s.registry.get("child-one"), undefined, "the child id holds no record");
+});
+
+test("depth: a caller below the cap builds a child with no spawn tool", async () => {
+	const s = setup();
+	registerCallerChain(s.registry, "root-session", 1);
+	const input: BuildChildInput = {
+		...s.input,
+		loadout: { ...s.loadout, tools: ["read", "subagent"] },
+	};
+
+	await buildChildSession(input);
+
+	assert.deepEqual(s.seen[0]?.tools, ["read"], "the child at the cap cannot spawn");
+});
+
+test("depth: the caller depth comes from the record walk, not the start depth", async () => {
+	const s = setup();
+	// The start record claims depth 0, but the registry puts the caller at the cap.
+	registerCallerChain(s.registry, "root-session", 2);
+	const input: BuildChildInput = { ...s.input, start: { ...s.input.start, depth: 0 } };
+
+	await assert.rejects(buildChildSession(input), (error: unknown) => {
+		assert.equal((error as Error).message, DEPTH_CAP_REASON, "the walk wins over the start depth");
+		return true;
+	});
+
+	assert.equal(s.seen.length, 0, "a wrong start depth cannot force a build");
+	assert.equal(s.registry.get("child-one"), undefined, "the refused build leaves no record");
+});
+
+test("depth: a walk that cannot resolve the parent strips the spawn tool", async () => {
+	// No caller record exists, so the walk fails and the fallback must stay closed.
+	const s = setup({ sessionId: "child-walk" });
+	const input: BuildChildInput = {
+		...s.input,
+		loadout: { ...s.loadout, tools: ["read", "subagent"] },
+	};
+
+	const built = await buildChildSession(input);
+
+	assert.deepEqual(s.seen[0]?.tools, ["read"], "a broken chain still strips the spawn tool");
+	built.dispose("done");
+});
+
+test("wildcard: a loadout that names a wildcard is refused before the build", async () => {
+	const s = setup({ sessionId: "child-wild" });
+	const input: BuildChildInput = {
+		...s.input,
+		loadout: { ...s.loadout, tools: ["read", "read*"] },
+	};
+
+	await assert.rejects(buildChildSession(input), (error: unknown) => {
+		assert.equal((error as Error).name, CHILD_WILDCARD_ERROR_NAME, "the name tells a refusal from a failure");
+
+		return /names a wildcard/.test((error as Error).message);
+	});
+
+	assert.equal(s.seen.length, 0, "a wildcard loadout builds no session");
+	assert.equal(s.registry.get("child-wild"), undefined, "the refusal writes no record");
 });
 
 test("dispose: a successful build disposes once and a second dispose does nothing", async () => {
