@@ -60,6 +60,10 @@ export interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
+	/** The turn cap in force for the run, read from the call. */
+	maxTurns?: number;
+	/** True when the cap ended the run by aborting it after the grace turns. */
+	turnsCapped?: boolean;
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;

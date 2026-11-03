@@ -7,6 +7,7 @@
 
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
+import { DEFAULT_MAX_TURNS, MAX_MAX_TURNS, MIN_MAX_TURNS } from "./turn-cap.ts";
 
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
@@ -35,4 +36,9 @@ export const SubagentParams = Type.Object({
 		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
 	),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
+	maxTurns: Type.Optional(
+		Type.Number({
+			description: `Turn cap for each child run: a whole number from ${MIN_MAX_TURNS} to ${MAX_MAX_TURNS}. Default: ${DEFAULT_MAX_TURNS}. A value outside the range is refused before the run.`,
+		}),
+	),
 });

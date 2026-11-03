@@ -48,6 +48,7 @@ import {
 	isFailedResult,
 } from "./subagent-result.ts";
 import { makeThinkingEventHandler, reduceThinking } from "./subagent-thinking.ts";
+import { TURN_CAP_STEER, resolveMaxTurns, turnCapAction } from "./turn-cap.ts";
 import {
 	TREE_OUTPUT_PREVIEW_BYTES,
 	TREE_TASK_PREVIEW_BYTES,
@@ -218,6 +219,7 @@ export async function runSingleAgent(
 	task: string,
 	cwd: string | undefined,
 	step: number | undefined,
+	maxTurns: number | undefined,
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
@@ -234,6 +236,12 @@ export async function runSingleAgent(
 			`Unknown agent: "${agentName}". Available agents: ${available}.`,
 		);
 	}
+	// The cap comes from the call on every run. A bad value refuses before the build.
+	const cap = resolveMaxTurns(maxTurns);
+	if (!cap.ok) {
+		return failureResult(agentName, agent.source, task, step, cap.error);
+	}
+	const maxTurnLimit = cap.maxTurns;
 	// A child needs a parent id, or its record walks to depth 0 as the root.
 	if (!deps.runtime.parentSessionId) {
 		return failureResult(agentName, agent.source, task, step, NO_PARENT_SESSION_REASON);
@@ -299,6 +307,8 @@ export async function runSingleAgent(
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model: agent.model ?? deps.defaults.model,
 		step,
+		maxTurns: maxTurnLimit,
+		turnsCapped: false,
 		runStartedAt: Date.now(),
 		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
 	};
@@ -365,6 +375,9 @@ export async function runSingleAgent(
 	);
 	emitTree("start", { status: "running", task: truncateUtf8(task, TREE_TASK_PREVIEW_BYTES) });
 	let built: BuiltChild | null = null;
+	// One steer, then the grace window, then one abort. The flags live per round.
+	let steered = false;
+	let capAborted = false;
 	try {
 		const prepared = await (deps.runtime.prepare ?? prepareChildRuntime)(childCwd);
 		// A child loads no extension, so its role text travels in the prompt.
@@ -400,12 +413,37 @@ export async function runSingleAgent(
 			registry: deps.runtime.registry,
 			createSession: deps.runtime.createSession,
 		});
+		const child = built;
+		// The registry count and usage.turns move together, once per assistant end.
+		const onAssistantTurn = (turns: number): void => {
+			deps.runtime.registry.addTurn(child.record.sessionId);
+			if (capAborted) return;
+			const action = turnCapAction(turns, maxTurnLimit, steered);
+			if (action === "steer") {
+				steered = true;
+				// A rejected steer must not escape the event callback.
+				child.session.steer(TURN_CAP_STEER).catch(() => {});
+				return;
+			}
+			if (action === "abort") {
+				capAborted = true;
+				currentResult.turnsCapped = true;
+				child.session.abort().catch(() => {});
+			}
+		};
 
 		const unsubscribe = built.session.subscribe((event) => {
-			bytesOut += foldEvent(event, currentResult, (e) => mcp.count(e), handleThinkingEvent, () => {
-				emitUpdate();
-				emitTreeUpdate();
-			});
+			bytesOut += foldEvent(
+				event,
+				currentResult,
+				(e) => mcp.count(e),
+				handleThinkingEvent,
+				() => {
+					emitUpdate();
+					emitTreeUpdate();
+				},
+				onAssistantTurn,
+			);
 		});
 		let promptError: string | null = null;
 		try {
@@ -417,6 +455,12 @@ export async function runSingleAgent(
 		}
 
 		if (promptError) currentResult.errorMessage = promptError;
+		// The cap ended this run, so the caller reads a capped result, not a clean one.
+		if (currentResult.turnsCapped) {
+			currentResult.exitCode = 1;
+			currentResult.stopReason = "aborted";
+			return currentResult;
+		}
 		if (signal?.aborted) {
 			currentResult.exitCode = 1;
 			currentResult.stopReason = "aborted";

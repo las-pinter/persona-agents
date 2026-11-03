@@ -15,6 +15,7 @@ import type { SingleResult } from "./subagent-result.ts";
 /**
  * Fold one child session event into the running result. Returns the bytes the
  * event would have written, which the tree log reports as output size.
+ * `onAssistantTurn` runs once per assistant message end, with the new turn count.
  */
 export function foldEvent(
 	event: unknown,
@@ -22,6 +23,7 @@ export function foldEvent(
 	count: (event: unknown) => void,
 	onThinkingEvent: (eventType: ThinkingEventType) => void,
 	onMessage: () => void,
+	onAssistantTurn?: (turns: number) => void,
 ): number {
 	const typed = event as { type?: string; message?: Message; assistantMessageEvent?: { type?: string } };
 	count(event);
@@ -33,6 +35,7 @@ export function foldEvent(
 	result.messages.push(msg);
 	if (msg.role === "assistant") {
 		result.usage.turns++;
+		onAssistantTurn?.(result.usage.turns);
 		const usage = msg.usage;
 		if (usage) {
 			result.usage.input += usage.input || 0;

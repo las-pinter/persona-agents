@@ -45,6 +45,7 @@ import {
 } from "./subagent-run.ts";
 import { renderSubagentCall, renderSubagentResult } from "./subagent-render.ts";
 import { SubagentParams } from "./subagent-schema.ts";
+import { cappedTurnText } from "./turn-cap.ts";
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 /** One step of a chain or parallel call. */
@@ -58,6 +59,8 @@ export interface ModeRun {
 	deps: DispatchDeps;
 	signal: AbortSignal | undefined;
 	onUpdate: OnUpdateCallback | undefined;
+	/** The turn cap the call names. Absent means the default. */
+	maxTurns?: number;
 	makeDetails: (mode: "single" | "parallel" | "chain") => (results: SingleResult[]) => SubagentDetails;
 	/** Writes a finished run to the inspector archive. Absent in a test. */
 	archive?: (mode: "chain" | "parallel" | "single", results: SingleResult[]) => void;
@@ -111,16 +114,18 @@ export async function runChainMode(
 			taskWithContext,
 			step.cwd,
 			i + 1,
+			mode.maxTurns,
 			mode.signal,
 			chainUpdate,
 			mode.makeDetails("chain"),
 		);
 		results.push(result);
 		if (isFailedResult(result)) {
-			const errorMsg = getResultOutput(result);
+			const errorMsg = failureBody(result);
+			const capped = cappedOutputPrefix(result);
 			return {
 				content: [
-					{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` },
+					{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${capped}${errorMsg}` },
 				],
 				details: mode.makeDetails("chain")(results),
 				isError: true,
@@ -176,6 +181,7 @@ export async function runParallelMode(
 			task.task,
 			task.cwd,
 			undefined,
+			mode.maxTurns,
 			mode.signal,
 			(partial) => {
 				const current = partial.details?.results[0];
@@ -192,11 +198,11 @@ export async function runParallelMode(
 
 	const successCount = results.filter((r) => !isFailedResult(r)).length;
 	const summaries = results.map((r) => {
-		const output = truncateParallelOutput(getResultOutput(r));
+		const output = truncateParallelOutput(failureBody(r));
 		const status = isFailedResult(r)
 			? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
 			: "completed";
-		return `### [${r.agent}] ${status}\n\n${output}`;
+		return `### [${r.agent}] ${status}\n\n${cappedOutputPrefix(r)}${output}`;
 	});
 	mode.archive?.("parallel", results);
 	return {
@@ -208,6 +214,21 @@ export async function runParallelMode(
 		],
 		details: mode.makeDetails("parallel")(results),
 	};
+}
+
+/** The cap line a caller reads before a capped run's partial output, or empty. */
+function cappedOutputPrefix(result: SingleResult): string {
+	return result.turnsCapped && result.maxTurns !== undefined
+		? `${cappedTurnText(result.usage.turns, result.maxTurns)}\n\n`
+		: "";
+}
+
+/**
+ * The body a caller reads for one result. A capped run keeps its final
+ * assistant text, because its error text is the cap abort, not the run's work.
+ */
+function failureBody(result: SingleResult): string {
+	return result.turnsCapped ? getFinalOutput(result.messages) || "(no output)" : getResultOutput(result);
 }
 
 /** Single mode: run one agent and return its output. */
@@ -223,10 +244,24 @@ export async function runSingleMode(
 		task,
 		cwd,
 		undefined,
+		mode.maxTurns,
 		mode.signal,
 		mode.onUpdate,
 		mode.makeDetails("single"),
 	);
+	if (result.turnsCapped && result.maxTurns !== undefined) {
+		// A capped run keeps its partial text, with the cap line first.
+		return {
+			content: [
+				{
+					type: "text",
+					text: `${cappedTurnText(result.usage.turns, result.maxTurns)}\n\n${getFinalOutput(result.messages) || "(no output)"}`,
+				},
+			],
+			details: mode.makeDetails("single")([result]),
+			isError: true,
+		};
+	}
 	if (isFailedResult(result)) {
 		const errorMsg = getResultOutput(result);
 		return {
@@ -341,6 +376,7 @@ export default function (pi: ExtensionAPI) {
 				},
 				signal,
 				onUpdate,
+				maxTurns: params.maxTurns,
 				makeDetails,
 				archive,
 			};
