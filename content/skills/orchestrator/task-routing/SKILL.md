@@ -102,8 +102,8 @@ Fix the brief, not the round count.
 - Every fresh agent gets a short brief: the goal, the current state (the files
   and the last commit or the uncommitted diff), the decisions already made, and
   the open findings. Do not paste earlier transcripts.
-- Write large command output to a temporary file. Pass the path, not the
-  content.
+- Write large command output to a flat file under `/tmp`. Pass the path, not
+  the content.
 - The reuse limit in this section governs subagent reuse. The limit on review
   rounds lives in **code-review-checklist** under `## Fix Batching`.
 
@@ -113,7 +113,16 @@ Fix the brief, not the round count.
 
 - Name the reference source line in every implementer brief before the first draft.
 - Quote that exact line in the brief, within the metacharacter limit below.
-- Require absolute paths and `git -C` in every code-touching brief.
+- In every code-touching brief, give a file tool inside the repository a
+  repository-relative path that carries no parent segment. Only that form
+  allows on every engine. Give a git call the `git -C` option and an absolute
+  path.
+- A file-tool path inside the repository that is absolute, or that holds a
+  parent segment, asks on pi. An ask from a subagent can time out. The pi
+  package README owns the path forms of the pi gate.
+- Before dispatch, read the brief once. Replace every file-tool path inside the
+  repository that is absolute or that holds a parent segment with a
+  repository-relative path that carries no parent segment.
 - Forbid `cd` into the repo in every code-touching brief.
 - Before dispatch, check the brief and every command in it for shell metacharacters.
   On pi, the gate denies a greater-than sign that writes a file; other engines
