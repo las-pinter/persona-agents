@@ -301,8 +301,22 @@ export async function renderPermissionPrompt(
 ): Promise<PermissionChoice> {
 	if (ctx.mode === "tui") {
 		const mod = await import("@earendil-works/pi-tui");
-		const chosen = await ctx.ui.custom<PermissionChoice>(
+		let mountedTui: TUI | undefined;
+		// The mount requests a render with the cached frame, so the overlay is not
+		// drawn. A forced render resets that frame and draws the panel.
+		const paintOnce = (): void => {
+			const target = mountedTui;
+			if (!target) return;
+			try {
+				target.renderNow(true);
+			} catch (error) {
+				// The paint is cosmetic, so a failed paint must not fail the ask.
+				console.warn(`agent-stack: forced paint failed: ${(error as Error).message}`);
+			}
+		};
+		const mounted = ctx.ui.custom<PermissionChoice>(
 			(tui, theme, _keybindings, done) => {
+				mountedTui = tui;
 				const panel = createPermissionPanel(model, tui, theme, mod, done);
 				// An aborted ask closes the panel and denies, so no stale prompt stays.
 				if (signal) {
@@ -314,8 +328,12 @@ export async function renderPermissionPrompt(
 			{
 				overlay: true,
 				overlayOptions: { width: "80%", maxHeight: "100%", anchor: "center", margin: { top: 1 } },
+				// The host calls this right after it pushes the overlay, so one forced
+				// paint here lands on a mounted panel. A closed prompt never gets here.
+				onHandle: paintOnce,
 			},
 		);
+		const chosen = await mounted;
 		return chosen ?? "deny";
 	}
 
