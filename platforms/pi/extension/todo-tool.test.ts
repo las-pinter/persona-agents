@@ -22,8 +22,7 @@ import {
 	type TodoSessionEntry,
 	type TodoState,
 } from "./todo-tool.ts";
-import { bindChildAskRegistry } from "./child-ask.ts";
-import { RunRegistry, newRunRecord } from "./run-registry.ts";
+import { RunRegistry, bindRunRegistry, newRunRecord } from "./run-registry.ts";
 
 /** Apply one operation and give back the next state and the result. */
 function run(state: TodoState, input: Parameters<typeof applyTodoOperation>[1]) {
@@ -710,7 +709,7 @@ test("write target: a child writes its own list and leaves the root list alone",
 			parentSessionId: rootId,
 		}),
 	);
-	bindChildAskRegistry(registry);
+	bindRunRegistry(registry);
 	try {
 		const root = makeSessionCtxAt(rootId);
 		const child = makeSessionCtxAt(childId);
@@ -734,6 +733,6 @@ test("write target: a child writes its own list and leaves the root list alone",
 		);
 		assert.equal(harness.emitted.length, 1, "only the root write publishes a snapshot");
 	} finally {
-		bindChildAskRegistry(null);
+		bindRunRegistry(null);
 	}
 });

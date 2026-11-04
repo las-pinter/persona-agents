@@ -279,3 +279,21 @@ export class RunRegistry {
 		return this.records.size;
 	}
 }
+
+/** The registry the installed gate bound, or null before an install. */
+let boundRegistry: RunRegistry | null = null;
+
+/** Bind the registry the gate installed over, so a reader without the gate sees it. */
+export function bindRunRegistry(registry: RunRegistry | null): void {
+	boundRegistry = registry;
+}
+
+/**
+ * The walked depth of one session from the bound registry, or null when no
+ * registry is bound or the walk stops short. A caller uses it to tell a child
+ * session from the root without holding the registry itself.
+ */
+export function sessionDepthOf(sessionId: string): number | null {
+	const walk = boundRegistry?.walk(sessionId);
+	return walk !== undefined && walk.ok ? walk.depth : null;
+}

@@ -4,12 +4,13 @@
  * A child session loads no extension, so no `tool_call` handler runs inside it.
  * Each loadout name is registered as a custom tool that asks the parent gate
  * with the child context, then runs the tool it wraps. The gate is the parent's
- * own handler, so the verdict order, the session allow memory, and the ask
- * queue are the ones the root uses.
+ * own handler, so the verdict order and the session allow memory are the ones
+ * the root uses.
  *
- * An ask in a child goes to the parent queue (`child-ask.ts`). The gate reads
- * the child session id from the passed context. A wrapper with no bound gate
- * blocks, so it never runs ungated.
+ * An ask in a child is a denial at once (`permissions.ts` owns the reason). A
+ * child has no UI, so no prompt can mount for it. The gate reads the child
+ * session id from the passed context. A wrapper with no bound gate blocks, so
+ * it never runs ungated.
  *
  * The wrapper list must equal the child loadout. A name outside the list has no
  * wrapper, so nothing would gate it. `assertWrapperListEquals` fails that build.

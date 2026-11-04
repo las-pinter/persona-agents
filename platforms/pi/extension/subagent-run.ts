@@ -165,8 +165,8 @@ export async function prepareChildRuntime(
 
 /**
  * Register the root session record. A child walk needs it to reach depth 0, and
- * the child ask queue reads the root id from that walk. The session shutdown
- * handler finishes the record, so the retention sweep can reclaim it.
+ * the gate denies a child ask by reading the depth of that walk. The session
+ * shutdown handler finishes the record, so the retention sweep can reclaim it.
  */
 export function registerRootSession(sessionId: string, agent: AgentConfig | null): void {
 	getRunRegistry().register(

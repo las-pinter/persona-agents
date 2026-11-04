@@ -13,7 +13,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { isRootProcessEnv } from "./depth.ts";
-import { sessionDepthOf } from "./child-ask.ts";
+import { sessionDepthOf } from "./run-registry.ts";
 
 /** One todo item. `id` is a string so it can feed the pure renderer directly. */
 export interface Todo {

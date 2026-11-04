@@ -18,7 +18,7 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
 
-/** The one block reason both the root prompt and the child queue report. */
+/** The one block reason the prompt reports when the owner picks Deny. */
 export const DENIED_BY_USER_REASON = "Denied by user";
 
 /** A selectable option: display label plus the decision it maps to. */

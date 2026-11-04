@@ -29,10 +29,10 @@
  * factory never builds a pattern per call.
  *
  * Ask rows prompt with plain-language options (`permission-prompt.ts`). A root
- * session renders its own ask. A child session has no UI, so it enqueues the
- * request on the root queue (`child-ask.ts`), and the root renders one prompt
- * at a time. The grant key carries the session id, so a child answer stays
- * with its own session. Every tool shows the same three choices:
+ * session renders its own ask. A child session has no UI, and no panel can mount
+ * for one, so an ask in a child is a denial at once, with a reason that names the
+ * fix. The grant key carries the session id, so a grant stays with its own
+ * session. Every tool shows the same three choices:
  *   - Allow once                       → grant THIS single call
  *   - Always allow this rule (session) → remember the rule for the session
  *                                        (session|role|tool|rule key, in-memory
@@ -90,11 +90,25 @@ import {
 	renderPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
-import { bindChildAskRegistry, childAskQueue, grantKey } from "./child-ask.ts";
 import { type ParentGateHandler, bindParentGate } from "./child-tools.ts";
-import { UNKNOWN_RUN_REASON, type RunRecord, type RunRegistry } from "./run-registry.ts";
+import { bindRunRegistry, UNKNOWN_RUN_REASON, type RunRecord, type RunRegistry } from "./run-registry.ts";
 
 export { loadGlobalRules } from "./permission-config.ts";
+
+/**
+ * The block reason for an ask in a child session. No panel can mount for a
+ * child, so the ask is a denial, and the text names the fix.
+ */
+export const CHILD_ASK_DENIED_REASON =
+	"Blocked: a subagent cannot ask for permission. Use a repository-relative path or an allowed command form.";
+
+/**
+ * The grant key. One answer covers one session, role, tool, and rule.
+ * A key that lacks one part would lend the grant to a sibling or the root.
+ */
+function grantKey(sessionId: string, role: string, toolName: string, ruleId: string): string {
+	return `${sessionId}|${role}|${toolName}|${ruleId}`;
+}
 
 function probeFor(toolName: string, input: Record<string, unknown>): string {
 	switch (toolName) {
@@ -347,7 +361,7 @@ export function installToolCallGate(
 	registry: RunRegistry,
 	overlay: OverlayRules = loadGlobalRules(),
 ): void {
-	bindChildAskRegistry(registry);
+	bindRunRegistry(registry);
 
 	// The overlay is read once per factory run. /reload re-runs this factory (via
 	// the extension runner), which re-reads the file, so no per-call read is
@@ -389,21 +403,24 @@ export function installToolCallGate(
 
 		// A child answer must not cover its sibling or the root.
 		const sessionId = sessionIdOf(ctx);
-		const routing = childAskQueue();
-		if (routing && sessionId) routing.noteContext(sessionId, ctx);
-		const record = routing && sessionId ? routing.record(sessionId) : undefined;
+		const record = sessionId ? registry.get(sessionId) : undefined;
 		// The depth comes from the registry walk, never from the record's own copy.
-		// A record that under-reports its depth must still reach the root queue.
-		const depth = routing && sessionId ? routing.depth(sessionId) : null;
+		// A record that under-reports its depth is still judged as the child it is.
+		const walk = sessionId ? registry.walk(sessionId) : null;
+		const depth = walk !== null && walk.ok ? walk.depth : null;
 		// Assumption: a context with no session id is the root. pi always supplies
 		// one, so that fallback keeps its pre-child behaviour and stays unreachable.
 		// A bound registry with no record for the caller denies. The live root role
 		// must not cover an id the registry never saw.
-		if (routing && sessionId && !record) {
+		if (sessionId && !record) {
 			return { block: true, reason: UNKNOWN_RUN_REASON };
 		}
+		// A walk that stops short places no depth, so the caller cannot be judged
+		// as a root. It is refused rather than given the root role.
+		if (sessionId && walk !== null && !walk.ok) {
+			return { block: true, reason: `Blocked: broken parent chain at session ${walk.failureId}` };
+		}
 		// The child agent comes from its own record, never from the root.
-		// A record at depth 0 is the root itself, so the root keeps its live agent.
 		const childRecord = depth === 0 ? undefined : record;
 		const agent: AgentConfig | null = childRecord ? childAgentOf(childRecord) : getActiveAgent();
 
@@ -471,6 +488,14 @@ export function installToolCallGate(
 
 			// decision.kind === "ask"
 			const rule = decision.rule;
+
+			// A child ask can never be answered: no panel mounts for a child. The
+			// child is refused at once, and the reason names the fix. The root keeps
+			// the shared prompt below.
+			if (record && sessionId && depth !== 0) {
+				return { block: true, reason: CHILD_ASK_DENIED_REASON };
+			}
+
 			const key = sessionKey(rule.match);
 
 			// The rule's regex is never shown; the prompt uses the human reason.
@@ -482,29 +507,6 @@ export function installToolCallGate(
 				reason: humanReason(rule.reason, rule.match),
 				isSpanning: decision.segmentIndex === -1,
 			});
-
-			// A child has no UI of its own, so its call goes to the root queue and
-			// waits for the owner. The verdict below matches the root path exactly.
-			// A walk that stops short routes here too, so the queue names the break
-			// instead of a generic label. Depth 0 is the caller itself: the root path.
-			if (routing && record && sessionId && depth !== 0) {
-				const outcome = await routing.enqueue({
-					sessionId,
-					role: record.role,
-					toolName,
-					ruleId: rule.match,
-					key,
-					model: promptModel,
-					remember: (grant) => sessionAllow.add(grant),
-				});
-				if (outcome.kind === "block") return { block: true, reason: outcome.reason };
-				if (outcome.alwaysAllow && isShell && decision.segmentIndex >= 0) {
-					// Approve the matched segment, then re-evaluate the rest.
-					approvedSegments.add(decision.segmentIndex);
-					continue;
-				}
-				return undefined;
-			}
 
 			if (!ctx.hasUI) {
 				// Fail closed. The label is stable and never the rule regex.

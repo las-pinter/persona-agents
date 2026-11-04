@@ -1,6 +1,6 @@
 /**
- * Child tool wrapper: the parent verdict on every loadout tool, the ask path
- * into the root queue, and the loadout/wrapper equality.
+ * Child tool wrapper: the parent verdict on every loadout tool, the deny an ask
+ * in a child becomes, and the loadout/wrapper equality.
  *
  * The gate handler is the real installed one over a fixture table, the root
  * prompt is a fake, and the child session is fake. The root record comes from
@@ -24,7 +24,6 @@ import type {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { bindChildAskRegistry } from "./child-ask.ts";
 import { type BuiltChild, type ChildModel, buildChildSession } from "./child-session.ts";
 import {
 	CHILD_ASK_TOOL,
@@ -45,17 +44,17 @@ import {
 	wildcardLoadoutReason,
 	wrapChildTools,
 } from "./child-tools.ts";
-import { CHILD_A, ROOT, RootPrompter, childContext, repoRoot, rootContext } from "./gate-child-ask-fixture.ts";
+import { CHILD_A, ROOT, RootPrompter, childContext, repoRoot, rootContext } from "./gate-fixture.ts";
 import { loadDefaultRows } from "./permission-config.ts";
-import { compileGateSource, type GateRuleSourceFactory, installToolCallGate } from "./permissions.ts";
+import { CHILD_ASK_DENIED_REASON, compileGateSource, type GateRuleSourceFactory, installToolCallGate } from "./permissions.ts";
 import type { AgentConfig, AgentSource, PermissionClass, PermissionRule } from "./resolver.ts";
-import { RunRegistry, newRunRecord } from "./run-registry.ts";
+import { RunRegistry, bindRunRegistry, newRunRecord } from "./run-registry.ts";
 import { getRunRegistry, registerRootSession } from "./subagent-run.ts";
 import registerSubagentTool from "./subagent.ts";
 import { registerTodoTool } from "./todo-tool.ts";
 
 afterEach(() => {
-	bindChildAskRegistry(null);
+	bindRunRegistry(null);
 	clearChildToolImplementations();
 });
 
@@ -90,7 +89,7 @@ type Gate = (event: { toolName: string; input: Record<string, unknown> }, ctx: u
 
 /** Install the real gate over one rule source and bind the child runtime. */
 function installGateWith(agent: AgentConfig, source: GateRuleSourceFactory): Gate {
-	bindChildAskRegistry(getRunRegistry());
+	bindRunRegistry(getRunRegistry());
 	registerRootSession(ROOT, agent);
 	let captured: Gate | null = null;
 	const pi = {
@@ -292,7 +291,7 @@ test("verdict: a deny blocks the wrapped tool before it runs", async () => {
 	assert.equal(bash.calls.length, 0, "a denied tool never runs");
 });
 
-test("verdict: an ask reaches the parent queue and its answer runs the tool", async () => {
+test("verdict: a child ask is denied at once, with the child reason", async () => {
 	const handler = installGate();
 	const prompter = prompterOf(["Allow once"]);
 	await captureRoot(handler, prompter);
@@ -303,10 +302,10 @@ test("verdict: an ask reaches the parent queue and its answer runs the tool", as
 	const out = await callTool(wrapper, { command: "git push origin main" }, prompter);
 	built.dispose("done");
 
-	assert.equal(out.isError, false, out.text);
-	assert.equal(prompter.titles.length, 1, "the ask reached one root prompt");
-	assert.match(prompter.titles[0], /implementer/, "the prompt names the child role");
-	assert.equal(bash.calls.length, 1, "the answer let the tool run");
+	assert.equal(out.isError, true, "a child ask is a blocked tool result");
+	assert.equal(out.text, CHILD_ASK_DENIED_REASON, "the wrapper returns the child reason");
+	assert.equal(prompter.titles.length, 0, "a child ask renders no prompt");
+	assert.equal(bash.calls.length, 0, "the wrapped tool never runs on an ask");
 });
 
 test("gate: no bound gate blocks every wrapper", async () => {
@@ -321,9 +320,9 @@ test("gate: no bound gate blocks every wrapper", async () => {
 	assert.equal(bash.calls.length, 0);
 });
 
-// --- the root record and the queue ------------------------------------------
+// --- the root record and the child deny --------------------------------------
 
-test("root: a registered root record answers a child ask at the root surface", async () => {
+test("root: a child record walks to the root, and its ask is denied below the root", async () => {
 	const handler = installGate();
 	const walk = getRunRegistry().walk(ROOT);
 	assert.equal(walk.ok, true, "the root record is registered");
@@ -343,8 +342,9 @@ test("root: a registered root record answers a child ask at the root surface", a
 	const out = await callTool(wrapper, { command: "git push" }, prompter);
 	built.dispose("done");
 
-	assert.equal(out.isError, true, "the root denial blocks the child");
-	assert.equal(prompter.titles.length, 1, "the child ask is answerable at the root surface");
+	assert.equal(out.isError, true, "a child ask is a blocked tool result");
+	assert.equal(out.text, CHILD_ASK_DENIED_REASON, "the deny names the fix, not the root denial");
+	assert.equal(prompter.titles.length, 0, "the child ask reaches no root prompt");
 	assert.equal(bash.calls.length, 0);
 });
 
