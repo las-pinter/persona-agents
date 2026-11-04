@@ -26,6 +26,12 @@ The `subagent_model` option takes four values: `sonnet` (the default),
 Claude Code. If `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` is set, Claude Code ignores
 the `subagent_model` option. The orchestrator keeps your session model.
 
+The hook fills the model only when the call has none. A model that the caller
+passes wins, and the hook then gives no output. Auto mode reviews a call before
+the hook runs and refuses a call whose input the hook changed, so a changed
+input costs a retry. The orchestrator learns the selected model from a line in
+its session start text (not for `inherit`) and passes it on each call.
+
 Set an option in `/config` (**Persona theme**, **Subagent model**) or in your
 user `settings.json`. A project `settings.json` cannot set the subagent model.
 
@@ -72,9 +78,13 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
 - **Subagent model** comes from `platforms/claude/scripts/subagent-model.mjs`.
   It runs as a `PreToolUse` hook on `Agent` and `Task`. It sets the model of a
   `persona-agents:` subagent, except the orchestrator, from the `subagent_model`
-  option. A value outside `sonnet`, `opus`, `haiku`, and `inherit` gives the
+  option, but only when the call has no model: a caller model wins and gives no
+  output. A value outside `sonnet`, `opus`, `haiku`, and `inherit` gives the
   default, `sonnet`. The hook gives no permission decision and never blocks a
-  call.
+  call. `context.mjs` adds one line with the selected model to the `persona`
+  part for the orchestrator only, so the orchestrator passes the model itself.
+  `selectedSubagentModel()` in `plugin-options.mjs` is the one place that picks
+  the model.
 - **Option read** is `platforms/claude/scripts/plugin-options.mjs`. Both the
   `theme` hook and the model hook call it at run time, so a `/config` change
   needs no restart.

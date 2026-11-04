@@ -148,3 +148,21 @@ export function pluginOption(name, { envFallback = true } = {}) {
 		""
 	);
 }
+
+const SUBAGENT_MODELS = new Set(["sonnet", "opus", "haiku"]);
+const DEFAULT_SUBAGENT_MODEL = "sonnet";
+
+/**
+ * The selected subagent model, or "inherit"; a value outside the options gives the default, sonnet.
+ * CLAUDE_PLUGIN_OPTION_SUBAGENT_MODEL is not read. A probe (Claude Code 2.1.309)
+ * showed that a project .claude/settings.json env block sets it for the hook, so
+ * a repo could pick the subagent model. Only the settings files apply. A plugin
+ * installed from another marketplace name gets a different pluginConfigs key,
+ * so it always gets the default.
+ * The hook and the session start line share this one function, so a later
+ * per-profession option (subagent_model_<profession>, then subagent_model) changes it here only.
+ */
+export function selectedSubagentModel() {
+	const value = pluginOption("subagent_model", { envFallback: false });
+	return SUBAGENT_MODELS.has(value) || value === "inherit" ? value : DEFAULT_SUBAGENT_MODEL;
+}

@@ -205,9 +205,23 @@ describe("claude plugin: subagent model hook", () => {
 		}
 	});
 
-	test("a model the caller passed is overwritten", () => {
+	test("a caller model is kept", () => {
 		const run = runHook(agentInput({ ...implementerCall, model: "opus" }), undefined, { user: modelSettings("haiku") });
-		assert.equal(modelOf(run), "haiku");
+		assert.equal(run.status, 0);
+		assert.equal(run.stdout, "");
+	});
+
+	test("a caller model equal to the selected model gives no output", () => {
+		const run = runHook(agentInput({ ...implementerCall, model: "haiku" }), undefined, { user: modelSettings("haiku") });
+		assert.equal(run.status, 0);
+		assert.equal(run.stdout, "");
+	});
+
+	test("an empty or null caller model counts as absent", () => {
+		for (const empty of ["", null]) {
+			const run = runHook(agentInput({ ...implementerCall, model: empty }), undefined, { user: modelSettings("haiku") });
+			assert.equal(modelOf(run), "haiku", String(empty));
+		}
 	});
 
 	test("all other input fields are kept unchanged", () => {

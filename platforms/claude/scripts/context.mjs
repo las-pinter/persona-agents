@@ -19,7 +19,7 @@
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pluginOption } from "./plugin-options.mjs";
+import { pluginOption, selectedSubagentModel } from "./plugin-options.mjs";
 
 const PREFIX = "persona-agents:";
 const DEFAULT_THEME = "goblin";
@@ -59,15 +59,20 @@ function personaContext() {
 		return null;
 	}
 	const persona = readFileSync(join(content, "personas", theme, entry.personaFile), "utf8").trim();
-	const note = [
+	const lines = [
 		`# Running in Claude Code (persona theme: ${theme})`,
 		"",
 		`You are the persona-agents ${profession}. Speak as the persona below: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. In Claude Code:`,
 		`- Your crew are the \`${PREFIX}<profession>\` agents. Delegate to them with the Agent tool. Read a \`subagent\` tool, or a \`${theme}-<profession>\` agent name, as that.`,
 		`- Load a skill by name with the Skill tool: a path such as \`skills/<group>/<name>/\` is the skill \`${PREFIX}<name>\`.`,
 		"- Read a `todo` tool as Claude Code's task list, and an `ask_user_question` tool as AskUserQuestion.",
-	].join("\n");
-	return `${note}\n\n${persona}`;
+	];
+	// Only the orchestrator needs the model: it passes the model on each Agent call, so the hook changes nothing.
+	const model = profession === "orchestrator" ? selectedSubagentModel() : "inherit";
+	if (model !== "inherit") {
+		lines.push(`- Subagent model: ${model}. Pass model: "${model}" on every Agent call to a ${PREFIX} profession.`);
+	}
+	return `${lines.join("\n")}\n\n${persona}`;
 }
 
 const text = part === "profession" ? professionContext() : part === "persona" ? personaContext() : null;

@@ -170,6 +170,59 @@ describe("claude plugin: context hook", () => {
 		assert.match(run.context ?? "", /^# Orchestrator/);
 	});
 
+	describe("subagent model line", () => {
+		const orchestratorInput = {
+			hook_event_name: "SessionStart",
+			source: "startup",
+			agent_type: "persona-agents:orchestrator",
+		};
+		const modelSettings = (model: string) =>
+			JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { subagent_model: model } } } });
+		const modelLine = (model: string) =>
+			`- Subagent model: ${model}. Pass model: "${model}" on every Agent call to a persona-agents: profession.`;
+
+		for (const model of ["sonnet", "opus", "haiku"]) {
+			test(`the orchestrator is told ${model}`, () => {
+				const run = runContext("persona", orchestratorInput, undefined, { user: modelSettings(model) });
+				const context = run.context ?? "";
+				assert.ok(context.includes(modelLine(model)));
+				assert.ok(context.length < HOOK_STRING_CAP);
+			});
+		}
+
+		test("no option set tells the orchestrator sonnet", () => {
+			assert.ok(runContext("persona", orchestratorInput).context?.includes(modelLine("sonnet")));
+		});
+
+		test("inherit prints no line", () => {
+			const run = runContext("persona", orchestratorInput, undefined, { user: modelSettings("inherit") });
+			assert.ok(run.context);
+			assert.doesNotMatch(run.context, /Subagent model/);
+		});
+
+		test("a subagent never gets the line", () => {
+			for (const profession of professions.filter((name) => name !== "orchestrator")) {
+				const run = runContext("persona", subagentInput(profession), undefined, { user: modelSettings("opus") });
+				assert.ok(run.context, profession);
+				assert.doesNotMatch(run.context, /Subagent model/, profession);
+			}
+		});
+
+		test("the profession part never gets the line", () => {
+			const run = runContext("profession", orchestratorInput, undefined, { user: modelSettings("opus") });
+			assert.doesNotMatch(run.context ?? "", /Subagent model/);
+		});
+
+		test("the orchestrator persona part fits under the cap for every theme with the line", () => {
+			for (const theme of themes) {
+				const run = runContext("persona", orchestratorInput, theme, { user: modelSettings("haiku") });
+				const context = run.context ?? "";
+				assert.ok(context.includes(modelLine("haiku")), theme);
+				assert.ok(context.length < HOOK_STRING_CAP, `${theme}: ${context.length} characters`);
+			}
+		});
+	});
+
 	test("no option set means the goblin theme", () => {
 		assert.match(runContext("persona", subagentInput("implementer")).context ?? "", /persona theme: goblin\)/);
 	});
