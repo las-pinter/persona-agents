@@ -1,17 +1,17 @@
 /**
  * Child ask routing: the root prompt, the three answers, the deadline, the
  * arrival order, and the fail-closed branches. The gate handler is real and
- * the root prompt is a fake. The deadline is injected per case, at 20 ms, 25 ms,
- * or 40 ms.
+ * the root prompt is a fake. Most cases inject a deadline of 20 ms, 25 ms, or
+ * 40 ms. The cases that inject no deadline use fake timers.
  * Run: npm test
  */
 
 import { afterEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+	CHILD_ASK_DEADLINE_MS,
+	CHILD_ASK_DEADLINE_REASON,
 	CHILD_ASK_NO_SURFACE_REASON,
-	CHILD_ASK_TIMEOUT_MS,
-	CHILD_ASK_TIMEOUT_REASON,
 	bindChildAskRegistry,
 	childAskQueue,
 } from "./child-ask.ts";
@@ -19,6 +19,7 @@ import {
 	CHILD_A,
 	CHILD_B,
 	ROOT,
+	THREE_LABELS,
 	captureRoot,
 	childAsk,
 	deferred,
@@ -53,15 +54,15 @@ test("one root prompt: two children reach one visible prompt in turn", { timeout
 	assert.equal(s.prompter.childUiCalls, 0, "a child context is never asked");
 });
 
-test("one root prompt: the root's own ask still renders the shared prompt", { timeout: 2000 }, async () => {
-	const s = setup({ answers: ["Allow once"] });
+test("root ask: the shared prompt renders", { timeout: 2000 }, async () => {
+	const s = setup({ never: true });
 	await captureRoot(s);
-	const result = await rootAsk(s);
-	assert.equal(result, undefined);
-	assert.equal(s.prompter.titles.length, 1);
+	void rootAsk(s);
+	await drainMicrotasks();
+	assert.equal(s.prompter.titles.length, 1, "the root ask renders the shared prompt");
 	assert.match(s.prompter.titles[0], /Permission required \(bash\)/);
 	assert.ok(!s.prompter.titles[0].includes("waiting"), "a root prompt names no child");
-	assert.deepEqual(s.prompter.options[0], ["Allow once", "Always allow this rule (session)", "Deny"]);
+	assert.deepEqual(s.prompter.options[0], THREE_LABELS);
 });
 
 // --- bind order --------------------------------------------------------------
@@ -121,15 +122,51 @@ test("timeout: an unanswered request leaves the queue and blocks with the deadli
 	});
 	await captureRoot(s);
 	const result = await childAsk(s, CHILD_A);
-	assert.deepEqual(result, { block: true, reason: CHILD_ASK_TIMEOUT_REASON });
+	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 	assert.equal(s.prompter.titles.length, 1, "the request was shown once");
 	assert.equal(signals.length, 1);
 	assert.equal(signals[0].aborted, true, "the timed-out ask must carry an aborted signal");
 	assert.equal(childAskQueue()?.waiting(ROOT), 0, "the timed-out request left the queue");
 	assert.equal(childAskQueue()?.visible(ROOT), null, "no request stays visible");
 	assert.equal(childAskQueue()?.rootCount(), 0, "a drained root is dropped, not retained");
-	assert.equal(CHILD_ASK_TIMEOUT_MS, 120_000);
-	assert.equal(CHILD_ASK_TIMEOUT_REASON, "Blocked: the permission request timed out after 120 s");
+	assert.equal(CHILD_ASK_DEADLINE_MS, 5_000, "the default deadline is 5 s, not 120 s");
+	assert.equal(
+		CHILD_ASK_DEADLINE_REASON,
+		"Blocked: a subagent cannot ask for permission. Use a repository-relative path or an allowed command form.",
+	);
+});
+
+test("fast fail: a render that never settles refuses a child at 5 s, with fake timers", { timeout: 2000 }, async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	// No injected deadline: this case proves the shipped default.
+	const s = setup({ never: true });
+	await captureRoot(s);
+	let settled = false;
+	let outcome: unknown = null;
+	const pending = childAsk(s, CHILD_A);
+	void pending.then(
+		(value) => {
+			outcome = value;
+			settled = true;
+		},
+		(error) => assert.fail(`the child ask must settle, not reject: ${String(error)}`),
+	);
+	await drainMicrotasks();
+	assert.equal(s.prompter.titles.length, 1, "the child ask still reaches the root prompt");
+
+	t.mock.timers.tick(CHILD_ASK_DEADLINE_MS - 1);
+	await drainMicrotasks();
+	assert.equal(settled, false, "the child is not refused before the deadline");
+
+	t.mock.timers.tick(1);
+	await drainMicrotasks();
+	assert.equal(settled, true, "the child is refused at the shipped deadline");
+	assert.deepEqual(outcome, {
+		block: true,
+		reason: "Blocked: a subagent cannot ask for permission. Use a repository-relative path or an allowed command form.",
+	});
+	assert.equal(childAskQueue()?.waiting(ROOT), 0, "the refused request left the queue");
+	assert.equal(childAskQueue()?.rootCount(), 0, "the drained root is dropped");
 });
 
 /** Let the queue's microtask pump run without advancing a timer. */
@@ -149,10 +186,13 @@ test(
 		let secondSettled = false;
 		let firstOutcome: unknown = null;
 		const first = childAsk(s, CHILD_A);
-		void first.then((outcome) => {
-			firstOutcome = outcome;
-			firstSettled = true;
-		});
+		void first.then(
+			(outcome) => {
+				firstOutcome = outcome;
+				firstSettled = true;
+			},
+			(error) => assert.fail(`the head ask must settle, not reject: ${String(error)}`),
+		);
 		await drainMicrotasks();
 		assert.equal(s.prompter.titles.length, 1, "the head shows on arrival");
 
@@ -160,9 +200,12 @@ test(
 		t.mock.timers.tick(20);
 		await drainMicrotasks();
 		const second = childAsk(s, CHILD_B);
-		void second.then(() => {
-			secondSettled = true;
-		});
+		void second.then(
+			() => {
+				secondSettled = true;
+			},
+			(error) => assert.fail(`the queued ask must settle, not reject: ${String(error)}`),
+		);
 		await drainMicrotasks();
 		assert.equal(s.prompter.titles.length, 1, "the queued request waits behind the head");
 		assert.equal(childAskQueue()?.waiting(ROOT), 2, "both requests are queued");
@@ -170,7 +213,7 @@ test(
 		t.mock.timers.tick(20);
 		await drainMicrotasks();
 		assert.equal(firstSettled, true, "the head times out at its arrival deadline");
-		assert.deepEqual(firstOutcome, { block: true, reason: CHILD_ASK_TIMEOUT_REASON });
+		assert.deepEqual(firstOutcome, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 		assert.equal(secondSettled, false, "the queued request is not settled by the head's deadline");
 		assert.equal(s.prompter.titles.length, 2, "the head leaves, then the next request is shown");
 		assert.equal(childAskQueue()?.visible(ROOT), CHILD_B, "the second request is on screen");
@@ -202,7 +245,7 @@ test("timeout: an answer that arrives after the deadline changes nothing", { tim
 	});
 	await captureRoot(s);
 	const timedOut = await childAsk(s, CHILD_A);
-	assert.deepEqual(timedOut, { block: true, reason: CHILD_ASK_TIMEOUT_REASON });
+	assert.deepEqual(timedOut, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 	// The late answer is a stale panel choice, so it must grant nothing.
 	first.resolve("always-allow");
 	await new Promise<void>((resolve) => setTimeout(resolve, 5));
@@ -232,6 +275,9 @@ test("fail closed: a child ask with no captured root surface blocks", { timeout:
 	const s = setup({ answers: ["Allow once"] });
 	const result = await childAsk(s, CHILD_A);
 	assert.deepEqual(result, { block: true, reason: CHILD_ASK_NO_SURFACE_REASON });
+	// The missing-surface reason is its own text, apart from the deadline reason.
+	assert.equal(CHILD_ASK_NO_SURFACE_REASON, "Blocked: the root session has no prompt surface");
+	assert.notEqual(CHILD_ASK_NO_SURFACE_REASON, CHILD_ASK_DEADLINE_REASON);
 	assert.equal(s.prompter.titles.length, 0, "no surface means no prompt");
 });
 

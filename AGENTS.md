@@ -149,6 +149,11 @@ role templates reach DENY through the deny-by-default mode. `cp`, `mv`, and
 rest. The global file asks for `git push` and `gh pr` for every agent. It is
 live and unversioned.
 
+On pi, a child session cannot ask. The root panel never mounts for a child
+ask, so the gate fails the child closed in 5 seconds. The block reason is
+"Blocked: a subagent cannot ask for permission. Use a repository-relative path
+or an allowed command form." A root ask keeps no deadline.
+
 ## Adding content
 
 It is rare to add a theme, a profession, a persona, or a skill. The steps

@@ -3,8 +3,10 @@
  *
  * A child session has no UI, so its gate cannot render a prompt. The child
  * enqueues a request here instead. The root gate renders it with the root
- * context. One prompt is visible at a time. The title names the child and the
- * waiting count, and a denied head shows the next request.
+ * context, but a child ask mounts no root panel, so that render never settles
+ * and the deadline is the real outcome. One prompt is visible at a time. The
+ * title names the child and the waiting count, and a denied head shows the
+ * next request.
  *
  * The deadline counts from arrival, so a request that waits behind another
  * prompt can still time out. A timed-out request leaves the queue and blocks
@@ -31,11 +33,16 @@ import {
 	type RunRegistry,
 } from "./run-registry.ts";
 
-/** How long an unanswered request stays in the queue. */
-export const CHILD_ASK_TIMEOUT_MS = 120_000;
+/**
+ * How long an unanswered child request stays in the queue. The render promise
+ * never settles, so a short deadline turns that silent stall into a named
+ * refusal that names the fix.
+ */
+export const CHILD_ASK_DEADLINE_MS = 5_000;
 
-/** The block reason after the deadline. The owner sees the same text. */
-export const CHILD_ASK_TIMEOUT_REASON = "Blocked: the permission request timed out after 120 s";
+/** The block reason at the child deadline. The owner sees the same text. */
+export const CHILD_ASK_DEADLINE_REASON =
+	"Blocked: a subagent cannot ask for permission. Use a repository-relative path or an allowed command form.";
 
 /** The block reason when the root has no captured prompt surface. */
 export const CHILD_ASK_NO_SURFACE_REASON = "Blocked: the root session has no prompt surface";
@@ -87,7 +94,7 @@ export interface ChildAskDeps {
 		model: PromptModel,
 		signal: AbortSignal,
 	) => Promise<PermissionChoice>;
-	/** Defaults to `CHILD_ASK_TIMEOUT_MS`. */
+	/** Defaults to `CHILD_ASK_DEADLINE_MS`. */
 	timeoutMs?: number;
 }
 
@@ -131,7 +138,7 @@ export class ChildAskQueue {
 	constructor(deps: ChildAskDeps) {
 		this.registry = deps.registry;
 		this.render = deps.render ?? renderPermissionPrompt;
-		this.timeoutMs = deps.timeoutMs ?? CHILD_ASK_TIMEOUT_MS;
+		this.timeoutMs = deps.timeoutMs ?? CHILD_ASK_DEADLINE_MS;
 	}
 
 	/** The record for one session, so the gate can tell a child from a root. */
@@ -299,7 +306,7 @@ export class ChildAskQueue {
 	/** The deadline path. The child is blocked, and the next request shows. */
 	private expire(state: RootState, request: GateRequest): void {
 		if (request.settled) return;
-		this.settle(state, request, { kind: "block", reason: CHILD_ASK_TIMEOUT_REASON });
+		this.settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
 		this.pump(state);
