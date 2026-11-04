@@ -167,7 +167,8 @@ class InspectorComponent {
 		else detail.push("(no output)");
 		const usage = formatUsage(t.usage);
 		if (usage) detail.push(`${usage}`);
-		if (t.stderr) detail.push(`stderr: ${t.stderr.slice(0, Math.max(10, width - 10))}`);
+		// A result that did not fail carries its note in the tool text, so no stderr line.
+		if (t.stderr && t.status === "failed") detail.push(`stderr: ${t.stderr.slice(0, Math.max(10, width - 10))}`);
 
 		if (this.offset >= detail.length && detail.length > 0) {
 			this.offset = Math.max(0, detail.length - MAX_VIEW_LINES);

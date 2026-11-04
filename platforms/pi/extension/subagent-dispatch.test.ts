@@ -31,8 +31,9 @@ import { type ModeRun, runChainMode, runParallelMode, runSingleMode } from "./su
 
 /** The result fields every mode must return. The chain adds no field of its own. */
 const RESULT_FIELDS = [
-	"agent", "agentSource", "exitCode", "maxTurns", "messages", "model", "reasoningTokens", "runStartedAt",
-	"step", "stopReason", "stderr", "task", "thinking", "turnsCapped", "usage",
+	"agent", "agentSource", "exitCode", "maxTurns", "messages", "model", "reasoningTokens", "resumed",
+	"round", "runStartedAt", "session", "step", "stopReason", "stderr", "task", "thinking", "turnsCapped",
+	"usage",
 ].sort();
 
 const AGENT = {

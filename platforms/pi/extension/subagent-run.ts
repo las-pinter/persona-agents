@@ -51,6 +51,12 @@ import {
 import { makeThinkingEventHandler, reduceThinking } from "./subagent-thinking.ts";
 import { TURN_CAP_STEER, resolveMaxTurns, turnCapAction } from "./turn-cap.ts";
 import {
+	type PlannedSession,
+	openPlannedSession,
+	planSession,
+	writeRoundSidecar,
+} from "./session-store.ts";
+import {
 	TREE_OUTPUT_PREVIEW_BYTES,
 	TREE_TASK_PREVIEW_BYTES,
 	TREE_UPDATE_INTERVAL_MS,
@@ -105,6 +111,8 @@ export interface ChildRuntime {
 	createSession?: typeof createAgentSession;
 	/** Test seam. Production builds an extension-free loader and an in-memory session. */
 	prepare?: (cwd: string) => Promise<PreparedChildRuntime>;
+	/** Test seam for the session store. Defaults to `getAgentDir()`. */
+	agentDir?: string;
 }
 
 /** Everything one dispatch call reads. The mode code builds this once. */
@@ -224,56 +232,48 @@ export async function runSingleAgent(
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
+	session?: string,
 ): Promise<SingleResult> {
+	// Every refusal carries the caller's id, so a refused run still names it.
+	const fail = (source: SingleResult["agentSource"], reason: string, round = 1): SingleResult => ({
+		...failureResult(agentName, source, task, step, reason),
+		session: session ?? null,
+		round,
+	});
 	const target = deps.resolveTarget ? deps.resolveTarget(agentName) : null;
 	const agent = target?.agent ?? null;
 	if (!agent) {
 		const available = deps.agents.map((a) => `"${a.name}"`).join(", ") || "none";
-		return failureResult(
-			agentName,
-			"unknown",
-			task,
-			step,
-			`Unknown agent: "${agentName}". Available agents: ${available}.`,
-		);
+		return fail("unknown", `Unknown agent: "${agentName}". Available agents: ${available}.`);
 	}
 	// The cap comes from the call on every run. A bad value refuses before the build.
 	const cap = resolveMaxTurns(maxTurns);
 	if (!cap.ok) {
-		return failureResult(agentName, agent.source, task, step, cap.error);
+		return fail(agent.source, cap.error);
 	}
 	const maxTurnLimit = cap.maxTurns;
 	// A child needs a parent id, or its record walks to depth 0 as the root.
 	if (!deps.runtime.parentSessionId) {
-		return failureResult(agentName, agent.source, task, step, NO_PARENT_SESSION_REASON);
+		return fail(agent.source, NO_PARENT_SESSION_REASON);
 	}
 	// An in-process child shares this process, so the registry carries its depth.
 	const callerDepth = callerDepthOf(deps.runtime);
 	// The registry walk answers the cap here; the env depth is the fallback.
 	if (!canSpawn(callerDepth)) {
-		return failureResult(
-			agentName,
-			agent.source,
-			task,
-			step,
-			DEPTH_CAP_REASON,
-		);
+		return fail(agent.source, DEPTH_CAP_REASON);
 	}
 	// A resolved agent whose frontmatter sets `spawnable: false` runs as the main
 	// session only. Reject before a session is built.
 	if (agent.spawnable === false) {
-		return failureResult(
-			agentName,
+		return fail(
 			agent.source,
-			task,
-			step,
 			`Agent '${agentName}' is not spawnable as a subagent (its frontmatter sets spawnable: false).`,
 		);
 	}
 	const model = resolveChildModel(agent, deps.defaults);
 	if (!model) {
 		const named = agent.model ? ` "${agent.model}"` : "";
-		return failureResult(agentName, agent.source, task, step, `No usable model${named} for agent "${agentName}".`);
+		return fail(agent.source, `No usable model${named} for agent "${agentName}".`);
 	}
 
 	const childCwd = cwd ?? deps.defaultCwd;
@@ -283,12 +283,12 @@ export async function runSingleAgent(
 	// A wildcard would activate tools that no wrapper covers, so it never builds.
 	const wildcards = wildcardChildTools(spawnPlan.tools);
 	if (wildcards.length > 0) {
-		return failureResult(agentName, agent.source, task, step, wildcardLoadoutReason(wildcards));
+		return fail(agent.source, wildcardLoadoutReason(wildcards));
 	}
 	// A name no builtin and no kept definition covers has nothing to run.
 	const missing = missingChildTools(spawnPlan.tools);
 	if (missing.length > 0) {
-		return failureResult(agentName, agent.source, task, step, missingChildToolReason(missing));
+		return fail(agent.source, missingChildToolReason(missing));
 	}
 	const loadout: ChildLoadout = {
 		tools: spawnPlan.tools,
@@ -297,6 +297,22 @@ export async function runSingleAgent(
 		// A named model brings its own thinking default, so the call value would fight it.
 		thinkingLevel: agent.model ? undefined : deps.defaults.thinkingLevel,
 	};
+
+	// The store owns every resume rule. The runner only switches on the plan.
+	const plan = session
+		? planSession({
+				agentDir: deps.runtime.agentDir ?? getAgentDir(),
+				id: session,
+				agent: agent.name,
+				class: agent.permissionClass ?? FALLBACK_CLASS,
+				cwd: childCwd,
+				now: Date.now(),
+			})
+		: null;
+	// A cap refusal names the round it refused, so the count reads true.
+	if (plan !== null && plan.kind === "refuse") return fail(agent.source, plan.message, plan.round ?? 1);
+	// The round opens inside the build try, so a failed open is one failed run.
+	let plannedRound: PlannedSession | null = null;
 
 	const currentResult: SingleResult = {
 		agent: agentName,
@@ -312,6 +328,9 @@ export async function runSingleAgent(
 		turnsCapped: false,
 		runStartedAt: Date.now(),
 		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
+		session: plan ? plan.id : null,
+		resumed: false,
+		round: 1,
 	};
 
 	// Run identity for the append-only tree log. The parent reads its id from env.
@@ -381,6 +400,16 @@ export async function runSingleAgent(
 	let capAborted = false;
 	try {
 		const prepared = await (deps.runtime.prepare ?? prepareChildRuntime)(childCwd);
+		let sessionManager = prepared.sessionManager;
+		if (plan !== null) {
+			plannedRound = openPlannedSession(plan, deps.runtime.parentSessionId);
+			sessionManager = plannedRound.sessionManager;
+			currentResult.session = plannedRound.id;
+			currentResult.resumed = plannedRound.resumed;
+			// A cold round carries the store reason, so the caller reads why it started fresh.
+			currentResult.stderr = plannedRound.note;
+		}
+		currentResult.round = plannedRound === null ? 1 : plannedRound.round;
 		// A child loads no extension, so its role text travels in the prompt.
 		const discovered = discoverSkills(childCwd);
 		const patterns = agent.alwaysLoad ?? [];
@@ -394,7 +423,7 @@ export async function runSingleAgent(
 			resolveBuiltin: (name) => builtinChildTool(name, childCwd, prepared.settingsManager),
 		});
 		assertWrapperListEquals(loadout.tools, wrappers);
-		const sessionId = prepared.sessionManager.getSessionId();
+		const sessionId = sessionManager.getSessionId();
 		built = await buildChildSession({
 			loadout: { ...loadout, customTools: wrappers },
 			parent: { cwd: childCwd, loader: prepared.loader, settingsManager: prepared.settingsManager, signal },
@@ -407,10 +436,10 @@ export async function runSingleAgent(
 				alwaysLoad: agent.alwaysLoad ?? [],
 				depth: spawnPlan.childDepth,
 				parentSessionId: deps.runtime.parentSessionId,
-				sessionFile: prepared.sessionManager.getSessionFile() ?? null,
+				sessionFile: sessionManager.getSessionFile() ?? null,
 				startedAt: Date.now(),
 			},
-			sessionManager: prepared.sessionManager,
+			sessionManager,
 			registry: deps.runtime.registry,
 			createSession: deps.runtime.createSession,
 		});
@@ -456,6 +485,15 @@ export async function runSingleAgent(
 		}
 
 		if (promptError) currentResult.errorMessage = promptError;
+		// Only a round that appended a conversation message leaves a sidecar behind.
+		// Saved history seeds agent state, and no replay emits an event, so this list
+		// holds this round's messages only.
+		const wroteRound = currentResult.messages.some(
+			(message) => message.role === "user" || message.role === "assistant",
+		);
+		if (plannedRound !== null && wroteRound) {
+			writeRoundSidecar(plannedRound.plan, currentResult.usage.turns, deps.runtime.parentSessionId, Date.now());
+		}
 		// The cap ended this run, so the caller reads a capped result, not a clean one.
 		if (currentResult.turnsCapped) {
 			currentResult.exitCode = 1;

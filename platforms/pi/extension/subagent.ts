@@ -48,6 +48,14 @@ import { renderSubagentCall, renderSubagentResult } from "./subagent-render.ts";
 import { SubagentParams } from "./subagent-schema.ts";
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
+/** The refusal when a session id rides a mode that cannot persist one. */
+export const SESSION_SINGLE_MODE_REASON =
+	"session needs single mode: name one agent and its task. chain and tasks cannot carry a session.";
+
+/** An empty session id is no session, so a bare string never reaches the store. */
+export function sessionParamOf(params: { session?: string }): string | undefined {
+	return params.session || undefined;
+}
 /** One step of a chain or parallel call. */
 export interface StepInput {
 	agent: string;
@@ -162,6 +170,9 @@ export async function runParallelMode(
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
+		session: null,
+		resumed: false,
+		round: 1,
 	}));
 	const emitParallelUpdate = () => {
 		if (!mode.onUpdate) return;
@@ -222,6 +233,7 @@ export async function runSingleMode(
 	task: string,
 	cwd: string | undefined,
 	mode: ModeRun,
+	session?: string,
 ): Promise<AgentToolResult<SubagentDetails>> {
 	const result = await runSingleAgent(
 		mode.deps,
@@ -233,6 +245,7 @@ export async function runSingleMode(
 		mode.signal,
 		mode.onUpdate,
 		mode.makeDetails("single"),
+		session,
 	);
 	if (result.turnsCapped) {
 		// A capped run keeps its partial text, with the cap line first.
@@ -256,8 +269,11 @@ export async function runSingleMode(
 		};
 	}
 	mode.archive?.("single", [result]);
+	const body = getFinalOutput(result.messages) || "(no output)";
+	// A cold round puts its store reason on stderr, so a caller reads why it started fresh.
+	const text = result.stderr ? `${result.stderr}\n\n${body}` : body;
 	return {
-		content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+		content: [{ type: "text", text }],
 		details: mode.makeDetails("single")([result]),
 	};
 }
@@ -333,9 +349,11 @@ export default function (pi: ExtensionAPI) {
 				parentSessionId: parentSessionIdOf(ctx),
 			};
 			const confirmProjectAgents = params.confirmProjectAgents ?? true;
+			const session = sessionParamOf(params);
 			const hasChain = (params.chain?.length ?? 0) > 0;
 			const hasTasks = (params.tasks?.length ?? 0) > 0;
 			const hasSingle = Boolean(params.agent && params.task);
+			const requestedMode = hasChain ? "chain" : hasTasks ? "parallel" : "single";
 			const modeCount = Number(hasChain) + Number(hasTasks) + Number(hasSingle);
 			const makeDetails =
 				(mode: "single" | "parallel" | "chain") =>
@@ -365,6 +383,12 @@ export default function (pi: ExtensionAPI) {
 				makeDetails,
 				archive,
 			};
+			if (session !== undefined && !hasSingle) {
+				return {
+					content: [{ type: "text", text: SESSION_SINGLE_MODE_REASON }],
+					details: makeDetails(requestedMode)([]),
+				};
+			}
 			if (modeCount !== 1) {
 				const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 				return {
@@ -401,13 +425,14 @@ export default function (pi: ExtensionAPI) {
 					if (!ok)
 						return {
 							content: [{ type: "text", text: "Canceled: project-local agents not approved." }],
-							details: makeDetails(hasChain ? "chain" : hasTasks ? "parallel" : "single")([]),
+							details: makeDetails(requestedMode)([]),
 						};
 				}
 			}
 			if (params.chain && params.chain.length > 0) return runChainMode(params.chain, modeRun);
 			if (params.tasks && params.tasks.length > 0) return runParallelMode(params.tasks, modeRun);
-			if (params.agent && params.task) return runSingleMode(params.agent, params.task, params.cwd, modeRun);
+			if (params.agent && params.task)
+				return runSingleMode(params.agent, params.task, params.cwd, modeRun, session);
 			const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 			return {
 				content: [{ type: "text", text: `Invalid parameters. Available agents: ${available}` }],

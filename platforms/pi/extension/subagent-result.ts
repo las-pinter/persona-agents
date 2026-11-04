@@ -74,6 +74,12 @@ export interface SingleResult {
 	thinking?: ThinkingState;
 	/** Reasoning tokens summed over the run's assistant turns, when the provider reports them. */
 	reasoningTokens?: number;
+	/** The store session id, or null when the run used no session id. */
+	session: string | null;
+	/** True when the run reopened a saved session file. */
+	resumed: boolean;
+	/** The store round this run took: 1 when there is no session. */
+	round: number;
 }
 
 export interface SubagentDetails {
@@ -120,6 +126,9 @@ export function failureResult(
 		step,
 		runStartedAt: Date.now(),
 		thinking: { thinking: false, thinkingStartedAt: null, thinkingMs: 0 },
+		session: null,
+		resumed: false,
+		round: 1,
 	};
 }
 
