@@ -29,10 +29,9 @@ import { archiveRun } from "./inspector.ts";
 import {
 	type SingleResult,
 	type SubagentDetails,
-	cappedOutputPrefix,
 	getFinalOutput,
 	isFailedResult,
-	resultBodyText,
+	resultTextBlock,
 	toInspectTask,
 	truncateChainPrevious,
 	truncateParallelOutput,
@@ -129,11 +128,11 @@ export async function runChainMode(
 		);
 		results.push(result);
 		if (isFailedResult(result)) {
-			const errorMsg = resultBodyText(result);
-			const capped = cappedOutputPrefix(result);
+			// The shared rule adds the cap line, the partial text, and any real error.
+			const body = resultTextBlock(result);
 			return {
 				content: [
-					{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${capped}${errorMsg}` },
+					{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${body}` },
 				],
 				details: mode.makeDetails("chain")(results),
 				isError: true,
@@ -209,11 +208,12 @@ export async function runParallelMode(
 
 	const successCount = results.filter((r) => !isFailedResult(r)).length;
 	const summaries = results.map((r) => {
-		const output = truncateParallelOutput(resultBodyText(r));
+		// The shared rule carries the cap line, the partial text, and any real error.
+		const output = truncateParallelOutput(resultTextBlock(r));
 		const status = isFailedResult(r)
 			? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
 			: "completed";
-		return `### [${r.agent}] ${status}\n\n${cappedOutputPrefix(r)}${output}`;
+		return `### [${r.agent}] ${status}\n\n${output}`;
 	});
 	mode.archive?.("parallel", results);
 	return {
@@ -248,22 +248,17 @@ export async function runSingleMode(
 		session,
 	);
 	if (result.turnsCapped) {
-		// A capped run keeps its partial text, with the cap line first.
+		// A capped run keeps its partial text after the cap line, then any real error.
 		return {
-			content: [
-				{
-					type: "text",
-					text: `${cappedOutputPrefix(result)}${resultBodyText(result)}`,
-				},
-			],
+			content: [{ type: "text", text: resultTextBlock(result) }],
 			details: mode.makeDetails("single")([result]),
 			isError: true,
 		};
 	}
 	if (isFailedResult(result)) {
-		const errorMsg = resultBodyText(result);
+		const head = `Agent ${result.stopReason || "failed"}: `;
 		return {
-			content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
+			content: [{ type: "text", text: `${head}${resultTextBlock(result)}` }],
 			details: mode.makeDetails("single")([result]),
 			isError: true,
 		};

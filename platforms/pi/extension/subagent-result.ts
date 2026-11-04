@@ -16,6 +16,24 @@ import { cappedTurnText } from "./turn-cap.ts";
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
 
+/** The abort text an aborted run carries. A capped run's cap line already says it. */
+export const ABORT_TEXT = "Subagent was aborted";
+
+/**
+ * The abort texts a provider returns when the run is cut. A capped run maps each
+ * to ABORT_TEXT. The check is exact, so a real error is never swallowed.
+ */
+const ABORT_TEXTS: ReadonlySet<string> = new Set([
+	ABORT_TEXT,
+	"Request was aborted",
+	"The operation was aborted",
+	"This operation was aborted",
+	"The operation was aborted.",
+	"The user aborted a request.",
+	"signal is aborted without reason",
+	"AbortError",
+]);
+
 export function formatUsageStats(
 	usage: {
 		input: number;
@@ -101,7 +119,13 @@ export function getFinalOutput(messages: Message[]): string {
 	return "";
 }
 
-export function isFailedResult(result: SingleResult): boolean {
+/** The fields that decide a failed run. `SingleResult` and `ResultTextSource` both fit. */
+export interface FailureSource {
+	exitCode: number;
+	stopReason?: string;
+}
+
+export function isFailedResult(result: FailureSource): boolean {
 	return result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 }
 
@@ -152,41 +176,78 @@ export function toInspectTask(r: SingleResult): InspectTask {
 		reasoningTokens: r.reasoningTokens,
 		errorMessage: r.errorMessage,
 		turnsCapped: r.turnsCapped,
+		maxTurns: r.maxTurns,
 	};
 }
 
-/**
- * The body a caller reads for one result's work. A capped run keeps its final
- * assistant text, because its error text is the cap abort, not the run's work.
- * Every mode, the tree end preview, and the tool card read this one rule.
- */
-export function resultBodyText(result: SingleResult): string {
-	if (result.turnsCapped) return getFinalOutput(result.messages) || "(no output)";
-	if (isFailedResult(result)) {
-		return result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
-	}
-	return getFinalOutput(result.messages) || "(no output)";
+/** The fields the run-text rule reads. `SingleResult` and `InspectTask` both fit. */
+export interface ResultTextSource {
+	messages: Message[];
+	exitCode: number;
+	stderr?: string;
+	stopReason?: string;
+	errorMessage?: string;
+	turnsCapped?: boolean;
+	maxTurns?: number;
+	usage?: { turns?: number };
+}
+
+/** One run's text, decided in one place. */
+export interface ResultText {
+	/** The cap line, empty when the cap did not end the run. */
+	capLine: string;
+	/** The run's work, or its error text when it failed below the cap. */
+	body: string;
+	/** The error line text, or null when the surface shows no error line. */
+	error: string | null;
+}
+
+/** The final assistant text, or the no-output marker. */
+function outputText(messages: Message[]): string {
+	return getFinalOutput(messages) || "(no output)";
 }
 
 /**
- * The error text a surface shows for one result, or null when it shows none.
- * A capped run shows no error, because its error is the cap abort.
+ * The one rule for a run's text. The cap line shows when and only when the cap
+ * ended the run. The error line shows for any error, except the cap's own abort
+ * text, because the cap line already carries it. A run that failed below the cap
+ * keeps its error text and shows no cap line.
  */
-export function resultErrorText(result: { turnsCapped?: boolean; errorMessage?: string }): string | null {
-	if (result.turnsCapped) return null;
-	return result.errorMessage ?? null;
+export function resultText(source: ResultTextSource): ResultText {
+	const capped = source.turnsCapped === true;
+	const capLine = capped ? cappedTurnText(source.usage?.turns, source.maxTurns) : "";
+	const errorMessage = source.errorMessage ?? null;
+	// A capped run's abort text is the cap's own, so the cap line carries it instead.
+	const error = capped && errorMessage !== null && ABORT_TEXTS.has(errorMessage) ? null : errorMessage;
+	// A failure below the cap carries its reason as its body, so it shows once.
+	const body = !capped && isFailedResult(source)
+		? error || source.stderr || outputText(source.messages)
+		: outputText(source.messages);
+	return { capLine, body, error };
 }
 
-/** The cap line a caller reads before a capped run's partial text, or empty. */
-export function cappedOutputPrefix(result: SingleResult): string {
-	return result.turnsCapped && result.maxTurns !== undefined
-		? `${cappedTurnText(result.usage.turns, result.maxTurns)}\n\n`
-		: "";
+/**
+ * The error line text, or null when the body already carries it. Both renderers
+ * call this, so one rule decides the error line.
+ */
+export function errorLine(text: ResultText): string | null {
+	return text.error !== null && text.error !== text.body ? text.error : null;
 }
 
-/** The whole text a capped surface shows: the cap line, then the partial body. */
-export function cappedRunText(result: SingleResult): string {
-	return result.turnsCapped ? `${cappedOutputPrefix(result)}${resultBodyText(result)}` : "";
+/** The cap line then the body: the run text a surface prints in one block. */
+export function resultBodyBlock(source: ResultTextSource): string {
+	const text = resultText(source);
+	return text.capLine ? `${text.capLine}\n\n${text.body}` : text.body;
+}
+
+/** The cap line, the body, then the error line when the body does not carry it. */
+export function resultTextBlock(source: ResultTextSource): string {
+	const text = resultText(source);
+	const parts = text.capLine ? [text.capLine, text.body] : [text.body];
+	// A failure below the cap already carries its reason as its body.
+	const line = errorLine(text);
+	if (line) parts.push(line);
+	return parts.join("\n\n");
 }
 
 export function truncateParallelOutput(output: string): string {

@@ -70,6 +70,8 @@ interface HarnessOptions {
 	stopAfterSteerTurns?: number;
 	/** Makes the prompt throw once the runner aborts, as a real aborted session does. */
 	abortThrows?: boolean;
+	/** The abort text the prompt throws. Defaults to the repo abort text. */
+	abortMessage?: string;
 }
 
 interface Harness {
@@ -155,7 +157,8 @@ function harness(options: HarnessOptions = {}): Harness {
 					const message = assistantMessage(`turn ${child.emitted}`);
 					for (const listener of listeners) listener({ type: "message_end", message });
 				}
-				if (options.abortThrows && child.aborts > 0) throw new Error("Subagent was aborted");
+				if (options.abortThrows && child.aborts > 0)
+					throw new Error(options.abortMessage ?? "Subagent was aborted");
 			},
 			steer: async (text: string) => {
 				child.steers.push(text);
@@ -310,6 +313,33 @@ test("cap: a capped single run keeps the abort error off the tool result text", 
 	assert.ok(!text.includes("Subagent was aborted"), "the abort error text is not shown");
 });
 
+test("cap: a provider abort text stays off the run text and the tree error", async () => {
+	const logPath = treeLogPath();
+	const previous = process.env[ENV_TREE_LOG];
+	process.env[ENV_TREE_LOG] = logPath;
+	try {
+		const cap = 2;
+		const h = harness({ abortThrows: true, abortMessage: "Request was aborted" });
+		h.mode.maxTurns = cap;
+		const out = await runSingleMode("tester", "do it", undefined, h.mode);
+		const result = out.details?.results[0];
+		const text = out.content[0]?.type === "text" ? out.content[0].text : "";
+		const end = readAllEvents(logPath).find((event) => event.type === "end");
+
+		assert.ok(result);
+		assert.equal(result.turnsCapped, true, "the run is capped");
+		assert.equal(result.errorMessage, "Request was aborted", "the provider text lands on the result");
+		assert.ok(text.includes("partial output follows"), "the cap line shows");
+		assert.ok(!text.includes("Error:"), "no error line shows");
+		assert.ok(!text.includes("Request was aborted"), "the provider abort text is not shown");
+		assert.equal(end?.error, null, "the tree end event carries no error");
+	} finally {
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+		rmSync(logPath, { force: true });
+	}
+});
+
 test("cap: the tree end preview holds the capped partial text, not the abort error", async () => {
 	const logPath = treeLogPath();
 	const previous = process.env[ENV_TREE_LOG];
@@ -322,7 +352,11 @@ test("cap: the tree end preview holds the capped partial text, not the abort err
 		const end = readAllEvents(logPath).find((event) => event.type === "end");
 
 		assert.ok(end, "the run wrote one end event");
-		assert.equal(end.outputPreview, `turn ${cap + TURN_GRACE + 1}`, "the preview is the partial text");
+		assert.equal(
+			end.outputPreview,
+			`turns ${cap + TURN_GRACE + 1}/${cap} (capped, ${TURN_GRACE} grace) - partial output follows\n\nturn ${cap + TURN_GRACE + 1}`,
+			"the preview is the whole run text: the cap line then the partial text",
+		);
 		assert.equal(end.error, null, "the end event carries no abort error text");
 
 		const node = findNode(assembleTree(readAllEvents(logPath), Date.parse(end.at) + 1, 60_000), end.runId);

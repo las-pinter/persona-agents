@@ -12,7 +12,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { Message } from "@earendil-works/pi-ai";
 import { formatDuration, formatTokens } from "./duration.ts";
-import { resultErrorText } from "./subagent-result.ts";
+import { errorLine, resultBodyBlock, resultText } from "./subagent-result.ts";
 
 export interface InspectTask {
 	agent: string;
@@ -34,6 +34,8 @@ export interface InspectTask {
 	errorMessage?: string;
 	/** True when the turn cap ended the run, so its error text is the cap abort. */
 	turnsCapped?: boolean;
+	/** The turn cap in force for the run, so the cap line can name it. */
+	maxTurns?: number;
 }
 
 export interface InspectRun {
@@ -53,18 +55,6 @@ export function archiveRun(run: InspectRun): void {
 
 export function getRuns(): InspectRun[] {
 	return runs;
-}
-
-function getFinalOutput(messages: Message[]): string {
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const m = messages[i];
-		if (m.role === "assistant") {
-			for (const part of m.content) {
-				if (part.type === "text") return part.text;
-			}
-		}
-	}
-	return "";
 }
 
 function toolCalls(messages: Message[]): string[] {
@@ -158,20 +148,23 @@ class InspectorComponent implements Component {
 
 		const t = this.run.results[this.taskIndex];
 		const detail: string[] = [];
-		const shownError = resultErrorText(t);
-		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}${shownError ? " ERR " + shownError : ""}`);
+		// The shared rule decides the cap line, the partial body, and the error line.
+		const runText = resultText(t);
+		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}`);
 		const thinking = formatThinkingSummary(t);
 		if (thinking) detail.push(thinking);
 		for (const c of toolCalls(t.messages)) {
 			detail.push(`→ ${c.length > width - 4 ? c.slice(0, width - 4) : c}`);
 		}
-		const out = getFinalOutput(t.messages);
-		if (out) detail.push(...out.split("\n").map((l) => ` ${l}`.slice(0, width)));
-		else detail.push("(no output)");
+		for (const line of resultBodyBlock(t).split("\n")) detail.push(` ${line}`.slice(0, width));
+		// The error follows the body, so it shows once in the same order as the cards.
+		const errorText = errorLine(runText);
+		if (errorText) detail.push(`Error: ${errorText}`.slice(0, width));
 		const usage = formatUsage(t.usage);
 		if (usage) detail.push(`${usage}`);
-		// A result that did not fail carries its note in the tool text, so no stderr line.
-		if (t.stderr && t.status === "failed") detail.push(`stderr: ${t.stderr.slice(0, Math.max(10, width - 10))}`);
+		// A refusal sets the body from stderr, so the stderr line would repeat it.
+		if (t.stderr && t.status === "failed" && t.stderr !== runText.body)
+			detail.push(`stderr: ${t.stderr.slice(0, Math.max(10, width - 10))}`);
 
 		if (this.offset >= detail.length && detail.length > 0) {
 			this.offset = Math.max(0, detail.length - MAX_VIEW_LINES);

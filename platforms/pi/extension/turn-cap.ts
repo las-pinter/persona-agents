@@ -52,6 +52,10 @@ export function turnCapAction(turns: number, maxTurns: number, steered: boolean)
 }
 
 /** The caller-facing line for a capped run, with the real numbers in place. */
-export function cappedTurnText(turns: number, maxTurns: number): string {
-	return `turns ${turns}/${maxTurns} (capped, ${TURN_GRACE} grace) - partial output follows`;
+export function cappedTurnText(turns: number | undefined, maxTurns: number | undefined): string {
+	const grace = `${TURN_GRACE} grace) - partial output follows`;
+	// A capped source with no usage carries no honest count, so the line names none.
+	if (turns === undefined) return `capped (${grace}`;
+	const count = maxTurns === undefined ? `turns ${turns} (capped` : `turns ${turns}/${maxTurns} (capped`;
+	return `${count}, ${grace}`;
 }

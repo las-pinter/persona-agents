@@ -42,11 +42,12 @@ import { foldEvent } from "./subagent-fold.ts";
 import {
 	type SingleResult,
 	type SubagentDetails,
+	ABORT_TEXT,
 	failureResult,
 	getFinalOutput,
 	isFailedResult,
-	resultBodyText,
-	resultErrorText,
+	resultBodyBlock,
+	resultText,
 } from "./subagent-result.ts";
 import { makeThinkingEventHandler, reduceThinking } from "./subagent-thinking.ts";
 import { TURN_CAP_STEER, resolveMaxTurns, turnCapAction } from "./turn-cap.ts";
@@ -503,7 +504,7 @@ export async function runSingleAgent(
 		if (signal?.aborted) {
 			currentResult.exitCode = 1;
 			currentResult.stopReason = "aborted";
-			currentResult.errorMessage ??= "Subagent was aborted";
+			currentResult.errorMessage ??= ABORT_TEXT;
 			return currentResult;
 		}
 		// The running marker is -1, so the exit code comes from the run itself.
@@ -523,6 +524,7 @@ export async function runSingleAgent(
 		}
 		// The record and the session close here on every exit, including a throw.
 		built?.dispose(isFailedResult(currentResult) ? "failed" : "done");
+		// The shared rule supplies the cap line in the preview and the real error.
 		emitTree("end", {
 			status: isFailedResult(currentResult) ? "failed" : "done",
 			bytesIn: taskBytes,
@@ -530,8 +532,8 @@ export async function runSingleAgent(
 			toolCount: mcp.toolCount(),
 			usage: usageSnapshot(),
 			exitCode: currentResult.exitCode,
-			error: resultErrorText(currentResult),
-			outputPreview: truncateUtf8(resultBodyText(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
+			error: resultText(currentResult).error,
+			outputPreview: truncateUtf8(resultBodyBlock(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
 		});
 	}
 }
