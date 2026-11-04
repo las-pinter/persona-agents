@@ -303,12 +303,13 @@ export async function renderPermissionPrompt(
 		const mod = await import("@earendil-works/pi-tui");
 		let mountedTui: TUI | undefined;
 		// The mount requests a render with the cached frame, so the overlay is not
-		// drawn. A forced render resets that frame and draws the panel.
+		// drawn. The synchronous paint is not forced because a forced paint clears
+		// the screen and the scrollback, which strands the sidebar row cache.
 		const paintOnce = (): void => {
 			const target = mountedTui;
 			if (!target) return;
 			try {
-				target.renderNow(true);
+				target.renderNow();
 			} catch (error) {
 				// The paint is cosmetic, so a failed paint must not fail the ask.
 				console.warn(`agent-stack: forced paint failed: ${(error as Error).message}`);
@@ -328,8 +329,8 @@ export async function renderPermissionPrompt(
 			{
 				overlay: true,
 				overlayOptions: { width: "80%", maxHeight: "100%", anchor: "center", margin: { top: 1 } },
-				// The host calls this right after it pushes the overlay, so one forced
-				// paint here lands on a mounted panel. A closed prompt never gets here.
+				// The host calls this right after it pushes the overlay, so one paint
+				// here lands on a mounted panel. A closed prompt never gets here.
 				onHandle: paintOnce,
 			},
 		);

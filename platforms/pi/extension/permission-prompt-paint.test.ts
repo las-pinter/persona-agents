@@ -1,12 +1,14 @@
 /**
- * Tests for the forced paint that `renderPermissionPrompt` runs after the TUI
- * overlay mounts.
+ * Tests for the paint that `renderPermissionPrompt` runs after the TUI overlay
+ * mounts.
  *
- * Cohesion: one subject, the forced paint. The host renders the mount with its
- * cached frame, so the panel is not drawn until a forced render resets that
- * frame. These tests prove the paint happens once, only after the factory
- * returns, never after the prompt settles, and that a failed paint cannot fail
- * the ask. The model and render behaviour live in `permission-prompt.test.ts`.
+ * Cohesion: one subject, the mount paint. The host renders the mount with its
+ * cached frame, so the panel is not drawn until a render runs. These tests
+ * prove the paint happens once, is never forced, only runs after the factory
+ * returns, never runs after the prompt settles, and that a failed paint cannot
+ * fail the ask. A forced paint clears the screen and the scrollback, so the
+ * sidebar row cache strands; these tests fence that flag. The model and render
+ * behaviour live in `permission-prompt.test.ts`.
  *
  * Runs under plain Node (type stripping):
  *   npm test
@@ -27,9 +29,9 @@ const stubTheme = {
 	},
 } as unknown as Theme;
 
-/** One recorded paint. `afterFactory` proves the factory was never the painter. */
+/** One recorded paint. `force` keeps the raw argument the paint passed. */
 interface Paint {
-	force: boolean;
+	force: boolean | undefined;
 	afterFactory: boolean;
 }
 
@@ -68,7 +70,7 @@ function fakePromptCtx(renderNow?: (force?: boolean) => void): FakeHost {
 	const host = {
 		renderNow(force?: boolean): void {
 			if (renderNow) renderNow(force);
-			paints.push({ force: force === true, afterFactory: factoryReturned });
+			paints.push({ force, afterFactory: factoryReturned });
 		},
 		requestRender(): void {},
 	};
@@ -137,12 +139,12 @@ function shellModel() {
 	});
 }
 
-test("the TUI prompt forces one paint, and only after the factory returns", { timeout: 4000 }, async () => {
+test("the TUI prompt paints once, with no force argument, after the factory returns", { timeout: 4000 }, async () => {
 	const host = fakePromptCtx();
 	const answered = renderPermissionPrompt(host.ctx, shellModel());
 	await host.mounted;
 	assert.equal(host.paints.length, 1, "the mount fires the paint once");
-	assert.equal(host.paints[0].force, true, "the paint is a forced paint");
+	assert.equal(host.paints[0].force, undefined, "the paint passes no force argument");
 	assert.equal(host.paints[0].afterFactory, true, "the paint runs outside the factory");
 
 	// A later window proves the paint is not repeated on a second tick.
