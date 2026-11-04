@@ -1,21 +1,24 @@
 /**
- * A child session cannot ask: the gate denies an ask verdict at once, with a
- * reason that names the fix. The root ask still renders the shared prompt.
+ * Child gate verdicts: the walked depth places every call, a captured root
+ * surface renders the child ask, and the fail-closed guards still hold.
  *
- * The walked depth places the call, never the record's own copy of it: a record
- * that declares depth 0 is still a child. A walk that stops short, or a session
- * id the registry never saw, is refused rather than given the root role. A root
- * session grant is keyed to its session, so it does not cover a child.
+ * A child ask with a captured root surface renders the shared prompt, and the
+ * owner's answer becomes the child's verdict. A child ask with no captured root
+ * surface blocks at once with the no-surface reason. The walked depth places the
+ * call, never the record's own copy of it: a record that declares depth 0 is
+ * still a child. A walk that stops short, or a session id the registry never
+ * saw, is refused rather than given the root role. A root session grant is keyed
+ * to its session, so it does not cover a child.
  *
- * The gate handler is real and the root prompt is a fake. No case advances a
- * clock: the child case counts every timer the gate schedules.
+ * The gate handler is real and the root prompt is a fake.
  *
  * Run: npm test
  */
 
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { CHILD_ASK_NO_SURFACE_REASON, unbindChildAsk } from "./child-ask.ts";
 import {
 	CHILD_A,
 	CHILD_D0,
@@ -28,15 +31,15 @@ import {
 	registryOf,
 	rootContext,
 } from "./gate-fixture.ts";
-import { CHILD_ASK_DENIED_REASON, installToolCallGate, type GateRuleSourceFactory } from "./permissions.ts";
+import { installToolCallGate, type GateRuleSourceFactory } from "./permissions.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import { sessionDepthOf, UNKNOWN_RUN_REASON } from "./run-registry.ts";
 
-type Gate = (event: { toolName: string; input: Record<string, unknown> }, ctx: unknown) => Promise<unknown>;
+afterEach(() => {
+	unbindChildAsk();
+});
 
-/** The reason text, written out, so a rename of the constant cannot hide a change. */
-const REASON =
-	"Blocked: a subagent cannot ask for permission. Use a repository-relative path or an allowed command form.";
+type Gate = (event: { toolName: string; input: Record<string, unknown> }, ctx: unknown) => Promise<unknown>;
 
 /** Install the real gate over one fixture table: a push asks, a status allows. */
 function installGate(): Gate {
@@ -68,48 +71,55 @@ function installGate(): Gate {
 /** The publish ask, which the fixture table turns into an ask verdict. */
 const PUBLISH = { toolName: "bash", input: { command: "git push" } };
 
-test("child ask: the ask verdict is a deny at once, and no timer is scheduled", async () => {
-	const handler = installGate();
-	const prompter = new RootPrompter();
-	const ctx = childContext(CHILD_A, prompter);
+/** One allowed root call, which captures the root prompt surface. */
+async function captureRoot(handler: Gate, prompter: RootPrompter): Promise<void> {
+	const result = await handler({ toolName: "bash", input: { command: "git status" } }, rootContext(prompter));
+	assert.equal(result, undefined, "the root setup call must run");
+}
 
-	// Count every timer the gate schedules, so a deadline would show up here.
-	const scheduled: Array<number | undefined> = [];
-	const realSetTimeout = globalThis.setTimeout;
-	globalThis.setTimeout = ((callback: () => void, ms?: number, ...rest: unknown[]) => {
-		scheduled.push(ms);
-		// A flat rest signature, so the generic setTimeout overload cannot fight the spread.
-		return (realSetTimeout as unknown as (cb: () => void, ms?: number, ...a: unknown[]) => unknown)(
-			callback,
-			ms,
-			...rest,
-		);
-	}) as unknown as typeof setTimeout;
-	let result: unknown;
-	try {
-		result = await handler(PUBLISH, ctx);
-	} finally {
-		globalThis.setTimeout = realSetTimeout;
-	}
+// --- a child ask on the root surface ----------------------------------------
 
-	assert.deepEqual(result, { block: true, reason: REASON }, "the child is denied with the exact reason");
-	assert.equal(CHILD_ASK_DENIED_REASON, REASON, "the exported constant holds that text");
-	assert.deepEqual(scheduled, [], "a child ask schedules no timer");
-	assert.equal(prompter.titles.length, 0, "a child ask renders no prompt");
-	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
-});
-
-test("child ask: a context with a prompt surface still denies the child, before any prompt", async () => {
+test("child ask: the captured root surface renders the prompt and the answer is the verdict", async () => {
 	const handler = installGate();
 	const prompter = new RootPrompter();
 	prompter.answers = ["Allow once"];
-	// A child id on a UI-bearing context: the child branch must win.
+	await captureRoot(handler, prompter);
+
+	const result = await handler(PUBLISH, childContext(CHILD_A, prompter));
+
+	assert.equal(result, undefined, "the owner's allow grants the child call");
+	assert.equal(prompter.titles.length, 1, "the child ask renders the shared prompt");
+	assert.match(prompter.titles[0], /implementer/, "the prompt names the asking child");
+	assert.match(prompter.titles[0], /1 of 1 waiting/, "the prompt counts the waiting child");
+	assert.deepEqual(prompter.options[0], THREE_LABELS, "the three choices are unchanged");
+	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
+});
+
+test("child ask: no captured root surface blocks at once with its own reason", async () => {
+	const handler = installGate();
+	const prompter = new RootPrompter();
+	prompter.answers = ["Allow once"];
+
+	const result = await handler(PUBLISH, childContext(CHILD_A, prompter));
+
+	assert.deepEqual(result, { block: true, reason: CHILD_ASK_NO_SURFACE_REASON });
+	assert.notEqual(CHILD_ASK_NO_SURFACE_REASON, UNKNOWN_RUN_REASON, "the no-surface text is its own");
+	assert.equal(prompter.titles.length, 0, "no surface means no prompt");
+	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
+});
+
+test("child ask: a UI-bearing child context is not its own root surface", async () => {
+	const handler = installGate();
+	const prompter = new RootPrompter();
+	prompter.answers = ["Allow once"];
+	// A child id on a UI-bearing context: the child branch must still win.
 	const ctx = { ...rootContext(prompter), sessionManager: { getSessionId: () => CHILD_A } };
 
 	const result = await handler(PUBLISH, ctx);
 
-	assert.deepEqual(result, { block: true, reason: REASON });
-	assert.equal(prompter.titles.length, 0, "the ask never reaches the prompt");
+	assert.deepEqual(result, { block: true, reason: CHILD_ASK_NO_SURFACE_REASON });
+	assert.equal(prompter.titles.length, 0, "a child context never renders its own prompt");
+	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
 });
 
 test("root ask: the shared prompt still renders unchanged", async () => {
@@ -140,16 +150,19 @@ test("root ask: the owner's deny still blocks with the user reason", async () =>
 // --- walked depth ------------------------------------------------------------
 
 // Only this case catches a gate that trusts the record's own depth copy.
-test("depth: a record that declares depth 0 is still denied as a child", async () => {
+test("depth: a record that declares depth 0 still asks as a child", async () => {
 	const handler = installGate();
 	const prompter = new RootPrompter();
+	prompter.answers = ["Allow once"];
+	await captureRoot(handler, prompter);
 	// The record names the root as its parent, so the walk places it one hop down.
 	assert.equal(sessionDepthOf(CHILD_D0), 1, "the walk sets the depth, not the record");
 
 	const result = await handler(PUBLISH, childContext(CHILD_D0, prompter));
 
-	assert.deepEqual(result, { block: true, reason: REASON }, "the child is denied at once");
-	assert.equal(prompter.titles.length, 0, "a child ask renders no prompt");
+	assert.equal(result, undefined, "the owner's allow grants the child call");
+	assert.equal(prompter.titles.length, 1, "the child ask renders no root-style title");
+	assert.match(prompter.titles[0], /1 of 1 waiting/, "the child title, not the root title");
 	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
 });
 
@@ -194,7 +207,8 @@ test("fail closed: a broken parent link blocks with the missing session id", asy
 test("grant scope: a root session grant does not cover a child", async () => {
 	const handler = installGate();
 	const prompter = new RootPrompter();
-	prompter.answers = ["Always allow this rule (session)"];
+	prompter.answers = ["Always allow this rule (session)", "Allow once"];
+	await captureRoot(handler, prompter);
 
 	assert.equal(await handler(PUBLISH, rootContext(prompter)), undefined, "the root runs the granted rule");
 	assert.equal(await handler(PUBLISH, rootContext(prompter)), undefined, "the root reuses its own grant");
@@ -203,8 +217,9 @@ test("grant scope: a root session grant does not cover a child", async () => {
 	// CHILD_D0 holds the root's role, so only the session id separates the keys.
 	const result = await handler(PUBLISH, childContext(CHILD_D0, prompter));
 
-	assert.deepEqual(result, { block: true, reason: REASON }, "the root grant does not answer for the child");
-	assert.equal(prompter.titles.length, 1, "the child ask renders no prompt");
+	assert.equal(result, undefined, "the child prompt is answered on its own");
+	assert.equal(prompter.titles.length, 2, "the root grant does not answer for the child");
+	assert.match(prompter.titles[1], /orchestrator/, "the child prompt names the same role");
 	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
 });
 

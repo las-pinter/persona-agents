@@ -7,10 +7,10 @@
  * own handler, so the verdict order and the session allow memory are the ones
  * the root uses.
  *
- * An ask in a child is a denial at once (`permissions.ts` owns the reason). A
- * child has no UI, so no prompt can mount for it. The gate reads the child
- * session id from the passed context. A wrapper with no bound gate blocks, so
- * it never runs ungated.
+ * An ask in a child goes to the parent ask queue (`child-ask.ts`), which renders
+ * the shared prompt on the root surface. The gate reads the child session id
+ * from the passed context, so the root prompt answers the child. A wrapper with
+ * no bound gate blocks, so it never runs ungated.
  *
  * The wrapper list must equal the child loadout. A name outside the list has no
  * wrapper, so nothing would gate it. `assertWrapperListEquals` fails that build.
@@ -58,8 +58,8 @@ export const CHILD_ASK_REFUSAL_REASON =
 	"Blocked: a child cannot ask the user; return the questions for the caller to put";
 
 /**
- * The child `ask_user_question` tool. A child session has no UI, and the
- * orchestrator is the only mouth, so the tool refuses and names the next step.
+ * The child `ask_user_question` tool. A question round belongs to the caller,
+ * not to the child, so the tool refuses and names the next step.
  */
 export const CHILD_ASK_TOOL: ChildToolDefinition = {
 	name: "ask_user_question",

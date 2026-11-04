@@ -288,12 +288,17 @@ export function bindRunRegistry(registry: RunRegistry | null): void {
 	boundRegistry = registry;
 }
 
+/** Reads what `bindRunRegistry` set. */
+export function boundRunRegistry(): RunRegistry | null {
+	return boundRegistry;
+}
+
 /**
  * The walked depth of one session from the bound registry, or null when no
  * registry is bound or the walk stops short. A caller uses it to tell a child
  * session from the root without holding the registry itself.
  */
 export function sessionDepthOf(sessionId: string): number | null {
-	const walk = boundRegistry?.walk(sessionId);
+	const walk = boundRunRegistry()?.walk(sessionId);
 	return walk !== undefined && walk.ok ? walk.depth : null;
 }

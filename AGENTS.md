@@ -137,6 +137,11 @@ platform:
   allow it. The script path check limits that call to the installed script.
   The session stamp check and the `replace` digest check limit what it writes.
   The opencode separator asks are journal scoped and rely on last-match-wins.
+  On pi, a root prompt and a queued child prompt can mount on one terminal. The
+  two panels stack. The panel that mounted last takes the keypress, and the
+  earlier panel takes focus back when the later one closes. The root prompt
+  carries no deadline, so it waits. A child request still ends at its own
+  deadline.
 
 Every other agent gets a DENY for `git add`, `git commit`, `git push`,
 `git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr`,
@@ -149,10 +154,9 @@ role templates reach DENY through the deny-by-default mode. `cp`, `mv`, and
 rest. The global file asks for `git push` and `gh pr` for every agent. It is
 live and unversioned.
 
-On pi, a child session cannot ask. No panel can mount for a child, so the gate
-denies a child ask at once. The block reason is "Blocked: a subagent cannot ask
-for permission. Use a repository-relative path or an allowed command form." A
-root ask keeps its prompt.
+On pi, a child ask is queued, not denied, and the owner's answer becomes the
+child's verdict. `platforms/pi/README.md` owns the queue mechanics, the deadline
+count, and the no-surface case.
 
 ## Adding content
 

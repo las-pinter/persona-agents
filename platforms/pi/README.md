@@ -257,8 +257,18 @@ spanning always-allow runs the current call and remembers the rule, approving no
 segment; later calls skip the spanning ask, but they still must pass the allow checks,
 so deny-by-default can still block them.
 
-A run with no UI (`-p`, `--mode json`, a child process) treats `ask` as a hard
-block: nothing auto-allows.
+A run with no UI (`-p`, `--mode json`) has no surface to draw a prompt on, so an
+ask there fails closed with no prompt. A child ask does not fail closed while
+its root is live. The child enqueues the request in `child-ask.ts`, and the root
+renders the shared prompt on the surface its own gate captured, so the owner's
+answer becomes the child's verdict. One child request is on screen at a time,
+and its title names the child and the waiting count. The root's own inline ask
+is separate, so it can mount beside a child prompt. `AGENTS.md` records the
+accepted risk that the two panels stack. The deadline counts from arrival, so a
+request that waits behind another prompt can still time out. A stranded request
+leaves the queue and blocks with a reason that names the 120 second deadline. A
+root with no captured surface renders nothing, so its child blocks at once.
+`AGENTS.md` owns the doctrine.
 
 The table is a pi mechanism. Kiro and opencode keep their glob rule files, so a
 rule that misses a glob there falls to that stack's default (ask). On pi a form

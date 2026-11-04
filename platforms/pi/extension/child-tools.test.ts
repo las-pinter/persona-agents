@@ -46,7 +46,8 @@ import {
 } from "./child-tools.ts";
 import { CHILD_A, ROOT, RootPrompter, childContext, repoRoot, rootContext } from "./gate-fixture.ts";
 import { loadDefaultRows } from "./permission-config.ts";
-import { CHILD_ASK_DENIED_REASON, compileGateSource, type GateRuleSourceFactory, installToolCallGate } from "./permissions.ts";
+import { DENIED_BY_USER_REASON } from "./permission-prompt.ts";
+import { compileGateSource, type GateRuleSourceFactory, installToolCallGate } from "./permissions.ts";
 import type { AgentConfig, AgentSource, PermissionClass, PermissionRule } from "./resolver.ts";
 import { RunRegistry, bindRunRegistry, newRunRecord } from "./run-registry.ts";
 import { getRunRegistry, registerRootSession } from "./subagent-run.ts";
@@ -291,7 +292,7 @@ test("verdict: a deny blocks the wrapped tool before it runs", async () => {
 	assert.equal(bash.calls.length, 0, "a denied tool never runs");
 });
 
-test("verdict: a child ask is denied at once, with the child reason", async () => {
+test("verdict: a child ask renders the root prompt and the answer decides the child call", async () => {
 	const handler = installGate();
 	const prompter = prompterOf(["Allow once"]);
 	await captureRoot(handler, prompter);
@@ -302,10 +303,10 @@ test("verdict: a child ask is denied at once, with the child reason", async () =
 	const out = await callTool(wrapper, { command: "git push origin main" }, prompter);
 	built.dispose("done");
 
-	assert.equal(out.isError, true, "a child ask is a blocked tool result");
-	assert.equal(out.text, CHILD_ASK_DENIED_REASON, "the wrapper returns the child reason");
-	assert.equal(prompter.titles.length, 0, "a child ask renders no prompt");
-	assert.equal(bash.calls.length, 0, "the wrapped tool never runs on an ask");
+	assert.equal(out.isError, false, "the owner's allow runs the child call");
+	assert.equal(prompter.titles.length, 1, "the child ask renders the root prompt once");
+	assert.match(prompter.titles[0], /implementer/, "the prompt names the child");
+	assert.equal(bash.calls.length, 1, "the wrapped tool runs on an allowed ask");
 });
 
 test("gate: no bound gate blocks every wrapper", async () => {
@@ -322,7 +323,7 @@ test("gate: no bound gate blocks every wrapper", async () => {
 
 // --- the root record and the child deny --------------------------------------
 
-test("root: a child record walks to the root, and its ask is denied below the root", async () => {
+test("root: a child record walks to the root, and its deny is the child verdict", async () => {
 	const handler = installGate();
 	const walk = getRunRegistry().walk(ROOT);
 	assert.equal(walk.ok, true, "the root record is registered");
@@ -342,10 +343,10 @@ test("root: a child record walks to the root, and its ask is denied below the ro
 	const out = await callTool(wrapper, { command: "git push" }, prompter);
 	built.dispose("done");
 
-	assert.equal(out.isError, true, "a child ask is a blocked tool result");
-	assert.equal(out.text, CHILD_ASK_DENIED_REASON, "the deny names the fix, not the root denial");
-	assert.equal(prompter.titles.length, 0, "the child ask reaches no root prompt");
-	assert.equal(bash.calls.length, 0);
+	assert.equal(out.isError, true, "the owner's deny is a blocked tool result");
+	assert.equal(out.text, DENIED_BY_USER_REASON, "the deny is the owner's answer, not a child block");
+	assert.equal(prompter.titles.length, 1, "the child ask reached the root prompt");
+	assert.equal(bash.calls.length, 0, "the wrapped tool never runs on a deny");
 });
 
 // --- the wrapper list and the loadout ---------------------------------------

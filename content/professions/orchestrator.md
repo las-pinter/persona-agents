@@ -69,7 +69,10 @@ entry. Then run the startup reads that the **project-notes** skill defines, unle
 
 ## Planner Relay
 
-The orchestrator is the only mouth. A planner subagent cannot ask the user.
+The orchestrator is the only mouth for a planner's question round. A planner
+subagent cannot put a question to the user. A permission ask is not a question
+round. `AGENTS.md` owns that rule: the root renders the shared prompt when a
+child asks.
 
 - When a planner subagent returns a `## QUESTION ROUND` block, put those
   questions to the user with the user-question tool. That tool is
