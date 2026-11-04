@@ -22,13 +22,16 @@ import {
 	agentPrefix,
 	decidePlan,
 	findSessionFile,
+	isSafeSidecarId,
 	isValidSessionId,
 	missingSessionReason,
+	openPlannedSession,
 	planSession,
 	readSidecar,
 	sessionStoreDir,
 	sidecarPath,
 	staleSessionReason,
+	writeRoundSidecar,
 	writeSidecar,
 } from "./session-store.ts";
 import type { SidecarRecord, SessionFacts } from "./session-store.ts";
@@ -578,4 +581,171 @@ test("the pure decision needs no disk and reports a resume from supplied facts",
 	if (one.kind !== "resume") return;
 	assert.equal(one.sessionFile, "/tmp/saved.jsonl");
 	assert.equal(one.round, 1);
+});
+
+// --- planned session and round write ------------------------------------------
+
+test("a cold plan opens a manager that persists a store file the lookup later finds", () => {
+	const agentDir = tempAgentDir();
+
+	const cold = plan(agentDir);
+	assert.equal(cold.kind, "cold");
+	if (cold.kind !== "cold") return;
+
+	const opened = openPlannedSession(cold, "root-session");
+
+	assert.equal(opened.resumed, false);
+	assert.equal(opened.id, ID);
+	assert.equal(opened.round, 1);
+	assert.equal(opened.note, cold.message);
+	assert.equal(opened.plan, cold);
+
+	const pending = opened.sessionManager.getSessionFile();
+	assert.ok(pending !== undefined, "a cold round must know its store file");
+	if (pending === undefined) return;
+	assert.equal(path.dirname(pending), sessionStoreDir(agentDir));
+	assert.match(path.basename(pending), /^\d{4}-\d{2}-\d{2}T[\d-]+Z_implementer-auth-fix\.jsonl$/);
+
+	// The library writes the file at the first message, so a round drives it once.
+	opened.sessionManager.appendMessage({ role: "user", content: "probe", timestamp: NOW });
+
+	assert.equal(fs.existsSync(pending), true);
+	assert.equal(opened.sessionManager.getHeader()?.parentSession, "root-session");
+
+	const hit = findSessionFile(agentDir, ID);
+	assert.equal(hit?.path, pending);
+	assert.equal(hit?.headerCwd, CWD);
+});
+
+test("a resume plan reopens the saved file and reports the next round", () => {
+	const agentDir = tempAgentDir();
+	const saved = writeSession(agentDir, ID, { mtimeMs: NOW - DAY });
+	writeSidecar(agentDir, ID, sidecar({ rounds: 1 }));
+
+	const resume = plan(agentDir);
+	assert.equal(resume.kind, "resume");
+	if (resume.kind !== "resume") return;
+
+	// The parent argument is cold-only, so a resume must ignore it.
+	const opened = openPlannedSession(resume, "ignored-parent");
+
+	assert.equal(opened.resumed, true);
+	assert.equal(opened.id, ID);
+	assert.equal(opened.round, 2);
+	assert.equal(opened.note, "");
+	assert.equal(opened.plan, resume);
+	assert.equal(opened.sessionManager.getSessionFile(), saved);
+	assert.equal(opened.sessionManager.getSessionId(), ID);
+	assert.equal(opened.sessionManager.getHeader()?.cwd, CWD);
+	assert.equal(opened.sessionManager.getHeader()?.parentSession, undefined);
+});
+
+test("a round sidecar write updates the counts and the next plan refuses at the cap", () => {
+	const agentDir = tempAgentDir();
+
+	const cold = plan(agentDir);
+	assert.equal(cold.kind, "cold");
+	if (cold.kind !== "cold") return;
+
+	const opened = openPlannedSession(cold, null);
+	opened.sessionManager.appendMessage({ role: "user", content: "probe", timestamp: NOW });
+	const file = opened.sessionManager.getSessionFile();
+	assert.ok(file !== undefined, "a cold round must persist a file before its sidecar write");
+	if (file === undefined) return;
+	const mtime = new Date(NOW);
+	fs.utimesSync(file, mtime, mtime);
+
+	const firstWrite = NOW + 60_000;
+	assert.equal(writeRoundSidecar(cold, 5, "root-session", firstWrite), sidecarPath(agentDir, ID));
+
+	const afterOne = readSidecar(agentDir, ID);
+	assert.equal(afterOne?.agent, AGENT);
+	assert.equal(afterOne?.class, "worker");
+	assert.equal(afterOne?.rounds, 1);
+	assert.equal(afterOne?.turns, 5);
+	assert.equal(afterOne?.createdAt, firstWrite);
+	assert.equal(afterOne?.updatedAt, firstWrite);
+	assert.equal(afterOne?.parentSession, "root-session");
+	assert.equal(afterOne?.cwd, CWD);
+
+	const second = plan(agentDir, { now: firstWrite });
+	assert.equal(second.kind, "resume");
+	if (second.kind !== "resume") return;
+	assert.equal(second.round, 2);
+
+	const secondWrite = firstWrite + 60_000;
+	writeRoundSidecar(second, 3, null, secondWrite);
+
+	const afterTwo = readSidecar(agentDir, ID);
+	assert.equal(afterTwo?.agent, AGENT);
+	assert.equal(afterTwo?.class, "worker");
+	assert.equal(afterTwo?.rounds, 2);
+	assert.equal(afterTwo?.turns, 3);
+	assert.equal(afterTwo?.createdAt, firstWrite);
+	assert.equal(afterTwo?.updatedAt, secondWrite);
+	assert.equal(afterTwo?.parentSession, "root-session");
+
+	const third = plan(agentDir, { now: secondWrite });
+	assert.equal(third.kind, "refuse");
+	if (third.kind !== "refuse") return;
+	assert.equal(third.reason, "round-cap");
+	assert.equal(third.message, ROUND_CAP_REASON);
+	assert.equal(third.round, 3);
+});
+
+test("a saved null parent stays null when a later round passes a real parent id", () => {
+	const agentDir = tempAgentDir();
+
+	const cold = plan(agentDir);
+	assert.equal(cold.kind, "cold");
+	if (cold.kind !== "cold") return;
+
+	const opened = openPlannedSession(cold, null);
+	opened.sessionManager.appendMessage({ role: "user", content: "probe", timestamp: NOW });
+	const file = opened.sessionManager.getSessionFile();
+	assert.ok(file !== undefined, "a cold round must persist a file before its sidecar write");
+	if (file === undefined) return;
+	const mtime = new Date(NOW);
+	fs.utimesSync(file, mtime, mtime);
+
+	const firstWrite = NOW + 60_000;
+	writeRoundSidecar(cold, 4, null, firstWrite);
+	assert.equal(readSidecar(agentDir, ID)?.parentSession, null, "the first write must save the null parent");
+
+	const second = plan(agentDir, { now: firstWrite });
+	assert.equal(second.kind, "resume");
+	if (second.kind !== "resume") return;
+
+	const secondWrite = firstWrite + 60_000;
+	writeRoundSidecar(second, 2, "root-session", secondWrite);
+
+	const afterTwo = readSidecar(agentDir, ID);
+	assert.equal(afterTwo?.rounds, 2);
+	assert.equal(afterTwo?.parentSession, null, "a later round must not fill in the saved null parent");
+});
+
+test("an escape id is refused before a path is built and writes nothing outside the store", () => {
+	const parent = tempAgentDir();
+	const agentDir = path.join(parent, "agent");
+	const badIds = [
+		`${AGENT}-../escape`,
+		`${AGENT}-a/../../escape`,
+		`${AGENT}-Escape`,
+		`${AGENT}-a..b`,
+	];
+
+	for (const id of badIds) {
+		assert.equal(isSafeSidecarId(id), false, `${id} must not be a safe file name`);
+		assert.throws(() => sidecarPath(agentDir, id), `${id} must not build a sidecar path`);
+		assert.equal(readSidecar(agentDir, id), null, `${id} must read as absent`);
+
+		const one = plan(agentDir, { id });
+		assert.equal(one.kind, "refuse", `${id} must refuse`);
+		if (one.kind !== "refuse") continue;
+		assert.equal(one.reason, "bad-id");
+		assert.equal(one.sidecarPath, null);
+	}
+
+	assert.equal(fs.existsSync(agentDir), false, "a refused id must not create the agent folder");
+	assert.deepEqual(fs.readdirSync(parent), [], "a refused id must write nothing beside the store");
 });

@@ -9,7 +9,8 @@
  * This module owns every resume decision: the round cap, the foreign-agent
  * refusal, the id-prefix and id-grammar refusals, the two cold fallbacks, and
  * the retention age. The runner switches on the returned plan and does not
- * re-decide a rule.
+ * re-decide a rule. It also builds the session manager one plan names and
+ * writes the round sidecar.
  *
  * A sidecar read never throws. A missing, unreadable, corrupt, or partial file
  * reads as absent, because a broken sidecar must not block a cold run. The
@@ -19,6 +20,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { RUN_RETENTION_MS } from "./run-registry.ts";
 import { PERMISSION_CLASSES } from "./resolver.ts";
 import type { PermissionClass } from "./resolver.ts";
@@ -154,8 +156,21 @@ export function sessionStoreDir(agentDir: string): string {
 	return path.join(agentDir, SESSIONS_SUBDIR);
 }
 
-/** The sidecar path for one session id. */
+/** True for an id that is safe as one file name inside the store. */
+export function isSafeSidecarId(id: string): boolean {
+	return ID_TAIL_PATTERN.test(id);
+}
+
+/**
+ * The sidecar path for one session id.
+ *
+ * A bad id throws here, so no caller can build a path out of the store. The
+ * read wrapper catches it, so a bad id reads as absent.
+ */
 export function sidecarPath(agentDir: string, id: string): string {
+	if (!isSafeSidecarId(id)) {
+		throw new Error(`session-store: session id "${id}" is not a safe file name`);
+	}
 	return path.join(sessionStoreDir(agentDir), `${id}.json`);
 }
 
@@ -240,9 +255,8 @@ export function readSidecar(agentDir: string, id: string): SidecarRecord | null 
 	}
 }
 
-/** Write one sidecar and return its path. The eight fields are written in order. */
-export function writeSidecar(agentDir: string, id: string, record: SidecarRecord): string {
-	const file = sidecarPath(agentDir, id);
+/** Write one sidecar file and return its path. The caller supplies a safe path. */
+function writeSidecarFile(file: string, record: SidecarRecord): string {
 	const stored: SidecarRecord = {
 		agent: record.agent,
 		class: record.class,
@@ -253,9 +267,14 @@ export function writeSidecar(agentDir: string, id: string, record: SidecarRecord
 		parentSession: record.parentSession,
 		cwd: record.cwd,
 	};
-	fs.mkdirSync(sessionStoreDir(agentDir), { recursive: true });
+	fs.mkdirSync(path.dirname(file), { recursive: true });
 	fs.writeFileSync(file, `${JSON.stringify(stored)}\n`, "utf8");
 	return file;
+}
+
+/** Write one sidecar and return its path. The eight fields are written in order. */
+export function writeSidecar(agentDir: string, id: string, record: SidecarRecord): string {
+	return writeSidecarFile(sidecarPath(agentDir, id), record);
 }
 
 /** Read the session header `cwd` from the first line. Null when unreadable. */
@@ -476,4 +495,83 @@ export function planSession(input: PlanSessionInput): SessionPlan {
 	const sidecar = readSidecar(input.agentDir, input.id);
 	const session = sidecar === null ? null : findSessionFile(input.agentDir, input.id);
 	return decidePlan(input, { sidecar, session });
+}
+
+/** One session manager built from a plan, with the facts a result carries. */
+export interface PlannedSession {
+	/** A new persisted file for a cold run, or the saved file reopened. */
+	sessionManager: SessionManager;
+	/** The plan this manager came from, kept so the round can write its sidecar. */
+	plan: ResumePlan | ColdPlan;
+	/** The caller-named store id. */
+	id: string;
+	/** True when the manager reopened a saved file. */
+	resumed: boolean;
+	/** The round this call runs. */
+	round: number;
+	/** The store reason a cold round carries, or the empty string on a resume. */
+	note: string;
+}
+
+/**
+ * Build the session manager one plan names.
+ *
+ * A cold plan gets a manager that persists under the store directory and keeps
+ * the store id. The library writes the file at the first user or assistant
+ * message; a setup entry alone leaves no file. The file name ends with the
+ * store id, so a later round finds it. A resume opens the saved file and keeps
+ * its id. The parent link goes into the header only, on a cold round.
+ */
+export function openPlannedSession(
+	plan: ResumePlan | ColdPlan,
+	parentSession: string | null,
+): PlannedSession {
+	if (plan.kind === "resume") {
+		return {
+			sessionManager: SessionManager.open(plan.sessionFile, plan.storeDir, plan.cwd),
+			plan,
+			id: plan.id,
+			resumed: true,
+			round: plan.round,
+			note: "",
+		};
+	}
+	const sessionManager = SessionManager.create(plan.cwd, plan.storeDir, {
+		id: plan.id,
+		parentSession: parentSession ?? undefined,
+	});
+	return {
+		sessionManager,
+		plan,
+		id: plan.id,
+		resumed: false,
+		round: plan.round,
+		note: plan.message,
+	};
+}
+
+/**
+ * Write the sidecar after one round: the round count, this round's turns, and
+ * the write time. The five identity fields (agent, class, createdAt,
+ * parentSession, cwd) keep their first written value. The three counters are
+ * written every round, and the round cap depends on `rounds` growing, so
+ * `rounds` cannot be frozen. A saved `null` parent stays `null`.
+ */
+export function writeRoundSidecar(
+	plan: ResumePlan | ColdPlan,
+	turns: number,
+	parentSession: string | null,
+	now: number,
+): string {
+	const first = plan.sidecar;
+	return writeSidecarFile(plan.sidecarPath, {
+		agent: plan.agent,
+		class: plan.class,
+		rounds: plan.round,
+		turns,
+		createdAt: first?.createdAt ?? now,
+		updatedAt: now,
+		parentSession: first ? first.parentSession : parentSession,
+		cwd: first?.cwd ?? plan.cwd,
+	});
 }
