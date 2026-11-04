@@ -102,7 +102,7 @@ function formatThinkingSummary(t: InspectTask): string {
 
 const MAX_VIEW_LINES = 55;
 
-class InspectorComponent {
+class InspectorComponent implements Component {
 	wantsKeyRelease = false;
 	private taskIndex = 0;
 	private offset = 0;
@@ -115,6 +115,9 @@ class InspectorComponent {
 		this.run = run;
 		this.done = done;
 	}
+
+	// Render rebuilds every line from the run data, so there is no cached state to clear.
+	invalidate(): void {}
 
 	handleInput(data: string): void {
 		if (matchesKey(data, Key.escape) || data === "q" || data === "Q") {
@@ -228,10 +231,8 @@ export function registerInspectorCommands(pi: ExtensionAPI): void {
 			}
 			const run = all[idx];
 			await ctx.ui.custom(
-				// The overlay component is duck-typed (wantsKeyRelease/handleInput/render);
-				// pi's Component interface is stricter than the runtime contract here.
 				(_tui, _theme, _keybindings, done) =>
-					new InspectorComponent(_tui as TUI, run, () => done(undefined)) as unknown as Component,
+					new InspectorComponent(_tui, run, () => done(undefined)),
 				{
 					overlay: true,
 					overlayOptions: { width: "100%", maxHeight: "100%", anchor: "center", margin: { top: 0 } },

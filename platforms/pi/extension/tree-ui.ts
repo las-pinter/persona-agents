@@ -290,7 +290,7 @@ function stopTimers(): void {
 // --- overlays ---------------------------------------------------------------
 
 /** The `/agents-tree` overlay: a node list plus `renderNodeDetail` for the selection. */
-class TreeOverlayComponent {
+class TreeOverlayComponent implements Component {
 	wantsKeyRelease = false;
 	private readonly tui: TUI;
 	private readonly theme: SidebarTheme;
@@ -332,6 +332,9 @@ class TreeOverlayComponent {
 		}
 	}
 
+	// Render reads the live snapshot on every call, so there is no cached state to clear.
+	invalidate(): void {}
+
 	render(width: number): string[] {
 		const lines: string[] = [];
 		try {
@@ -363,7 +366,7 @@ class TreeOverlayComponent {
 }
 
 /** The `/agent-inspect` overlay: one node's detail. */
-class NodeDetailComponent {
+class NodeDetailComponent implements Component {
 	wantsKeyRelease = false;
 	private readonly theme: SidebarTheme;
 	private readonly node: TreeNode;
@@ -382,6 +385,9 @@ class NodeDetailComponent {
 			/* a key must never throw */
 		}
 	}
+
+	// The node and theme never change, so there is no cached render state to clear.
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		let lines: string[] = [];
@@ -403,15 +409,13 @@ async function openTreeOverlay(ctx: ExtensionContext): Promise<void> {
 		return;
 	}
 	await ctx.ui.custom(
-		// The component is duck-typed; pi's Component interface is stricter than
-		// the runtime contract, so cast like `inspector.ts` does.
 		(_tui, _theme, _keybindings, done) =>
 			new TreeOverlayComponent(
 				_tui,
-				_theme as unknown as SidebarTheme,
+				_theme,
 				() => boundData.snapshot(),
 				() => done(undefined),
-			) as unknown as Component,
+			),
 		{
 			overlay: true,
 			overlayOptions: { width: "100%", maxHeight: "100%", anchor: "center", margin: { top: 0 } },
@@ -422,8 +426,7 @@ async function openTreeOverlay(ctx: ExtensionContext): Promise<void> {
 /** Open one node's detail overlay. The caller has checked `ctx.mode === "tui"`. */
 async function openNodeOverlay(ctx: ExtensionContext, node: TreeNode): Promise<void> {
 	await ctx.ui.custom(
-		(_tui, _theme, _keybindings, done) =>
-			new NodeDetailComponent(_theme as unknown as SidebarTheme, node, () => done(undefined)) as unknown as Component,
+		(_tui, _theme, _keybindings, done) => new NodeDetailComponent(_theme, node, () => done(undefined)),
 		{
 			overlay: true,
 			overlayOptions: { width: "100%", maxHeight: "100%", anchor: "center", margin: { top: 0 } },
@@ -483,7 +486,7 @@ export function bindTreeSidebar(ctx: ExtensionContext): void {
 			WIDGET_KEY,
 			(tui, theme) => {
 				capturedTui = tui;
-				capturedTheme = theme as unknown as SidebarTheme;
+				capturedTheme = theme;
 				return anchor;
 			},
 			{ placement: "belowEditor" },

@@ -103,7 +103,7 @@ function formatToolCall(
 
 type DisplayItem =
 	| { type: "text"; text: string }
-	| { type: "toolCall"; name: string; args: Record<string, any>; durationMs?: number };
+	| { type: "toolCall"; name: string; args: Record<string, unknown>; durationMs?: number };
 
 function getDisplayItems(messages: SingleResult["messages"]): DisplayItem[] {
 	const durations = new Map<string, number>();

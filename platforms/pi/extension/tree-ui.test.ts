@@ -18,6 +18,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
 import {
 	SIDEBAR_CONFIG_ENV,
 	SIDEBAR_DEFAULT_WIDTH,
@@ -25,6 +26,7 @@ import {
 } from "./sidebar.ts";
 import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
+import { appendEvent } from "./tree-log.ts";
 
 /**
  * The outer pi session exports PI_AGENT_TREE_LOG. Its live tree log would fill
@@ -64,6 +66,11 @@ interface FakeTui {
 /** The real command handler shape the fake pi captures. */
 type SidebarHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 
+/** The component the last `ctx.ui.custom` call mounted. */
+interface MountedOverlay {
+	component: Component | undefined;
+}
+
 /** A bound glue instance and the fakes it was bound to. */
 interface Harness {
 	configPath: string;
@@ -71,6 +78,10 @@ interface Harness {
 	tui: FakeTui;
 	notifications: Notification[];
 	handler: SidebarHandler;
+	/** The `/agent-inspect` handler. */
+	inspect: SidebarHandler;
+	/** Set by the fake `ctx.ui.custom`. */
+	overlay: MountedOverlay;
 	ctx: ExtensionContext;
 }
 
@@ -90,7 +101,7 @@ afterEach(() => {
  * Bind the real glue to fakes. Writes the config file first so the resolved
  * width is deterministic, then registers the commands and binds the TUI path.
  */
-function setup(config: { enabled?: boolean; width?: number }): Harness {
+function setup(config: { enabled?: boolean; width?: number; log?: boolean }): Harness {
 	const dir = mkdtempSync(join(tmpdir(), "pa-tree-ui-"));
 	currentDir = dir;
 	const configPath = join(dir, "persona-agents-sidebar.json");
@@ -98,6 +109,22 @@ function setup(config: { enabled?: boolean; width?: number }): Harness {
 	process.env[SIDEBAR_CONFIG_ENV] = configPath;
 	// Force an empty tree so the test never reads the live tree log.
 	delete process.env[ENV_TREE_LOG];
+	if (config.log) {
+		const logPath = join(dir, "tree.log");
+		appendEvent(logPath, {
+			v: 1,
+			type: "start",
+			runId: "run-test-1",
+			parentRunId: null,
+			depth: 0,
+			agent: "implementer",
+			persona: null,
+			status: "running",
+			at: new Date().toISOString(),
+			task: "build it",
+		});
+		process.env[ENV_TREE_LOG] = logPath;
+	}
 
 	const writes: string[] = [];
 	const terminal: FakeTerminal = {
@@ -121,6 +148,7 @@ function setup(config: { enabled?: boolean; width?: number }): Harness {
 
 	const notifications: Notification[] = [];
 	const commands = new Map<string, SidebarHandler>();
+	const overlay: MountedOverlay = { component: undefined };
 	const identityTheme = {
 		bold: (text: string): string => text,
 		dim: (text: string): string => text,
@@ -135,6 +163,13 @@ function setup(config: { enabled?: boolean; width?: number }): Harness {
 		},
 		notify(message: string, level?: string): void {
 			notifications.push({ message, level });
+		},
+		// The handler mounts through `custom`; capture the component it returns.
+		custom(
+			factory: (tui: unknown, theme: unknown, keys: unknown, done: (value: unknown) => void) => unknown,
+		): Promise<void> {
+			overlay.component = factory(tui, identityTheme, {}, () => {}) as Component;
+			return Promise.resolve();
 		},
 	};
 
@@ -165,11 +200,12 @@ function setup(config: { enabled?: boolean; width?: number }): Harness {
 
 	const handler = commands.get("sidebar");
 	assert.ok(handler, "the /sidebar command was not registered");
-	return { configPath, terminal, tui, notifications, handler, ctx };
+	const inspect = commands.get("agent-inspect");
+	assert.ok(inspect, "the /agent-inspect command was not registered");
+	return { configPath, terminal, tui, notifications, handler, inspect, overlay, ctx };
 }
 
 // --- /sidebar width wiring ---------------------------------------------------
-
 test("a valid /sidebar width persists, reinstalls the compositor, and renders", async () => {
 	const harness = setup({ enabled: true });
 	const before = getSidebarCompositor();
@@ -296,4 +332,17 @@ test("a toggle adopts a width changed on disk so the live compositor matches dis
 		enabled: true,
 		width: 30,
 	});
+});
+
+// --- /agent-inspect overlay contract ----------------------------------------
+
+test("the agent detail overlay carries invalidate and re-renders after it", async () => {
+	const harness = setup({ enabled: true, log: true });
+	await harness.inspect("last", harness.ctx);
+
+	const mounted = harness.overlay.component;
+	assert.ok(mounted, "the /agent-inspect command mounts a component");
+	mounted.invalidate();
+	const lines = mounted.render(80);
+	assert.match(lines[0], /AGENT implementer/, lines[0]);
 });
