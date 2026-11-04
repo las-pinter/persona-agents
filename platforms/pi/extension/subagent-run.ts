@@ -44,8 +44,9 @@ import {
 	type SubagentDetails,
 	failureResult,
 	getFinalOutput,
-	getResultOutput,
 	isFailedResult,
+	resultBodyText,
+	resultErrorText,
 } from "./subagent-result.ts";
 import { makeThinkingEventHandler, reduceThinking } from "./subagent-thinking.ts";
 import { TURN_CAP_STEER, resolveMaxTurns, turnCapAction } from "./turn-cap.ts";
@@ -491,8 +492,8 @@ export async function runSingleAgent(
 			toolCount: mcp.toolCount(),
 			usage: usageSnapshot(),
 			exitCode: currentResult.exitCode,
-			error: currentResult.errorMessage ?? null,
-			outputPreview: truncateUtf8(getResultOutput(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
+			error: resultErrorText(currentResult),
+			outputPreview: truncateUtf8(resultBodyText(currentResult), TREE_OUTPUT_PREVIEW_BYTES),
 		});
 	}
 }

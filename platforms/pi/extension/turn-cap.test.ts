@@ -9,6 +9,9 @@
 
 import { afterEach, test } from "node:test";
 import * as assert from "node:assert/strict";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	AgentSession,
 	AgentSessionEvent,
@@ -21,12 +24,17 @@ import type {
 import type { Message } from "@earendil-works/pi-ai";
 import type { ChildModel } from "./child-session.ts";
 import { bindParentGate, clearChildToolImplementations } from "./child-tools.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
 import type { AgentConfig } from "./resolver.ts";
 import { RunRegistry } from "./run-registry.ts";
+import { renderNodeDetail } from "./sidebar-render.ts";
+import { theme } from "./sidebar-render-fixtures.ts";
 import type { SingleResult, SubagentDetails } from "./subagent-result.ts";
 import { type DispatchDeps, type PreparedChildRuntime } from "./subagent-run.ts";
 import { type ModeRun, runChainMode, runSingleMode } from "./subagent.ts";
 import { MAX_MAX_TURNS, MIN_MAX_TURNS, TURN_GRACE } from "./turn-cap.ts";
+import { assembleTree, findNode } from "./tree-model.ts";
+import { readAllEvents } from "./tree-log.ts";
 
 const AGENT = {
 	name: "tester",
@@ -193,6 +201,11 @@ async function run(h: Harness, maxTurns?: number): Promise<SingleResult> {
 	return result;
 }
 
+/** A unique tree log path per test, so one test reads only its own events. */
+function treeLogPath(): string {
+	return join(tmpdir(), `pi-cap-tree-${process.pid}-${Math.random().toString(36).slice(2)}.ndjson`);
+}
+
 test("cap: a call with no maxTurns uses the default and stays uncapped below it", async () => {
 	const h = harness({ emitLimit: 3 });
 	const result = await run(h);
@@ -279,6 +292,78 @@ test("cap: a capped chain step shows its partial text, not the abort error", asy
 	assert.ok(text.includes("partial output follows"), "the cap line promises the partial text");
 	assert.ok(text.includes(`turn ${cap + TURN_GRACE + 1}`), "the partial text follows the cap line");
 	assert.ok(!text.includes("Subagent was aborted"), "the abort error text is not shown");
+});
+
+test("cap: a capped single run keeps the abort error off the tool result text", async () => {
+	const cap = 2;
+	const h = harness({ abortThrows: true });
+	h.mode.maxTurns = cap;
+	const out = await runSingleMode("tester", "do it", undefined, h.mode);
+	const result = out.details?.results[0];
+	const text = out.content[0]?.type === "text" ? out.content[0].text : "";
+
+	assert.ok(result);
+	assert.equal(result.turnsCapped, true, "the run is capped");
+	assert.match(result.errorMessage ?? "", /Subagent was aborted/, "the abort error text exists on the result");
+	assert.ok(text.includes("partial output follows"), "the cap line promises the partial text");
+	assert.ok(text.includes(`turn ${cap + TURN_GRACE + 1}`), "the partial text follows the cap line");
+	assert.ok(!text.includes("Subagent was aborted"), "the abort error text is not shown");
+});
+
+test("cap: the tree end preview holds the capped partial text, not the abort error", async () => {
+	const logPath = treeLogPath();
+	const previous = process.env[ENV_TREE_LOG];
+	process.env[ENV_TREE_LOG] = logPath;
+	try {
+		const cap = 2;
+		const h = harness({ abortThrows: true });
+		h.mode.maxTurns = cap;
+		await runSingleMode("tester", "do it", undefined, h.mode);
+		const end = readAllEvents(logPath).find((event) => event.type === "end");
+
+		assert.ok(end, "the run wrote one end event");
+		assert.equal(end.outputPreview, `turn ${cap + TURN_GRACE + 1}`, "the preview is the partial text");
+		assert.equal(end.error, null, "the end event carries no abort error text");
+
+		const node = findNode(assembleTree(readAllEvents(logPath), Date.parse(end.at) + 1, 60_000), end.runId);
+		assert.ok(node, "the tree holds the capped run");
+		assert.equal(node.error, null, "the node copies no abort error text");
+		const detail = renderNodeDetail(node, 80, theme).join("\n");
+		assert.ok(!detail.includes("Subagent was aborted"), "the sidebar detail shows no abort error text");
+		assert.ok(detail.includes(`turn ${cap + TURN_GRACE + 1}`), "the sidebar detail shows the partial preview");
+	} finally {
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+		rmSync(logPath, { force: true });
+	}
+});
+
+test("cap: an abort below the cap keeps its error text on the tool result and the tree", async () => {
+	const logPath = treeLogPath();
+	const previous = process.env[ENV_TREE_LOG];
+	process.env[ENV_TREE_LOG] = logPath;
+	try {
+		const controller = new AbortController();
+		controller.abort();
+		const h = harness({ emitLimit: 1 });
+		h.mode.maxTurns = 5;
+		h.mode.signal = controller.signal;
+		const out = await runSingleMode("tester", "do it", undefined, h.mode);
+		const result = out.details?.results[0];
+		const text = out.content[0]?.type === "text" ? out.content[0].text : "";
+		const end = readAllEvents(logPath).find((event) => event.type === "end");
+
+		assert.ok(result);
+		assert.equal(result.turnsCapped, false, "the run ended below the cap");
+		assert.ok(result.errorMessage, "the run carries one error text");
+		assert.ok(text.includes(result.errorMessage), "the tool result keeps the error text");
+		assert.equal(end?.outputPreview, result.errorMessage, "the tree preview keeps the error text");
+		assert.equal(end?.error, result.errorMessage, "the tree end event keeps the error text");
+	} finally {
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+		rmSync(logPath, { force: true });
+	}
 });
 
 test("cap: a child that stops inside the grace window is not capped", async () => {

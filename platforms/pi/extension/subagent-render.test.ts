@@ -255,6 +255,39 @@ test("the single run total and stop reason render duration-first in both collaps
 	assert.equal(expanded, "✗ tester (user) 1.2s [aborted]");
 });
 
+test("an abort below the cap keeps its error line in the card", () => {
+	const tool = captureTool();
+	const failed = makeSingle({ exitCode: 1, stopReason: "aborted", errorMessage: "boom" });
+	const result = makeResult(makeDetails("single", [failed]));
+
+	assert.ok(render(tool, result, false, {}).includes("Error: boom"), "the collapsed card keeps the error");
+	assert.ok(render(tool, result, true, {}).includes("Error: boom"), "the expanded card keeps the error");
+});
+
+test("a capped single card shows the partial text and no abort error", () => {
+	const tool = captureTool();
+	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
+	const capped = makeSingle({
+		exitCode: 1,
+		stopReason: "aborted",
+		errorMessage: "Subagent was aborted",
+		turnsCapped: true,
+		maxTurns: 2,
+		usage: { ...zeroUsage(), turns: 8 },
+		messages: [partial],
+	});
+	const result = makeResult(makeDetails("single", [capped]));
+
+	for (const expanded of [false, true]) {
+		const out = render(tool, result, expanded, {});
+		assert.ok(!out.includes("Subagent was aborted"), `expanded=${expanded} hides the abort error`);
+		assert.ok(out.includes("partial output follows"), `expanded=${expanded} shows the shared cap line`);
+		assert.ok(out.includes("partial turn text"), `expanded=${expanded} shows the partial text`);
+	}
+	const collapsed = render(tool, result, false, {});
+	assert.ok(!collapsed.includes("(no output)"), "the collapsed card shows no no-output line");
+});
+
 // --- thinking reducer (pure) -------------------------------------------------
 
 test("reduceThinking folds a thinking stretch into the run total", () => {
@@ -503,6 +536,48 @@ test("the inspector detail shows the thinking summary", async () => {
 	const lines = component?.render(200).join("\n") ?? "";
 	assert.ok(lines.includes("🧠 3.4s"), lines);
 	assert.ok(lines.includes("25 reasoning"), lines);
+});
+
+test("the capped detail hides the abort text and a below-cap detail keeps its error", async () => {
+	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
+	const cappedTask = toInspectTask(
+		makeSingle({
+			exitCode: 1,
+			stopReason: "aborted",
+			errorMessage: "Subagent was aborted",
+			turnsCapped: true,
+			usage: { ...zeroUsage(), turns: 8 },
+			messages: [partial],
+		}) as unknown as SingleResult,
+	);
+	const belowCapTask = toInspectTask(
+		makeSingle({ exitCode: 1, stopReason: "aborted", errorMessage: "aborted below the cap" }) as unknown as SingleResult,
+	);
+	archiveRun({ at: "2024-01-07T00:00:00.000Z", mode: "single", agentScope: "user", results: [belowCapTask] });
+	archiveRun({ at: "2024-01-08T00:00:00.000Z", mode: "single", agentScope: "user", results: [cappedTask] });
+
+	const commands = captureCommands();
+	const inspectDetail = async (arg: string): Promise<string> => {
+		let component: { render(width: number): string[] } | undefined;
+		await commands.get("inspect")?.handler(arg, {
+			mode: "tui",
+			ui: {
+				custom: async (
+					factory: (tui: unknown, theme: unknown, keys: unknown, done: (v: unknown) => void) => unknown,
+				) => {
+					component = factory({}, {}, {}, () => {}) as { render(width: number): string[] };
+				},
+			},
+		});
+		return component?.render(200).join("\n") ?? "";
+	};
+
+	const capped = await inspectDetail("last");
+	assert.ok(capped.includes("partial turn text"), capped);
+	assert.ok(!capped.includes("Subagent was aborted"), capped);
+
+	const belowCap = await inspectDetail(String(getRuns().length - 1));
+	assert.ok(belowCap.includes("aborted below the cap"), belowCap);
 });
 
 test("the inspector formats reasoning tokens like the inline block", async () => {

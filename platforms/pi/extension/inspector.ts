@@ -12,6 +12,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { Message } from "@earendil-works/pi-ai";
 import { formatDuration, formatTokens } from "./duration.ts";
+import { resultErrorText } from "./subagent-result.ts";
 
 export interface InspectTask {
 	agent: string;
@@ -31,6 +32,8 @@ export interface InspectTask {
 	thinkingMs?: number;
 	reasoningTokens?: number;
 	errorMessage?: string;
+	/** True when the turn cap ended the run, so its error text is the cap abort. */
+	turnsCapped?: boolean;
 }
 
 export interface InspectRun {
@@ -152,7 +155,8 @@ class InspectorComponent {
 
 		const t = this.run.results[this.taskIndex];
 		const detail: string[] = [];
-		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}${t.errorMessage ? " ERR " + t.errorMessage : ""}`);
+		const shownError = resultErrorText(t);
+		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}${shownError ? " ERR " + shownError : ""}`);
 		const thinking = formatThinkingSummary(t);
 		if (thinking) detail.push(thinking);
 		for (const c of toolCalls(t.messages)) {

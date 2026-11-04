@@ -14,9 +14,11 @@ import { SubagentParams } from "./subagent-schema.ts";
 import {
 	type SingleResult,
 	type SubagentDetails,
+	cappedRunText,
 	formatUsageStats,
 	getFinalOutput,
 	isFailedResult,
+	resultErrorText,
 } from "./subagent-result.ts";
 import { formatThinkingIndicator } from "./subagent-thinking.ts";
 
@@ -232,7 +234,10 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 				? theme.fg("error", "✗")
 				: theme.fg("success", "✓");
 		const displayItems = getDisplayItems(r.messages);
-		const finalOutput = getFinalOutput(r.messages);
+		// A capped run shows the shared cap line and partial body, not the abort error.
+		const finalOutput = cappedRunText(r) || getFinalOutput(r.messages);
+		// The shared rule decides if a capped run shows its error text at all.
+		const errorText = resultErrorText(r);
 
 		if (expanded) {
 			const container = new Container();
@@ -240,8 +245,8 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 			container.addChild(new Text(header, 0, 0));
 			for (const line of thinkingLines(r)) container.addChild(new Text(theme.fg("dim", line), 0, 0));
-			if (isError && r.errorMessage)
-				container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
+			// A capped run shows its partial text, not the cap abort error.
+			if (isError && errorText) container.addChild(new Text(theme.fg("error", `Error: ${errorText}`), 0, 0));
 			container.addChild(new Spacer(1));
 			container.addChild(new Text(theme.fg("muted", "─── Task ───"), 0, 0));
 			container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
@@ -276,7 +281,8 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 		let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
 		if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 		text += thinkingText(r);
-		if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
+		if (isError && errorText) text += `\n${theme.fg("error", `Error: ${errorText}`)}`;
+		else if (r.turnsCapped) text += `\n${theme.fg("muted", finalOutput)}`;
 		else if (displayItems.length === 0)
 			text += `\n${theme.fg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;
 		else {
@@ -332,7 +338,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 							? theme.fg("success", "✓")
 							: theme.fg("error", "✗");
 				const displayItems = getDisplayItems(r.messages);
-				const finalOutput = getFinalOutput(r.messages);
+				const finalOutput = cappedRunText(r) || getFinalOutput(r.messages);
 
 				container.addChild(new Spacer(1));
 				container.addChild(
@@ -429,7 +435,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			for (const r of details.results) {
 				const rIcon = isFailedResult(r) ? theme.fg("error", "✗") : theme.fg("success", "✓");
 				const displayItems = getDisplayItems(r.messages);
-				const finalOutput = getFinalOutput(r.messages);
+				const finalOutput = cappedRunText(r) || getFinalOutput(r.messages);
 
 				container.addChild(new Spacer(1));
 				container.addChild(

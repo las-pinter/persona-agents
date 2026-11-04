@@ -10,6 +10,7 @@ import type { InspectTask } from "./inspector.ts";
 import type { AgentScope } from "./resolver.ts";
 import { formatTokens } from "./duration.ts";
 import type { ThinkingState } from "./subagent-thinking.ts";
+import { cappedTurnText } from "./turn-cap.ts";
 
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
@@ -141,14 +142,42 @@ export function toInspectTask(r: SingleResult): InspectTask {
 		thinkingMs: r.thinking?.thinkingMs ?? 0,
 		reasoningTokens: r.reasoningTokens,
 		errorMessage: r.errorMessage,
+		turnsCapped: r.turnsCapped,
 	};
 }
 
-export function getResultOutput(result: SingleResult): string {
+/**
+ * The body a caller reads for one result's work. A capped run keeps its final
+ * assistant text, because its error text is the cap abort, not the run's work.
+ * Every mode, the tree end preview, and the tool card read this one rule.
+ */
+export function resultBodyText(result: SingleResult): string {
+	if (result.turnsCapped) return getFinalOutput(result.messages) || "(no output)";
 	if (isFailedResult(result)) {
 		return result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
 	}
 	return getFinalOutput(result.messages) || "(no output)";
+}
+
+/**
+ * The error text a surface shows for one result, or null when it shows none.
+ * A capped run shows no error, because its error is the cap abort.
+ */
+export function resultErrorText(result: { turnsCapped?: boolean; errorMessage?: string }): string | null {
+	if (result.turnsCapped) return null;
+	return result.errorMessage ?? null;
+}
+
+/** The cap line a caller reads before a capped run's partial text, or empty. */
+export function cappedOutputPrefix(result: SingleResult): string {
+	return result.turnsCapped && result.maxTurns !== undefined
+		? `${cappedTurnText(result.usage.turns, result.maxTurns)}\n\n`
+		: "";
+}
+
+/** The whole text a capped surface shows: the cap line, then the partial body. */
+export function cappedRunText(result: SingleResult): string {
+	return result.turnsCapped ? `${cappedOutputPrefix(result)}${resultBodyText(result)}` : "";
 }
 
 export function truncateParallelOutput(output: string): string {
