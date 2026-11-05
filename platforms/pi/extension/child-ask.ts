@@ -19,9 +19,11 @@
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { askPanelSlot } from "./ask-panel-slot.ts";
 import {
 	DENIED_BY_USER_REASON,
 	renderPermissionPrompt,
+	renderRootPermissionPrompt,
 	type PermissionChoice,
 	type PromptModel,
 } from "./permission-prompt.ts";
@@ -109,6 +111,8 @@ interface RootState {
 	queue: GateRequest[];
 	/** The request whose prompt is on screen, or null. */
 	visible: GateRequest | null;
+	/** Requests with a mount that runs or waits for the shared panel slot. */
+	parked: Set<GateRequest>;
 }
 
 /**
@@ -259,7 +263,7 @@ export class ChildAskQueue {
 		const roots = this.stateOf(registry).roots;
 		let state = roots.get(rootSessionId);
 		if (!state) {
-			state = { registry, rootSessionId, queue: [], visible: null };
+			state = { registry, rootSessionId, queue: [], visible: null, parked: new Set() };
 			roots.set(rootSessionId, state);
 		}
 		return state;
@@ -267,7 +271,7 @@ export class ChildAskQueue {
 
 	/** Show the head, or fail it closed when the root has no surface yet. */
 	private pump(state: RootState): void {
-		if (state.visible) return;
+		if (state.visible || state.parked.size > 0) return;
 		const surfaces = this.stateOf(state.registry).surfaces;
 		while (state.queue.length > 0) {
 			const head = state.queue[0];
@@ -280,32 +284,51 @@ export class ChildAskQueue {
 				this.settle(state, head, { kind: "block", reason: CHILD_ASK_NO_SURFACE_REASON });
 				continue;
 			}
-			// A root inline ask can already hold an overlay here. This gate does not
-			// track that, so the two panels stack: the panel that mounted last takes
-			// the keypress, and the earlier panel takes focus back when the later one
-			// closes. AGENTS.md records that as an accepted risk.
-			state.visible = head;
-			const model = titled(head.model, childPromptTitle(head.role, state.queue.length));
-			let shown: Promise<PermissionChoice>;
-			try {
-				shown = this.render(ctx, model, head.cancel.signal);
-			} catch {
-				this.answer(state, head, "deny");
-				return;
-			}
-			void shown.then(
-				(choice) => this.answer(state, head, choice),
-				() => this.answer(state, head, "deny"),
-			);
+			// A root ask can own the panel slot. This wait is bounded by the request's
+			// own deadline, so the wait never outlasts the ask that waits for a panel.
+			void this.show(state, head, ctx);
 			return;
 		}
 		this.release(state);
 	}
 
+	/**
+	 * Take the shared panel slot, mount one prompt, and hand the slot back on
+	 * every exit. The slot stops a root ask from mounting beside this panel. A
+	 * request that times out while it waits for the slot never mounts here.
+	 */
+	private async show(state: RootState, head: GateRequest, ctx: ExtensionContext): Promise<void> {
+		// Count the mount before it can wait, so a settle in another path sees it.
+		state.parked.add(head);
+		try {
+			const releaseSlot = await askPanelSlot.acquire();
+			try {
+				// The deadline may have passed while this request waited for the slot.
+				if (head.settled) return;
+				state.visible = head;
+				const model = titled(head.model, childPromptTitle(head.role, state.queue.length));
+				let choice: PermissionChoice;
+				try {
+					choice = await this.render(ctx, model, head.cancel.signal);
+				} catch {
+					choice = "deny";
+				}
+				this.answer(state, head, choice);
+			} finally {
+				releaseSlot();
+			}
+		} finally {
+			state.parked.delete(head);
+			this.pump(state);
+		}
+	}
+
 	/** Drop a state with no work left, so the roots map does not grow per root. */
 	private release(state: RootState): void {
 		if (state.visible || state.queue.length > 0) return;
-		this.stateOf(state.registry).roots.delete(state.rootSessionId);
+		const roots = this.stateOf(state.registry).roots;
+		// A stale mount can outlive its own root entry, so only drop this exact state.
+		if (roots.get(state.rootSessionId) === state) roots.delete(state.rootSessionId);
 	}
 
 	/** Turn one owner choice into a verdict, then show the next request. */
@@ -344,7 +367,12 @@ export class ChildAskQueue {
 		this.settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
+		// A parked mount clears itself in its own finally. This path never clears
+		// the parked count, so a later expire cannot start a second mount.
 		this.pump(state);
+		// The visible panel closes on its own microtask, so drop the drained root
+		// here. A stale mount that resumes later cannot delete a newer state.
+		this.release(state);
 	}
 }
 
@@ -357,6 +385,13 @@ let routing: ChildAskQueue | null = null;
  * `run-registry.ts`; this bind never names one.
  */
 export function bindChildAsk(options: ChildAskOptions = {}): void {
+	// The root wrapper takes the slot, and the child queue takes it too. A child
+	// render that also takes it would wait on itself forever.
+	if (options.render === renderRootPermissionPrompt) {
+		throw new Error(
+			"bindChildAsk: renderRootPermissionPrompt is the root renderer, so a child ask would deadlock",
+		);
+	}
 	routing = new ChildAskQueue(options);
 }
 
@@ -364,6 +399,8 @@ export function bindChildAsk(options: ChildAskOptions = {}): void {
 export function unbindChildAsk(): void {
 	routing?.clearSurfaces();
 	routing = null;
+	// A panel left mounted by a test would block the next test's first ask.
+	askPanelSlot.reset();
 }
 
 /** The bound queue. The gate calls this on every tool call. */

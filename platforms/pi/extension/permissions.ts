@@ -88,7 +88,7 @@ import {
 	blockedLabel,
 	DENIED_BY_USER_REASON,
 	humanReason,
-	renderPermissionPrompt,
+	renderRootPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
 import { bindChildAsk, childAskQueue } from "./child-ask.ts";
@@ -533,7 +533,7 @@ export function installToolCallGate(
 				};
 			}
 
-			const choice: PermissionChoice = await renderPermissionPrompt(ctx, promptModel);
+			const choice: PermissionChoice = await renderRootPermissionPrompt(ctx, promptModel);
 
 			if (choice === "always-allow") {
 				sessionAllow.add(key); // remembered for the rest of the session

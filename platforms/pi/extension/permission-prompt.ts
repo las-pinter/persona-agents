@@ -14,6 +14,7 @@
 
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
+import { askPanelSlot } from "./ask-panel-slot.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
@@ -343,6 +344,28 @@ export async function renderPermissionPrompt(
 		signal,
 	);
 	return model.options.find((option) => option.label === picked)?.decision ?? "deny";
+}
+
+/**
+ * Show the root permission prompt. The root holds the ask panel slot while its
+ * panel is live, so a queued child ask cannot mount beside it. A child ask does
+ * not come here: the child queue takes the slot itself, and a second acquire on
+ * one ask would deadlock. The slot is released on every exit: answer, deny,
+ * cancel, abort, or throw. A signal can release the slot while the host select
+ * dialog is still on screen, because the fallback cannot close that dialog. The
+ * root gate passes no signal today, so that release path is not reached.
+ */
+export async function renderRootPermissionPrompt(
+	ctx: ExtensionContext,
+	model: PromptModel,
+	signal?: AbortSignal,
+): Promise<PermissionChoice> {
+	const releaseSlot = await askPanelSlot.acquire();
+	try {
+		return await renderPermissionPrompt(ctx, model, signal);
+	} finally {
+		releaseSlot();
+	}
 }
 
 /**

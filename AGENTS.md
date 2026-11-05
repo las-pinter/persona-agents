@@ -137,11 +137,10 @@ platform:
   allow it. The script path check limits that call to the installed script.
   The session stamp check and the `replace` digest check limit what it writes.
   The opencode separator asks are journal scoped and rely on last-match-wins.
-  On pi, a root prompt and a queued child prompt can mount on one terminal. The
-  two panels stack. The panel that mounted last takes the keypress, and the
-  earlier panel takes focus back when the later one closes. The root prompt
-  carries no deadline, so it waits. A child request still ends at its own
-  deadline.
+  On pi, a root ask and a queued child ask share one panel slot, so only one
+  panel is live on the terminal. The second ask waits, first in first out. A
+  waiting ask is bounded by its own deadline. The root prompt carries no
+  deadline, so it waits. A child request still ends at its own deadline.
 
 Every other agent gets a DENY for `git add`, `git commit`, `git push`,
 `git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr`,

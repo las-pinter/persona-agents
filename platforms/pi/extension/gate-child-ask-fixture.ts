@@ -67,19 +67,33 @@ export class RootPrompter {
 	never = false;
 	private active = 0;
 	private next = 0;
+	private readonly held: Array<(value: string | undefined) => void> = [];
 
 	async select(title: string, options: string[]): Promise<string | undefined> {
 		this.titles.push(title);
 		this.options.push(options);
 		this.active += 1;
 		this.maxActive = Math.max(this.maxActive, this.active);
-		// A held prompt models an owner who never answers.
-		if (this.never) return new Promise<string | undefined>(() => {});
+		// A held prompt waits for the test, so the case can answer it on demand.
+		if (this.never) {
+			return new Promise<string | undefined>((resolve) => {
+				this.held.push((value) => {
+					this.active -= 1;
+					resolve(value);
+				});
+			});
+		}
 		await new Promise<void>((resolve) => setTimeout(resolve, 4));
 		this.active -= 1;
 		const answer = this.answers[Math.min(this.next, this.answers.length - 1)];
 		this.next += 1;
 		return answer;
+	}
+
+	/** Answer every held prompt, so a test can release the root on demand. */
+	release(answer: string | undefined): void {
+		const held = this.held.splice(0);
+		for (const resolve of held) resolve(answer);
 	}
 }
 

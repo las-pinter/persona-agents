@@ -262,10 +262,15 @@ ask there fails closed with no prompt. A child ask does not fail closed while
 its root is live. The child enqueues the request in `child-ask.ts`, and the root
 renders the shared prompt on the surface its own gate captured, so the owner's
 answer becomes the child's verdict. One child request is on screen at a time,
-and its title names the child and the waiting count. The root's own inline ask
-is separate, so it can mount beside a child prompt. `AGENTS.md` records the
-accepted risk that the two panels stack. The deadline counts from arrival, so a
-request that waits behind another prompt can still time out. A stranded request
+and its title names the child and the waiting count. `ask-panel-slot.ts` holds
+one exclusive slot with two acquire sites: the root wrapper
+`renderRootPermissionPrompt` in `permission-prompt.ts`, and `ChildAskQueue.show`
+in `child-ask.ts`. Each site releases the slot in a `finally`, so a throw, a
+denial, a cancel, or a timeout frees it. A second ask waits first in first out.
+A generation counter stops a stale lease from freeing a newer ask's slot.
+`permission-prompt-slot.test.ts` covers the slot. `AGENTS.md` owns the rule
+that only one panel is live. The deadline counts from arrival, so a request
+that waits behind another prompt can still time out. A stranded request
 leaves the queue and blocks with a reason that names the 120 second deadline. A
 root with no captured surface renders nothing, so its child blocks at once.
 `AGENTS.md` owns the doctrine.
