@@ -30,6 +30,14 @@ import {
 import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent } from "./tree-log.ts";
+import {
+	makeTerminal,
+	makeTui,
+	paintCalls,
+	resetPaints,
+	type FakeTerminal,
+	type FakeTui,
+} from "./sidebar-terminal-fixtures.ts";
 
 /**
  * The outer pi session exports PI_AGENT_TREE_LOG. Its live tree log would fill
@@ -51,34 +59,6 @@ const SELECTION_MARKER = "▶";
 interface Notification {
 	message: string;
 	level: string | undefined;
-}
-
-interface FakeTerminal {
-	columns: number;
-	rows: number;
-	writes: string[];
-	write(data: string): void;
-}
-
-interface FakeTui {
-	terminal: FakeTerminal;
-	/** Counts the `doRender` paint path alone. */
-	doRenderCalls: number;
-	/** Counts the `requestRender` paint path alone. */
-	requestRenderCalls: number;
-	doRender(): void;
-	requestRender(): void;
-}
-
-/** The sum of both paint paths; use it when any paint satisfies the check. */
-function paintCalls(tui: FakeTui): number {
-	return tui.doRenderCalls + tui.requestRenderCalls;
-}
-
-/** Set both paint counters to zero before one action. */
-function resetPaints(tui: FakeTui): void {
-	tui.doRenderCalls = 0;
-	tui.requestRenderCalls = 0;
 }
 
 /** The real command handler shape the fake pi captures. */
@@ -181,26 +161,8 @@ function setup(config: { enabled?: boolean; width?: number; log?: boolean }): Ha
 		process.env[ENV_TREE_LOG] = logPath;
 	}
 
-	const writes: string[] = [];
-	const terminal: FakeTerminal = {
-		columns: RAW_COLUMNS,
-		rows: RAW_ROWS,
-		writes,
-		write(data: string): void {
-			writes.push(data);
-		},
-	};
-	const tui: FakeTui = {
-		terminal,
-		doRenderCalls: 0,
-		requestRenderCalls: 0,
-		doRender(): void {
-			tui.doRenderCalls += 1;
-		},
-		requestRender(): void {
-			tui.requestRenderCalls += 1;
-		},
-	};
+	const terminal = makeTerminal(RAW_COLUMNS, RAW_ROWS);
+	const tui = makeTui(terminal);
 
 	const notifications: Notification[] = [];
 	const commands = new Map<string, SidebarHandler>();
@@ -291,7 +253,7 @@ test("a valid /sidebar width persists, reinstalls the compositor, and renders", 
 		RAW_COLUMNS - 80 - 1,
 		"the terminal was not narrowed to the new width",
 	);
-	assert.ok(paintCalls(harness.tui) > 0, "the handler did not request a render");
+	assert.equal(harness.tui.requestRenderCalls, 1, "the handler did not request a render");
 	assert.deepEqual(JSON.parse(readFileSync(harness.configPath, "utf8")), {
 		enabled: true,
 		width: 80,

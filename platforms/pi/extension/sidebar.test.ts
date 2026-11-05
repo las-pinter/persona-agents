@@ -31,74 +31,13 @@ import {
 	resolveSidebarWidth,
 	toggleSidebarState,
 	writeSidebarConfig,
-	type SidebarTerminal,
 } from "./sidebar.ts";
 import {
 	renderSidebarPanel,
 	type SidebarSnapshot,
 	type SidebarTheme,
 } from "./sidebar-render.ts";
-
-// --- fakes ------------------------------------------------------------------
-
-interface FakeTerminal extends SidebarTerminal {
-	writes: string[];
-}
-
-interface FakeTui {
-	terminal: FakeTerminal;
-	renderCalls: number;
-	doRender(...args: unknown[]): void;
-}
-
-function makeTerminal(columns = 100, rows = 30): FakeTerminal {
-	const writes: string[] = [];
-	return {
-		columns,
-		rows,
-		writes,
-		write(data: string): void {
-			writes.push(data);
-		},
-	};
-}
-
-function makeTui(terminal: FakeTerminal): FakeTui {
-	const tui: FakeTui = {
-		terminal,
-		renderCalls: 0,
-		doRender(): void {
-			tui.renderCalls += 1;
-		},
-	};
-	return tui;
-}
-
-/** A terminal whose raw column count can change, like a real resize. */
-interface ResizableTerminal extends FakeTerminal {
-	resize(columns: number): void;
-}
-
-function makeResizableTerminal(columns: number, rows = 30): ResizableTerminal {
-	let raw = columns;
-	const writes: string[] = [];
-	return {
-		rows,
-		writes,
-		get columns(): number {
-			return raw;
-		},
-		set columns(value: number) {
-			raw = value;
-		},
-		write(data: string): void {
-			writes.push(data);
-		},
-		resize(next: number): void {
-			raw = next;
-		},
-	};
-}
+import { makeResizableTerminal, makeTerminal, makeTui } from "./sidebar-terminal-fixtures.ts";
 
 // --- compositor install / dispose -------------------------------------------
 
@@ -155,6 +94,10 @@ test("dispose restores the original doRender", () => {
 	const tui = makeTui(terminal);
 	const originalRender = tui.doRender;
 	const compositor = new SidebarCompositor(tui, () => [], 20);
+
+	// The disposer restores an own descriptor, so both paints must be own properties.
+	assert.equal(Object.hasOwn(tui, "doRender"), true, "doRender must be an own property");
+	assert.equal(Object.hasOwn(tui, "requestRender"), true, "requestRender must be an own property");
 
 	compositor.install();
 	assert.notEqual(tui.doRender, originalRender);
@@ -272,7 +215,7 @@ test("the wrapped doRender calls pi, opens a sync frame, and paints", () => {
 	tui.doRender();
 
 	const output = terminal.writes.join("");
-	assert.equal(tui.renderCalls, 1);
+	assert.equal(tui.doRenderCalls, 1);
 	assert.ok(output.includes("\x1b[?2026h"), output);
 	assert.ok(output.includes("\x1b[?2026l"), output);
 	assert.ok(output.includes("panel"), output);
@@ -282,19 +225,20 @@ test("the wrapped doRender calls pi, opens a sync frame, and paints", () => {
 
 test("the wrapped doRender rewrites pi's full-line erase", () => {
 	const terminal = makeTerminal(100, 30);
-	const tui: FakeTui = {
-		terminal,
-		renderCalls: 0,
-		doRender(): void {
-			terminal.write("\x1b[2Khi");
-		},
-	};
+	const marker = "erase-marker";
+	const received: unknown[] = [];
+	const tui = makeTui(terminal, (...args) => {
+		received.push(...args);
+		terminal.write("\x1b[2Khi");
+	});
 	const compositor = new SidebarCompositor(tui, () => [], 20);
 
 	compositor.install();
 	terminal.writes.length = 0;
-	tui.doRender();
+	tui.doRender(marker);
 
+	// The wrapper forwards every caller argument to pi's own render body.
+	assert.deepEqual(received, [marker], "the render body did not receive the caller argument");
 	const output = terminal.writes.join("");
 	assert.ok(output.includes("\x1b[79X"), output);
 	assert.ok(!output.includes("\x1b[2K"), output);
@@ -304,13 +248,7 @@ test("the wrapped doRender rewrites pi's full-line erase", () => {
 
 test("a full-screen clear forces every sidebar row to repaint", () => {
 	const terminal = makeTerminal(100, 30);
-	const tui: FakeTui = {
-		terminal,
-		renderCalls: 0,
-		doRender(): void {
-			terminal.write("\x1b[2Jhi");
-		},
-	};
+	const tui = makeTui(terminal, () => terminal.write("\x1b[2Jhi"));
 	const compositor = new SidebarCompositor(tui, () => ["panel"], 20);
 
 	compositor.install();
@@ -330,13 +268,7 @@ test("a full-screen clear forces every sidebar row to repaint", () => {
 
 test("the wrapped doRender strips pi's nested sync markers", () => {
 	const terminal = makeTerminal(100, 30);
-	const tui: FakeTui = {
-		terminal,
-		renderCalls: 0,
-		doRender(): void {
-			terminal.write("\x1b[?2026hpi-content\x1b[?2026l");
-		},
-	};
+	const tui = makeTui(terminal, () => terminal.write("\x1b[?2026hpi-content\x1b[?2026l"));
 	const compositor = new SidebarCompositor(tui, () => [], 20);
 
 	compositor.install();
@@ -357,13 +289,9 @@ test("the wrapped doRender strips pi's nested sync markers", () => {
 
 test("the wrapped doRender rethrows pi's error and swallows a paint error", () => {
 	const terminal = makeTerminal(100, 30);
-	const tui: FakeTui = {
-		terminal,
-		renderCalls: 0,
-		doRender(): void {
-			throw new Error("pi-boom");
-		},
-	};
+	const tui = makeTui(terminal, () => {
+		throw new Error("pi-boom");
+	});
 	const compositor = new SidebarCompositor(
 		tui,
 		() => {
@@ -374,6 +302,8 @@ test("the wrapped doRender rethrows pi's error and swallows a paint error", () =
 
 	compositor.install();
 	assert.throws(() => tui.doRender(), /pi-boom/);
+	// The counter moves before the wrapped call, so a throw still counts one paint.
+	assert.equal(tui.doRenderCalls, 1, "the thrown render did not count one paint");
 	// The synchronized-output block still closes in `finally`.
 	assert.ok(terminal.writes.join("").includes("\x1b[?2026l"));
 
