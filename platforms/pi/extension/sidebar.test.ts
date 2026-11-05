@@ -95,7 +95,7 @@ test("dispose restores the original doRender", () => {
 	const originalRender = tui.doRender;
 	const compositor = new SidebarCompositor(tui, () => [], 20);
 
-	// The disposer restores an own descriptor, so both paints must be own properties.
+	// Both paints must be own properties; the fixture self-test covers why.
 	assert.equal(Object.hasOwn(tui, "doRender"), true, "doRender must be an own property");
 	assert.equal(Object.hasOwn(tui, "requestRender"), true, "requestRender must be an own property");
 
