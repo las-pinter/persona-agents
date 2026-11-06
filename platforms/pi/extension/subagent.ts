@@ -66,8 +66,6 @@ export interface ModeRun {
 	deps: DispatchDeps;
 	signal: AbortSignal | undefined;
 	onUpdate: OnUpdateCallback | undefined;
-	/** The turn cap the call names. Absent means the default. */
-	maxTurns?: number;
 	makeDetails: (mode: "single" | "parallel" | "chain") => (results: SingleResult[]) => SubagentDetails;
 	/** Writes a finished run to the inspector archive. Absent in a test. */
 	archive?: (mode: "chain" | "parallel" | "single", results: SingleResult[]) => void;
@@ -121,7 +119,6 @@ export async function runChainMode(
 			taskWithContext,
 			step.cwd,
 			i + 1,
-			mode.maxTurns,
 			mode.signal,
 			chainUpdate,
 			mode.makeDetails("chain"),
@@ -191,7 +188,6 @@ export async function runParallelMode(
 			task.task,
 			task.cwd,
 			undefined,
-			mode.maxTurns,
 			mode.signal,
 			(partial) => {
 				const current = partial.details?.results[0];
@@ -241,20 +237,11 @@ export async function runSingleMode(
 		task,
 		cwd,
 		undefined,
-		mode.maxTurns,
 		mode.signal,
 		mode.onUpdate,
 		mode.makeDetails("single"),
 		session,
 	);
-	if (result.turnsCapped) {
-		// A capped run keeps its partial text after the cap line, then any real error.
-		return {
-			content: [{ type: "text", text: resultTextBlock(result) }],
-			details: mode.makeDetails("single")([result]),
-			isError: true,
-		};
-	}
 	if (isFailedResult(result)) {
 		const head = `Agent ${result.stopReason || "failed"}: `;
 		return {
@@ -374,7 +361,6 @@ export default function (pi: ExtensionAPI) {
 				},
 				signal,
 				onUpdate,
-				maxTurns: params.maxTurns,
 				makeDetails,
 				archive,
 			};

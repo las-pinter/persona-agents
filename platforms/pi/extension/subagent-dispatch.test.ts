@@ -31,9 +31,8 @@ import { type ModeRun, runChainMode, runParallelMode, runSingleMode } from "./su
 
 /** The result fields every mode must return. The chain adds no field of its own. */
 const RESULT_FIELDS = [
-	"agent", "agentSource", "exitCode", "maxTurns", "messages", "model", "reasoningTokens", "resumed",
-	"round", "runStartedAt", "session", "step", "stopReason", "stderr", "task", "thinking", "turnsCapped",
-	"usage",
+	"agent", "agentSource", "exitCode", "messages", "model", "reasoningTokens", "resumed",
+	"round", "runStartedAt", "session", "step", "stopReason", "stderr", "task", "thinking", "usage",
 ].sort();
 
 const AGENT = {
@@ -419,8 +418,8 @@ test("single: an early refusal carries the run field set", async () => {
 
 	assert.deepEqual(
 		fieldKeys(result),
-		RESULT_FIELDS.filter((key) => key !== "reasoningTokens" && key !== "maxTurns" && key !== "turnsCapped"),
-		"a refusal carries every field a run carries, except the provider-reported reasoning count and the turn cap",
+		RESULT_FIELDS.filter((key) => key !== "reasoningTokens"),
+		"a refusal carries every field a run carries, except the provider-reported reasoning count",
 	);
 	assert.equal(result?.stopReason, "error", "a refusal reports an error stop, not a missing one");
 	assert.equal(typeof result?.runStartedAt, "number", "a refusal carries a run start time");

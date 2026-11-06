@@ -8,7 +8,6 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { SESSION_ROUND_CAP } from "./session-store.ts";
-import { DEFAULT_MAX_TURNS, MAX_MAX_TURNS, MIN_MAX_TURNS } from "./turn-cap.ts";
 
 /** The rounds one store id may run, written from the cap. */
 function sessionRoundsText(): string {
@@ -45,11 +44,6 @@ export const SubagentParams = Type.Object({
 	session: Type.Optional(
 		Type.String({
 			description: `Single mode only. Store session id: it must start with the agent name and a hyphen. Only ${sessionRoundsText()} may run on one id.`,
-		}),
-	),
-	maxTurns: Type.Optional(
-		Type.Number({
-			description: `Turn cap for each child run: a whole number from ${MIN_MAX_TURNS} to ${MAX_MAX_TURNS}. Default: ${DEFAULT_MAX_TURNS}. A value outside the range is refused before the run.`,
 		}),
 	),
 });
