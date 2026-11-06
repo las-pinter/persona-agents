@@ -15,7 +15,6 @@ import {
 	type ResultText,
 	type SingleResult,
 	type SubagentDetails,
-	errorLine,
 	formatUsageStats,
 	isFailedResult,
 	resultBodyBlock,
@@ -28,16 +27,13 @@ const COLLAPSED_ITEM_COUNT = 10;
 type ThemeFg = (color: any, text: string) => string;
 
 /**
- * The collapsed card run text: the body, then any error the body does not carry.
- * A failed run keeps its red marker on its one line.
+ * The collapsed card run text of a failed run: its red marker, or the body when
+ * the run carries no error text. A failed run's body is its error, so the marker
+ * replaces it.
  */
 function collapsedRunText(text: ResultText, block: string, fg: ThemeFg): string[] {
-	const line = errorLine(text);
-	// The body of a failed run is its reason, so the red marker replaces it.
-	if (line === null && text.error !== null) return [fg("error", `Error: ${text.error}`)];
-	const lines = [fg("muted", block)];
-	if (line) lines.push(fg("error", `Error: ${line}`));
-	return lines;
+	if (text.error) return [fg("error", `Error: ${text.error}`)];
+	return [fg("muted", block)];
 }
 
 type RenderCallFn = NonNullable<ToolDefinition<typeof SubagentParams, SubagentDetails>["renderCall"]>;
@@ -250,11 +246,9 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 				? theme.fg("error", "✗")
 				: theme.fg("success", "✓");
 		const displayItems = getDisplayItems(r.messages);
-		// The shared rule decides the body and the error line.
+		// The shared rule decides the body. A failed run carries its reason there.
 		const runText = resultText(r);
 		const finalOutput = resultBodyBlock(r);
-		// A failed run already carries its reason as its body.
-		const errorText = errorLine(runText);
 
 		if (expanded) {
 			const container = new Container();
@@ -281,8 +275,6 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 				container.addChild(new Spacer(1));
 				container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 			}
-			// The error follows the body, so the card reads body, then error.
-			if (errorText) container.addChild(new Text(theme.fg("error", `Error: ${errorText}`), 0, 0));
 			const usageStr = formatUsageStats(r.usage, r.model);
 			if (usageStr) {
 				container.addChild(new Spacer(1));
@@ -294,7 +286,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 		let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
 		if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 		text += thinkingText(r);
-		// A failed run shows its run text, then any error the body does not carry.
+		// The collapsed card shows the reason, or the body when the run carries no error text.
 		if (isError) {
 			for (const line of collapsedRunText(runText, finalOutput, theme.fg.bind(theme))) text += `\n${line}`;
 		} else if (displayItems.length === 0)
@@ -353,7 +345,6 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 							: theme.fg("error", "✗");
 				const displayItems = getDisplayItems(r.messages);
 				const finalOutput = resultBodyBlock(r);
-				const stepRunText = resultText(r);
 
 				container.addChild(new Spacer(1));
 				container.addChild(
@@ -384,10 +375,6 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 					container.addChild(new Spacer(1));
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
-				// The error follows the body, so the step card reads body, then error.
-				const stepError = errorLine(stepRunText);
-				if (stepError) container.addChild(new Text(theme.fg("error", `Error: ${stepError}`), 0, 0));
-
 				const stepUsage = formatUsageStats(r.usage, r.model);
 				if (stepUsage) container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
 			}
@@ -418,7 +405,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			text += `\n\n${theme.fg("muted", `─── Step ${r.step}: `)}${theme.fg("accent", r.agent)} ${rIcon}${liveElapsed(r)}`;
 			text += thinkingText(r);
 			const runText = resultText(r);
-			// The collapsed card follows the single card: run text, then any real error.
+			// The collapsed card shows the reason, or the body when the run carries no error text.
 			if (r.exitCode !== -1 && isFailedResult(r)) {
 				for (const line of collapsedRunText(runText, resultBodyBlock(r), theme.fg.bind(theme))) text += `\n${line}`;
 			} else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
@@ -458,7 +445,6 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 				const rIcon = isFailedResult(r) ? theme.fg("error", "✗") : theme.fg("success", "✓");
 				const displayItems = getDisplayItems(r.messages);
 				const finalOutput = resultBodyBlock(r);
-				const taskRunText = resultText(r);
 
 				container.addChild(new Spacer(1));
 				container.addChild(
@@ -485,10 +471,6 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 					container.addChild(new Spacer(1));
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
-				// The error follows the body, so the task card reads body, then error.
-				const taskError = errorLine(taskRunText);
-				if (taskError) container.addChild(new Text(theme.fg("error", `Error: ${taskError}`), 0, 0));
-
 				const taskUsage = formatUsageStats(r.usage, r.model);
 				if (taskUsage) container.addChild(new Text(theme.fg("dim", taskUsage), 0, 0));
 			}
@@ -514,7 +496,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			text += `\n\n${theme.fg("muted", "─── ")}${theme.fg("accent", r.agent)} ${rIcon}${liveElapsed(r)}`;
 			text += thinkingText(r);
 			const runText = resultText(r);
-			// The collapsed card follows the single card: run text, then any real error.
+			// The collapsed card shows the reason, or the body when the run carries no error text.
 			if (r.exitCode !== -1 && isFailedResult(r)) {
 				for (const line of collapsedRunText(runText, resultBodyBlock(r), theme.fg.bind(theme))) text += `\n${line}`;
 			} else if (displayItems.length === 0)

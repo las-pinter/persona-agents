@@ -277,8 +277,8 @@ test("an aborted run prints its error text once in the card", () => {
 	assert.ok(collapsed.includes("Error: boom"), "the collapsed card keeps the red marker");
 
 	const expanded = render(tool, result, true, {});
-	assert.equal(countOccurrences(expanded, "boom"), 1, "the expanded card prints the reason once");
 	assert.ok(!expanded.includes("Error: boom"), "the expanded card adds no second error line");
+	assert.equal(countOccurrences(expanded, "boom"), 1, "the expanded card prints the reason once");
 	assert.equal(resultText(failed).error, "boom", "the tree end event carries the real error");
 });
 
@@ -305,8 +305,6 @@ test("a run aborted by the parent shows its error once and prints no cap text", 
 		assert.ok(!out.includes("partial output follows"), `expanded=${expanded} promises no partial text`);
 		// The body is the reason, so the card prints no no-output marker.
 		assert.ok(!out.includes("(no output)"), `expanded=${expanded} shows the reason as the body`);
-		// The expanded card shows the body and adds no error line beside it.
-		if (expanded) assert.ok(!out.includes("Error:"), "the expanded card adds no error line beside the body");
 	}
 });
 
@@ -334,7 +332,6 @@ test("a failure prints its error text once on every card", () => {
 	];
 	for (const [name, out] of expanded) {
 		assert.equal(countOccurrences(out, "boom"), 1, `${name} prints the error text once`);
-		assert.ok(!out.includes("Error: boom"), `${name} adds no second error line`);
 	}
 
 	// The tool text reads the shared rule, so the error shows once there too.
@@ -364,7 +361,6 @@ test("the expanded card shows a failed run's reason as its body and adds no erro
 		const out = render(tool, result, true, {});
 		assert.equal(countOccurrences(out, "provider exploded"), 1, `${mode} prints the body once`);
 		assert.ok(!out.includes(messageText), `${mode} drops the message text, so the reason replaces it`);
-		assert.ok(!out.includes("Error:"), `${mode} adds no error line the body already carries`);
 	}
 });
 
@@ -671,8 +667,6 @@ test("the inspector prints an aborted run's abort text once and no partial text"
 	assert.ok(!lines.includes("half a turn of output"), lines);
 	assert.ok(!lines.includes("capped"), lines);
 	assert.ok(!lines.includes("partial output follows"), lines);
-	// No reachable run shows a separate error line, because the body carries it.
-	assert.ok(!lines.includes("Error:"), lines);
 	// The body holds the body slot, so it prints before the usage summary.
 	const bodyAt = lines.indexOf("Subagent was aborted");
 	const usageAt = lines.indexOf("↑10");

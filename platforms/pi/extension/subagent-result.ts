@@ -192,27 +192,14 @@ export function resultText(source: ResultTextSource): ResultText {
 	return { body, error };
 }
 
-/**
- * The error line text, or null when the body already carries it. Both renderers
- * call this, so one rule decides the error line.
- */
-export function errorLine(text: ResultText): string | null {
-	return text.error !== null && text.error !== text.body ? text.error : null;
-}
-
 /** The run text a surface prints in one block. */
 export function resultBodyBlock(source: ResultTextSource): string {
 	return resultText(source).body;
 }
 
-/** The body, then the error line when the body does not carry it. */
+/** The run text a surface prints in one block, body only. */
 export function resultTextBlock(source: ResultTextSource): string {
-	const text = resultText(source);
-	const parts = [text.body];
-	// A failed run already carries its reason as its body.
-	const line = errorLine(text);
-	if (line) parts.push(line);
-	return parts.join("\n\n");
+	return resultText(source).body;
 }
 
 export function truncateParallelOutput(output: string): string {

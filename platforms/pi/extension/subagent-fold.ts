@@ -50,7 +50,10 @@ export function foldEvent(
 		}
 		if (!result.model && msg.model) result.model = msg.model;
 		if (msg.stopReason) result.stopReason = msg.stopReason;
-		if (msg.errorMessage) result.errorMessage = msg.errorMessage;
+		// A run that did not fail carries no error text, even if the message has one.
+		if (msg.errorMessage && (msg.stopReason === "error" || msg.stopReason === "aborted")) {
+			result.errorMessage = msg.errorMessage;
+		}
 	}
 	onMessage();
 	// The byte count stands in for the stdout a separate child used to write.

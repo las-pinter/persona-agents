@@ -12,7 +12,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 import type { Message } from "@earendil-works/pi-ai";
 import { formatDuration, formatTokens } from "./duration.ts";
-import { errorLine, resultBodyBlock, resultText } from "./subagent-result.ts";
+import { resultBodyBlock, resultText } from "./subagent-result.ts";
 
 export interface InspectTask {
 	agent: string;
@@ -144,7 +144,7 @@ class InspectorComponent implements Component {
 
 		const t = this.run.results[this.taskIndex];
 		const detail: string[] = [];
-		// The shared rule decides the body and the error line.
+		// The shared rule decides the body. A failed run carries its reason there.
 		const runText = resultText(t);
 		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}`);
 		const thinking = formatThinkingSummary(t);
@@ -153,9 +153,6 @@ class InspectorComponent implements Component {
 			detail.push(`→ ${c.length > width - 4 ? c.slice(0, width - 4) : c}`);
 		}
 		for (const line of resultBodyBlock(t).split("\n")) detail.push(` ${line}`.slice(0, width));
-		// The error follows the body, so it shows once in the same order as the cards.
-		const errorText = errorLine(runText);
-		if (errorText) detail.push(`Error: ${errorText}`.slice(0, width));
 		const usage = formatUsage(t.usage);
 		if (usage) detail.push(`${usage}`);
 		// A refusal sets the body from stderr, so the stderr line would repeat it.

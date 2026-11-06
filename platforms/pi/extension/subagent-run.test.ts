@@ -27,6 +27,7 @@ import { bindParentGate, clearChildToolImplementations } from "./child-tools.ts"
 import { ENV_TREE_LOG } from "./depth.ts";
 import type { AgentConfig } from "./resolver.ts";
 import { RunRegistry } from "./run-registry.ts";
+import { foldEvent } from "./subagent-fold.ts";
 import type { SingleResult, SubagentDetails } from "./subagent-result.ts";
 import { type DispatchDeps, type PreparedChildRuntime } from "./subagent-run.ts";
 import { type ModeRun, runSingleMode } from "./subagent.ts";
@@ -169,6 +170,30 @@ function harness(options: HarnessOptions = {}): Harness {
 	return { deps, children, registry, mode };
 }
 
+/** A clean result with no messages, so a fold test starts empty. */
+function emptyResult(): SingleResult {
+	return {
+		agent: "tester",
+		agentSource: "user",
+		task: "do it",
+		exitCode: 0,
+		messages: [],
+		stderr: "",
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+		session: null,
+		resumed: false,
+		round: 1,
+	};
+}
+
+/** Fold one assistant message end and return the result. */
+function foldAssistant(stopReason: string, errorMessage: string): SingleResult {
+	const result = emptyResult();
+	const message = { role: "assistant", content: [], stopReason, errorMessage } as unknown as Message;
+	foldEvent({ type: "message_end", message }, result, () => {}, () => {}, () => {});
+	return result;
+}
+
 /** Run one single-mode call. */
 async function run(h: Harness): Promise<SingleResult> {
 	const out = await runSingleMode("tester", "do it", undefined, h.mode);
@@ -222,4 +247,10 @@ test("run: a parent abort keeps its error text on the tool result and the tree e
 		else process.env[ENV_TREE_LOG] = previous;
 		rmSync(logPath, { force: true });
 	}
+});
+
+test("fold: an error message is kept only on an error or aborted stop", () => {
+	assert.equal(foldAssistant("end", "a stray message").errorMessage, undefined, "a clean stop keeps no error text");
+	assert.equal(foldAssistant("error", "the provider failed").errorMessage, "the provider failed", "an error stop keeps its text");
+	assert.equal(foldAssistant("aborted", "the caller stopped it").errorMessage, "the caller stopped it", "an abort keeps its text");
 });
