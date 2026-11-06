@@ -15,7 +15,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { formatToolDuration } from "./subagent.ts";
-import { resultText, resultTextBlock } from "./subagent-result.ts";
+import { resultBodyBlock, resultText } from "./subagent-result.ts";
 import {
 	captureTool,
 	countOccurrences,
@@ -230,7 +230,7 @@ test("a failure prints its error text once on every card", () => {
 	}
 
 	// The tool text reads the shared rule, so the error shows once there too.
-	const toolText = resultTextBlock(failed);
+	const toolText = resultBodyBlock(failed);
 	assert.equal(countOccurrences(toolText, "boom"), 1, "the tool text prints the error once");
 	assert.ok(!toolText.includes("capped"), "the tool text carries no cap line");
 });

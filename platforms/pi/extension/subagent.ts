@@ -31,7 +31,7 @@ import {
 	type SubagentDetails,
 	getFinalOutput,
 	isFailedResult,
-	resultTextBlock,
+	resultBodyBlock,
 	toInspectTask,
 	truncateChainPrevious,
 	truncateParallelOutput,
@@ -126,7 +126,7 @@ export async function runChainMode(
 		results.push(result);
 		if (isFailedResult(result)) {
 			// The shared rule adds the body and any real error.
-			const body = resultTextBlock(result);
+			const body = resultBodyBlock(result);
 			return {
 				content: [
 					{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${body}` },
@@ -205,7 +205,7 @@ export async function runParallelMode(
 	const successCount = results.filter((r) => !isFailedResult(r)).length;
 	const summaries = results.map((r) => {
 		// The shared rule carries the body and any real error.
-		const output = truncateParallelOutput(resultTextBlock(r));
+		const output = truncateParallelOutput(resultBodyBlock(r));
 		const status = isFailedResult(r)
 			? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
 			: "completed";
@@ -245,7 +245,7 @@ export async function runSingleMode(
 	if (isFailedResult(result)) {
 		const head = `Agent ${result.stopReason || "failed"}: `;
 		return {
-			content: [{ type: "text", text: `${head}${resultTextBlock(result)}` }],
+			content: [{ type: "text", text: `${head}${resultBodyBlock(result)}` }],
 			details: mode.makeDetails("single")([result]),
 			isError: true,
 		};

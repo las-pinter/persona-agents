@@ -192,13 +192,8 @@ export function resultText(source: ResultTextSource): ResultText {
 	return { body, error };
 }
 
-/** The run text a surface prints in one block. */
-export function resultBodyBlock(source: ResultTextSource): string {
-	return resultText(source).body;
-}
-
 /** The run text a surface prints in one block, body only. */
-export function resultTextBlock(source: ResultTextSource): string {
+export function resultBodyBlock(source: ResultTextSource): string {
 	return resultText(source).body;
 }
 
