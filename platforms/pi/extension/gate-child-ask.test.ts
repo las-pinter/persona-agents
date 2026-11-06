@@ -2,7 +2,9 @@
  * Child ask routing: the root prompt, the three answers, the deadline, the
  * arrival order, and the fail-closed branches. The gate handler is real and
  * the root prompt is a fake. Most cases inject a deadline of 20 ms, 25 ms, or
- * 40 ms. The cases that inject no deadline use fake timers.
+ * 40 ms. The cases that inject no deadline use fake timers. The warning cases
+ * are the last cases of the deadline block, so this file keeps one
+ * responsibility: child ask routing.
  * Run: npm test
  */
 
@@ -42,17 +44,33 @@ import {
 } from "./permission-prompt.ts";
 import { newRunRecord } from "./run-registry.ts";
 
-/** Every console line the extension logs, so a case reads it and no case prints it. */
-const logged: string[] = [];
+/** The console channel a line came through, so a line is forwarded the same way. */
+type LoggedChannel = "error" | "warn";
+
+/** One console line the extension logs, with the channel that carried it. */
+interface LoggedLine {
+	channel: LoggedChannel;
+	text: string;
+}
+
+/** Every console line the extension logs, so a warning case reads it and none prints. */
+const logged: LoggedLine[] = [];
 const realConsole = { error: console.error, warn: console.warn };
+
+/** Record one console call on the channel that carried it. */
+function record(channel: LoggedChannel, args: unknown[]): void {
+	logged.push({ channel, text: args.map((arg) => String(arg)).join(" ") });
+}
+
+/** The logged lines that start with one prefix. */
+function linesWith(prefix: string): LoggedLine[] {
+	return logged.filter((line) => line.text.startsWith(prefix));
+}
 
 // Every child ask case logs two lines, so one stub for the file lives here.
 before(() => {
-	const record = (...args: unknown[]): void => {
-		logged.push(args.map((arg) => String(arg)).join(" "));
-	};
-	console.error = record;
-	console.warn = record;
+	console.error = (...args: unknown[]): void => record("error", args);
+	console.warn = (...args: unknown[]): void => record("warn", args);
 });
 
 after(() => {
@@ -62,6 +80,12 @@ after(() => {
 
 afterEach(() => {
 	unbindChildAsk();
+	// A line from another case is a real fault, so it reaches its own channel.
+	for (const line of logged) {
+		if (line.text.startsWith("agent-stack: child ask ")) continue;
+		if (line.channel === "error") realConsole.error(line.text);
+		else realConsole.warn(line.text);
+	}
 	logged.length = 0;
 });
 
@@ -304,32 +328,32 @@ test("warnings: an arrival line and a deadline line name the ask and its state",
 	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 
 	// Split by source, so a missing line names itself in its own assertion.
-	const queued = logged.filter((line) => line.startsWith("agent-stack: child ask queued "));
-	const expired = logged.filter((line) => line.startsWith("agent-stack: child ask expired "));
+	const queued = linesWith("agent-stack: child ask queued ");
+	const expired = linesWith("agent-stack: child ask expired ");
 	assert.equal(queued.length, 1, "one arrival line");
 	assert.equal(expired.length, 1, "one deadline line");
 
-	assert.match(queued[0], new RegExp(`root=${ROOT} `), "the arrival line names the root");
-	assert.match(queued[0], /child=implementer /, "the arrival line names the child role");
-	assert.match(queued[0], /tool=bash /, "the arrival line names the tool");
+	assert.ok(queued[0].text.includes(`root=${ROOT} `), "the arrival line names the root");
+	assert.match(queued[0].text, /child=implementer /, "the arrival line names the child role");
+	assert.match(queued[0].text, /tool=bash /, "the arrival line names the tool");
 	assert.match(
-		queued[0],
-		/waiting=1 shown=none parked=0 surface=yes$/,
-		"one request waits, no panel is visible yet, and the root holds a surface",
+		queued[0].text,
+		/queued=1 shown=none parked=0 surface=yes$/,
+		"one request is queued, no panel is visible yet, and the root holds a surface",
 	);
 
 	assert.match(
-		expired[0],
+		expired[0].text,
 		/^agent-stack: child ask expired with no answer before the deadline /,
 		"the deadline line says plainly that no answer arrived",
 	);
-	assert.match(expired[0], new RegExp(`root=${ROOT} `), "the deadline line names the root");
-	assert.match(expired[0], /child=implementer /, "the deadline line names the child role");
-	assert.match(expired[0], /tool=bash /, "the deadline line names the tool");
+	assert.ok(expired[0].text.includes(`root=${ROOT} `), "the deadline line names the root");
+	assert.match(expired[0].text, /child=implementer /, "the deadline line names the child role");
+	assert.match(expired[0].text, /tool=bash /, "the deadline line names the tool");
 	assert.match(
-		expired[0],
-		/waiting=1 shown=this parked=1 surface=yes$/,
-		"the deadline line shows that this request held the mounted panel",
+		expired[0].text,
+		/waiting=0 shown=this parked=1 surface=yes$/,
+		"no other request waits, and this one held the mounted panel",
 	);
 });
 
@@ -349,12 +373,12 @@ test("warnings: a waiter reports the panel of the request ahead, not its own", {
 	await drainMicrotasks();
 
 	// The second request waits behind the first, which owns the only panel.
-	const queued = logged.filter((line) => line.startsWith("agent-stack: child ask queued "));
+	const queued = linesWith("agent-stack: child ask queued ");
 	assert.equal(queued.length, 2, "two arrival lines");
 	assert.match(
-		queued[1],
-		/waiting=2 shown=other parked=1 surface=yes$/,
-		"the waiter reports another request on screen, so its own panel never painted",
+		queued[1].text,
+		/queued=2 shown=other parked=1 surface=yes$/,
+		"the waiter is queued behind another request on screen, so its own panel never painted",
 	);
 
 	t.mock.timers.tick(20);
@@ -362,18 +386,26 @@ test("warnings: a waiter reports the panel of the request ahead, not its own", {
 	t.mock.timers.tick(20);
 	await drainMicrotasks();
 
-	const expired = logged.filter((line) => line.startsWith("agent-stack: child ask expired "));
+	const expired = linesWith("agent-stack: child ask expired ");
 	assert.equal(expired.length, 2, "two deadline lines");
-	assert.match(expired[0], /shown=this /, "the head held the mounted panel when it expired");
-	assert.match(expired[1], /shown=this /, "the second request held the panel when it expired");
+	assert.match(
+		expired[0].text,
+		/child=implementer tool=bash waiting=1 shown=this /,
+		"the head line names its own child, tool, and count",
+	);
+	assert.match(
+		expired[1].text,
+		/child=tester tool=bash waiting=0 shown=this /,
+		"the next line names its own child, tool, and count",
+	);
 
 	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 	assert.deepEqual(await second, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 });
 
 // Only this case reaches the cut branch of the short-id helper.
-test("warnings: a root id over twelve characters is cut on the line", { timeout: 2000 }, async () => {
-	const longRoot = "root-session-1234567890";
+test("warnings: a 29-character root id is cut and marked on the line", { timeout: 2000 }, async () => {
+	const longRoot = "root-session-0123456789abcdef";
 	const registry = registryOf();
 	registry.register(
 		newRunRecord({
@@ -420,10 +452,31 @@ test("warnings: a root id over twelve characters is cut on the line", { timeout:
 	);
 
 	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
-	const queued = logged.filter((line) => line.startsWith("agent-stack: child ask queued "));
+	const queued = linesWith("agent-stack: child ask queued ");
 	assert.equal(queued.length, 1, "one arrival line");
-	assert.match(queued[0], new RegExp(`root=${longRoot.slice(0, 12)} `), "the line carries the cut root id");
-	assert.ok(!queued[0].includes(longRoot), "the whole long root id never reaches the line");
+	assert.ok(queued[0].text.includes(`root=${longRoot.slice(0, 12)}… `), "the cut id carries its marker");
+	assert.ok(!queued[0].text.includes(longRoot), "the whole long root id never reaches the line");
+});
+
+// Only this case pins the guard: a throwing console may not skip the settle.
+test("warnings: a console that throws still blocks the child at the deadline", { timeout: 2000 }, async () => {
+	const s = setup({ never: true, timeoutMs: 20 });
+	await captureRoot(s);
+	const restore = console.error;
+	console.error = (): void => {
+		throw new Error("console is gone");
+	};
+	try {
+		const result = await childAsk(s, CHILD_A);
+		assert.deepEqual(
+			result,
+			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			"the deadline verdict must arrive although the console threw",
+		);
+		assert.equal(childAskQueue()?.waiting(ROOT), 0, "the request left the queue");
+	} finally {
+		console.error = restore;
+	}
 });
 
 // --- FIFO --------------------------------------------------------------------

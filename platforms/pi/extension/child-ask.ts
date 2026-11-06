@@ -131,15 +131,18 @@ function titled(model: PromptModel, title: string): PromptModel {
 	return { ...model, title };
 }
 
-/** A short stable form of a session id, so one warning line fits a terminal. */
+/**
+ * A short stable form of a session id, so one warning line fits a terminal. A
+ * cut id ends with the cut marker, so a cut id never reads as a full id.
+ */
 function shortId(sessionId: string): string {
-	return sessionId.length <= 12 ? sessionId : sessionId.slice(0, 12);
+	return sessionId.length <= 12 ? sessionId : `${sessionId.slice(0, 12)}…`;
 }
 
 /**
  * Write one ask warning line. A console that throws must not skip the settle,
- * so this call catches its own throw. `console.error` sits in a catch, which is
- * the one form the `no-console-except-error` rule allows.
+ * so this call catches its own throw. The catch stays empty, because a dropped
+ * warning line has no second place to go.
  */
 function warnAskLine(line: string): void {
 	try {
@@ -227,7 +230,7 @@ export class ChildAskQueue {
 			state.queue.push(request);
 			// A silent queue hides a child that waits for an owner who never sees it.
 			warnAskLine(
-				`agent-stack: child ask queued root=${shortId(state.rootSessionId)} child=${request.role} tool=${request.toolName} ${this.flags(state, request)}`,
+				`agent-stack: child ask queued root=${shortId(state.rootSessionId)} child=${request.role} tool=${request.toolName} ${this.flags(state, request, `queued=${state.queue.length}`)}`,
 			);
 			// Batch requests that arrive in one tick, so the title counts them all.
 			queueMicrotask(() => this.pump(state));
@@ -251,15 +254,23 @@ export class ChildAskQueue {
 	}
 
 	/**
-	 * The state fields both ask warnings carry: the queued count, which request is
+	 * The state fields both ask warnings carry: the count field, which request is
 	 * shown, the parked mounts, and a bound root surface. The `shown` field is per
-	 * request, so a line never claims a panel for the request it names.
+	 * request, so a line never claims a panel for the request it names. The count
+	 * field comes from the caller, because the two lines count apart: an arrival
+	 * counts every queued request and prints `queued=`, an expiry counts the other
+	 * requests only and prints `waiting=`.
 	 */
-	private flags(state: RootState, request: GateRequest): string {
+	private flags(state: RootState, request: GateRequest, count: string): string {
 		const surfaces = this.states.get(state.registry)?.surfaces;
 		const shown = state.visible === request ? "this" : state.visible ? "other" : "none";
 		const surface = surfaces?.has(state.rootSessionId) ? "yes" : "no";
-		return `waiting=${state.queue.length} shown=${shown} parked=${state.parked.size} surface=${surface}`;
+		return `${count} shown=${shown} parked=${state.parked.size} surface=${surface}`;
+	}
+
+	/** Requests still waiting on one root, apart from the request named. */
+	private waitingApart(state: RootState, request: GateRequest): number {
+		return state.queue.filter((entry) => entry !== request).length;
 	}
 
 	/** The live roots of the bound registry, or undefined when none is bound. */
@@ -398,11 +409,13 @@ export class ChildAskQueue {
 	/** The deadline path. The child is blocked, and the next request shows. */
 	private expire(state: RootState, request: GateRequest): void {
 		if (request.settled) return;
-		// The fields are read before the settle, so a mounted panel still shows.
-		warnAskLine(
-			`agent-stack: child ask expired with no answer before the deadline root=${shortId(state.rootSessionId)} child=${request.role} tool=${request.toolName} ${this.flags(state, request)}`,
-		);
+		// Read the fields first, so a mounted panel still shows on the line.
+		const root = shortId(state.rootSessionId);
+		const flags = this.flags(state, request, `waiting=${this.waitingApart(state, request)}`);
+		const line = `agent-stack: child ask expired with no answer before the deadline root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
+		// The verdict goes first, so a blocking console write never delays it.
 		this.settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
+		warnAskLine(line);
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
 		// A parked mount clears itself in its own finally. This path never clears
