@@ -47,10 +47,11 @@ import { newRunRecord } from "./run-registry.ts";
 /** The console channel a line came through, so a line is forwarded the same way. */
 type LoggedChannel = "error" | "warn";
 
-/** One console line the extension logs, with the channel that carried it. */
+/** One console line the extension logs, with its channel and full argument list. */
 interface LoggedLine {
 	channel: LoggedChannel;
 	text: string;
+	args: unknown[];
 }
 
 /** Every console line the extension logs, so a warning case reads it and none prints. */
@@ -59,12 +60,23 @@ const realConsole = { error: console.error, warn: console.warn };
 
 /** Record one console call on the channel that carried it. */
 function record(channel: LoggedChannel, args: unknown[]): void {
-	logged.push({ channel, text: args.map((arg) => String(arg)).join(" ") });
+	logged.push({ channel, text: args.map((arg) => String(arg)).join(" "), args });
 }
 
 /** The logged lines that start with one prefix. */
 function linesWith(prefix: string): LoggedLine[] {
 	return logged.filter((line) => line.text.startsWith(prefix));
+}
+
+/** Forward each non child-ask line to the real console, then clear the log. */
+function forwardLogged(): void {
+	// A line from another case is a real fault, so it reaches its own channel.
+	for (const line of logged) {
+		if (line.text.startsWith("agent-stack: child ask ")) continue;
+		if (line.channel === "error") realConsole.error(...line.args);
+		else realConsole.warn(...line.args);
+	}
+	logged.length = 0;
 }
 
 // Every child ask case logs two lines, so one stub for the file lives here.
@@ -80,13 +92,7 @@ after(() => {
 
 afterEach(() => {
 	unbindChildAsk();
-	// A line from another case is a real fault, so it reaches its own channel.
-	for (const line of logged) {
-		if (line.text.startsWith("agent-stack: child ask ")) continue;
-		if (line.channel === "error") realConsole.error(line.text);
-		else realConsole.warn(line.text);
-	}
-	logged.length = 0;
+	forwardLogged();
 });
 
 // --- one root prompt ---------------------------------------------------------
@@ -476,6 +482,50 @@ test("warnings: a console that throws still blocks the child at the deadline", {
 		assert.equal(childAskQueue()?.waiting(ROOT), 0, "the request left the queue");
 	} finally {
 		console.error = restore;
+	}
+});
+
+// This case logs a line with no child-ask prefix, so the forward must carry it
+// to the real console on the channel it came through.
+test("console forward: a foreign line reaches the real console on its own channel", { timeout: 2000 }, () => {
+	const errorLine = "console forward: this line came through error";
+	const warnLine = "console forward: this line came through warn";
+	const arrived: Record<LoggedChannel, unknown[][]> = { error: [], warn: [] };
+	const restore = { error: realConsole.error, warn: realConsole.warn };
+	realConsole.error = (...args: unknown[]): void => {
+		arrived.error.push(args);
+	};
+	realConsole.warn = (...args: unknown[]): void => {
+		arrived.warn.push(args);
+	};
+	try {
+		console.error(errorLine, "error detail");
+		console.warn(warnLine, "warn detail");
+
+		assert.deepEqual(
+			logged,
+			[
+				{ channel: "error", text: `${errorLine} error detail`, args: [errorLine, "error detail"] },
+				{ channel: "warn", text: `${warnLine} warn detail`, args: [warnLine, "warn detail"] },
+			],
+			"the recorder keeps the channel, the text, and the full argument list of each line",
+		);
+
+		forwardLogged();
+
+		assert.deepEqual(
+			arrived.error,
+			[[errorLine, "error detail"]],
+			"the error line is forwarded on error, once, with both arguments",
+		);
+		assert.deepEqual(
+			arrived.warn,
+			[[warnLine, "warn detail"]],
+			"the warn line is forwarded on warn, once, with both arguments",
+		);
+	} finally {
+		realConsole.error = restore.error;
+		realConsole.warn = restore.warn;
 	}
 });
 
