@@ -68,8 +68,9 @@ Before touching a single line:
 
 ## Phase 4: Verify
 
-Run the quality gate for the project's language. Fix all issues before
-delivering.
+Run the quality gate for the project's language. Fix each new issue or warning
+before delivering. Report an issue or warning that predates the change in the
+hand-back report.
 
 The three language gate skills (`python-quality-gates`, `rust-quality-gates`,
 `react-quality-gates`) own the gate order and the language tools. Follow the gate

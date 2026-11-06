@@ -11,6 +11,8 @@ Every Python implementation must pass these gates before delivery. Run them in t
 1. Type Check → 2. Lint & Format → 3. Tests & Coverage → 4. Security Scan → 5. Build Verification
 ```
 
+For a pre-existing warning, follow Phase 4 of the **code-implementation** skill.
+
 ## 1. Type Check — MUST HAVE
 
 - `mypy --strict` (or the project's `[tool.mypy]` config) — zero errors required.

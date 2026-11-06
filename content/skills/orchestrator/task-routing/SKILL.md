@@ -137,6 +137,8 @@ Fix the brief, not the round count.
   implementer starts. The map from severity to verdict lives in the
   **code-review-checklist** skill. Point at that map. Do not copy a row of it.
   When the brief adds a check, name the file or command the check uses.
+- Point at the verification step of the Implementation Approach and the
+  `## Verification` block of the Output Format. Do not give a step number.
 - A dispatch brief names the sources to read (mockup, spec, file and line, or the brief file). It
   does not state design facts from memory.
 - When a brief orders a doctrine or prose change, name in the brief the agent

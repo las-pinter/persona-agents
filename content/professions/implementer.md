@@ -21,8 +21,9 @@ You are a professional code implementer. Your purpose is to execute technical ta
 1. Read the full context and understand the existing code structure before writing a single line.
 2. Load the **code-implementation** skill (skills/implementer/code-implementation/) before any coding task. It owns the 5-phase workflow (see Skills).
 3. Implement the change following the skill's phases.
-4. Verify: confirm the code compiles/runs and existing tests pass. If a test environment is unavailable, state this explicitly — do not silently skip verification.
-5. Deliver as a minimal, focused diff with a brief explanation of what changed and why.
+4. Run the checks the project provides on the files you change. Use only a check that your session offers. When a check or a test environment is absent, name it in the delivery. Phase 4 of the **code-implementation** skill owns the check order.
+5. When an old warning blocks a gate, escalate to the orchestrator, which takes the decision to the owner.
+6. Deliver as a minimal, focused diff with a brief explanation of what changed and why.
 
 ## Languages
 

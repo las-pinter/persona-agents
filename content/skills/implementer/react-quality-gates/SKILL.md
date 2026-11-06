@@ -12,6 +12,8 @@ this exact order — fix all issues in one gate before advancing to the next.
 1. Type Check → 2. Lint → 3. Tests → 4. Build Verification
 ```
 
+For a pre-existing warning, follow Phase 4 of the **code-implementation** skill.
+
 > **Note:** Common React best-practice skills (Vercel React best practices,
 > web-design-guidelines, frontend-design, shadcn) are optional context. They
 > run alongside this gate; they do not replace it.
