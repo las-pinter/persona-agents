@@ -273,13 +273,10 @@ export { formatDuration as formatToolDuration } from "./duration.ts";
 /** Thinking state lives in `subagent-thinking.ts`; re-exported for callers. */
 export {
 	INITIAL_THINKING,
-	type ThinkingEventType,
 	type ThinkingState,
 	formatThinkingIndicator,
-	isThinkingEventType,
 	makeThinkingEventHandler,
 	reduceThinking,
-	thinkingElapsedMs,
 } from "./subagent-thinking.ts";
 /** Result types live in `subagent-result.ts`; re-exported for callers. */
 export { type SingleResult, toInspectTask } from "./subagent-result.ts";

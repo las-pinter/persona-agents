@@ -62,7 +62,7 @@ export function makeThinkingEventHandler(
 }
 
 /** Live elapsed for a run: completed stretches plus the active stretch. */
-export function thinkingElapsedMs(state: ThinkingState | undefined, nowMs: number): number {
+function thinkingElapsedMs(state: ThinkingState | undefined, nowMs: number): number {
 	const total = state?.thinkingMs ?? 0;
 	if (!state?.thinking || state.thinkingStartedAt === null) return total;
 	return total + Math.max(0, nowMs - state.thinkingStartedAt);
