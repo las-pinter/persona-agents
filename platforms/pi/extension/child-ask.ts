@@ -30,7 +30,6 @@ import {
 import {
 	boundRunRegistry,
 	UNKNOWN_RUN_REASON,
-	type RunRecord,
 	type RunRegistry,
 } from "./run-registry.ts";
 
@@ -152,6 +151,36 @@ function warnAskLine(line: string): void {
 	}
 }
 
+/**
+ * Which request the panel shows for one line: `this` for the named request,
+ * `other` for a different visible request, and `none` for no visible request.
+ */
+function shownField(visible: GateRequest | null, request: GateRequest): string {
+	if (visible === request) return "this";
+	return visible ? "other" : "none";
+}
+
+/**
+ * The state fields both ask warnings carry. The count comes from the caller,
+ * because the two lines count apart: an arrival prints `queued=`, an expiry
+ * prints `waiting=`. A line never claims a panel for the request it names.
+ */
+function askFlags(
+	surfaces: Map<string, ExtensionContext> | undefined,
+	state: RootState,
+	request: GateRequest,
+	count: string,
+): string {
+	const shown = shownField(state.visible, request);
+	const surface = surfaces?.has(state.rootSessionId) ? "yes" : "no";
+	return `${count} shown=${shown} parked=${state.parked.size} surface=${surface}`;
+}
+
+/** Requests still waiting on one root, apart from the request named. */
+function waitingApart(state: RootState, request: GateRequest): number {
+	return state.queue.filter((entry) => entry !== request).length;
+}
+
 /** FIFO queue plus the single visible prompt, one state per registry. */
 export class ChildAskQueue {
 	private readonly states = new WeakMap<RunRegistry, RegistryState>();
@@ -163,11 +192,6 @@ export class ChildAskQueue {
 	constructor(options: ChildAskOptions = {}) {
 		this.render = options.render ?? renderPermissionPrompt;
 		this.timeoutMs = options.timeoutMs ?? CHILD_ASK_DEADLINE_MS;
-	}
-
-	/** The record for one session, so the gate can tell a child from a root. */
-	record(sessionId: string): Readonly<RunRecord> | undefined {
-		return boundRunRegistry()?.get(sessionId);
 	}
 
 	/**
@@ -196,19 +220,19 @@ export class ChildAskQueue {
 
 	/**
 	 * Add one request to its root queue and resolve when the owner answers or
-	 * the deadline passes. The promise never rejects, so the gate always gets a
-	 * verdict.
+	 * the deadline passes. Every verdict resolves, so the gate gets a verdict.
+	 * A fault in the state build rejects, and no verdict path rejects.
 	 */
-	enqueue(input: ChildAskInput): Promise<ChildAskOutcome> {
+	async enqueue(input: ChildAskInput): Promise<ChildAskOutcome> {
 		const registry = boundRunRegistry();
-		if (!registry) return Promise.resolve({ kind: "block", reason: UNKNOWN_RUN_REASON });
+		if (!registry) return { kind: "block", reason: UNKNOWN_RUN_REASON };
 		const walk = registry.walk(input.sessionId);
 		if (!walk.ok) {
 			const reason =
 				walk.failure === "unknown-session"
 					? UNKNOWN_RUN_REASON
 					: `Blocked: broken parent chain at session ${walk.failureId}`;
-			return Promise.resolve({ kind: "block", reason });
+			return { kind: "block", reason };
 		}
 		const state = this.state(registry, walk.rootSessionId);
 		return new Promise<ChildAskOutcome>((resolve) => {
@@ -228,10 +252,17 @@ export class ChildAskQueue {
 			const timer = setTimeout(() => this.expire(state, request), this.timeoutMs);
 			request.timer = timer;
 			state.queue.push(request);
-			// A silent queue hides a child that waits for an owner who never sees it.
-			warnAskLine(
-				`agent-stack: child ask queued root=${shortId(state.rootSessionId)} child=${request.role} tool=${request.toolName} ${this.flags(state, request, `queued=${state.queue.length}`)}`,
+			// Read the fields first, so a queued request shows on the line.
+			const root = shortId(state.rootSessionId);
+			const flags = askFlags(
+				this.states.get(registry)?.surfaces,
+				state,
+				request,
+				`queued=${state.queue.length}`,
 			);
+			const line = `agent-stack: child ask queued root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
+			// A silent queue hides a child that waits for an owner who never sees it.
+			warnAskLine(line);
 			// Batch requests that arrive in one tick, so the title counts them all.
 			queueMicrotask(() => this.pump(state));
 		});
@@ -251,26 +282,6 @@ export class ChildAskQueue {
 	/** The child session whose prompt is visible, or null. */
 	visible(rootSessionId: string): string | null {
 		return this.rootsOf()?.get(rootSessionId)?.visible?.sessionId ?? null;
-	}
-
-	/**
-	 * The state fields both ask warnings carry: the count field, which request is
-	 * shown, the parked mounts, and a bound root surface. The `shown` field is per
-	 * request, so a line never claims a panel for the request it names. The count
-	 * field comes from the caller, because the two lines count apart: an arrival
-	 * counts every queued request and prints `queued=`, an expiry counts the other
-	 * requests only and prints `waiting=`.
-	 */
-	private flags(state: RootState, request: GateRequest, count: string): string {
-		const surfaces = this.states.get(state.registry)?.surfaces;
-		const shown = state.visible === request ? "this" : state.visible ? "other" : "none";
-		const surface = surfaces?.has(state.rootSessionId) ? "yes" : "no";
-		return `${count} shown=${shown} parked=${state.parked.size} surface=${surface}`;
-	}
-
-	/** Requests still waiting on one root, apart from the request named. */
-	private waitingApart(state: RootState, request: GateRequest): number {
-		return state.queue.filter((entry) => entry !== request).length;
 	}
 
 	/** The live roots of the bound registry, or undefined when none is bound. */
@@ -411,7 +422,12 @@ export class ChildAskQueue {
 		if (request.settled) return;
 		// Read the fields first, so a mounted panel still shows on the line.
 		const root = shortId(state.rootSessionId);
-		const flags = this.flags(state, request, `waiting=${this.waitingApart(state, request)}`);
+		const flags = askFlags(
+			this.states.get(state.registry)?.surfaces,
+			state,
+			request,
+			`waiting=${waitingApart(state, request)}`,
+		);
 		const line = `agent-stack: child ask expired with no answer before the deadline root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
 		// The verdict goes first, so a blocking console write never delays it.
 		this.settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
