@@ -131,6 +131,24 @@ function titled(model: PromptModel, title: string): PromptModel {
 	return { ...model, title };
 }
 
+/** A short stable form of a session id, so one warning line fits a terminal. */
+function shortId(sessionId: string): string {
+	return sessionId.length <= 12 ? sessionId : sessionId.slice(0, 12);
+}
+
+/**
+ * Write one ask warning line. A console that throws must not skip the settle,
+ * so this call catches its own throw. `console.error` sits in a catch, which is
+ * the one form the `no-console-except-error` rule allows.
+ */
+function warnAskLine(line: string): void {
+	try {
+		console.error(line);
+	} catch {
+		// A broken console must not turn a blocked child into a stuck child.
+	}
+}
+
 /** FIFO queue plus the single visible prompt, one state per registry. */
 export class ChildAskQueue {
 	private readonly states = new WeakMap<RunRegistry, RegistryState>();
@@ -207,6 +225,10 @@ export class ChildAskQueue {
 			const timer = setTimeout(() => this.expire(state, request), this.timeoutMs);
 			request.timer = timer;
 			state.queue.push(request);
+			// A silent queue hides a child that waits for an owner who never sees it.
+			warnAskLine(
+				`agent-stack: child ask queued root=${shortId(state.rootSessionId)} child=${request.role} tool=${request.toolName} ${this.flags(state, request)}`,
+			);
 			// Batch requests that arrive in one tick, so the title counts them all.
 			queueMicrotask(() => this.pump(state));
 		});
@@ -226,6 +248,18 @@ export class ChildAskQueue {
 	/** The child session whose prompt is visible, or null. */
 	visible(rootSessionId: string): string | null {
 		return this.rootsOf()?.get(rootSessionId)?.visible?.sessionId ?? null;
+	}
+
+	/**
+	 * The state fields both ask warnings carry: the queued count, which request is
+	 * shown, the parked mounts, and a bound root surface. The `shown` field is per
+	 * request, so a line never claims a panel for the request it names.
+	 */
+	private flags(state: RootState, request: GateRequest): string {
+		const surfaces = this.states.get(state.registry)?.surfaces;
+		const shown = state.visible === request ? "this" : state.visible ? "other" : "none";
+		const surface = surfaces?.has(state.rootSessionId) ? "yes" : "no";
+		return `waiting=${state.queue.length} shown=${shown} parked=${state.parked.size} surface=${surface}`;
 	}
 
 	/** The live roots of the bound registry, or undefined when none is bound. */
@@ -364,6 +398,10 @@ export class ChildAskQueue {
 	/** The deadline path. The child is blocked, and the next request shows. */
 	private expire(state: RootState, request: GateRequest): void {
 		if (request.settled) return;
+		// The fields are read before the settle, so a mounted panel still shows.
+		warnAskLine(
+			`agent-stack: child ask expired with no answer before the deadline root=${shortId(state.rootSessionId)} child=${request.role} tool=${request.toolName} ${this.flags(state, request)}`,
+		);
 		this.settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();

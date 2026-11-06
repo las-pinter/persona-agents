@@ -6,12 +6,13 @@
  * Run: npm test
  */
 
-import { afterEach, test } from "node:test";
+import { after, afterEach, before, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
 	CHILD_ASK_DEADLINE_MS,
 	CHILD_ASK_DEADLINE_REASON,
 	CHILD_ASK_NO_SURFACE_REASON,
+	bindChildAsk,
 	childAskQueue,
 	unbindChildAsk,
 } from "./child-ask.ts";
@@ -23,6 +24,7 @@ import {
 	THREE_LABELS,
 	captureRoot,
 	childAsk,
+	childContext,
 	deferred,
 	installGate,
 	registryOf,
@@ -31,15 +33,36 @@ import {
 	settleOrStall,
 	setup,
 	type Setup,
+	type ToolCallContext,
 } from "./gate-child-ask-fixture.ts";
 import {
 	DENIED_BY_USER_REASON,
 	renderPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
+import { newRunRecord } from "./run-registry.ts";
+
+/** Every console line the extension logs, so a case reads it and no case prints it. */
+const logged: string[] = [];
+const realConsole = { error: console.error, warn: console.warn };
+
+// Every child ask case logs two lines, so one stub for the file lives here.
+before(() => {
+	const record = (...args: unknown[]): void => {
+		logged.push(args.map((arg) => String(arg)).join(" "));
+	};
+	console.error = record;
+	console.warn = record;
+});
+
+after(() => {
+	console.error = realConsole.error;
+	console.warn = realConsole.warn;
+});
 
 afterEach(() => {
 	unbindChildAsk();
+	logged.length = 0;
 });
 
 // --- one root prompt ---------------------------------------------------------
@@ -268,6 +291,139 @@ test("timeout: an answer that arrives after the deadline changes nothing", { tim
 	await new Promise<void>((resolve) => setTimeout(resolve, 5));
 	assert.equal(await childAsk(s, CHILD_A), undefined);
 	assert.equal(renders, 2, "the late always-allow granted nothing");
+});
+
+// --- visible deadline --------------------------------------------------------
+
+// Only this case catches a deadline that leaves the terminal with no trace.
+test("warnings: an arrival line and a deadline line name the ask and its state", { timeout: 2000 }, async () => {
+	const s = setup({ never: true, timeoutMs: 20 });
+	await captureRoot(s);
+
+	const result = await childAsk(s, CHILD_A);
+	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+
+	// Split by source, so a missing line names itself in its own assertion.
+	const queued = logged.filter((line) => line.startsWith("agent-stack: child ask queued "));
+	const expired = logged.filter((line) => line.startsWith("agent-stack: child ask expired "));
+	assert.equal(queued.length, 1, "one arrival line");
+	assert.equal(expired.length, 1, "one deadline line");
+
+	assert.match(queued[0], new RegExp(`root=${ROOT} `), "the arrival line names the root");
+	assert.match(queued[0], /child=implementer /, "the arrival line names the child role");
+	assert.match(queued[0], /tool=bash /, "the arrival line names the tool");
+	assert.match(
+		queued[0],
+		/waiting=1 shown=none parked=0 surface=yes$/,
+		"one request waits, no panel is visible yet, and the root holds a surface",
+	);
+
+	assert.match(
+		expired[0],
+		/^agent-stack: child ask expired with no answer before the deadline /,
+		"the deadline line says plainly that no answer arrived",
+	);
+	assert.match(expired[0], new RegExp(`root=${ROOT} `), "the deadline line names the root");
+	assert.match(expired[0], /child=implementer /, "the deadline line names the child role");
+	assert.match(expired[0], /tool=bash /, "the deadline line names the tool");
+	assert.match(
+		expired[0],
+		/waiting=1 shown=this parked=1 surface=yes$/,
+		"the deadline line shows that this request held the mounted panel",
+	);
+});
+
+// Only this case catches a flag that claims the panel for a request on screen
+// when the panel belongs to the request ahead of it.
+test("warnings: a waiter reports the panel of the request ahead, not its own", { timeout: 2000 }, async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const s = setup({ never: true, timeoutMs: 40 });
+	await captureRoot(s);
+
+	const first = childAsk(s, CHILD_A);
+	await drainMicrotasks();
+	assert.equal(s.prompter.titles.length, 1, "the head shows on arrival");
+
+	t.mock.timers.tick(20);
+	const second = childAsk(s, CHILD_B);
+	await drainMicrotasks();
+
+	// The second request waits behind the first, which owns the only panel.
+	const queued = logged.filter((line) => line.startsWith("agent-stack: child ask queued "));
+	assert.equal(queued.length, 2, "two arrival lines");
+	assert.match(
+		queued[1],
+		/waiting=2 shown=other parked=1 surface=yes$/,
+		"the waiter reports another request on screen, so its own panel never painted",
+	);
+
+	t.mock.timers.tick(20);
+	await drainMicrotasks();
+	t.mock.timers.tick(20);
+	await drainMicrotasks();
+
+	const expired = logged.filter((line) => line.startsWith("agent-stack: child ask expired "));
+	assert.equal(expired.length, 2, "two deadline lines");
+	assert.match(expired[0], /shown=this /, "the head held the mounted panel when it expired");
+	assert.match(expired[1], /shown=this /, "the second request held the panel when it expired");
+
+	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(await second, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+});
+
+// Only this case reaches the cut branch of the short-id helper.
+test("warnings: a root id over twelve characters is cut on the line", { timeout: 2000 }, async () => {
+	const longRoot = "root-session-1234567890";
+	const registry = registryOf();
+	registry.register(
+		newRunRecord({
+			sessionId: longRoot,
+			role: "orchestrator",
+			class: "orchestrator",
+			source: "package",
+			skills: [],
+			alwaysLoad: [],
+			depth: 0,
+			parentSessionId: null,
+			sessionFile: null,
+			startedAt: 0,
+		}),
+	);
+	registry.register(
+		newRunRecord({
+			sessionId: CHILD_A,
+			role: "implementer",
+			class: "worker",
+			source: "package",
+			skills: [],
+			alwaysLoad: [],
+			depth: 1,
+			parentSessionId: longRoot,
+			sessionFile: null,
+			startedAt: 0,
+		}),
+	);
+	const prompter = new RootPrompter();
+	prompter.never = true;
+	bindChildAsk({ timeoutMs: 20 });
+	const handler = installGate(registry);
+	const longRootContext: ToolCallContext = {
+		...rootContext(prompter),
+		sessionManager: { getSessionId: () => longRoot },
+	};
+	const allowed = await handler({ toolName: "bash", input: { command: "git status" } }, longRootContext);
+	assert.equal(allowed, undefined, "the long root call runs, so the gate captured its surface");
+
+	const result = await handler(
+		{ toolName: "bash", input: { command: "git push" } },
+		childContext(CHILD_A, prompter),
+	);
+
+	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	const queued = logged.filter((line) => line.startsWith("agent-stack: child ask queued "));
+	assert.equal(queued.length, 1, "one arrival line");
+	assert.match(queued[0], new RegExp(`root=${longRoot.slice(0, 12)} `), "the line carries the cut root id");
+	assert.ok(!queued[0].includes(longRoot), "the whole long root id never reaches the line");
 });
 
 // --- FIFO --------------------------------------------------------------------
