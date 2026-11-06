@@ -85,6 +85,6 @@ own structure.
   unambiguous words and sentences for every message, answer, code comment,
   document, report, and journal entry. The persona sets the tone; the skill sets
   the words, length, and clarity.
-- **shell-discipline** (`skills/common/shell-discipline/`) — Shell and path
-  rules for every command: do not `cd` into the repo, use absolute paths and
-  `git -C`. Load at startup.
+- **shell-discipline** (`skills/common/shell-discipline/`) — Rules: no
+  `cd` into the repo; absolute command paths; file-tool paths, no parent
+  segment; `git -C`. Load at startup.

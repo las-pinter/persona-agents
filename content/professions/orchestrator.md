@@ -146,4 +146,4 @@ Do NOT load skills that belong to subagents you delegate to.
 - **commit-hygiene** (`skills/orchestrator/commit-hygiene/`) — Final quality gate on completed work: review the commit chain, verify the tree, and squash workarounds before push.
 - **code-review-checklist** (`skills/reviewer/code-review-checklist/`) — The severity map for the review verdict and the fix-batch rule. The reviewer loads the full checklist.
 - **simplified-technical-english** (`skills/common/simplified-technical-english/`) — Write all text in Simplified Technical English (ASD-STE100): short, plain, unambiguous words for every message, answer, code comment, document, report, and journal entry.
-- **shell-discipline** (`skills/common/shell-discipline/`) — Shell and path rules for every command: do not `cd` into the repo, use absolute paths and `git -C`.
+- **shell-discipline** (`skills/common/shell-discipline/`) — Rules: no `cd` into the repo; absolute command paths; file-tool paths, no parent segment; `git -C`.
