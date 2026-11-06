@@ -32,10 +32,6 @@ export interface InspectTask {
 	thinkingMs?: number;
 	reasoningTokens?: number;
 	errorMessage?: string;
-	/** True when the turn cap ended the run, so its error text is the cap abort. */
-	turnsCapped?: boolean;
-	/** The turn cap in force for the run, so the cap line can name it. */
-	maxTurns?: number;
 }
 
 export interface InspectRun {
@@ -148,7 +144,7 @@ class InspectorComponent implements Component {
 
 		const t = this.run.results[this.taskIndex];
 		const detail: string[] = [];
-		// The shared rule decides the cap line, the partial body, and the error line.
+		// The shared rule decides the body and the error line.
 		const runText = resultText(t);
 		detail.push(`${t.agent} [${t.status}] exit=${t.exitCode}`);
 		const thinking = formatThinkingSummary(t);

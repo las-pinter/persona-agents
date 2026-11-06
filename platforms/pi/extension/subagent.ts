@@ -125,7 +125,7 @@ export async function runChainMode(
 		);
 		results.push(result);
 		if (isFailedResult(result)) {
-			// The shared rule adds the cap line, the partial text, and any real error.
+			// The shared rule adds the body and any real error.
 			const body = resultTextBlock(result);
 			return {
 				content: [
@@ -204,7 +204,7 @@ export async function runParallelMode(
 
 	const successCount = results.filter((r) => !isFailedResult(r)).length;
 	const summaries = results.map((r) => {
-		// The shared rule carries the cap line, the partial text, and any real error.
+		// The shared rule carries the body and any real error.
 		const output = truncateParallelOutput(resultTextBlock(r));
 		const status = isFailedResult(r)
 			? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`

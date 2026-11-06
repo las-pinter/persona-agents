@@ -10,29 +10,13 @@ import type { InspectTask } from "./inspector.ts";
 import type { AgentScope } from "./resolver.ts";
 import { formatTokens } from "./duration.ts";
 import type { ThinkingState } from "./subagent-thinking.ts";
-import { cappedTurnText } from "./turn-cap.ts";
 
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
 
-/** The abort text an aborted run carries. A capped run's cap line already says it. */
+/** The abort text an aborted run carries. */
 export const ABORT_TEXT = "Subagent was aborted";
-
-/**
- * The abort texts a provider returns when the run is cut. A capped run maps each
- * to ABORT_TEXT. The check is exact, so a real error is never swallowed.
- */
-const ABORT_TEXTS: ReadonlySet<string> = new Set([
-	ABORT_TEXT,
-	"Request was aborted",
-	"The operation was aborted",
-	"This operation was aborted",
-	"The operation was aborted.",
-	"The user aborted a request.",
-	"signal is aborted without reason",
-	"AbortError",
-]);
 
 export function formatUsageStats(
 	usage: {
@@ -79,10 +63,6 @@ export interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
-	/** The turn cap in force for the run, read from the call. */
-	maxTurns?: number;
-	/** True when the cap ended the run by aborting it after the grace turns. */
-	turnsCapped?: boolean;
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
@@ -175,8 +155,6 @@ export function toInspectTask(r: SingleResult): InspectTask {
 		thinkingMs: r.thinking?.thinkingMs ?? 0,
 		reasoningTokens: r.reasoningTokens,
 		errorMessage: r.errorMessage,
-		turnsCapped: r.turnsCapped,
-		maxTurns: r.maxTurns,
 	};
 }
 
@@ -187,16 +165,11 @@ export interface ResultTextSource {
 	stderr?: string;
 	stopReason?: string;
 	errorMessage?: string;
-	turnsCapped?: boolean;
-	maxTurns?: number;
-	usage?: { turns?: number };
 }
 
 /** One run's text, decided in one place. */
 export interface ResultText {
-	/** The cap line, empty when the cap did not end the run. */
-	capLine: string;
-	/** The run's work, or its error text when it failed below the cap. */
+	/** The run's work, or its error text when it failed. */
 	body: string;
 	/** The error line text, or null when the surface shows no error line. */
 	error: string | null;
@@ -208,22 +181,15 @@ function outputText(messages: Message[]): string {
 }
 
 /**
- * The one rule for a run's text. The cap line shows when and only when the cap
- * ended the run. The error line shows for any error, except the cap's own abort
- * text, because the cap line already carries it. A run that failed below the cap
- * keeps its error text and shows no cap line.
+ * The one rule for a run's text. A failed run carries its reason as its body,
+ * so the reason shows once. The error line shows whenever a surface has one.
  */
 export function resultText(source: ResultTextSource): ResultText {
-	const capped = source.turnsCapped === true;
-	const capLine = capped ? cappedTurnText(source.usage?.turns, source.maxTurns) : "";
-	const errorMessage = source.errorMessage ?? null;
-	// A capped run's abort text is the cap's own, so the cap line carries it instead.
-	const error = capped && errorMessage !== null && ABORT_TEXTS.has(errorMessage) ? null : errorMessage;
-	// A failure below the cap carries its reason as its body, so it shows once.
-	const body = !capped && isFailedResult(source)
+	const error = source.errorMessage ?? null;
+	const body = isFailedResult(source)
 		? error || source.stderr || outputText(source.messages)
 		: outputText(source.messages);
-	return { capLine, body, error };
+	return { body, error };
 }
 
 /**
@@ -234,17 +200,16 @@ export function errorLine(text: ResultText): string | null {
 	return text.error !== null && text.error !== text.body ? text.error : null;
 }
 
-/** The cap line then the body: the run text a surface prints in one block. */
+/** The run text a surface prints in one block. */
 export function resultBodyBlock(source: ResultTextSource): string {
-	const text = resultText(source);
-	return text.capLine ? `${text.capLine}\n\n${text.body}` : text.body;
+	return resultText(source).body;
 }
 
-/** The cap line, the body, then the error line when the body does not carry it. */
+/** The body, then the error line when the body does not carry it. */
 export function resultTextBlock(source: ResultTextSource): string {
 	const text = resultText(source);
-	const parts = text.capLine ? [text.capLine, text.body] : [text.body];
-	// A failure below the cap already carries its reason as its body.
+	const parts = [text.body];
+	// A failed run already carries its reason as its body.
 	const line = errorLine(text);
 	if (line) parts.push(line);
 	return parts.join("\n\n");

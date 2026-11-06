@@ -28,13 +28,13 @@ const COLLAPSED_ITEM_COUNT = 10;
 type ThemeFg = (color: any, text: string) => string;
 
 /**
- * The collapsed card run text: the cap line, the body, then any error the body
- * does not carry. A below-cap failure keeps its red marker on its one line.
+ * The collapsed card run text: the body, then any error the body does not carry.
+ * A failed run keeps its red marker on its one line.
  */
 function collapsedRunText(text: ResultText, block: string, fg: ThemeFg): string[] {
 	const line = errorLine(text);
-	// The body of a below-cap failure is its reason, so the red marker replaces it.
-	if (!text.capLine && line === null && text.error !== null) return [fg("error", `Error: ${text.error}`)];
+	// The body of a failed run is its reason, so the red marker replaces it.
+	if (line === null && text.error !== null) return [fg("error", `Error: ${text.error}`)];
 	const lines = [fg("muted", block)];
 	if (line) lines.push(fg("error", `Error: ${line}`));
 	return lines;
@@ -250,10 +250,10 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 				? theme.fg("error", "✗")
 				: theme.fg("success", "✓");
 		const displayItems = getDisplayItems(r.messages);
-		// The shared rule decides the cap line, the partial body, and the error line.
+		// The shared rule decides the body and the error line.
 		const runText = resultText(r);
 		const finalOutput = resultBodyBlock(r);
-		// A failure below the cap already carries its reason as its body.
+		// A failed run already carries its reason as its body.
 		const errorText = errorLine(runText);
 
 		if (expanded) {
@@ -281,7 +281,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 				container.addChild(new Spacer(1));
 				container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 			}
-			// The error follows the body, so every card reads cap line, body, error.
+			// The error follows the body, so the card reads body, then error.
 			if (errorText) container.addChild(new Text(theme.fg("error", `Error: ${errorText}`), 0, 0));
 			const usageStr = formatUsageStats(r.usage, r.model);
 			if (usageStr) {
@@ -294,8 +294,8 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 		let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
 		if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 		text += thinkingText(r);
-		// A capped or failed run shows its run text, then any error the body does not carry.
-		if (runText.capLine || isError) {
+		// A failed run shows its run text, then any error the body does not carry.
+		if (isError) {
 			for (const line of collapsedRunText(runText, finalOutput, theme.fg.bind(theme))) text += `\n${line}`;
 		} else if (displayItems.length === 0)
 			text += `\n${theme.fg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;
@@ -384,7 +384,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 					container.addChild(new Spacer(1));
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
-				// The error follows the body, so every card reads cap line, body, error.
+				// The error follows the body, so the step card reads body, then error.
 				const stepError = errorLine(stepRunText);
 				if (stepError) container.addChild(new Text(theme.fg("error", `Error: ${stepError}`), 0, 0));
 
@@ -419,7 +419,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			text += thinkingText(r);
 			const runText = resultText(r);
 			// The collapsed card follows the single card: run text, then any real error.
-			if (runText.capLine || (r.exitCode !== -1 && isFailedResult(r))) {
+			if (r.exitCode !== -1 && isFailedResult(r)) {
 				for (const line of collapsedRunText(runText, resultBodyBlock(r), theme.fg.bind(theme))) text += `\n${line}`;
 			} else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
 			else text += `\n${renderDisplayItems(displayItems, 5)}`;
@@ -485,7 +485,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 					container.addChild(new Spacer(1));
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
-				// The error follows the body, so every card reads cap line, body, error.
+				// The error follows the body, so the task card reads body, then error.
 				const taskError = errorLine(taskRunText);
 				if (taskError) container.addChild(new Text(theme.fg("error", `Error: ${taskError}`), 0, 0));
 
@@ -515,7 +515,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			text += thinkingText(r);
 			const runText = resultText(r);
 			// The collapsed card follows the single card: run text, then any real error.
-			if (runText.capLine || (r.exitCode !== -1 && isFailedResult(r))) {
+			if (r.exitCode !== -1 && isFailedResult(r)) {
 				for (const line of collapsedRunText(runText, resultBodyBlock(r), theme.fg.bind(theme))) text += `\n${line}`;
 			} else if (displayItems.length === 0)
 				text += `\n${theme.fg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;

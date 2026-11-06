@@ -27,7 +27,6 @@ import subagentExtension, {
 } from "./subagent.ts";
 import { archiveRun, getRuns, registerInspectorCommands } from "./inspector.ts";
 import { failureResult, resultText, resultTextBlock } from "./subagent-result.ts";
-import { TURN_GRACE } from "./turn-cap.ts";
 
 // --- harness -----------------------------------------------------------------
 
@@ -268,7 +267,7 @@ test("the single run total and stop reason render duration-first in both collaps
 	assert.equal(expanded, "✗ tester (user) 1.2s [aborted]");
 });
 
-test("an abort below the cap prints its error text once in the card", () => {
+test("an aborted run prints its error text once in the card", () => {
 	const tool = captureTool();
 	const failed = makeSingle({ exitCode: 1, stopReason: "aborted", errorMessage: "boom" });
 	const result = makeResult(makeDetails("single", [failed]));
@@ -280,111 +279,17 @@ test("an abort below the cap prints its error text once in the card", () => {
 	const expanded = render(tool, result, true, {});
 	assert.equal(countOccurrences(expanded, "boom"), 1, "the expanded card prints the reason once");
 	assert.ok(!expanded.includes("Error: boom"), "the expanded card adds no second error line");
+	assert.equal(resultText(failed).error, "boom", "the tree end event carries the real error");
 });
 
-test("a capped single card shows the partial text and no abort error", () => {
-	const tool = captureTool();
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const capped = makeSingle({
-		exitCode: 1,
-		stopReason: "aborted",
-		errorMessage: "Subagent was aborted",
-		turnsCapped: true,
-		maxTurns: 2,
-		usage: { ...zeroUsage(), turns: 8 },
-		messages: [partial],
-	});
-	const result = makeResult(makeDetails("single", [capped]));
+// --- a run aborted by the parent -------------------------------------------
 
-	for (const expanded of [false, true]) {
-		const out = render(tool, result, expanded, {});
-		assert.ok(!out.includes("Subagent was aborted"), `expanded=${expanded} hides the abort error`);
-		assert.ok(out.includes("partial output follows"), `expanded=${expanded} shows the shared cap line`);
-		assert.ok(out.includes("partial turn text"), `expanded=${expanded} shows the partial text`);
-	}
-	const collapsed = render(tool, result, false, {});
-	assert.ok(!collapsed.includes("(no output)"), "the collapsed card shows no no-output line");
-});
-
-// --- a capped run with a real error, and a run aborted below the cap ---------
-
-/** A capped single result whose error is a real failure, not the cap abort. */
-function cappedWithRealError() {
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	return makeSingle({
-		exitCode: 1,
-		stopReason: "aborted",
-		errorMessage: "provider exploded",
-		turnsCapped: true,
-		maxTurns: 2,
-		usage: { ...zeroUsage(), turns: 8 },
-		messages: [partial],
-	});
-}
-
-test("a capped run with a real error shows the cap line and the error on every card", () => {
-	const tool = captureTool();
-	const capped = cappedWithRealError();
-	const capLine = `turns 8/2 (capped, ${TURN_GRACE} grace) - partial output follows`;
-	const single = makeResult(makeDetails("single", [capped]));
-	const chain = makeResult(makeDetails("chain", [{ ...capped, step: 1 }]));
-	const parallel = makeResult(makeDetails("parallel", [capped]));
-	const surfaces: [string, string][] = [
-		["single collapsed", render(tool, single, false, {})],
-		["single expanded", render(tool, single, true, {})],
-		["chain collapsed", render(tool, chain, false, {})],
-		["chain expanded", render(tool, chain, true, {})],
-		["parallel collapsed", render(tool, parallel, false, {})],
-		["parallel expanded", render(tool, parallel, true, {})],
-	];
-	for (const [name, out] of surfaces) {
-		assert.ok(out.includes(capLine), `${name} shows the cap line`);
-		assert.ok(out.includes("Error: provider exploded"), `${name} shows the real error`);
-		assert.ok(out.includes("partial turn text"), `${name} shows the partial text`);
-	}
-
-	// The tool text and the tree preview read the shared rule.
-	const toolText = resultTextBlock(capped);
-	assert.ok(toolText.includes(capLine), "the tool text carries the cap line");
-	assert.ok(toolText.includes("provider exploded"), "the tool text carries the real error");
-	assert.equal(
-		resultText(capped).error,
-		"provider exploded",
-		"the tree end event carries the real error",
-	);
-});
-
-test("a capped run whose only error is the cap abort shows the cap line and no error line", () => {
-	const tool = captureTool();
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const capped = makeSingle({
-		exitCode: 1,
-		stopReason: "aborted",
-		errorMessage: "Subagent was aborted",
-		turnsCapped: true,
-		maxTurns: 2,
-		usage: { ...zeroUsage(), turns: 8 },
-		messages: [partial],
-	});
-	const result = makeResult(makeDetails("single", [capped]));
-	const capLine = `turns 8/2 (capped, ${TURN_GRACE} grace) - partial output follows`;
-
-	for (const expanded of [false, true]) {
-		const out = render(tool, result, expanded, {});
-		assert.ok(out.includes(capLine), `expanded=${expanded} shows the cap line`);
-		assert.ok(out.includes("partial turn text"), `expanded=${expanded} shows the partial text`);
-		assert.ok(!out.includes("Error:"), `expanded=${expanded} shows no error line`);
-		assert.ok(!out.includes("Subagent was aborted"), `expanded=${expanded} hides the cap abort text`);
-	}
-});
-
-test("a run aborted below the cap shows its error and no cap line", () => {
+test("a run aborted by the parent shows its error once and prints no cap text", () => {
 	const tool = captureTool();
 	const failed = makeSingle({
 		exitCode: 1,
 		stopReason: "aborted",
 		errorMessage: "stopped by the caller",
-		maxTurns: 8,
 		usage: { ...zeroUsage(), turns: 3 },
 	});
 	const result = makeResult(makeDetails("single", [failed]));
@@ -398,12 +303,16 @@ test("a run aborted below the cap shows its error and no cap line", () => {
 		);
 		assert.ok(!out.includes("capped"), `expanded=${expanded} shows no cap line`);
 		assert.ok(!out.includes("partial output follows"), `expanded=${expanded} promises no partial text`);
+		// The body is the reason, so the card prints no no-output marker.
+		assert.ok(!out.includes("(no output)"), `expanded=${expanded} shows the reason as the body`);
+		// The expanded card shows the body and adds no error line beside it.
+		if (expanded) assert.ok(!out.includes("Error:"), "the expanded card adds no error line beside the body");
 	}
 });
 
 // --- one error text, one place ----------------------------------------------
 
-test("a failure below the cap prints its error text once on every card", () => {
+test("a failure prints its error text once on every card", () => {
 	const tool = captureTool();
 	const failed = makeSingle({ exitCode: 1, stopReason: "error", errorMessage: "boom" });
 	const single = makeResult(makeDetails("single", [failed]));
@@ -427,90 +336,36 @@ test("a failure below the cap prints its error text once on every card", () => {
 		assert.equal(countOccurrences(out, "boom"), 1, `${name} prints the error text once`);
 		assert.ok(!out.includes("Error: boom"), `${name} adds no second error line`);
 	}
+
+	// The tool text reads the shared rule, so the error shows once there too.
+	const toolText = resultTextBlock(failed);
+	assert.equal(countOccurrences(toolText, "boom"), 1, "the tool text prints the error once");
+	assert.ok(!toolText.includes("capped"), "the tool text carries no cap line");
 });
 
-test("a capped run with a provider abort text shows the cap line and no error line", () => {
+test("the expanded card shows a failed run's reason as its body and adds no error line", () => {
 	const tool = captureTool();
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const capped = makeSingle({
+	const messageText = "half a turn of output";
+	// A failed run's body is its error text, so the reason shows once, as the body.
+	const failed = makeSingle({
 		exitCode: 1,
-		stopReason: "aborted",
-		errorMessage: "Request was aborted",
-		turnsCapped: true,
-		maxTurns: 2,
-		usage: { ...zeroUsage(), turns: 8 },
-		messages: [partial],
+		stopReason: "error",
+		errorMessage: "provider exploded",
+		messages: [{ role: "assistant", content: [{ type: "text", text: messageText }] }],
 	});
-	const result = makeResult(makeDetails("single", [capped]));
-	const capLine = `turns 8/2 (capped, ${TURN_GRACE} grace) - partial output follows`;
-
-	for (const expanded of [false, true]) {
-		const out = render(tool, result, expanded, {});
-		assert.ok(out.includes(capLine), `expanded=${expanded} shows the cap line`);
-		assert.ok(!out.includes("Error:"), `expanded=${expanded} shows no error line`);
-		assert.ok(!out.includes("Request was aborted"), `expanded=${expanded} hides the provider abort text`);
-	}
-	assert.equal(resultText(capped).error, null, "the tree error is null");
-});
-
-test("a capped run carrying the transit abort text shows the cap line and no error line", () => {
-	const tool = captureTool();
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const capped = makeSingle({
-		exitCode: 1,
-		stopReason: "aborted",
-		errorMessage: "This operation was aborted",
-		turnsCapped: true,
-		maxTurns: 2,
-		usage: { ...zeroUsage(), turns: 8 },
-		messages: [partial],
-	});
-	const result = makeResult(makeDetails("single", [capped]));
-	const capLine = `turns 8/2 (capped, ${TURN_GRACE} grace) - partial output follows`;
-
-	for (const expanded of [false, true]) {
-		const out = render(tool, result, expanded, {});
-		assert.ok(out.includes(capLine), `expanded=${expanded} shows the cap line`);
-		assert.ok(!out.includes("Error:"), `expanded=${expanded} shows no error line`);
-		assert.ok(!out.includes("This operation was aborted"), `expanded=${expanded} hides the provider abort text`);
-	}
-	assert.equal(resultText(capped).error, null, "the tree error is null");
-});
-
-test("every card reads cap line, body, error in that order", () => {
-	const tool = captureTool();
-	const capped = cappedWithRealError();
-	const capLine = `turns 8/2 (capped, ${TURN_GRACE} grace) - partial output follows`;
+	assert.equal(resultText(failed).body, resultText(failed).error, "the body is the error text");
+	assert.equal(resultText(failed).body, "provider exploded", "the body is the plain message");
 	const cards: [string, unknown][] = [
-		["single", makeResult(makeDetails("single", [capped]))],
-		["chain", makeResult(makeDetails("chain", [{ ...capped, step: 1 }]))],
-		["parallel", makeResult(makeDetails("parallel", [capped]))],
+		["single", makeResult(makeDetails("single", [failed]))],
+		["chain", makeResult(makeDetails("chain", [{ ...failed, step: 1 }]))],
+		["parallel", makeResult(makeDetails("parallel", [failed]))],
 	];
 	for (const [mode, result] of cards) {
-		for (const expanded of [false, true]) {
-			const out = render(tool, result, expanded, {});
-			const capAt = out.indexOf(capLine);
-			const bodyAt = out.indexOf("partial turn text");
-			const errorAt = out.indexOf("Error: provider exploded");
-			assert.ok(capAt >= 0, `${mode} expanded=${expanded} shows the cap line`);
-			assert.ok(bodyAt > capAt, `${mode} expanded=${expanded} shows the body after the cap line`);
-			assert.ok(errorAt > bodyAt, `${mode} expanded=${expanded} shows the error after the body`);
-		}
+		const out = render(tool, result, true, {});
+		assert.equal(countOccurrences(out, "provider exploded"), 1, `${mode} prints the body once`);
+		assert.ok(!out.includes(messageText), `${mode} drops the message text, so the reason replaces it`);
+		assert.ok(!out.includes("Error:"), `${mode} adds no error line the body already carries`);
 	}
-});
-
-test("a capped source with no usage prints the cap line and no false turn count", () => {
-	const capped = makeSingle({
-		exitCode: 1,
-		stopReason: "aborted",
-		errorMessage: "Subagent was aborted",
-		turnsCapped: true,
-		maxTurns: 2,
-		usage: undefined,
-	});
-	const text = resultText(capped);
-	assert.equal(text.capLine, `capped (${TURN_GRACE} grace) - partial output follows`);
-	assert.ok(!text.capLine.includes("turns 0"), "no false turn count");
 });
 
 // --- thinking reducer (pure) -------------------------------------------------
@@ -780,33 +635,6 @@ test("the inspector detail shows the thinking summary", async () => {
 	assert.ok(lines.includes("25 reasoning"), lines);
 });
 
-test("the capped detail hides the abort text and a below-cap detail keeps its error", async () => {
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const cappedTask = toInspectTask(
-		makeSingle({
-			exitCode: 1,
-			stopReason: "aborted",
-			errorMessage: "Subagent was aborted",
-			turnsCapped: true,
-			usage: { ...zeroUsage(), turns: 8 },
-			messages: [partial],
-		}),
-	);
-	const belowCapTask = toInspectTask(
-		makeSingle({ exitCode: 1, stopReason: "aborted", errorMessage: "aborted below the cap" }),
-	);
-	archiveRun({ at: "2024-01-07T00:00:00.000Z", mode: "single", agentScope: "user", results: [belowCapTask] });
-	archiveRun({ at: "2024-01-08T00:00:00.000Z", mode: "single", agentScope: "user", results: [cappedTask] });
-
-	const capped = await inspectDetail("last");
-	assert.ok(capped.includes("partial turn text"), capped);
-	assert.ok(!capped.includes("Subagent was aborted"), capped);
-
-	const belowCap = await inspectDetail(String(getRuns().length - 1));
-	assert.ok(belowCap.includes("aborted below the cap"), belowCap);
-	assert.equal(countOccurrences(belowCap, "aborted below the cap"), 1, "the inspector prints the error text once");
-});
-
 test("the inspector prints a refusal once, not as body and stderr", async () => {
 	const refusal = failureResult("tester", "user", "do the thing", undefined, "Blocked: the tool refused");
 	archiveRun({ at: "2024-01-11T00:00:00.000Z", mode: "single", agentScope: "user", results: [toInspectTask(refusal)] });
@@ -825,61 +653,31 @@ test("the inspector keeps the stderr line when it differs from the body", async 
 	assert.ok(detail.includes("stderr: the tool said no"), detail);
 });
 
-test("the inspector shows the cap line for a capped run and keeps its partial text", async () => {
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const cappedTask = toInspectTask(
+test("the inspector prints an aborted run's abort text once and no partial text", async () => {
+	const abortedTask = toInspectTask(
 		makeSingle({
 			exitCode: 1,
 			stopReason: "aborted",
 			errorMessage: "Subagent was aborted",
-			turnsCapped: true,
-			maxTurns: 2,
-			usage: { ...zeroUsage(), turns: 8 },
-			messages: [partial],
+			messages: [{ role: "assistant", content: [{ type: "text", text: "half a turn of output" }] }],
+			usage: { ...zeroUsage(), input: 10, output: 5, turns: 8 },
 		}),
 	);
-	archiveRun({ at: "2024-01-09T00:00:00.000Z", mode: "single", agentScope: "user", results: [cappedTask] });
+	archiveRun({ at: "2024-01-09T00:00:00.000Z", mode: "single", agentScope: "user", results: [abortedTask] });
 
-	const commands = captureCommands();
-	let component: { render(width: number): string[] } | undefined;
-	await commands.get("inspect")?.handler("last", {
-		mode: "tui",
-		ui: {
-			custom: async (
-				factory: (tui: unknown, theme: unknown, keys: unknown, done: (v: unknown) => void) => unknown,
-			) => {
-				component = factory({}, {}, {}, () => {}) as { render(width: number): string[] };
-			},
-		},
-	});
-	const lines = component?.render(200).join("\n") ?? "";
-	assert.ok(lines.includes(`turns 8/2 (capped, ${TURN_GRACE} grace) - partial output follows`), lines);
-	assert.ok(lines.includes("partial turn text"), lines);
-	assert.ok(!lines.includes("Subagent was aborted"), lines);
-});
-
-test("the inspector reads cap line, body, error in that order", async () => {
-	const partial = { role: "assistant", content: [{ type: "text", text: "partial turn text" }] };
-	const cappedTask = toInspectTask(
-		makeSingle({
-			exitCode: 1,
-			stopReason: "aborted",
-			errorMessage: "provider exploded",
-			turnsCapped: true,
-			maxTurns: 2,
-			usage: { ...zeroUsage(), turns: 8 },
-			messages: [partial],
-		}),
-	);
-	archiveRun({ at: "2024-01-10T00:00:00.000Z", mode: "single", agentScope: "user", results: [cappedTask] });
-
-	const detail = await inspectDetail("last");
-	const capAt = detail.indexOf("partial output follows");
-	const bodyAt = detail.indexOf("partial turn text");
-	const errorAt = detail.indexOf("Error: provider exploded");
-	assert.ok(capAt >= 0, detail);
-	assert.ok(bodyAt > capAt, detail);
-	assert.ok(errorAt > bodyAt, detail);
+	const lines = await inspectDetail("last");
+	assert.equal(countOccurrences(lines, "Subagent was aborted"), 1, "the inspector prints the abort text once");
+	// A failed run's body is its error text, so no partial output text can appear.
+	assert.ok(!lines.includes("half a turn of output"), lines);
+	assert.ok(!lines.includes("capped"), lines);
+	assert.ok(!lines.includes("partial output follows"), lines);
+	// No reachable run shows a separate error line, because the body carries it.
+	assert.ok(!lines.includes("Error:"), lines);
+	// The body holds the body slot, so it prints before the usage summary.
+	const bodyAt = lines.indexOf("Subagent was aborted");
+	const usageAt = lines.indexOf("↑10");
+	assert.ok(bodyAt >= 0, lines);
+	assert.ok(usageAt > bodyAt, `the body prints before the usage line:\n${lines}`);
 });
 
 test("the inspector formats reasoning tokens like the inline block", async () => {
