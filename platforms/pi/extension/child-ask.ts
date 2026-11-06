@@ -16,22 +16,34 @@
  * The queue reads the registry that `run-registry.ts` binds, so the gate and
  * the queue share one identity source. No pi runtime import: the renderer is
  * injected, so the test needs no terminal.
+ *
+ * This file is the facade. The state record, the log line, and the mount live
+ * in `child-ask-state.ts`, `child-ask-log.ts`, and `child-ask-mount.ts`.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { askPanelSlot } from "./ask-panel-slot.ts";
+import { askFlags, shortId, waitingApart, warnAskLine } from "./child-ask-log.ts";
+import { pump, release } from "./child-ask-mount.ts";
 import {
-	DENIED_BY_USER_REASON,
-	renderPermissionPrompt,
-	renderRootPermissionPrompt,
-	type PermissionChoice,
-	type PromptModel,
-} from "./permission-prompt.ts";
-import {
-	boundRunRegistry,
-	UNKNOWN_RUN_REASON,
-	type RunRegistry,
-} from "./run-registry.ts";
+	bindSurface,
+	clearAllSurfaces,
+	newRequest,
+	rootState,
+	settle,
+	surfacesOf,
+	type ChildAskInput,
+	type ChildAskOutcome,
+	type ChildAskRender,
+	type GateRequest,
+	type RegistryState,
+	type RootState,
+} from "./child-ask-state.ts";
+import { renderPermissionPrompt, renderRootPermissionPrompt } from "./permission-prompt.ts";
+import { boundRunRegistry, UNKNOWN_RUN_REASON, type RunRegistry } from "./run-registry.ts";
+
+export { CHILD_ASK_NO_SURFACE_REASON, childPromptTitle } from "./child-ask-mount.ts";
+export type { ChildAskInput, ChildAskOutcome, ChildAskRender } from "./child-ask-state.ts";
 
 /**
  * How long an unanswered child request stays in the queue. One owner answer is
@@ -43,142 +55,12 @@ export const CHILD_ASK_DEADLINE_MS = 120_000;
 export const CHILD_ASK_DEADLINE_REASON =
 	"Blocked: the permission ask timed out after 120 seconds with no answer";
 
-/** The block reason when the root has no captured prompt surface. */
-export const CHILD_ASK_NO_SURFACE_REASON = "Blocked: the root session has no prompt surface";
-
-/**
- * The prompt title for a child request. Only the head is shown, so the
- * position is always 1, and the total shrinks as requests are answered.
- */
-export function childPromptTitle(childName: string, total: number): string {
-	return `Permission required for ${childName} (1 of ${total} waiting)`;
-}
-
-/** What one request resolves to. An allow never carries a block reason. */
-export type ChildAskOutcome =
-	| { kind: "allow"; alwaysAllow: boolean }
-	| { kind: "block"; reason: string };
-
-/** Everything a child enqueues. The gate fills the grant key and the model. */
-export interface ChildAskInput {
-	/** The child session id. It scopes the grant and finds the root. */
-	sessionId: string;
-	/** The child agent name, shown in the title. */
-	role: string;
-	toolName: string;
-	/** The full grant key the gate will test on the next call. */
-	key: string;
-	/** The prompt model, without the child-specific title. */
-	model: PromptModel;
-	/** Stores the key when the owner picks always-allow. */
-	remember: (key: string) => void;
-}
-
-/** The prompt renderer. The default is the real shared prompt. */
-export type ChildAskRender = (
-	ctx: ExtensionContext,
-	model: PromptModel,
-	signal: AbortSignal,
-) => Promise<PermissionChoice>;
-
 /** The queue options. Both have a production default. */
 export interface ChildAskOptions {
 	/** Defaults to `renderPermissionPrompt`. */
 	render?: ChildAskRender;
 	/** Defaults to `CHILD_ASK_DEADLINE_MS`. */
 	timeoutMs?: number;
-}
-
-interface GateRequest {
-	sessionId: string;
-	role: string;
-	toolName: string;
-	key: string;
-	model: PromptModel;
-	remember: (key: string) => void;
-	resolve: (outcome: ChildAskOutcome) => void;
-	/** Closes the visible panel when the deadline passes. */
-	cancel: AbortController;
-	timer: ReturnType<typeof setTimeout> | null;
-	settled: boolean;
-}
-
-/** One root and the requests that wait on it. */
-interface RootState {
-	registry: RunRegistry;
-	rootSessionId: string;
-	queue: GateRequest[];
-	/** The request whose prompt is on screen, or null. */
-	visible: GateRequest | null;
-	/** Requests with a mount that runs or waits for the shared panel slot. */
-	parked: Set<GateRequest>;
-}
-
-/**
- * The queue and the surfaces of one registry. A new registry starts empty, so
- * a surface captured for an earlier session never answers a later one.
- */
-interface RegistryState {
-	registry: RunRegistry;
-	roots: Map<string, RootState>;
-	/** The prompt surface of each root, kept after its queue drains. */
-	surfaces: Map<string, ExtensionContext>;
-}
-
-/** Drop a stale title before the queue sets the child-specific one. */
-function titled(model: PromptModel, title: string): PromptModel {
-	return { ...model, title };
-}
-
-/**
- * A short stable form of a session id, so one warning line fits a terminal. A
- * cut id ends with the cut marker, so a cut id never reads as a full id.
- */
-function shortId(sessionId: string): string {
-	return sessionId.length <= 12 ? sessionId : `${sessionId.slice(0, 12)}…`;
-}
-
-/**
- * Write one ask warning line. A console that throws must not skip the settle,
- * so this call catches its own throw. The catch stays empty, because a dropped
- * warning line has no second place to go.
- */
-function warnAskLine(line: string): void {
-	try {
-		console.error(line);
-	} catch {
-		// A broken console must not turn a blocked child into a stuck child.
-	}
-}
-
-/**
- * Which request the panel shows for one line: `this` for the named request,
- * `other` for a different visible request, and `none` for no visible request.
- */
-function shownField(visible: GateRequest | null, request: GateRequest): string {
-	if (visible === request) return "this";
-	return visible ? "other" : "none";
-}
-
-/**
- * The state fields both ask warnings carry. The count comes from the caller,
- * because the two lines count apart: an arrival prints `queued=`, an expiry
- * prints `waiting=`. A line never claims a panel for the request it names.
- */
-function askFlags(
-	surfaces: Map<string, ExtensionContext> | undefined,
-	state: RootState,
-	request: GateRequest,
-	count: string,
-): string {
-	const shown = shownField(state.visible, request);
-	const surface = surfaces?.has(state.rootSessionId) ? "yes" : "no";
-	return `${count} shown=${shown} parked=${state.parked.size} surface=${surface}`;
-}
-
-/** Requests still waiting on one root, apart from the request named. */
-function waitingApart(state: RootState, request: GateRequest): number {
-	return state.queue.filter((entry) => entry !== request).length;
 }
 
 /** FIFO queue plus the single visible prompt, one state per registry. */
@@ -215,7 +97,7 @@ export class ChildAskQueue {
 		const walk = registry.walk(sessionId);
 		if (!walk.ok || walk.rootSessionId !== sessionId) return;
 		if (!ctx.hasUI) return;
-		this.stateOf(registry).surfaces.set(walk.rootSessionId, ctx);
+		bindSurface(this.states, this.live, registry, walk.rootSessionId, ctx);
 	}
 
 	/**
@@ -234,20 +116,9 @@ export class ChildAskQueue {
 					: `Blocked: broken parent chain at session ${walk.failureId}`;
 			return { kind: "block", reason };
 		}
-		const state = this.state(registry, walk.rootSessionId);
+		const state = rootState(this.states, this.live, registry, walk.rootSessionId);
 		return new Promise<ChildAskOutcome>((resolve) => {
-			const request: GateRequest = {
-				sessionId: input.sessionId,
-				role: input.role,
-				toolName: input.toolName,
-				key: input.key,
-				model: input.model,
-				remember: input.remember,
-				resolve,
-				cancel: new AbortController(),
-				timer: null,
-				settled: false,
-			};
+			const request: GateRequest = newRequest(input, resolve);
 			// The deadline starts now, so time behind another prompt also counts.
 			const timer = setTimeout(() => this.expire(state, request), this.timeoutMs);
 			request.timer = timer;
@@ -255,7 +126,7 @@ export class ChildAskQueue {
 			// Read the fields first, so a queued request shows on the line.
 			const root = shortId(state.rootSessionId);
 			const flags = askFlags(
-				this.states.get(registry)?.surfaces,
+				surfacesOf(this.states, registry),
 				state,
 				request,
 				`queued=${state.queue.length}`,
@@ -264,7 +135,7 @@ export class ChildAskQueue {
 			// A silent queue hides a child that waits for an owner who never sees it.
 			warnAskLine(line);
 			// Batch requests that arrive in one tick, so the title counts them all.
-			queueMicrotask(() => this.pump(state));
+			queueMicrotask(() => pump(this.states, this.live, this.render, state));
 		});
 	}
 
@@ -290,16 +161,6 @@ export class ChildAskQueue {
 		return registry ? this.states.get(registry)?.roots : undefined;
 	}
 
-	private stateOf(registry: RunRegistry): RegistryState {
-		let state = this.states.get(registry);
-		if (!state) {
-			state = { registry, roots: new Map(), surfaces: new Map() };
-			this.states.set(registry, state);
-			this.live.add(state);
-		}
-		return state;
-	}
-
 	/**
 	 * Drop every captured surface. A surface is one gate generation's context, so
 	 * a later install or a later test must not render on it. A root binds its
@@ -307,114 +168,7 @@ export class ChildAskQueue {
 	 * nothing, so it is dropped at once.
 	 */
 	clearSurfaces(): void {
-		for (const state of this.live) {
-			state.surfaces.clear();
-			if (state.roots.size > 0) continue;
-			this.states.delete(state.registry);
-			this.live.delete(state);
-		}
-	}
-
-	private state(registry: RunRegistry, rootSessionId: string): RootState {
-		const roots = this.stateOf(registry).roots;
-		let state = roots.get(rootSessionId);
-		if (!state) {
-			state = { registry, rootSessionId, queue: [], visible: null, parked: new Set() };
-			roots.set(rootSessionId, state);
-		}
-		return state;
-	}
-
-	/** Show the head, or fail it closed when the root has no surface yet. */
-	private pump(state: RootState): void {
-		if (state.visible || state.parked.size > 0) return;
-		const surfaces = this.stateOf(state.registry).surfaces;
-		while (state.queue.length > 0) {
-			const head = state.queue[0];
-			if (head.settled) {
-				state.queue.shift();
-				continue;
-			}
-			const ctx = surfaces.get(state.rootSessionId);
-			if (!ctx) {
-				this.settle(state, head, { kind: "block", reason: CHILD_ASK_NO_SURFACE_REASON });
-				continue;
-			}
-			// A root ask can own the panel slot. This wait is bounded by the request's
-			// own deadline, so the wait never outlasts the ask that waits for a panel.
-			void this.show(state, head, ctx);
-			return;
-		}
-		this.release(state);
-	}
-
-	/**
-	 * Take the shared panel slot, mount one prompt, and hand the slot back on
-	 * every exit. The slot stops a root ask from mounting beside this panel. A
-	 * request that times out while it waits for the slot never mounts here.
-	 */
-	private async show(state: RootState, head: GateRequest, ctx: ExtensionContext): Promise<void> {
-		// Count the mount before it can wait, so a settle in another path sees it.
-		state.parked.add(head);
-		try {
-			const releaseSlot = await askPanelSlot.acquire();
-			try {
-				// The deadline may have passed while this request waited for the slot.
-				if (head.settled) return;
-				state.visible = head;
-				const model = titled(head.model, childPromptTitle(head.role, state.queue.length));
-				let choice: PermissionChoice;
-				try {
-					choice = await this.render(ctx, model, head.cancel.signal);
-				} catch {
-					choice = "deny";
-				}
-				this.answer(state, head, choice);
-			} finally {
-				releaseSlot();
-			}
-		} finally {
-			state.parked.delete(head);
-			this.pump(state);
-		}
-	}
-
-	/** Drop a state with no work left, so the roots map does not grow per root. */
-	private release(state: RootState): void {
-		if (state.visible || state.queue.length > 0) return;
-		const roots = this.stateOf(state.registry).roots;
-		// A stale mount can outlive its own root entry, so only drop this exact state.
-		if (roots.get(state.rootSessionId) === state) roots.delete(state.rootSessionId);
-	}
-
-	/** Turn one owner choice into a verdict, then show the next request. */
-	private answer(state: RootState, request: GateRequest, choice: PermissionChoice): void {
-		// A timeout may already have advanced the queue. A late panel answer is stale.
-		if (state.visible !== request) return;
-		state.visible = null;
-		if (choice === "always-allow") {
-			request.remember(request.key);
-			this.settle(state, request, { kind: "allow", alwaysAllow: true });
-		} else if (choice === "allow-once") {
-			this.settle(state, request, { kind: "allow", alwaysAllow: false });
-		} else {
-			this.settle(state, request, { kind: "block", reason: DENIED_BY_USER_REASON });
-		}
-		this.pump(state);
-	}
-
-	/** Drop one request from the queue, clear its timer, and resolve it once. */
-	private settle(state: RootState, request: GateRequest, outcome: ChildAskOutcome): void {
-		if (request.settled) return;
-		request.settled = true;
-		if (request.timer !== null) {
-			clearTimeout(request.timer);
-			request.timer = null;
-		}
-		const index = state.queue.indexOf(request);
-		if (index >= 0) state.queue.splice(index, 1);
-		if (state.visible === request) state.visible = null;
-		request.resolve(outcome);
+		clearAllSurfaces(this.states, this.live);
 	}
 
 	/** The deadline path. The child is blocked, and the next request shows. */
@@ -423,23 +177,23 @@ export class ChildAskQueue {
 		// Read the fields first, so a mounted panel still shows on the line.
 		const root = shortId(state.rootSessionId);
 		const flags = askFlags(
-			this.states.get(state.registry)?.surfaces,
+			surfacesOf(this.states, state.registry),
 			state,
 			request,
 			`waiting=${waitingApart(state, request)}`,
 		);
 		const line = `agent-stack: child ask expired with no answer before the deadline root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
 		// The verdict goes first, so a blocking console write never delays it.
-		this.settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
+		settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
 		warnAskLine(line);
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
 		// A parked mount clears itself in its own finally. This path never clears
 		// the parked count, so a later expire cannot start a second mount.
-		this.pump(state);
+		pump(this.states, this.live, this.render, state);
 		// The visible panel closes on its own microtask, so drop the drained root
 		// here. A stale mount that resumes later cannot delete a newer state.
-		this.release(state);
+		release(this.states, this.live, state);
 	}
 }
 

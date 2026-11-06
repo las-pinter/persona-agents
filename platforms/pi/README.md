@@ -264,8 +264,8 @@ renders the shared prompt on the surface its own gate captured, so the owner's
 answer becomes the child's verdict. One child request is on screen at a time,
 and its title names the child and the waiting count. `ask-panel-slot.ts` holds
 one exclusive slot with two acquire sites: the root wrapper
-`renderRootPermissionPrompt` in `permission-prompt.ts`, and `ChildAskQueue.show`
-in `child-ask.ts`. Each site releases the slot in a `finally`, so a throw, a
+`renderRootPermissionPrompt` in `permission-prompt.ts`, and the `show` mount in
+`child-ask-mount.ts`. Each site releases the slot in a `finally`, so a throw, a
 denial, a cancel, or a timeout frees it. A second ask waits first in first out.
 A generation counter stops a stale lease from freeing a newer ask's slot.
 `permission-prompt-slot.test.ts` covers the slot. `AGENTS.md` owns the rule
