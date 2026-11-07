@@ -37,6 +37,51 @@ import {
 	makeWorkspace,
 	theme,
 } from "./sidebar-render-fixtures.ts";
+import type { RunEvent, RunUsage } from "./tree-log.ts";
+import { assembleTree } from "./tree-model.ts";
+
+const RUN_T0 = Date.parse("2026-10-07T00:00:00.000Z");
+
+/** One log run of 65 s with 1500 tokens, 7 turns, and 3 tools. */
+function roundRun(round?: number, resumed?: boolean): RunEvent[] {
+	const at = (offsetMs: number): string => new Date(RUN_T0 + offsetMs).toISOString();
+	const usage: RunUsage = { input: 1000, output: 500, cost: 0.1, turns: 7 };
+	const marks = round === undefined ? {} : { round, resumed };
+	return [
+		{
+			v: 1,
+			type: "start",
+			runId: "tester-run",
+			parentRunId: null,
+			depth: 0,
+			agent: "tester",
+			persona: null,
+			status: "running",
+			at: at(0),
+			...marks,
+		},
+		{
+			v: 1,
+			type: "end",
+			runId: "tester-run",
+			parentRunId: null,
+			depth: 0,
+			agent: "tester",
+			persona: null,
+			status: "done",
+			at: at(65_000),
+			usage,
+			toolCount: 3,
+			...marks,
+		},
+	];
+}
+
+/** The one tree line a run log paints, at the run's end time. */
+function roundLine(events: RunEvent[]): string {
+	const roots = assembleTree(events, RUN_T0 + 65_000, 1000);
+	return renderTreeLines(roots, theme, 0, RUN_T0 + 65_000)[0] ?? "";
+}
 
 // --- AGENTS (tree) -----------------------------------------------------------
 
@@ -264,6 +309,22 @@ test("missing agent metrics render placeholders", () => {
 	assert.ok(line?.includes("tester"));
 	assert.ok(line?.includes("- - -"));
 	assert.ok(line?.includes("0⚒"));
+});
+
+// --- round marks on the tree line --------------------------------------------
+
+test("a round-2 resumed run paints the round and the resume mark on its tree line", () => {
+	assert.equal(roundLine(roundRun(2, true)), "✓ tester 1m05s 1.5k 7t 3⚒ r2↺");
+});
+
+test("a round-1 run paints the round and no resume mark", () => {
+	const line = roundLine(roundRun(1, false));
+	assert.equal(line, "✓ tester 1m05s 1.5k 7t 3⚒ r1");
+	assert.ok(!line.includes("↺"), "a cold round carries no resume mark");
+});
+
+test("a log with no round paints the line it painted before the round marks", () => {
+	assert.equal(roundLine(roundRun()), "✓ tester 1m05s 1.5k 7t 3⚒");
 });
 
 test("a rich agent line stays readable and fits width 45", () => {

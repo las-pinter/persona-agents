@@ -9,7 +9,7 @@
 
 import { afterEach, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -30,6 +30,7 @@ import { RunRegistry } from "./run-registry.ts";
 import { foldEvent } from "./subagent-fold.ts";
 import type { SingleResult, SubagentDetails } from "./subagent-result.ts";
 import { type DispatchDeps, type PreparedChildRuntime } from "./subagent-run.ts";
+import { SESSION_ROUND_CAP, sessionStoreDir, writeSidecar } from "./session-store.ts";
 import { type ModeRun, runSingleMode } from "./subagent.ts";
 import { readAllEvents } from "./tree-log.ts";
 
@@ -207,6 +208,42 @@ function treeLogPath(): string {
 	return join(tmpdir(), `pi-run-tree-${process.pid}-${Math.random().toString(36).slice(2)}.ndjson`);
 }
 
+/** A sidecar whose next round the cap refuses. */
+function cappedAgentDir(agent: string, id: string): string {
+	const agentDir = mkdtempSync(join(tmpdir(), "pi-run-store-"));
+	writeSidecar(agentDir, id, {
+		agent,
+		class: "worker",
+		rounds: SESSION_ROUND_CAP,
+		turns: 3,
+		createdAt: Date.now(),
+		updatedAt: Date.now(),
+		parentSession: "root-session",
+		cwd: "/tmp/subagent-work",
+	});
+	return agentDir;
+}
+
+/** A store with one saved round and a matching header, so the next round resumes. */
+function resumedAgentDir(agent: string, id: string): string {
+	const agentDir = mkdtempSync(join(tmpdir(), "pi-run-store-"));
+	writeSidecar(agentDir, id, {
+		agent,
+		class: "worker",
+		rounds: 1,
+		turns: 3,
+		createdAt: Date.now(),
+		updatedAt: Date.now(),
+		parentSession: "root-session",
+		cwd: "/tmp/subagent-work",
+	});
+	const storeDir = sessionStoreDir(agentDir);
+	mkdirSync(storeDir, { recursive: true });
+	const header = { type: "session", version: 3, id, cwd: "/tmp/subagent-work" };
+	writeFileSync(join(storeDir, `2026-01-01T00-00-00-000Z_${id}.jsonl`), `${JSON.stringify(header)}\n`, "utf8");
+	return agentDir;
+}
+
 test("run: a child runs to its own end, and the turn count equals the registry record", async () => {
 	const h = harness({ emitLimit: 200 });
 	const result = await run(h);
@@ -246,6 +283,56 @@ test("run: a parent abort keeps its error text on the tool result and the tree e
 		if (previous === undefined) delete process.env[ENV_TREE_LOG];
 		else process.env[ENV_TREE_LOG] = previous;
 		rmSync(logPath, { force: true });
+	}
+});
+
+test("run: a refused third round writes no start record", async () => {
+	const logPath = treeLogPath();
+	const previous = process.env[ENV_TREE_LOG];
+	process.env[ENV_TREE_LOG] = logPath;
+	const agentDir = cappedAgentDir(AGENT.name, "tester-cap");
+	try {
+		const h = harness();
+		h.deps.runtime.agentDir = agentDir;
+		const out = await runSingleMode(AGENT.name, "do it", "/tmp/subagent-work", h.mode, "tester-cap");
+		const result = out.details?.results[0];
+
+		assert.ok(result, "a refused run still returns a result");
+		assert.equal(result.round, 3, "the refusal names the round it refused");
+		assert.match(result.stderr, /round cap reached/, "the refusal text is the store reason");
+		assert.equal(h.children.length, 0, "no child session is built");
+		assert.deepEqual(readAllEvents(logPath), [], "a refused run leaves no tree record");
+	} finally {
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+		rmSync(logPath, { force: true });
+		rmSync(agentDir, { recursive: true, force: true });
+	}
+});
+
+test("run: a resumed plan writes its round and the resume flag on the first record", async () => {
+	const logPath = treeLogPath();
+	const previous = process.env[ENV_TREE_LOG];
+	process.env[ENV_TREE_LOG] = logPath;
+	const agentDir = resumedAgentDir(AGENT.name, "tester-resume");
+	try {
+		const h = harness();
+		h.deps.runtime.agentDir = agentDir;
+		const out = await runSingleMode(AGENT.name, "do it", "/tmp/subagent-work", h.mode, "tester-resume");
+		const result = out.details?.results[0];
+		const first = readAllEvents(logPath)[0];
+
+		assert.ok(result, "the resumed run returns a result");
+		assert.equal(result.round, 2, "the plan resumes at round 2");
+		assert.equal(result.resumed, true, "the result carries the resume flag");
+		assert.equal(first?.type, "start", "the first record is the start event");
+		assert.equal(first?.round, 2, "the start record carries the plan round");
+		assert.equal(first?.resumed, true, "the start record carries the resume flag");
+	} finally {
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+		rmSync(logPath, { force: true });
+		rmSync(agentDir, { recursive: true, force: true });
 	}
 });
 

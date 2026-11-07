@@ -318,3 +318,32 @@ test("the newest clear wins and older cleared children stay dropped", () => {
 	assert.equal(findNode(roots, "old"), undefined);
 	assert.equal(findNode(roots, "middle"), undefined);
 });
+
+test("the round and the resume flag fold onto the node", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", at: at(0), round: 2, resumed: true }),
+		makeEvent({ runId: "root", type: "update", at: at(10) }),
+		makeEvent({ runId: "root", type: "end", at: at(20), status: "done" }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots[0]?.round, 2, "the start round is kept when a later record omits it");
+	assert.equal(roots[0]?.resumed, true, "the start resume flag is kept when a later record omits it");
+});
+
+test("a later record with another round wins over the start round", () => {
+	const events = [
+		makeEvent({ runId: "root", type: "start", at: at(0), round: 1, resumed: false }),
+		makeEvent({ runId: "root", type: "end", at: at(20), status: "done", round: 2, resumed: true }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots[0]?.round, 2, "the later round wins over the start round");
+	assert.equal(roots[0]?.resumed, true, "the later resume flag wins over the start flag");
+});
+
+test("a log with no round leaves both node fields undefined", () => {
+	const roots = assembleTree(twoLevelEvents(), T0 + 100, 1000);
+	for (const node of flattenTree(roots)) {
+		assert.equal(node.round, undefined, `${node.runId} carries no round`);
+		assert.equal(node.resumed, undefined, `${node.runId} carries no resume flag`);
+	}
+});

@@ -343,6 +343,8 @@ export async function runSingleAgent(
 				agent: agent.name,
 				persona: personaId,
 				at: new Date().toISOString(),
+				round: currentResult.round,
+				resumed: currentResult.resumed,
 				...extra,
 			} as RunEvent,
 			mcp,
@@ -384,7 +386,13 @@ export async function runSingleAgent(
 		emitUpdate,
 		() => Date.now(),
 	);
-	emitTree("start", { status: "running", task: truncateUtf8(task, TREE_TASK_PREVIEW_BYTES) });
+	// The plan holds the true round; the current result still holds the default.
+	emitTree("start", {
+		status: "running",
+		task: truncateUtf8(task, TREE_TASK_PREVIEW_BYTES),
+		round: plan?.round ?? 1,
+		resumed: plan?.kind === "resume",
+	});
 	let built: BuiltChild | null = null;
 	try {
 		const prepared = await (deps.runtime.prepare ?? prepareChildRuntime)(childCwd);

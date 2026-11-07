@@ -204,6 +204,9 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 		typeof runDurationMs === "number" && Number.isFinite(runDurationMs)
 			? ` ${theme.fg("dim", formatDuration(runDurationMs))}`
 			: "";
+	// The round marks sit before the duration: the round, then the resume glyph.
+	const roundMark = (r: SingleResult): string =>
+		`${typeof r.round === "number" ? ` r${r.round}` : ""}${r.resumed === true ? "↺" : ""}`;
 
 	const renderDisplayItems = (items: DisplayItem[], limit?: number) => {
 		const toShow = limit ? items.slice(-limit) : items;
@@ -252,7 +255,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 
 		if (expanded) {
 			const container = new Container();
-			let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
+			let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${roundMark(r)}${runDuration}${liveElapsed(r)}`;
 			if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 			container.addChild(new Text(header, 0, 0));
 			for (const line of thinkingLines(r)) container.addChild(new Text(theme.fg("dim", line), 0, 0));
@@ -283,7 +286,7 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 			return container;
 		}
 
-		let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${runDuration}${liveElapsed(r)}`;
+		let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${roundMark(r)}${runDuration}${liveElapsed(r)}`;
 		if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 		text += thinkingText(r);
 		// The collapsed card shows the reason, or the body when the run carries no error text.

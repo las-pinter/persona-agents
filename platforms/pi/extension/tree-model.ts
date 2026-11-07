@@ -28,6 +28,10 @@ export interface TreeNode {
 	usage: RunUsage | undefined;
 	/** Tool calls this run started. `0` when the log has no count. */
 	toolCount: number;
+	/** The session round this run took. Absent when the log carries none. */
+	round?: number;
+	/** True when the round reopened a saved session. Absent when the log carries none. */
+	resumed?: boolean;
 	exitCode: number | null;
 	error: string | null;
 	outputPreview: string;
@@ -109,6 +113,8 @@ function buildNode(runId: string, records: RunEvent[], now: number, staleMs: num
 		bytesOut: latest.bytesOut ?? 0,
 		usage: latest.usage ?? start?.usage,
 		toolCount: latest.toolCount ?? start?.toolCount ?? 0,
+		round: latest.round ?? start?.round,
+		resumed: latest.resumed ?? start?.resumed,
 		exitCode: end?.exitCode ?? latest.exitCode ?? null,
 		error: end?.error ?? latest.error ?? null,
 		outputPreview: end?.outputPreview ?? latest.outputPreview ?? "",

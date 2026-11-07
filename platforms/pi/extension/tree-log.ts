@@ -52,6 +52,10 @@ export interface RunEvent {
 	mcpUsage?: Record<string, number>;
 	/** The settled ask on an `ask` record. Absent on every other type. */
 	ask?: AskRecord;
+	/** The session round this run took. Absent on an old record. */
+	round?: number;
+	/** True when the round reopened a saved session. Absent on an old record. */
+	resumed?: boolean;
 	exitCode?: number | null;
 	error?: string | null;
 	outputPreview?: string;

@@ -388,6 +388,8 @@ test("treeSignature changes for every field the panels paint", () => {
 		["output preview after char 64", n({ outputPreview: `${long}A` }), n({ outputPreview: `${long}B` })],
 		["node usage", usage(0.1), usage(0.2)],
 		["tool count", n({ toolCount: 1 }), n({ toolCount: 2 })],
+		["node round", n({ round: 1 }), n({ round: 2 })],
+		["node resumed", n({ resumed: false }), n({ resumed: true })],
 		["null error vs empty error", n({ error: null }), n({ error: "" })],
 		[
 			"session model",

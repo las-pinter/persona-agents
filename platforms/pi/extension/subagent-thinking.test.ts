@@ -151,7 +151,7 @@ test("a running result shows the live elapsed in the header", () => {
 	const tool = captureTool();
 	const result = makeSingle({ exitCode: -1, runStartedAt: 2_500 });
 	const out = render(tool, makeResult(makeDetails("single", [result])), false, { now: 5_000 });
-	assert.equal(out.split("\n")[0], "⏳ tester (user) · ⏱ 2.5s");
+	assert.equal(out.split("\n")[0], "⏳ tester (user) r1 · ⏱ 2.5s");
 });
 
 test("a finished result shows no live elapsed", () => {

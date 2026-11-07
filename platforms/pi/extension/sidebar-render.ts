@@ -307,7 +307,10 @@ function nodeMetrics(node: TreeNode, now: number): string {
 	const tokenText = tokens === null ? "-" : formatCount(tokens);
 	const turnsText = node.usage ? `${node.usage.turns}t` : "-";
 	const toolsText = `${Math.max(0, Math.floor(node.toolCount ?? 0))}⚒`;
-	return `${elapsed} ${tokenText} ${turnsText} ${toolsText}`;
+	const roundText = typeof node.round === "number" ? ` r${node.round}` : "";
+	// A resume mark with no round takes its own space, so the marks never touch.
+	const resumeText = node.resumed === true ? `${roundText ? "" : " "}↺` : "";
+	return `${elapsed} ${tokenText} ${turnsText} ${toolsText}${roundText}${resumeText}`;
 }
 
 /** A fixed-cell context bar. `█` is filled, `░` is empty. */
@@ -746,6 +749,8 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		depth: node.depth,
 		task: node.task,
 		toolCount: node.toolCount,
+		round: node.round ?? null,
+		resumed: node.resumed === true,
 		outputPreview: node.outputPreview,
 		usage: node.usage,
 		exitCode: node.exitCode ?? null,

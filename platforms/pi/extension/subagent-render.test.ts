@@ -55,7 +55,7 @@ test("every collapsed and expanded header appends the run total once and omits i
 	const tool = captureTool();
 	const pair = [makeSingle({ agent: "alpha", step: 1 }), makeSingle({ agent: "beta", step: 2 })];
 	const modes: Array<["single" | "chain" | "parallel", unknown[], string]> = [
-		["single", [makeSingle()], "✓ tester (user)"],
+		["single", [makeSingle()], "✓ tester (user) r1"],
 		["chain", pair, "✓ chain 2/2 steps"],
 		["parallel", pair, "✓ parallel 2/2 tasks"],
 	];
@@ -77,7 +77,7 @@ test("a non-finite run total renders no header suffix", () => {
 	const tool = captureTool();
 	for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
 		const out = render(tool, makeResult(makeDetails("single", [makeSingle()])), false, { durationMs: bad });
-		assert.equal(out.split("\n")[0], "✓ tester (user)", `durationMs=${bad}`);
+		assert.equal(out.split("\n")[0], "✓ tester (user) r1", `durationMs=${bad}`);
 	}
 });
 
@@ -157,9 +157,19 @@ test("the single run total and stop reason render duration-first in both collaps
 	const collapsed = render(tool, result, false, { durationMs: 1_200 }).split("\n")[0];
 	const expanded = render(tool, result, true, { durationMs: 1_200 }).split("\n")[0];
 
-	// Both views share one order: duration first, then the stop reason.
-	assert.equal(collapsed, "✗ tester (user) 1.2s [aborted]");
-	assert.equal(expanded, "✗ tester (user) 1.2s [aborted]");
+	// Both views share one order: the round mark, then the duration, then the stop reason.
+	assert.equal(collapsed, "✗ tester (user) r1 1.2s [aborted]");
+	assert.equal(expanded, "✗ tester (user) r1 1.2s [aborted]");
+});
+
+test("the card header paints the round and the resume mark before the duration", () => {
+	const tool = captureTool();
+	const result = makeResult(makeDetails("single", [makeSingle({ round: 2, resumed: true })]));
+
+	for (const expanded of [false, true]) {
+		const line = render(tool, result, expanded, { durationMs: 1_200 }).split("\n")[0];
+		assert.equal(line, "✓ tester (user) r2↺ 1.2s", `expanded=${expanded}`);
+	}
 });
 
 test("an aborted run prints its error text once in the card", () => {

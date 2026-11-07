@@ -380,6 +380,9 @@ The role text is rebuilt on every round: the profession body, the always-load
 skills, and the persona go in again. The caller adds only the task text, so a round
 sends the new task text and never a resent brief.
 
+The tree line and the single-result card header carry the round as ` r<n>`, and
+`↺` marks a resumed round.
+
 A session id starts with the agent name and a hyphen, then lower-case letters,
 digits, and hyphens only. Single mode carries the id; chain and parallel modes
 refuse one. `session-store.ts` owns the plan and its reasons.
