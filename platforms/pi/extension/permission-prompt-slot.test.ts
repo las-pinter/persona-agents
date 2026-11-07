@@ -20,7 +20,7 @@ import {
 	childAskQueue,
 	unbindChildAsk,
 } from "./child-ask.ts";
-import { CHILD_A, CHILD_B, ROOT, captureRoot, childAsk, deferred, rootAsk, setup } from "./gate-child-ask-fixture.ts";
+import { CHILD_A, CHILD_B, CHILD_C, ROOT, captureRoot, childAsk, deferred, rootAsk, setup } from "./gate-child-ask-fixture.ts";
 import {
 	buildPromptModel,
 	renderRootPermissionPrompt,
@@ -196,8 +196,72 @@ test("slot: a child that expires while it waits never mounts", { timeout: 2000 }
 	assert.equal(childAskQueue()?.rootCount(), 0, "the drained root is dropped");
 });
 
-// --- identity guard ----------------------------------------------------------
+// Only this case follows a live waiter past two expired waiters, so a slot
+// that a settled mount keeps after it wakes cannot pass. The third child is
+// live when the slot frees, so only it can mount.
+test(
+	"slot: the third of three children mounts after two expire behind the root",
+	{ timeout: 2000 },
+	async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		const s = setup({ never: true });
+		await captureRoot(s);
 
+		// The root panel holds the only slot until this case answers it.
+		const root = rootAsk(s);
+		await drainMicrotasks();
+		assert.equal(s.prompter.titles.length, 1, "the root panel holds the slot");
+
+		const first = childAsk(s, CHILD_A);
+		await drainMicrotasks();
+		// Stagger the arrivals, so the three deadlines fall in arrival order.
+		t.mock.timers.tick(1000);
+		const second = childAsk(s, CHILD_B);
+		await drainMicrotasks();
+		t.mock.timers.tick(1000);
+		const third = childAsk(s, CHILD_C);
+		await drainMicrotasks();
+		assert.equal(s.prompter.titles.length, 1, "no child panel mounts beside the root panel");
+		assert.equal(askPanelSlot.pending, 1, "only the first child waits on the slot");
+		assert.equal(childAskQueue()?.waiting(ROOT), 3, "three requests wait on the root");
+
+		// The first two reach their arrival deadlines while the root holds the slot.
+		t.mock.timers.tick(CHILD_ASK_DEADLINE_MS - 2000);
+		await drainMicrotasks();
+		assert.deepEqual(
+			await first,
+			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			"the first child expires in the wait",
+		);
+		t.mock.timers.tick(1000);
+		await drainMicrotasks();
+		assert.deepEqual(
+			await second,
+			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			"the second child expires in the wait",
+		);
+		assert.equal(s.prompter.titles.length, 1, "an expired child mounts no panel");
+		assert.equal(childAskQueue()?.waiting(ROOT), 1, "only the third child still waits");
+
+		// The third child is still live when the root answers and frees the slot.
+		s.prompter.release("Allow once");
+		await drainMicrotasks();
+		await drainMicrotasks();
+		assert.equal(await root, undefined, "the owner allowed the root call once");
+		assert.equal(s.prompter.titles.length, 2, "the third child mounts on the freed slot");
+		assert.match(s.prompter.titles[1], /implementer/, "the third panel is a child prompt");
+		assert.match(s.prompter.titles[1], /1 of 1 waiting/, "the two expired requests left the title");
+		assert.equal(childAskQueue()?.visible(ROOT), CHILD_C, "the third child is on screen");
+
+		s.prompter.release("Allow once");
+		await drainMicrotasks();
+		assert.equal(await third, undefined, "the owner answer reaches the third child");
+		assert.equal(askPanelSlot.busy, false, "the last panel released the slot");
+		assert.equal(childAskQueue()?.rootCount(), 0, "the drained root is dropped");
+	},
+);
+
+// --- identity guard ----------------------------------------------------------
 test(
 	"slot: a stale mount keeps the newer state for the same root",
 	{ timeout: 2000 },

@@ -30,29 +30,68 @@ export function warnAskLine(line: string): void {
 	}
 }
 
+/** The `shown` values: the named request's own panel, another panel, or none. */
+export type ShownValue = "this" | "other" | "none";
+
 /**
- * Which request the panel shows for one line: `this` for the named request,
- * `other` for a different visible request, and `none` for no visible request.
+ * The `shown` value of an arrival line: never `this`, because `enqueue` writes
+ * the line before the pump mounts a panel.
  */
-function shownField(visible: GateRequest | null, request: GateRequest): string {
+export type ArrivalShownValue = Exclude<ShownValue, "this">;
+
+/** The `place` values: the mount began, or the request never left the queue. */
+export type PlaceValue = "slot" | "queue";
+
+/**
+ * Which request the panel shows: `other` for a different visible request and
+ * `none` for no visible request. An expiry line can also print `this`, because
+ * a mounted panel is the request's own.
+ */
+export function shownField(visible: GateRequest | null, request: GateRequest): ShownValue {
 	if (visible === request) return "this";
 	return visible ? "other" : "none";
 }
 
 /**
- * The state fields both ask warnings carry. The count comes from the caller,
- * because the two lines count apart: an arrival prints `queued=`, an expiry
- * prints `waiting=`. A line never claims a panel for the request it names.
+ * Where one request stood when its deadline passed. `slot` means its mount
+ * began: the request waited for the panel slot or held it. `queue` means the
+ * mount never began. The two values need different fixes.
  */
-export function askFlags(
+export function placeField(state: RootState, request: GateRequest): PlaceValue {
+	return state.parked.has(request) ? "slot" : "queue";
+}
+
+/** The fields both ask warnings carry: the parked count and the surface. */
+function tailFlags(
 	surfaces: Map<string, ExtensionContext> | undefined,
 	state: RootState,
-	request: GateRequest,
-	count: string,
 ): string {
-	const shown = shownField(state.visible, request);
 	const surface = surfaces?.has(state.rootSessionId) ? "yes" : "no";
-	return `${count} shown=${shown} parked=${state.parked.size} surface=${surface}`;
+	return `parked=${state.parked.size} surface=${surface}`;
+}
+
+/** The fields of one arrival line: the queue count and the panel on screen. */
+export function arrivalFlags(
+	surfaces: Map<string, ExtensionContext> | undefined,
+	state: RootState,
+	shown: ArrivalShownValue,
+	queued: number,
+): string {
+	return `queued=${queued} shown=${shown} ${tailFlags(surfaces, state)}`;
+}
+
+/**
+ * The fields of one expiry line: how many wait, the panel on screen, and where
+ * the request stood.
+ */
+export function expiryFlags(
+	surfaces: Map<string, ExtensionContext> | undefined,
+	state: RootState,
+	shown: ShownValue,
+	place: PlaceValue,
+	waiting: number,
+): string {
+	return `waiting=${waiting} shown=${shown} place=${place} ${tailFlags(surfaces, state)}`;
 }
 
 /** Requests still waiting on one root, apart from the request named. */

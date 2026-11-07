@@ -358,8 +358,8 @@ test("warnings: an arrival line and a deadline line name the ask and its state",
 	assert.match(expired[0].text, /tool=bash /, "the deadline line names the tool");
 	assert.match(
 		expired[0].text,
-		/waiting=0 shown=this parked=1 surface=yes$/,
-		"no other request waits, and this one held the mounted panel",
+		/waiting=0 shown=this place=slot parked=1 surface=yes$/,
+		"no other request waits, and this request owned the mounted panel",
 	);
 });
 
@@ -396,17 +396,89 @@ test("warnings: a waiter reports the panel of the request ahead, not its own", {
 	assert.equal(expired.length, 2, "two deadline lines");
 	assert.match(
 		expired[0].text,
-		/child=implementer tool=bash waiting=1 shown=this /,
-		"the head line names its own child, tool, and count",
+		/child=implementer tool=bash waiting=1 shown=this place=slot /,
+		"the head line names its own child, tool, count, panel, and place",
 	);
 	assert.match(
 		expired[1].text,
-		/child=tester tool=bash waiting=0 shown=this /,
-		"the next line names its own child, tool, and count",
+		/child=tester tool=bash waiting=0 shown=this place=slot /,
+		"the next line names its own child, tool, count, panel, and place",
 	);
 
 	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 	assert.deepEqual(await second, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+});
+
+// This case pins `place=slot` for a request whose mount never painted. Four
+// other expiry assertions across three cases read `place=slot` too, so the
+// value is not unique here.
+test("warnings: an expiry at the panel slot says where the request stood", { timeout: 2000 }, async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const s = setup({ never: true });
+	await captureRoot(s);
+
+	// The root panel holds the only slot until this case answers it.
+	const root = rootAsk(s);
+	await drainMicrotasks();
+	const child = childAsk(s, CHILD_A);
+	await drainMicrotasks();
+	assert.equal(s.prompter.titles.length, 1, "the child waits behind the root panel");
+
+	t.mock.timers.tick(CHILD_ASK_DEADLINE_MS);
+	await drainMicrotasks();
+
+	const expired = linesWith("agent-stack: child ask expired ");
+	assert.equal(expired.length, 1, "one deadline line");
+	assert.match(
+		expired[0].text,
+		/waiting=0 shown=none place=slot parked=1 surface=yes$/,
+		"the line says the mount began, not that the request stayed queued",
+	);
+	assert.deepEqual(await child, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+
+	s.prompter.release("Deny");
+	assert.deepEqual(await root, { block: true, reason: DENIED_BY_USER_REASON }, "the root ask denies");
+});
+
+// This case pins `place=queue`: the waiter's mount never began while the
+// head's mount began and waited for the shared panel slot.
+test("warnings: an expiry still in the queue says where the request stood", { timeout: 2000 }, async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const s = setup({ never: true });
+	await captureRoot(s);
+
+	const root = rootAsk(s);
+	await drainMicrotasks();
+	const first = childAsk(s, CHILD_A);
+	await drainMicrotasks();
+	// Stagger the arrivals, so the two deadlines fall in arrival order.
+	t.mock.timers.tick(1000);
+	const second = childAsk(s, CHILD_B);
+	await drainMicrotasks();
+	assert.equal(s.prompter.titles.length, 1, "no child panel mounts beside the root panel");
+
+	t.mock.timers.tick(CHILD_ASK_DEADLINE_MS - 1000);
+	await drainMicrotasks();
+	t.mock.timers.tick(1000);
+	await drainMicrotasks();
+
+	const expired = linesWith("agent-stack: child ask expired ");
+	assert.equal(expired.length, 2, "two deadline lines");
+	assert.match(
+		expired[0].text,
+		/child=implementer tool=bash waiting=1 shown=none place=slot /,
+		"the head's mount began while the root held the slot",
+	);
+	assert.match(
+		expired[1].text,
+		/child=tester tool=bash waiting=0 shown=none place=queue parked=1 /,
+		"the waiter never began a mount, so it stayed queued",
+	);
+	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(await second, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+
+	s.prompter.release("Deny");
+	assert.deepEqual(await root, { block: true, reason: DENIED_BY_USER_REASON }, "the root ask denies");
 });
 
 // Only this case reaches the cut branch of the short-id helper.

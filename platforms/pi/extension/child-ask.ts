@@ -23,7 +23,16 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { askPanelSlot } from "./ask-panel-slot.ts";
-import { askFlags, shortId, waitingApart, warnAskLine } from "./child-ask-log.ts";
+import type { ArrivalShownValue } from "./child-ask-log.ts";
+import {
+	arrivalFlags,
+	expiryFlags,
+	placeField,
+	shortId,
+	shownField,
+	waitingApart,
+	warnAskLine,
+} from "./child-ask-log.ts";
 import { pump, release } from "./child-ask-mount.ts";
 import {
 	bindSurface,
@@ -125,11 +134,12 @@ export class ChildAskQueue {
 			state.queue.push(request);
 			// Read the fields first, so a queued request shows on the line.
 			const root = shortId(state.rootSessionId);
-			const flags = askFlags(
+			const flags = arrivalFlags(
 				surfacesOf(this.states, registry),
 				state,
-				request,
-				`queued=${state.queue.length}`,
+				// The pump mounts this request later, so the panel is another or none.
+				shownField(state.visible, request) as ArrivalShownValue,
+				state.queue.length,
 			);
 			const line = `agent-stack: child ask queued root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
 			// A silent queue hides a child that waits for an owner who never sees it.
@@ -174,13 +184,14 @@ export class ChildAskQueue {
 	/** The deadline path. The child is blocked, and the next request shows. */
 	private expire(state: RootState, request: GateRequest): void {
 		if (request.settled) return;
-		// Read the fields first, so a mounted panel still shows on the line.
+		// Read the position first, so the line names where this request stood.
 		const root = shortId(state.rootSessionId);
-		const flags = askFlags(
+		const flags = expiryFlags(
 			surfacesOf(this.states, state.registry),
 			state,
-			request,
-			`waiting=${waitingApart(state, request)}`,
+			shownField(state.visible, request),
+			placeField(state, request),
+			waitingApart(state, request),
 		);
 		const line = `agent-stack: child ask expired with no answer before the deadline root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
 		// The verdict goes first, so a blocking console write never delays it.
