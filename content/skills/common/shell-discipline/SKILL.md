@@ -38,6 +38,7 @@ string.
 The gate decides a path by its shape, not by the working directory. For a
 worker and the orchestrator, a repository-relative path with no parent segment
 allows a write. Any other path asks for a worker or the orchestrator. The gate
-denies that path for a reader. A path that reaches no rule falls to the mode
-default, which denies. The pi permission table and its README
+denies that path for a reader. For a judged agent, a path that reaches no rule
+falls to the mode default, which denies. A session with no active agent and no
+run record keeps only the global rows and allows. The pi permission table and its README
 own the zones and the path forms.

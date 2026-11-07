@@ -257,6 +257,12 @@ spanning always-allow runs the current call and remembers the rule, approving no
 segment; later calls skip the spanning ask, but they still must pass the allow checks,
 so deny-by-default can still block them.
 
+The panel's first row is `Allow once`, and the cursor starts on that row, so a
+bare Enter allows the call once.
+
+An allowed ask returns no block text to the child, so the child cannot tell a
+granted ask from no ask at all. Only the wait time shows that an ask happened.
+
 A run with no UI (`-p`, `--mode json`) has no surface to draw a prompt on, so an
 ask there fails closed with no prompt. A child ask does not fail closed while
 its root is live. The child enqueues the request in `child-ask.ts`, and the root
