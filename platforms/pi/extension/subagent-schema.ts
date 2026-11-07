@@ -43,7 +43,7 @@ export const SubagentParams = Type.Object({
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
 	session: Type.Optional(
 		Type.String({
-			description: `Single mode only. Store session id: it must start with the agent name and a hyphen. Only ${sessionRoundsText()} may run on one id.`,
+			description: `Single mode only. Store session id: the agent name and a hyphen, then lower-case letters, digits, and hyphens only. Only ${sessionRoundsText()} may run on one id.`,
 		}),
 	),
 });

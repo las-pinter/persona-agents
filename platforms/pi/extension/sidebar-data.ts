@@ -9,8 +9,8 @@
  * Every callback and timer body is wrapped in `try/catch`. Missing data yields a
  * defined default. A bad API call must never crash the TUI.
  *
- * `pi.events` is process-local, so the TODOS data here is the root process's
- * data only. The tree log is the only cross-process source.
+ * The child loader carries no extension set, so the TODOS data here is the root
+ * process's data only. The tree log is the only cross-process source.
  */
 
 import { readFileSync } from "node:fs";

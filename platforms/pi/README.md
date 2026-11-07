@@ -16,15 +16,15 @@ module below lives in `extension/`, except the shipped table data file):
 | `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |
 | `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
-| `subagent.ts` | Spawn-based subagent tool (single / parallel / chain), ported from the legacy extension |
+| `subagent.ts` | In-process subagent tool (single / parallel / chain): one child session per run |
 | `subagent-schema.ts` | TypeBox schema for the `subagent` tool arguments |
-| `subagent-run.ts` | Spawns one `pi` child per run and parses its JSON stdout lines |
+| `subagent-run.ts` | Builds one in-process child session per run and folds its events into one result |
 | `subagent-result.ts` | Result types with the output, usage, and truncation helpers |
 | `subagent-render.ts` | Tool call and result renderers for single, parallel, and chain runs |
 | `subagent-thinking.ts` | Per-run thinking timing and the thinking indicator lines |
 | `subagent-tree.ts` | Writes each child run's start, update, and end records to the tree log |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
-| `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent `--tools` strip, run-id allocation |
+| `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent tool strip, run-id allocation |
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
 | `sidebar-render.ts` | Pure five-panel renderers (AGENTS, SESSION, WORKSPACE, MCP, TODOS) |
@@ -118,10 +118,10 @@ compiler writes the pattern. Translation notes:
   MCP/extension tools — out of scope for the regex gate, so they are not listed:
   **MCP and namespaced tools (`mcp__…`, `server.tool`) are never gated** (see
   `permissions.ts`). They are research/read-only services or extension
-  namespaces, and spawned subagents are already confined to their `tools:`
-  loadout via `--tools`. In the main session the gate constrains
-  bash/read/edit/write/… calls; MCP access is controlled by tool *availability*
-  (`--tools`, `--no-tools`), not by per-agent rules.
+  namespaces, and subagents are already confined to their `tools:` loadout. In
+  the main session the gate constrains bash/read/edit/write/… calls; MCP access
+  is controlled by tool *availability* (`--tools`, `--no-tools`), not by
+  per-agent rules.
 
 Template fields (YAML):
 
@@ -130,8 +130,8 @@ Template fields (YAML):
 | `name` | string | required — invoked as `/agents <name>` or `agent: "name"` |
 | `description` | string | required — shown in listings |
 | `spawnable` | boolean | optional — `false` marks the agent as **not dispatchable as a subagent**: the `subagent` tool rejects it (alias or direct name) before spawning. Defaults to `true`. Use the **unquoted boolean** (`spawnable: false`); the resolver also treats a quoted `"false"` string as disabled, but the boolean is the documented form. The `orchestrator` template ships `spawnable: false` |
-| `tools` | string[] | tool-name allowlist for subagent spawns (`--tools`) |
-| `model` | string | optional `provider/model` override for subagent spawns |
+| `tools` | string[] | tool-name allowlist for subagent runs |
+| `model` | string | optional `provider/model` override for subagent runs |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
 | `skills` | string[] | glob bindings to skills under `content/skills/` (package), `~/.pi/agent/skills/` (user), and `.pi/skills/` (project). `"orchestrator/*"` matches every skill in the orchestrator group; each matched skill is injected as an on-demand index entry (name, description, path) and the agent reads the `SKILL.md` when the task matches |
 | `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total writes no warning; the measured total, cap, and budget go to the debug log when it is enabled. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
@@ -346,22 +346,43 @@ Every completed subagent tool run is archived (bounded to the last 12).
   agent views): task list, per-task tool calls, final output, usage, and errors.
   Keys: `↑/↓` + `PgUp/PgDn` scroll · `Tab`/`←/→` switch task · `q`/`Esc` close.
 
+## Child session resume
+
+The `session` parameter carries one id per brief. The store keeps one sidecar per id
+and one or more saved transcripts whose name ends with `_<id>` or whose stem is the
+id, under the agent directory. The cap is two runs on one id: round 1 is fresh,
+round 2 may resume, and round 3 refuses. The refusal text is exactly
+`round cap reached (2): start a new id for a new brief`.
+
+A resumed round reopens the saved transcript, so the child sees its earlier turns.
+The working folder must match the saved header, or the round starts cold. A
+transcript older than `RUN_RETENTION_MS` (14 days) also starts cold.
+
+The role text is rebuilt on every round: the profession body, the always-load
+skills, and the persona go in again. The caller adds only the task text, so a round
+sends the new task text and never a resent brief.
+
+A session id starts with the agent name and a hyphen, then lower-case letters,
+digits, and hyphens only. Single mode carries the id; chain and parallel modes
+refuse one. `session-store.ts` owns the plan and its reasons.
+
 ## Nested subagents and the live sidebar
 
 The extension caps agent nesting at 3 levels: 0 (the root), 1, and 2. A level-2
 agent cannot spawn.
 
-The primary control is the parent `--tools` strip. When a child would be at the
-cap, the parent removes `subagent` from the child's `--tools` list. pi locks the
-tool set at process start, so the child never receives the tool.
-`PI_AGENT_DEPTH` carries the depth, and the child self-guard refuses a stale
-spawn.
+The primary control is the parent tool strip. When a child would be at the
+cap, the parent removes `subagent` from the child's resolved tool list. The
+child session builds with that list, so the child never receives the tool.
+The child depth comes from the run record walk; `PI_AGENT_DEPTH` covers a
+launch that an outer process started. A caller at the cap is refused, so no
+child session is built.
 
 The cap is NOT a security boundary. All pi processes have the same OS privilege.
 A child with an allowed interpreter can run `pi -ne …` with a forged
 `PI_AGENT_DEPTH`. That bypasses every in-process guard. Only OS isolation — a
 separate user, a container, or a sandbox — is a true boundary. OS isolation is
-OUT OF SCOPE for this feature. The `--tools` strip stops the normal path only.
+OUT OF SCOPE for this feature. The tool strip stops the normal path only.
 
 The sidebar owns the right column. It paints FIVE panels:
 
@@ -373,14 +394,15 @@ The sidebar owns the right column. It paints FIVE panels:
 5. TODOS — the `todo` tool's list.
 
 The tree and the MCP counts are cross-process. The SESSION, WORKSPACE, and
-TODOS panels show the root process's data only. `pi.events` is process-local,
-so a child's session and todo data is not visible to the root sidebar. The
-root counts its own MCP tool starts and folds each child's counts through the
-tree log into one session tally.
+TODOS panels show the root process's data only. The child loader carries no
+extension set, and the `todo` tool guards a child session by id, so a child's
+session and todo data is not visible to the root sidebar. The root counts its own
+MCP tool starts and folds each child's counts through the tree log into one
+session tally.
 
 The tree comes from a shared append-only NDJSON log. The root creates the log in
 `os.tmpdir()`, unique per root. The root compacts the log when it grows past the
-cap. Each spawned process appends the records of its own children.
+cap. A child runs in the root process, so it shares the log and appends through it.
 
 MCP fidelity is reduced. The built-in `pi.getMcpServers()` returns config only,
 with no live connection state. The panel infers `connected` from the tool names
@@ -520,9 +542,10 @@ resolved in the order flag > settings > env. Alternatives:
 
 - `discoverAgents(cwd, scope)` — `user` (agent dir + package), `project` (nearest `.pi/agents`),
   `both` (merged; project wins name collisions).
-- Subagent spawns use `pi --mode json -p --no-session --agent <name> --persona <id|off>`
-  (plus `--tools`, `--model`, `--thinking`). The child activates exactly that agent and
-  persona via the flags, so **global `defaultAgent`/`defaultPersona` can never leak into a
-  subagent** — "off" explicitly clears them. The child's own `before_agent_start` injects
-  the profession body + persona (no temp prompt file), and because the child has a real
-  active agent, the gate applies that agent's class rule set there too.
+- A subagent run builds one in-process child session. The build names the agent,
+  the class, the model, the thinking level, and the resolved tool list, so
+  **global `defaultAgent`/`defaultPersona` can never leak into a subagent** — "off"
+  explicitly clears them. The loader carries no extension set, so the child builds
+  no gate of its own; each child tool is a wrapper that asks the parent gate with
+  the child's context. The role text (profession body, always-load skills, and
+  persona) travels in the prompt, so no `before_agent_start` hook runs in the child.

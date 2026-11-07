@@ -92,20 +92,20 @@ rule in **code-review-checklist** says when it applies.
 name no engine here. Resume only two roles: the implementer and the reviewer.
 Every other role always starts fresh.
 
-- When the platform can resume: reuse the same implementer and reviewer for up
-to 2 rounds. They keep useful context.
+- When the platform can resume: reuse the same implementer and reviewer across
+rounds. They keep useful context.
 - When the platform cannot resume: start a fresh agent of the same type for
-each round. A third round is a sign that the first brief was underspecified.
-Fix the brief, not the round count.
-- A resumed round gets the delta only: the new findings and the changed files.
-  Do not resend the whole brief.
+each round. A round after the platform limit is a sign that the first brief was
+underspecified. Fix the brief, not the round count.
+- A resumed round gets the task text as the delta, not a resent brief.
 - Every fresh agent gets a short brief: the goal, the current state (the files
   and the last commit or the uncommitted diff), the decisions already made, and
   the open findings. Do not paste earlier transcripts.
-- Write large command output to a flat file under `/tmp`. Pass the path, not
-  the content.
-- The reuse limit in this section governs subagent reuse. The limit on review
-  rounds lives in **code-review-checklist** under `## Fix Batching`.
+- Write large command output to a flat file outside the repository. Pass the
+  path, not the content.
+- The resume rule in this section governs subagent reuse. The platform's session
+  store and its platform README own the round count and the resume mechanics. The
+  limit on review rounds lives in **code-review-checklist** under `## Fix Batching`.
 
 ---
 
