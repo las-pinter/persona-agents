@@ -13,9 +13,9 @@
  * process's data only. The tree log is the only cross-process source.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
 	type ExtensionAPI,
 	type ExtensionContext,
@@ -26,10 +26,19 @@ import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mc
 import { readEvents } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
+import {
+	parseStatusFile,
+	pickActiveStudy,
+	sortBriefNames,
+	studySlug,
+	type StudyEntry,
+	type StudyFields,
+} from "./study-status.ts";
 import type {
 	McpServerStatus,
 	SessionSnapshot,
 	SidebarSnapshot,
+	StatusSnapshot,
 	WorkspaceFileSnapshot,
 	WorkspaceSnapshot,
 } from "./sidebar-render.ts";
@@ -40,6 +49,8 @@ export const TREE_POLL_MS = 500;
 export const GIT_POLL_MS = 2000;
 /** MCP poll cadence. */
 export const MCP_POLL_MS = 5000;
+/** Study status poll cadence. */
+export const STUDY_POLL_MS = 5000;
 /** TPS sliding window. */
 export const TPS_WINDOW_MS = 2000;
 /** A running node older than this is stale, per the plan. */
@@ -93,8 +104,24 @@ interface InternalState {
 	rootCallIds: Set<string>;
 	/** Session-wide subagent MCP usage, folded from the shared tree log. */
 	mcpTally: McpTally;
+	/** Short git HEAD, or `null` when the read failed. */
+	head: string | null;
 	unsubs: Array<() => void>;
 	timers: Array<ReturnType<typeof setInterval>>;
+}
+
+/** A fully defined STATUS snapshot before the first read. */
+function emptyStatus(): StatusSnapshot {
+	return {
+		study: null,
+		stage: null,
+		briefs: [],
+		nextAction: null,
+		head: null,
+		askCounts: {},
+		askTool: null,
+		askAgeMs: null,
+	};
 }
 
 /** A fully defined snapshot before the first event. */
@@ -119,7 +146,17 @@ function emptySnapshot(): SidebarSnapshot {
 		changedCount: 0,
 		files: [],
 	};
-	return { cwd: "", tree: [], session, workspace, mcp: [], todos: [], todosTurnMarker: false, tps: 0 };
+	return {
+		cwd: "",
+		tree: [],
+		session,
+		workspace,
+		mcp: [],
+		todos: [],
+		todosTurnMarker: false,
+		tps: 0,
+		status: emptyStatus(),
+	};
 }
 
 /** The agent directory's `mcp.json`, guarded against a missing helper. */
@@ -144,6 +181,66 @@ function readMcpJsonServers(filePath: string): string[] {
 		/* missing or malformed mcp.json is not an error */
 		return [];
 	}
+}
+
+/** A name that cannot escape its parent folder: no separator and no dot word. */
+function isSafeName(name: string): boolean {
+	return name.length > 0 && name !== "." && name !== ".." && !/[\\/]/.test(name);
+}
+
+/** Read and parse one `status.md`. A missing or malformed file gives `null`. */
+function readStatusFields(filePath: string): StudyFields | null {
+	try {
+		return parseStatusFile(readFileSync(filePath, "utf8"));
+	} catch {
+		/* a missing status.md is not an error */
+		return null;
+	}
+}
+
+/** One study folder's brief names, sorted. A missing folder gives `[]`. */
+function readBriefNames(briefsDir: string): string[] {
+	try {
+		const names = readdirSync(briefsDir).filter(
+			(name) => isSafeName(name) && name.endsWith(".md"),
+		);
+		return sortBriefNames(names);
+	} catch {
+		/* a missing briefs folder is not an error */
+		return [];
+	}
+}
+
+/** One active study and its brief names, read from the notes tree. */
+export interface ActiveStudyRead {
+	study: StudyEntry | null;
+	briefs: string[];
+}
+
+/**
+ * Read the studies tree under `studiesRoot`. `isSafeName` keeps every joined
+ * name inside the tree; a symbolic link inside the tree is still followed. A
+ * missing tree, a missing `status.md`, or a throwing read gives an empty read.
+ */
+export function readActiveStudy(studiesRoot: string): ActiveStudyRead {
+	const entries: StudyEntry[] = [];
+	try {
+		const names = readdirSync(studiesRoot, { withFileTypes: true })
+			.filter((dirent) => dirent.isDirectory() && isSafeName(dirent.name))
+			.map((dirent) => dirent.name)
+			.sort();
+		for (const name of names) {
+			entries.push({
+				folder: name,
+				fields: readStatusFields(join(studiesRoot, name, "status.md")),
+			});
+		}
+	} catch {
+		return { study: null, briefs: [] };
+	}
+	const study = pickActiveStudy(entries);
+	if (!study) return { study: null, briefs: [] };
+	return { study, briefs: readBriefNames(join(studiesRoot, study.folder, "briefs")) };
 }
 
 /** One row parsed from `git status --porcelain`. */
@@ -253,6 +350,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		rootMcpUsage: {},
 		rootCallIds: new Set<string>(),
 		mcpTally: createMcpTally(),
+		head: null,
 		unsubs: [],
 		timers: [],
 	};
@@ -434,23 +532,56 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		applyMcpUsage();
 	}
 
+	/** Write the current HEAD into the STATUS panel, keeping the other fields. */
+	function applyStatusHead(): void {
+		state.snapshot.status = { ...(state.snapshot.status ?? emptyStatus()), head: state.head };
+	}
+
+	/**
+	 * Read the active study under the project's notes tree and write the STATUS
+	 * panel. A missing tree, a missing `status.md`, or a throwing read paints
+	 * `no active study`, a `-` stage, `-` for the next action, and no briefs.
+	 */
+	function refreshStudy(): void {
+		const cwd = state.snapshot.cwd || state.snapshot.workspace.cwd;
+		const project = cwd ? basename(cwd) : "";
+		const read =
+			project && isSafeName(project)
+				? readActiveStudy(join(homedir(), "agent-notes", "project-notes", project, "studies"))
+				: { study: null, briefs: [] };
+		const active = read.study;
+		state.snapshot.status = {
+			...(state.snapshot.status ?? emptyStatus()),
+			study: active ? studySlug(active.folder) : null,
+			stage: active?.fields?.stage ?? null,
+			briefs: active ? read.briefs : [],
+			nextAction: active?.fields?.nextAction ?? null,
+			head: state.head,
+		};
+	}
+
 	/** Poll git status and diff for changed files and per-file line stats. */
 	async function refreshGit(): Promise<void> {
 		const myGeneration = generation;
 		const cwd = state.snapshot.workspace.cwd || state.snapshot.cwd;
 		if (!cwd) return;
 		if (typeof pi.exec !== "function") {
+			state.head = null;
+			applyStatusHead();
 			markGitUnavailable();
 			applyWorkspace();
 			return;
 		}
 		try {
-			const [status, numstat] = await Promise.all([
+			const [status, numstat, head] = await Promise.all([
 				pi.exec("git", ["status", "--porcelain"], { cwd, timeout: GIT_TIMEOUT_MS }),
 				pi.exec("git", ["diff", "--numstat", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
+				pi.exec("git", ["rev-parse", "--short", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
 			]);
 			// dispose() bumps the generation; drop a stale write after the await.
 			if (myGeneration !== generation) return;
+			state.head = head && head.code === 0 ? String(head.stdout ?? "").trim() || null : null;
+			applyStatusHead();
 			if (!status || status.code !== 0) {
 				markGitUnavailable();
 				applyWorkspace();
@@ -467,6 +598,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			state.files = files.slice(0, WORKSPACE_FILES_CAP);
 		} catch {
 			if (myGeneration !== generation) return;
+			state.head = null;
+			applyStatusHead();
 			markGitUnavailable();
 		}
 		applyWorkspace();
@@ -629,6 +762,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		});
 		guard(() => refreshMcp());
 		guard(() => refreshTree());
+		guard(() => refreshStudy());
 		guardAsync(() => refreshGit());
 
 		// Session freshness. One listener per event; a missing event is skipped.
@@ -713,6 +847,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		state.timers.push(setInterval(() => guard(() => refreshTree()), TREE_POLL_MS));
 		state.timers.push(setInterval(() => guardAsync(() => refreshGit()), GIT_POLL_MS));
 		state.timers.push(setInterval(() => guard(() => refreshMcp()), MCP_POLL_MS));
+		state.timers.push(setInterval(() => guard(() => refreshStudy()), STUDY_POLL_MS));
 
 		return () => {
 			if (myGeneration === generation) teardown();
