@@ -43,6 +43,8 @@ export interface GateRequest {
 	sessionId: string;
 	role: string;
 	toolName: string;
+	/** Stable per-ask id, so a queue record and a settle record fold as one. */
+	askId?: string;
 	key: string;
 	model: PromptModel;
 	remember: (key: string) => void;
@@ -152,6 +154,8 @@ export function newRequest(
 		sessionId: input.sessionId,
 		role: input.role,
 		toolName: input.toolName,
+		// One id per request, so its arrival and its verdict share a key.
+		askId: `${input.sessionId}#${new Date().toISOString()}`,
 		key: input.key,
 		model: input.model,
 		remember: input.remember,

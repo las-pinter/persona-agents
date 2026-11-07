@@ -383,13 +383,15 @@ export async function renderRootPermissionPrompt(
 	const releaseSlot = await askPanelSlot.acquire();
 	try {
 		const choice = await renderPermissionPrompt(ctx, model, signal);
-		// One settled root ask writes one record. A throw above writes none.
+		// One settled root ask writes one record with its own id. A throw above
+		// writes none.
 		recordAsk({
 			tool: model.toolName,
 			role: askRole(ctx),
 			verdict: choice === "deny" ? "deny" : "allow",
 			runId: askSessionId(ctx) ?? undefined,
 			depth: 0,
+			phase: "settle",
 		});
 		return choice;
 	} finally {

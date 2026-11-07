@@ -135,6 +135,107 @@ test("two polls raise the count to x2 and a clear does not lower it", (t) => {
 	}
 });
 
+/** One arrival and one expiry of the same ask, stamped one second apart. */
+function appendAskPair(): void {
+	recordAsk({
+		tool: "bash",
+		role: "implementer",
+		verdict: "pending",
+		runId: "child-a",
+		depth: 1,
+		at: "2026-01-01T00:00:00.000Z",
+		askId: "ask-1",
+		phase: "arrival",
+		flags: "queued=1 shown=none parked=0 surface=yes",
+	});
+	recordAsk({
+		tool: "bash",
+		role: "implementer",
+		verdict: "expired",
+		runId: "child-a",
+		depth: 1,
+		at: "2026-01-01T00:00:01.000Z",
+		askId: "ask-1",
+		phase: "expiry",
+		flags: "waiting=0 shown=none place=slot parked=1 surface=yes",
+	});
+}
+
+test("the snapshot askLog is newest first and an expiry text names its place", async (t) => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	appendAskPair();
+	const data = createSidebarData(fakePi());
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	try {
+		data.subscribe(fakeCtx());
+		await flush();
+		const rows = data.snapshot().askLog ?? [];
+		assert.equal(rows.length, 2, "the ring keeps both stages of the ask");
+		assert.equal(rows[0].phase, "expiry", "the newest event comes first");
+		assert.equal(rows[0].askId, rows[1].askId, "both rows carry one ask id");
+		assert.equal(
+			rows[0].text,
+			"00:00:01 implementer/bash waiting=0 shown=none place=slot parked=1 surface=yes",
+			"the expiry row names where the request stood",
+		);
+		assert.match(
+			rows[1].text,
+			/^00:00:00 implementer\/bash queued=1 /,
+			"the arrival row leads with its clock",
+		);
+		assert.deepEqual(data.snapshot().status?.askCounts, { bash: 1 }, "the pair counts once");
+		// The ring is rebuilt from the whole kept tail, so a poll must not append.
+		t.mock.timers.tick(TREE_POLL_MS);
+		t.mock.timers.tick(TREE_POLL_MS);
+		assert.equal((data.snapshot().askLog ?? []).length, 2, "two polls keep both rows and add none");
+		recordAsk({
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			runId: "child-b",
+			depth: 1,
+			at: "2026-01-01T00:00:02.000Z",
+			askId: "ask-2",
+			phase: "arrival",
+			flags: "queued=1 shown=none parked=0 surface=yes",
+		});
+		t.mock.timers.tick(TREE_POLL_MS);
+		const three = data.snapshot().askLog ?? [];
+		assert.equal(three.length, 3, "one new record adds one row to the two kept rows");
+		assert.equal(three[0].askId, "ask-2", "the new record comes first");
+		assert.equal(three[1].askId, "ask-1", "the older ask follows it");
+	} finally {
+		data.dispose();
+		t.mock.timers.reset();
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a reload rebuilds the ring from the log", async () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	appendAskPair();
+	const first = createSidebarData(fakePi());
+	const second = createSidebarData(fakePi());
+	try {
+		first.subscribe(fakeCtx());
+		await flush();
+		assert.equal(first.snapshot().askLog?.length, 2, "the first handle reads both rows");
+		first.dispose();
+		second.subscribe(fakeCtx());
+		await flush();
+		assert.equal(second.snapshot().askLog?.length, 2, "the new handle reads both rows again");
+		assert.equal(second.snapshot().askLog?.[0].phase, "expiry", "the order survives the reload");
+	} finally {
+		first.dispose();
+		second.dispose();
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 test("a reload keeps the count from the log", async () => {
 	const { dir, logPath } = tempLog();
 	const restore = useLog(logPath);

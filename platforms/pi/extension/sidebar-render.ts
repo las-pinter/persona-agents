@@ -11,6 +11,7 @@
  */
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
 
@@ -146,6 +147,8 @@ export interface SidebarSnapshot {
 	tree: TreeNode[];
 	/** STATUS panel data. Absent means nothing was probed yet. */
 	status?: StatusSnapshot;
+	/** The newest ask queue events, newest first. Absent means no log read yet. */
+	askLog?: AskLogEvent[];
 	session: SessionSnapshot;
 	workspace: WorkspaceSnapshot;
 	mcp: McpSnapshot;

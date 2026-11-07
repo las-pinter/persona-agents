@@ -21,7 +21,7 @@ import {
 	type ExtensionContext,
 	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { createAskTally, type AskTally } from "./ask-record.ts";
+import { createAskLog, createAskTally, type AskLog, type AskTally } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
 import { readEvents } from "./tree-log.ts";
@@ -107,6 +107,8 @@ interface InternalState {
 	mcpTally: McpTally;
 	/** Session-wide ask records, folded from the shared tree log. */
 	askTally: AskTally;
+	/** The newest ask queue events, rebuilt from the same log read. */
+	askLog: AskLog;
 	/** Short git HEAD, or `null` when the read failed. */
 	head: string | null;
 	unsubs: Array<() => void>;
@@ -159,6 +161,7 @@ function emptySnapshot(): SidebarSnapshot {
 		todosTurnMarker: false,
 		tps: 0,
 		status: emptyStatus(),
+		askLog: [],
 	};
 }
 
@@ -354,6 +357,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		rootCallIds: new Set<string>(),
 		mcpTally: createMcpTally(),
 		askTally: createAskTally(),
+		askLog: createAskLog(),
 		head: null,
 		unsubs: [],
 		timers: [],
@@ -525,6 +529,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		const logPath = process.env[ENV_TREE_LOG];
 		if (!logPath) {
 			state.snapshot.tree = [];
+			state.snapshot.askLog = [];
+			state.askLog.reset();
 			applyMcpUsage();
 			return;
 		}
@@ -536,6 +542,10 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		applyMcpUsage();
 		for (const event of events) state.askTally.observe(event);
 		applyStatusAsk();
+		// This read returns the whole kept tail, so the ring is rebuilt not appended.
+		state.askLog.reset();
+		for (const event of events) state.askLog.observe(event);
+		state.snapshot.askLog = state.askLog.rows().reverse();
 	}
 
 	/** Write the folded ask counts and the newest ask age into the STATUS panel. */

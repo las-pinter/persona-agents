@@ -141,6 +141,8 @@ function answer(
 		verdict: choice === "deny" ? "deny" : "allow",
 		runId: request.sessionId,
 		depth: sessionDepthOf(request.sessionId) ?? 0,
+		askId: request.askId,
+		phase: "settle",
 	});
 	pump(states, live, render, state);
 }

@@ -143,6 +143,17 @@ export class ChildAskQueue {
 				state.queue.length,
 			);
 			const line = `agent-stack: child ask queued root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
+			// The arrival writes one record with the same id the verdict will carry.
+			recordAsk({
+				tool: request.toolName,
+				role: request.role,
+				verdict: "pending",
+				runId: request.sessionId,
+				depth: sessionDepthOf(request.sessionId) ?? 0,
+				askId: request.askId,
+				phase: "arrival",
+				flags,
+			});
 			// A silent queue hides a child that waits for an owner who never sees it.
 			warnAskLine(line);
 			// Batch requests that arrive in one tick, so the title counts them all.
@@ -202,6 +213,9 @@ export class ChildAskQueue {
 			verdict: "expired",
 			runId: request.sessionId,
 			depth: sessionDepthOf(request.sessionId) ?? 0,
+			askId: request.askId,
+			phase: "expiry",
+			flags,
 		});
 		// The verdict goes first, so a blocking console write never delays it.
 		settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
