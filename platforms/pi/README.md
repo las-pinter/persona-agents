@@ -27,7 +27,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent tool strip, run-id allocation |
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
-| `sidebar-render.ts` | Pure five-panel renderers (AGENTS, SESSION, WORKSPACE, MCP, TODOS) |
+| `sidebar-render.ts` | Pure six-panel renderers (AGENTS, STATUS, SESSION, WORKSPACE, MCP, TODOS) |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
 | `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
@@ -390,17 +390,19 @@ A child with an allowed interpreter can run `pi -ne …` with a forged
 separate user, a container, or a sandbox — is a true boundary. OS isolation is
 OUT OF SCOPE for this feature. The tool strip stops the normal path only.
 
-The sidebar owns the right column. It paints FIVE panels:
+The sidebar owns the right column. It paints SIX panels:
 
 1. AGENTS — the live agent tree.
-2. SESSION — model, thinking level, context use, cost, and tokens per second.
-3. WORKSPACE — cwd, git branch, and the changed-file count.
-4. MCP — configured servers, an inferred connection dot, a per-server `xN`
+2. STATUS — the active study, its stage and brief count, the next action, the
+   short HEAD, and the newest ask.
+3. SESSION — model, thinking level, context use, cost, and tokens per second.
+4. WORKSPACE — cwd, git branch, and the changed-file count.
+5. MCP — configured servers, an inferred connection dot, a per-server `xN`
    use count, and a `total xN` line.
-5. TODOS — the `todo` tool's list.
+6. TODOS — the `todo` tool's list.
 
-The tree and the MCP counts are cross-process. The SESSION, WORKSPACE, and
-TODOS panels show the root process's data only. The child loader carries no
+The tree and the MCP counts are cross-process. The STATUS, SESSION, WORKSPACE,
+and TODOS panels show the root process's data only. The child loader carries no
 extension set, and the `todo` tool guards a child session by id, so a child's
 session and todo data is not visible to the root sidebar. The root counts its own
 MCP tool starts and folds each child's counts through the tree log into one

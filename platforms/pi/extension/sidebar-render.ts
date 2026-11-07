@@ -1,8 +1,9 @@
 /**
  * Sidebar panel renderers — pure.
  *
- * Composes the five right-column panels: AGENTS (tree), SESSION, WORKSPACE,
- * MCP, TODOS. Every function is pure: no fs, no timers, no pi runtime import.
+ * Composes the six right-column panels: AGENTS (tree), STATUS, SESSION,
+ * WORKSPACE, MCP, TODOS. Every function is pure: no fs, no timers, no pi runtime
+ * import.
  * The only external import is `truncateToWidth`/`visibleWidth`, so every line
  * fits the column width.
  *
@@ -32,6 +33,8 @@ export const SECTION_RULE_CHAR = "─";
  * lines so the panels below stay put. Clamped to the height budget.
  */
 export const AGENTS_PAD_MIN = 4; // blank lines buy a stable footprint, so lower panels do not jump
+/** Fixed STATUS panel lines, header included. The shape is constant. */
+export const STATUS_PAD_MIN = 4;
 
 /** Status spinner. One glyph per animation frame. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -117,10 +120,32 @@ export interface WorkspaceSnapshot {
 	files: WorkspaceFileSnapshot[];
 }
 
+/** STATUS panel data. A missing value prints `-`; no study prints a word. */
+export interface StatusSnapshot {
+	/** Active study slug, with its `YYYY-MM-DD-` prefix dropped. */
+	study: string | null;
+	/** Study stage word. */
+	stage: string | null;
+	/** Brief file names under the study's `briefs/` folder, sorted by name. */
+	briefs: string[];
+	/** The study's next-action line. */
+	nextAction: string | null;
+	/** Short git HEAD. */
+	head: string | null;
+	/** Ask count per tool, folded from the ask records. */
+	askCounts: Record<string, number>;
+	/** Tool of the newest ask record, or null when no record exists. */
+	askTool: string | null;
+	/** Age of the newest ask record in ms. */
+	askAgeMs: number | null;
+}
+
 /** Everything the sidebar paints in one frame. */
 export interface SidebarSnapshot {
 	cwd: string;
 	tree: TreeNode[];
+	/** STATUS panel data. Absent means nothing was probed yet. */
+	status?: StatusSnapshot;
 	session: SessionSnapshot;
 	workspace: WorkspaceSnapshot;
 	mcp: McpSnapshot;
@@ -416,6 +441,42 @@ export function renderAgentTreePanel(
 	// padToMin: reserve a stable footprint, clamped to the height budget.
 	const min = Math.min(AGENTS_PAD_MIN, Math.max(0, Math.floor(height)));
 	while (lines.length < min) lines.push("");
+
+	return lines.map((line) => clipLine(line, width));
+}
+
+/**
+ * The STATUS panel: the active study, its next action, and the newest ask.
+ * The shape is fixed at `STATUS_PAD_MIN` lines, so the panels below do not
+ * jump. A missing value prints `-`; no active study prints a word.
+ */
+export function renderStatusPanel(
+	status: StatusSnapshot | null | undefined,
+	width: number,
+	theme: SidebarTheme,
+): string[] {
+	const lines: string[] = [header(theme, " STATUS ")];
+	const data = status ?? null;
+
+	if (!data || !data.study) {
+		lines.push("no active study");
+	} else {
+		const stage = data.stage ? oneLine(data.stage) : "-";
+		const count = data.briefs?.length ?? 0;
+		lines.push(`${stage} · ${count} briefs · ${oneLine(data.study)}`);
+	}
+
+	lines.push(`next ${data?.nextAction ? oneLine(data.nextAction) : "-"}`);
+
+	const head = data?.head ? oneLine(data.head) : "-";
+	const tool = data?.askTool ? oneLine(data.askTool) : null;
+	if (!tool) {
+		lines.push(`${head} · ask -`);
+	} else {
+		const count = data?.askCounts?.[tool] ?? 0;
+		const age = formatElapsed(data?.askAgeMs ?? null);
+		lines.push(`${head} · ask ${tool} x${count} ${age}`);
+	}
 
 	return lines.map((line) => clipLine(line, width));
 }
@@ -730,9 +791,12 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		done: todo.done,
 	}));
 
+	const status = snapshot.status ?? null;
+
 	return JSON.stringify({
 		cwd: snapshot.cwd,
 		tree,
+		status,
 		session,
 		workspace,
 		mcp,
@@ -807,10 +871,11 @@ export function renderSidebarPanel(
 
 	const now = Date.now();
 	const treePanel = renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now);
+	const statusPanel = renderStatusPanel(snapshot.status, width, theme);
 	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
 	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
 	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage);
-	const upper = [treePanel, sessionPanel, workspacePanel, mcpPanel];
+	const upper = [treePanel, statusPanel, sessionPanel, workspacePanel, mcpPanel];
 	// The +upper.length counts the section rules, including the rule before TODOS.
 	const usedByUpper = upper.reduce((sum, panel) => sum + panel.length, 0) + upper.length;
 	const todosHeight = Math.max(0, limit - usedByUpper);

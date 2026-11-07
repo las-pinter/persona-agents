@@ -13,13 +13,16 @@ import * as assert from "node:assert/strict";
 import {
 	type SidebarSnapshot,
 	type SidebarTheme,
+	type StatusSnapshot,
 	AGENTS_PAD_MIN,
 	SECTION_RULE_CHAR,
+	STATUS_PAD_MIN,
 	renderAgentTreePanel,
 	renderMcpPanel,
 	renderNodeDetail,
 	renderSessionPanel,
 	renderSidebarPanel,
+	renderStatusPanel,
 	renderTodosPanel,
 	renderWorkspacePanel,
 	selectNext,
@@ -104,9 +107,50 @@ test("renderSidebarPanel stacks AGENTS first", () => {
 });
 
 test("renderSidebarPanel drops lower panels when the height is short", () => {
-	const lines = renderSidebarPanel(makeSnapshot(), 80, 2, theme, 0);
-	assert.ok(lines[0]?.startsWith(" AGENTS "));
-	assert.ok(!lines.some((line) => line.includes(" SESSION ")));
+	const lines = content(renderSidebarPanel(makeSnapshot(), 80, 2, theme, 0));
+	const headers = lines.filter((line) => /^ (AGENTS|STATUS|SESSION|WORKSPACE|MCP|TODOS)$/.test(line));
+	assert.deepEqual(headers, [" AGENTS"], "only AGENTS paints at height 2");
+	assert.equal(lines.length, 2, "the column uses the whole height");
+});
+
+test("renderSidebarPanel puts STATUS second and keeps the header order", () => {
+	const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
+	const lines = renderSidebarPanel(makeSnapshot({ tree: [node] }), 80, 30, theme, 0);
+	const headers = content(lines).filter((line) => /^ (AGENTS|STATUS|SESSION|WORKSPACE|MCP|TODOS)$/.test(line));
+	assert.deepEqual(headers, [
+		" AGENTS",
+		" STATUS",
+		" SESSION",
+		" WORKSPACE",
+		" MCP",
+		" TODOS",
+	]);
+});
+
+test("renderStatusPanel pads a missing status to four lines", () => {
+	const lines = renderStatusPanel(undefined, 80, theme);
+	assert.equal(lines.length, STATUS_PAD_MIN);
+	assert.equal(content(lines)[0], " STATUS");
+	assert.deepEqual(content(lines).slice(1), ["no active study", "next -", "- · ask -"]);
+	assertFits(lines, 80);
+});
+
+test("renderStatusPanel paints the stage, next, and ask rows", () => {
+	const status: StatusSnapshot = {
+		study: "gate-status-surface",
+		stage: "full",
+		briefs: ["01-a.md", "02-b.md", "03-c.md", "04-d.md"],
+		nextAction: "brief 01",
+		head: "b674669",
+		askCounts: { bash: 2 },
+		askTool: "bash",
+		askAgeMs: 65_000,
+	};
+	const lines = content(renderStatusPanel(status, 80, theme));
+	assert.equal(lines[1], "full · 4 briefs · gate-status-surface");
+	assert.equal(lines[2], "next brief 01");
+	assert.equal(lines[3], "b674669 · ask bash x2 1m05s");
+	assertFits(renderStatusPanel(status, 20, theme), 20);
 });
 
 test("a full-width dim rule separates panels, never above the first or below the last", () => {
@@ -115,8 +159,8 @@ test("a full-width dim rule separates panels, never above the first or below the
 	const ruleIndexes = lines
 		.map((line, index) => (line === rule ? index : -1))
 		.filter((index) => index >= 0);
-	// One rule per gap between the five panels.
-	assert.equal(ruleIndexes.length, 4, "expected one rule per panel gap");
+	// One rule per gap between the six panels.
+	assert.equal(ruleIndexes.length, 5, "expected one rule per panel gap");
 	assert.notEqual(lines[0], rule, "no rule above the first panel");
 	assert.notEqual(lines[lines.length - 1], rule, "no rule below the last panel");
 	for (const index of ruleIndexes) {
@@ -131,8 +175,8 @@ test("the section rule is clipped at width 0 and 1 and still fits", () => {
 	assertFits(atOne, 1);
 	assert.equal(
 		atOne.filter((line) => line === SECTION_RULE_CHAR).length,
-		4,
-		"four rules are drawn at width 1",
+		5,
+		"five rules are drawn at width 1",
 	);
 
 	const atZero = renderSidebarPanel(makeSnapshot(), 0, 30, theme, 0);
@@ -142,26 +186,30 @@ test("the section rule is clipped at width 0 and 1 and still fits", () => {
 
 test("the section rule counts against the height budget", () => {
 	const rule = SECTION_RULE_CHAR.repeat(80);
-	// AGENTS pads to 4; SESSION is 9. One rule makes 14 lines, so SESSION
-	// fits at height 14 but is dropped at height 13 before the budget overflows.
-	const fits = renderSidebarPanel(makeSnapshot(), 80, 14, theme, 0);
-	assert.ok(fits.some((line) => line.includes(" SESSION ")), "SESSION fits at height 14");
-	assert.equal(fits.filter((line) => line === rule).length, 1, "one rule fits at height 14");
-	assert.ok(fits.length <= 14);
+	// AGENTS pads to 4, STATUS is 4, and SESSION is 9. With two rules, 4 + 1 +
+	// 4 + 1 + 9 = 19 needs height 19; at 18 the compositor drops SESSION.
+	const fits = renderSidebarPanel(makeSnapshot(), 80, 19, theme, 0);
+	assert.ok(fits.some((line) => line.includes(" SESSION ")), "SESSION fits at height 19");
+	assert.equal(fits.filter((line) => line === rule).length, 2, "two rules fit at height 19");
+	assert.ok(fits.length <= 19);
 
-	const short = renderSidebarPanel(makeSnapshot(), 80, 13, theme, 0);
-	assert.ok(!short.some((line) => line.includes(" SESSION ")), "SESSION drops at height 13");
-	assert.equal(short.filter((line) => line === rule).length, 0, "no rule without a second panel");
-	assert.ok(short.length <= 13);
+	const short = renderSidebarPanel(makeSnapshot(), 80, 18, theme, 0);
+	assert.ok(!short.some((line) => line.includes(" SESSION ")), "SESSION drops at height 18");
+	assert.equal(short.filter((line) => line === rule).length, 1, "one rule without a third panel");
+	assert.ok(short.length <= 18);
 });
 
 test("a short tree at height 13 pads AGENTS to the minimum and drops SESSION", () => {
-	// Tradeoff: AGENTS_PAD_MIN buys a stable footprint for the lower panels.
-	// AGENTS pads to 4 and SESSION is 9, so with one rule 4 + 1 + 9 = 14 needs
-	// height 14; at 13 the compositor drops SESSION rather than shrink AGENTS.
+	// AGENTS pads to 4 and STATUS is 4, so one rule makes 4 + 1 + 4 = 9 lines.
+	// SESSION would need 19, so at 13 it drops and AGENTS stays at its minimum.
 	const root = makeNode({ runId: "root", agent: "orchestrator" });
 	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, 13, theme, 0);
-	assert.equal(lines.length, AGENTS_PAD_MIN, "AGENTS pads to the minimum footprint");
+	assert.equal(
+		lines.length,
+		AGENTS_PAD_MIN + 1 + STATUS_PAD_MIN,
+		"AGENTS pads and STATUS paints",
+	);
+	assert.equal(content(lines)[AGENTS_PAD_MIN - 1], "", "AGENTS pads with a blank line");
 	assert.ok(!lines.some((line) => line.includes(" SESSION ")), "SESSION is dropped at height 13");
 });
 
@@ -242,6 +290,20 @@ test("renderSidebarPanel gives TODOS the leftover height and shows every item", 
 	assert.ok(!lines.some((line) => line.includes("more")), "no overflow marker when every item fits");
 });
 
+test("renderSidebarPanel gives TODOS the height left after 28 upper lines", () => {
+	const height = 30;
+	const todos = Array.from({ length: 8 }, (_value, index) => ({
+		id: String(index),
+		text: `todo ${index}`,
+		done: false,
+	}));
+	const lines = renderSidebarPanel(makeSnapshot({ todos }), 80, height, theme, 0);
+	const todosStart = content(lines).findIndex((line) => line === " TODOS");
+	assert.ok(todosStart > 0, "TODOS paints at height 30");
+	assert.equal(lines.length, height, "the column uses the whole height");
+	assert.equal(lines.length - todosStart, height - 28, "TODOS gets limit minus the 28 upper lines");
+});
+
 test("renderSidebarPanel paints the turn marker from the snapshot", () => {
 	const snapshot = makeSnapshot({
 		tree: [],
@@ -264,8 +326,8 @@ test("renderSidebarPanel drops lower panels first", () => {
 		mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
 		todos: [{ id: "1", text: "do it", done: false }],
 	});
-	const headers = [" AGENTS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS "];
-	for (const height of [0, 1, 3, 8, 12, 15, 18, 30]) {
+	const headers = [" AGENTS ", " STATUS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS "];
+	for (const height of [0, 1, 3, 8, 12, 15, 16, 18, 24, 30]) {
 		const lines = renderSidebarPanel(snapshot, 80, height, theme, 0);
 		assert.ok(lines.length <= height, `height ${height} overflowed`);
 		const present = headers
@@ -275,6 +337,19 @@ test("renderSidebarPanel drops lower panels first", () => {
 			assert.equal(index, position, `height ${height} dropped a higher panel before a lower one`);
 		});
 	}
+});
+
+test("renderSidebarPanel keeps the settled order at heights 30, 24, 16, and 12", () => {
+	const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
+	const snapshot = makeSnapshot({ tree: [node] });
+	const headers = (height: number): string[] =>
+		content(renderSidebarPanel(snapshot, 80, height, theme, 0))
+			.filter((line) => /^ (AGENTS|STATUS|SESSION|WORKSPACE|MCP|TODOS)$/.test(line))
+			.map((line) => line.trim());
+	assert.deepEqual(headers(30), ["AGENTS", "STATUS", "SESSION", "WORKSPACE", "MCP", "TODOS"]);
+	assert.deepEqual(headers(24), ["AGENTS", "STATUS", "SESSION", "WORKSPACE"]);
+	assert.deepEqual(headers(16), ["AGENTS", "STATUS"]);
+	assert.deepEqual(headers(12), ["AGENTS", "STATUS"]);
 });
 
 // --- selection edge cases ----------------------------------------------------
@@ -292,6 +367,20 @@ test("treeSignature changes for every field the panels paint", () => {
 			workspace: makeWorkspace({ files: [{ path: "a.ts", added, removed: 0, untracked: false }] }),
 		});
 	const usage = (cost: number) => n({ usage: { input: 1, output: 2, cost, turns: 3 } });
+	const status = (overrides: Partial<StatusSnapshot> = {}) =>
+		makeSnapshot({
+			status: {
+				study: "study-a",
+				stage: "full",
+				briefs: ["01-a.md"],
+				nextAction: "brief 01",
+				head: "abc1234",
+				askCounts: { bash: 1 },
+				askTool: "bash",
+				askAgeMs: 1000,
+				...overrides,
+			},
+		});
 	const cases: Array<[string, SidebarSnapshot, SidebarSnapshot]> = [
 		["node status", n({ status: "running" }), n({ status: "done" })],
 		["node depth", n({ depth: 0 }), n({ depth: 1 })],
@@ -329,6 +418,14 @@ test("treeSignature changes for every field the panels paint", () => {
 			makeSnapshot({ todos: [{ id: "1", text: "second", done: false }] }),
 		],
 		["todos turn marker", makeSnapshot({ todosTurnMarker: false }), makeSnapshot({ todosTurnMarker: true })],
+		["status study", status(), status({ study: "study-b" })],
+		["status stage", status(), status({ stage: "draft" })],
+		["status briefs", status(), status({ briefs: ["01-a.md", "02-b.md"] })],
+		["status next action", status(), status({ nextAction: "brief 02" })],
+		["status head", status(), status({ head: "def5678" })],
+		["status ask count", status(), status({ askCounts: { bash: 2 } })],
+		["status ask tool", status(), status({ askTool: "edit" })],
+		["status ask age", status(), status({ askAgeMs: 2000 })],
 	];
 	for (const [label, before, after] of cases) {
 		assert.notEqual(treeSignature(before), treeSignature(after), label);
