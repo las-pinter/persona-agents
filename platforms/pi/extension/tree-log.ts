@@ -21,6 +21,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AskRecord } from "./ask-record.ts";
 
 /** Token and cost totals for one run. */
 export interface RunUsage {
@@ -33,7 +34,7 @@ export interface RunUsage {
 /** One tree event. One JSON line per event. */
 export interface RunEvent {
 	v: 1;
-	type: "start" | "update" | "end" | "clear";
+	type: "start" | "update" | "end" | "clear" | "ask";
 	runId: string;
 	parentRunId: string | null;
 	depth: number;
@@ -49,6 +50,8 @@ export interface RunEvent {
 	toolCount?: number;
 	/** Cumulative MCP calls per server for one run; the server set is trusted small. */
 	mcpUsage?: Record<string, number>;
+	/** The settled ask on an `ask` record. Absent on every other type. */
+	ask?: AskRecord;
 	exitCode?: number | null;
 	error?: string | null;
 	outputPreview?: string;

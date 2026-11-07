@@ -744,6 +744,10 @@ function withHome<T>(home: string, fn: () => T): T {
 
 /** Subscribe against a home tree and return the rendered STATUS lines. */
 async function readStatusPanel(script: GitScript, home: string, cwd = "/repo"): Promise<string[]> {
+	// An empty log, so an ask record from another test cannot paint row 4.
+	const previous = process.env[ENV_TREE_LOG];
+	const logDir = mkdtempSync(join(tmpdir(), "status-log-"));
+	process.env[ENV_TREE_LOG] = join(logDir, "tree.ndjson");
 	const data = createSidebarData(makeFakePi(script));
 	try {
 		withHome(home, () => data.subscribe(makeFakeCtx([], cwd)));
@@ -751,6 +755,8 @@ async function readStatusPanel(script: GitScript, home: string, cwd = "/repo"): 
 		return renderStatusPanel(data.snapshot().status, 80, theme).map((line) => line.trimEnd());
 	} finally {
 		data.dispose();
+		restoreTreeLogEnv(previous);
+		rmSync(logDir, { recursive: true, force: true });
 	}
 }
 

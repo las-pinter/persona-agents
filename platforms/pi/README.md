@@ -263,6 +263,18 @@ bare Enter allows the call once.
 An allowed ask returns no block text to the child, so the child cannot tell a
 granted ask from no ask at all. Only the wait time shows that an ask happened.
 
+An ask the owner answers appends one `ask` record to the shared tree log, and an
+ask whose deadline expires appends one `ask` record with the verdict `expired`.
+An ask that fails closed with no prompt writes none: a child request that never
+reaches a root surface, and a root ask on a run with no surface. The record
+names the tool, the asking role, and the verdict. The root settle and the child
+settle write it in the ask plumbing (`permission-prompt.ts`,
+`child-ask-mount.ts`, and `child-ask.ts`), never in the gate. The sidebar folds
+the records the way it folds the MCP counts, and the STATUS panel prints the
+newest tool with its count and age. A count never subtracts, so a `clear` keeps
+it. The log lives under the OS temp dir, so a `/reload` keeps the record and a
+reboot loses it.
+
 A run with no UI (`-p`, `--mode json`) has no surface to draw a prompt on, so an
 ask there fails closed with no prompt. A child ask does not fail closed while
 its root is live. The child enqueues the request in `child-ask.ts`, and the root

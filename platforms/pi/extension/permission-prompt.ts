@@ -15,6 +15,8 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { askPanelSlot } from "./ask-panel-slot.ts";
+import { recordAsk } from "./ask-record.ts";
+import { boundRunRegistry, UNKNOWN_RUN_ROLE } from "./run-registry.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
@@ -346,6 +348,24 @@ export async function renderPermissionPrompt(
 	return model.options.find((option) => option.label === picked)?.decision ?? "deny";
 }
 
+/** The session id of one ask, or null when the context carries none. */
+function askSessionId(ctx: ExtensionContext): string | null {
+	try {
+		const manager = ctx.sessionManager as { getSessionId?: () => string } | undefined;
+		return manager?.getSessionId?.() ?? null;
+	} catch {
+		// A lost id must not lose the verdict the owner gave.
+		return null;
+	}
+}
+
+/** The role of the asking session, or `unknown` when no record answers. */
+function askRole(ctx: ExtensionContext): string {
+	const sessionId = askSessionId(ctx);
+	if (!sessionId) return UNKNOWN_RUN_ROLE;
+	return boundRunRegistry()?.get(sessionId)?.role ?? UNKNOWN_RUN_ROLE;
+}
+
 /**
  * Show the root permission prompt. The root holds the ask panel slot while its
  * panel is live, so a queued child ask cannot mount beside it. A child ask does
@@ -362,7 +382,16 @@ export async function renderRootPermissionPrompt(
 ): Promise<PermissionChoice> {
 	const releaseSlot = await askPanelSlot.acquire();
 	try {
-		return await renderPermissionPrompt(ctx, model, signal);
+		const choice = await renderPermissionPrompt(ctx, model, signal);
+		// One settled root ask writes one record. A throw above writes none.
+		recordAsk({
+			tool: model.toolName,
+			role: askRole(ctx),
+			verdict: choice === "deny" ? "deny" : "allow",
+			runId: askSessionId(ctx) ?? undefined,
+			depth: 0,
+		});
+		return choice;
 	} finally {
 		releaseSlot();
 	}

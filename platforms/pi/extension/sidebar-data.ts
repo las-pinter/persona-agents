@@ -21,6 +21,7 @@ import {
 	type ExtensionContext,
 	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
+import { createAskTally, type AskTally } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
 import { readEvents } from "./tree-log.ts";
@@ -104,6 +105,8 @@ interface InternalState {
 	rootCallIds: Set<string>;
 	/** Session-wide subagent MCP usage, folded from the shared tree log. */
 	mcpTally: McpTally;
+	/** Session-wide ask records, folded from the shared tree log. */
+	askTally: AskTally;
 	/** Short git HEAD, or `null` when the read failed. */
 	head: string | null;
 	unsubs: Array<() => void>;
@@ -350,6 +353,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		rootMcpUsage: {},
 		rootCallIds: new Set<string>(),
 		mcpTally: createMcpTally(),
+		askTally: createAskTally(),
 		head: null,
 		unsubs: [],
 		timers: [],
@@ -530,6 +534,23 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
 		for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);
 		applyMcpUsage();
+		for (const event of events) state.askTally.observe(event);
+		applyStatusAsk();
+	}
+
+	/** Write the folded ask counts and the newest ask age into the STATUS panel. */
+	function applyStatusAsk(): void {
+		const latest = state.askTally.latest();
+		const at = latest ? Date.parse(latest.at) : Number.NaN;
+		state.snapshot.status = {
+			...(state.snapshot.status ?? emptyStatus()),
+			askCounts: state.askTally.usage(),
+			askTool: latest?.tool ?? null,
+			// Whole seconds, so the repaint signature follows the printed age.
+			askAgeMs: Number.isFinite(at)
+				? Math.floor(Math.max(0, Date.now() - at) / 1000) * 1000
+				: null,
+		};
 	}
 
 	/** Write the current HEAD into the STATUS panel, keeping the other fields. */

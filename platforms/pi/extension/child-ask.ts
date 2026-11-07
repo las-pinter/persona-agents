@@ -23,6 +23,7 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { askPanelSlot } from "./ask-panel-slot.ts";
+import { recordAsk } from "./ask-record.ts";
 import type { ArrivalShownValue } from "./child-ask-log.ts";
 import {
 	arrivalFlags,
@@ -49,7 +50,7 @@ import {
 	type RootState,
 } from "./child-ask-state.ts";
 import { renderPermissionPrompt, renderRootPermissionPrompt } from "./permission-prompt.ts";
-import { boundRunRegistry, UNKNOWN_RUN_REASON, type RunRegistry } from "./run-registry.ts";
+import { boundRunRegistry, sessionDepthOf, UNKNOWN_RUN_REASON, type RunRegistry } from "./run-registry.ts";
 
 export { CHILD_ASK_NO_SURFACE_REASON, childPromptTitle } from "./child-ask-mount.ts";
 export type { ChildAskInput, ChildAskOutcome, ChildAskRender } from "./child-ask-state.ts";
@@ -194,6 +195,14 @@ export class ChildAskQueue {
 			waitingApart(state, request),
 		);
 		const line = `agent-stack: child ask expired with no answer before the deadline root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
+		// One expired ask writes one record, before the settle frees the request.
+		recordAsk({
+			tool: request.toolName,
+			role: request.role,
+			verdict: "expired",
+			runId: request.sessionId,
+			depth: sessionDepthOf(request.sessionId) ?? 0,
+		});
 		// The verdict goes first, so a blocking console write never delays it.
 		settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
 		warnAskLine(line);

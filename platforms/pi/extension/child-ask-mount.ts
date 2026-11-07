@@ -8,6 +8,7 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { askPanelSlot } from "./ask-panel-slot.ts";
+import { recordAsk } from "./ask-record.ts";
 import {
 	chooseHead,
 	settle,
@@ -22,7 +23,7 @@ import {
 	type PermissionChoice,
 	type PromptModel,
 } from "./permission-prompt.ts";
-import type { RunRegistry } from "./run-registry.ts";
+import { sessionDepthOf, type RunRegistry } from "./run-registry.ts";
 
 /** The block reason when the root has no captured prompt surface. */
 export const CHILD_ASK_NO_SURFACE_REASON = "Blocked: the root session has no prompt surface";
@@ -133,5 +134,13 @@ function answer(
 	} else {
 		settle(state, request, { kind: "block", reason: DENIED_BY_USER_REASON });
 	}
+	// One settled child ask writes one record, in the ask plumbing and not the gate.
+	recordAsk({
+		tool: request.toolName,
+		role: request.role,
+		verdict: choice === "deny" ? "deny" : "allow",
+		runId: request.sessionId,
+		depth: sessionDepthOf(request.sessionId) ?? 0,
+	});
 	pump(states, live, render, state);
 }
