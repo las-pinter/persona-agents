@@ -246,3 +246,26 @@ test("an old archive record without thinking fields renders without them", async
 	assert.ok(line.includes("tester"), notified);
 	assert.ok(!line.includes("🧠"), line);
 });
+
+test("a narrow inspector leads the nav line with the whole page counter", async () => {
+	const task = toInspectTask(makeSingle({ task: "do the thing" }));
+	archiveRun({ at: "2024-01-13T00:00:00.000Z", mode: "single", agentScope: "user", results: [task] });
+
+	const commands = captureCommands();
+	let component: { render(width: number): string[] } | undefined;
+	await commands.get("inspect")?.handler("last", {
+		mode: "tui",
+		ui: {
+			custom: async (
+				factory: (tui: unknown, theme: unknown, keys: unknown, done: (v: unknown) => void) => unknown,
+			) => {
+				component = factory({}, {}, {}, () => {}) as { render(width: number): string[] };
+			},
+		},
+	});
+
+	const lines = component?.render(24) ?? [];
+	const nav = (lines.at(-1) ?? "").trimEnd();
+	assert.match(nav, /^\(line 1\/\d+\)/, `the counter leads at width 24: ${JSON.stringify(nav)}`);
+	assert.ok(!nav.includes("q/Esc close"), "the narrow frame cut a key hint, not the counter");
+});

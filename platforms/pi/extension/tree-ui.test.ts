@@ -27,7 +27,8 @@ import {
 	SIDEBAR_DEFAULT_WIDTH,
 	getSidebarCompositor,
 } from "./sidebar.ts";
-import { MAX_ASK_VIEW_ROWS, bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
+import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS } from "./overlays.ts";
+import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, type RunEvent } from "./tree-log.ts";
 import {
@@ -686,7 +687,7 @@ describe("ask log overlay runtime path", () => {
 		const counter = /^\(line 1\/(\d+)\)/.exec(nav);
 		assert.ok(counter, `the nav line leads with the page counter: ${JSON.stringify(nav)}`);
 		assert.ok(Number(counter[1]) > MAX_ASK_VIEW_ROWS, "the wrapped body is taller than the view cap");
-		assert.equal(bodyRows, MAX_ASK_VIEW_ROWS - 5, "the view height stops at the cap minus the frame rows");
+		assert.equal(bodyRows, MAX_ASK_VIEW_ROWS - ASK_FRAME_ROWS, "the view height stops at the cap minus the frame rows");
 	});
 
 	test("q, Q, and Esc each close the overlay once", async () => {
@@ -725,8 +726,8 @@ describe("ask log overlay runtime path", () => {
 		const lines = component.render(100);
 
 		assert.ok(
-			lines.some((line) => line.trimEnd() === "(no child asks)"),
-			"the empty ring paints the placeholder",
+			lines.some((line) => line.trimEnd() === "  (no child asks)"),
+			"the empty ring paints the placeholder on the row indent",
 		);
 		assert.match(askNav(lines), /^\(line 1\/1\) ·/, "the nav line still paints");
 		assert.equal(

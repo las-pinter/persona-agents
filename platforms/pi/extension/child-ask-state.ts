@@ -148,6 +148,8 @@ export function clearAllSurfaces(
 /**
  * The ask counter per session. Two asks in the same millisecond share a stamp,
  * so the counter keeps their ids apart and the log folds them as two asks.
+ * The map is never pruned: it keeps one small entry per distinct session for
+ * the life of the process.
  */
 const askSeqBySession = new Map<string, number>();
 

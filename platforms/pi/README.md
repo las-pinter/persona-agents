@@ -31,7 +31,8 @@ module below lives in `extension/`, except the shipped table data file):
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
 | `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
-| `tree-ui.ts` | Sidebar glue: binds compositor, data, commands, and lifecycle; reads the git branch |
+| `tree-ui.ts` | Sidebar glue: binds compositor, data, commands, and lifecycle; reads the git branch; mounts the overlays |
+| `overlays.ts` | Full-screen overlay components (`/agents-tree`, `/agent-inspect`, `/ask-log`) and the pure ask-log frame builder |
 | `todo-tool.ts` | `todo` tool: session-entry state, registration, and the `persona-agents/todos/v1` event |
 | `status-text.ts` | Dims footer status text in TUI mode, with a plain-text fallback |
 | `duration.ts` | Shared display formatting for durations and token counts |

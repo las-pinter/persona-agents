@@ -165,7 +165,9 @@ class InspectorComponent implements Component {
 		const shown = detail.slice(this.offset, this.offset + MAX_VIEW_LINES);
 
 		const lines = [...head, ...shown, ""];
-		const nav = `${this.run.results.length > 1 ? "Tab/←/→ task · " : ""}↑/↓/PgUp/PgDn scroll · q/Esc close (line ${this.offset + 1}/${Math.max(1, detail.length)})`;
+		// The counter leads, so a narrow terminal cuts a key hint and not the position.
+		const keys = `${this.run.results.length > 1 ? "Tab/←/→ task · " : ""}↑/↓/PgUp/PgDn scroll · q/Esc close`;
+		const nav = `(line ${this.offset + 1}/${Math.max(1, detail.length)}) · ${keys}`;
 		lines.push(nav.length > width ? nav.slice(0, width) : nav);
 		return lines;
 	}
