@@ -23,7 +23,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
+import { Key, matchesKey, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import {
 	GIT_POLL_MS,
 	TREE_POLL_MS,
@@ -50,6 +50,7 @@ import {
 	selectPrev,
 	statusIcon,
 	treeSignature,
+	type AskLogRow,
 	type SidebarSnapshot,
 	type SidebarTheme,
 } from "./sidebar-render.ts";
@@ -61,6 +62,8 @@ export const SPINNER_MS = 90;
 const GIT_TIMEOUT_MS = 2000;
 /** Bounded RPC summary height, per the plan. */
 const RPC_MAX_LINES = 10;
+/** The `/ask-log` view height clamp, in view rows. */
+export const MAX_ASK_VIEW_ROWS = 100;
 /** RPC summary render width. */
 const RPC_WIDTH = 60;
 
@@ -448,6 +451,165 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+// --- /ask-log overlay -------------------------------------------------------
+
+/** The indentation every ask row carries. */
+const ASK_ROW_INDENT = "  ";
+/** The minimum wrap width, so a narrow terminal still wraps instead of clipping. */
+const ASK_WRAP_MIN = 10;
+/** The rule width cap, so a wide terminal keeps a readable rule. */
+const ASK_RULE_MAX = 96;
+/** The key scroll step for PgUp and PgDn. */
+const ASK_PAGE_STEP = 15;
+/** The chrome allowance subtracted from the terminal height. */
+const ASK_FRAME_ROWS = 5;
+
+/** One rule line, clipped to the width cap. */
+function askRule(width: number): string {
+	return "─".repeat(Math.max(0, Math.min(width - 1, ASK_RULE_MAX)));
+}
+
+/**
+ * The wrapped body of the ask log: one row per event, newest first, each
+ * wrapped to the width and indented two spaces. Pure. An empty ring is one
+ * placeholder line.
+ */
+function askLogBodyLines(rows: AskLogRow[], width: number): string[] {
+	if (rows.length === 0) return ["(no child asks)"];
+	const wrapWidth = Math.max(ASK_WRAP_MIN, width - ASK_ROW_INDENT.length);
+	const lines: string[] = [];
+	for (const row of rows) {
+		const text = typeof row.text === "string" ? row.text : "";
+		for (const line of wrapTextWithAnsi(text, wrapWidth)) lines.push(`${ASK_ROW_INDENT}${line}`);
+	}
+	return lines;
+}
+
+/**
+ * The `/ask-log` frame for one width, scroll offset, and view height: the
+ * header, a rule, the wrapped rows, a rule, and the nav line. Every line is
+ * clipped to the width. Pure: the caller supplies the rows and the numbers, and
+ * this function reads no clock, file, or environment.
+ */
+export function askLogViewRows(
+	rows: AskLogRow[] | null | undefined,
+	width: number,
+	offset = 0,
+	viewHeight = MAX_ASK_VIEW_ROWS,
+): string[] {
+	const list = rows ?? [];
+	const body = askLogBodyLines(list, width);
+	const height = Math.max(1, Math.floor(viewHeight) || 1);
+	// The tail must stay in view, so the offset stops at the last full page.
+	const start = Math.min(Math.max(0, Math.floor(offset) || 0), Math.max(0, body.length - height));
+	const lines = [
+		` ASK LOG — ${list.length} events · newest first`,
+		askRule(width),
+		...body.slice(start, start + height),
+		askRule(width),
+		`↑/↓/PgUp/PgDn scroll · g/G top/end · q/Esc close (line ${start + 1}/${body.length})`,
+	];
+	return lines.map((line) => clipLine(line, width));
+}
+
+/** The view height for the terminal: the chrome rows are kept off the total. */
+function askViewHeight(tui: TUI): number {
+	let rows = 24;
+	try {
+		const value = tui.terminal?.rows ?? 24;
+		if (typeof value === "number" && Number.isFinite(value) && value > 0) rows = Math.floor(value);
+	} catch {
+		/* fall through to the default height */
+	}
+	return Math.max(5, Math.min(rows, MAX_ASK_VIEW_ROWS) - ASK_FRAME_ROWS);
+}
+
+/** The `/ask-log` overlay: the ask history, wrapped, scrolled by wrapped line. */
+class AskLogOverlayComponent implements Component {
+	wantsKeyRelease = false;
+	private readonly tui: TUI;
+	private readonly getSnapshot: () => SidebarSnapshot;
+	private readonly done: () => void;
+	private offset = 0;
+	/** The last render width, so a key press before the first paint still counts. */
+	private width = 80;
+
+	constructor(tui: TUI, getSnapshot: () => SidebarSnapshot, done: () => void) {
+		this.tui = tui;
+		this.getSnapshot = getSnapshot;
+		this.done = done;
+	}
+
+	// The ring is read on every render, so there is no cached render state to clear.
+	invalidate(): void {}
+
+	/** The ring rows, never null. */
+	private snapshotRows(): AskLogRow[] {
+		return this.getSnapshot().askLog ?? [];
+	}
+
+	/** The wrapped body line count at the last render width. */
+	private bodyCount(): number {
+		return askLogBodyLines(this.snapshotRows(), this.width).length;
+	}
+
+	handleInput(input: string): void {
+		try {
+			if (matchesKey(input, Key.escape) || input === "q" || input === "Q") {
+				this.done();
+				return;
+			}
+			const maxOffset = Math.max(0, this.bodyCount() - askViewHeight(this.tui));
+			if (matchesKey(input, Key.up)) this.offset = Math.max(0, this.offset - 1);
+			else if (matchesKey(input, Key.down)) this.offset = Math.min(maxOffset, this.offset + 1);
+			else if (matchesKey(input, Key.pageUp)) this.offset = Math.max(0, this.offset - ASK_PAGE_STEP);
+			else if (matchesKey(input, Key.pageDown)) this.offset = Math.min(maxOffset, this.offset + ASK_PAGE_STEP);
+			else if (input === "g") this.offset = 0;
+			else if (input === "G") this.offset = maxOffset;
+			else return;
+			this.tui.requestRender();
+		} catch {
+			/* a key must never throw */
+		}
+	}
+
+	render(width: number): string[] {
+		try {
+			const w = Math.max(1, Math.floor(width) || 1);
+			this.width = w;
+			const rows = this.snapshotRows();
+			const total = askLogBodyLines(rows, w).length;
+			const viewHeight = askViewHeight(this.tui);
+			// A resize or a shrinking ring must not leave the offset past the end.
+			this.offset = Math.min(Math.max(0, this.offset), Math.max(0, total - viewHeight));
+			return askLogViewRows(rows, w, this.offset, viewHeight);
+		} catch {
+			return [];
+		}
+	}
+}
+
+/** Open the ask log overlay. The caller has checked `ctx.mode === "tui"`. */
+async function openAskLogOverlay(ctx: ExtensionContext): Promise<void> {
+	const boundData = getSidebarData();
+	if (!boundData) {
+		ctx.ui?.notify?.("Ask log is not ready yet.", "info");
+		return;
+	}
+	await ctx.ui.custom(
+		(_tui, _theme, _keybindings, done) =>
+			new AskLogOverlayComponent(
+				_tui,
+				() => boundData.snapshot(),
+				() => done(undefined),
+			),
+		{
+			overlay: true,
+			overlayOptions: { width: "100%", maxHeight: "100%", anchor: "center", margin: { top: 0 } },
+		},
+	);
+}
+
 // --- binding and lifecycle --------------------------------------------------
 
 /** Bind the data module and the compositor once. Never throws. */
@@ -511,6 +673,11 @@ export function bindTreeSidebar(ctx: ExtensionContext): void {
 	} catch {
 		/* binding must never break a session */
 	}
+}
+
+/** The live data module, or null before the bind. The overlays read the snapshot here. */
+export function getSidebarData(): SidebarData | null {
+	return data;
 }
 
 /** Bind if needed, for a command that needs live data. Never throws. */
@@ -680,6 +847,26 @@ export function registerTreeUi(pi: ExtensionAPI): void {
 			} catch (error) {
 				try {
 					ctx.ui?.notify?.(`Cannot open the agent detail: ${errorText(error)}`, "error");
+				} catch {
+					/* never throw from a command */
+				}
+			}
+		},
+	});
+
+	pi.registerCommand("ask-log", {
+		description: "Open the child ask history",
+		handler: async (_args: string, ctx) => {
+			try {
+				if (ctx.mode !== "tui") {
+					ctx.ui?.notify?.("The ask log overlay requires interactive mode.", "error");
+					return;
+				}
+				ensureBound(ctx);
+				await openAskLogOverlay(ctx);
+			} catch (error) {
+				try {
+					ctx.ui?.notify?.(`Cannot open the ask log: ${errorText(error)}`, "error");
 				} catch {
 					/* never throw from a command */
 				}

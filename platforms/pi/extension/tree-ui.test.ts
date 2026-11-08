@@ -21,7 +21,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Component } from "@earendil-works/pi-tui";
+import { visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import {
 	SIDEBAR_CONFIG_ENV,
 	SIDEBAR_DEFAULT_WIDTH,
@@ -29,7 +29,7 @@ import {
 } from "./sidebar.ts";
 import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { appendEvent } from "./tree-log.ts";
+import { appendEvent, type RunEvent } from "./tree-log.ts";
 import {
 	makeTerminal,
 	makeTui,
@@ -108,6 +108,8 @@ interface Harness {
 	inspect: SidebarHandler;
 	/** The `/agents-tree` handler. */
 	tree: SidebarHandler;
+	/** The `/ask-log` handler. */
+	askLog: SidebarHandler;
 	/** Set by the fake `ctx.ui.custom`. */
 	overlay: MountedOverlay;
 	/** Every `ctx.ui.setWidget` call, in order. */
@@ -133,10 +135,37 @@ afterEach(() => {
 });
 
 /**
+ * One arrival ask event, written into the shared log. The ring keeps an
+ * arrival, so the snapshot carries this row.
+ */
+function askEvent(index: number, flags = "waiting=0 shown=none place=slot"): RunEvent {
+	const clock = `10:00:${String(index + 1).padStart(2, "0")}`;
+	return {
+		v: 1,
+		type: "ask",
+		runId: "run-test-1",
+		parentRunId: null,
+		depth: 0,
+		agent: "implementer",
+		persona: null,
+		status: "idle",
+		at: `2026-11-07T${clock}.000Z`,
+		ask: {
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			askId: `root#${clock}`,
+			phase: "arrival",
+			flags,
+		},
+	};
+}
+
+/**
  * Bind the real glue to fakes. Writes the config file first so the resolved
  * width is deterministic, then registers the commands and binds the TUI path.
  */
-function setup(config: { enabled?: boolean; width?: number; log?: boolean }): Harness {
+function setup(config: { enabled?: boolean; width?: number; log?: boolean; asks?: number }): Harness {
 	const dir = mkdtempSync(join(tmpdir(), "pa-tree-ui-"));
 	currentDir = dir;
 	const configPath = join(dir, "persona-agents-sidebar.json");
@@ -158,6 +187,7 @@ function setup(config: { enabled?: boolean; width?: number; log?: boolean }): Ha
 			at: new Date().toISOString(),
 			task: "build it",
 		});
+		for (let index = 0; index < (config.asks ?? 0); index += 1) appendEvent(logPath, askEvent(index));
 		process.env[ENV_TREE_LOG] = logPath;
 	}
 
@@ -231,7 +261,9 @@ function setup(config: { enabled?: boolean; width?: number; log?: boolean }): Ha
 	assert.ok(inspect, "the /agent-inspect command was not registered");
 	const tree = commands.get("agents-tree");
 	assert.ok(tree, "the /agents-tree command was not registered");
-	return { configPath, terminal, tui, notifications, handler, inspect, tree, overlay, widgets, ctx };
+	const askLog = commands.get("ask-log");
+	assert.ok(askLog, "the /ask-log command was not registered");
+	return { configPath, terminal, tui, notifications, handler, inspect, tree, askLog, overlay, widgets, ctx };
 }
 
 // --- /sidebar width wiring ---------------------------------------------------
@@ -507,5 +539,191 @@ describe("tree overlay runtime path", () => {
 		assert.ok(last, "dispose writes a widget call");
 		assert.equal(last.key, key, "dispose writes the tree widget key");
 		assert.equal(last.content, undefined, "dispose clears the widget with an undefined value");
+	});
+});
+
+// --- /ask-log overlay runtime path ------------------------------------------
+
+/** Mount `/ask-log` and hand back the component and its close values. */
+async function mountAskLog(
+	harness: Harness,
+): Promise<{ component: Component; mount: OverlayMount; handleInput: (key: string) => void }> {
+	await harness.askLog("", harness.ctx);
+	const mount = harness.overlay.calls.at(-1);
+	assert.ok(mount?.component, "the /ask-log command mounts a component");
+	const handleInput = mount.component.handleInput?.bind(mount.component);
+	assert.ok(handleInput, "the mounted component accepts input");
+	return { component: mount.component, mount, handleInput };
+}
+
+/** The nav line of one frame, with the right padding trimmed. */
+function askNav(lines: string[]): string {
+	return (lines.at(-1) ?? "").trimEnd();
+}
+
+describe("ask log overlay runtime path", () => {
+	test("a /ask-log run mounts one full-screen centered overlay", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 2 });
+
+		await harness.askLog("", harness.ctx);
+
+		assert.equal(harness.overlay.calls.length, 1, "the command mounts exactly one overlay");
+		const call = harness.overlay.calls[0];
+		assert.equal(call.options?.overlay, true, "the ask log mounts as an overlay");
+		const options = call.options?.overlayOptions;
+		assert.ok(options, "the overlay carries overlayOptions");
+		assert.equal(options.width, "100%", "the overlay width is 100 percent");
+		assert.equal(options.maxHeight, "100%", "the overlay maxHeight is 100 percent");
+		assert.equal(options.anchor, "center", "the overlay anchors at the center");
+		assert.equal(options.margin?.top, 0, "the overlay margin top is 0");
+		assert.ok(call.component, "the factory returns a component");
+	});
+
+	test("the frame paints the ring newest first with a header and a nav line", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 2 });
+		const { component } = await mountAskLog(harness);
+
+		const lines = component.render(80);
+
+		assert.match(lines[0], /ASK LOG — 2 events · newest first/, "the header carries the ring count");
+		assert.match(lines[2], /10:00:02 implementer\/bash/, "the newest row paints first");
+		assert.match(lines[3], /10:00:01 implementer\/bash/, "the older row paints second");
+		assert.match(askNav(lines), /\(line 1\/2\)$/, "the nav line starts at the first line");
+	});
+
+	test("Down moves one wrapped line, so a wrapped row takes two presses", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 5 });
+		// Five view rows, so ten wrapped body lines leave room to scroll.
+		harness.terminal.rows = 10;
+		const { component, handleInput } = await mountAskLog(harness);
+		const newest = wrapTextWithAnsi("10:00:05 implementer/bash waiting=0 shown=none place=slot", 38);
+		const next = wrapTextWithAnsi("10:00:04 implementer/bash waiting=0 shown=none place=slot", 38);
+		assert.equal(newest.length, 2, "the newest row wraps to two lines at width 40");
+		assert.equal(next.length, 2, "the second row wraps to two lines at width 40");
+
+		const first = component.render(40);
+		assert.equal(first[2].trimEnd(), `  ${newest[0]}`, "the first body line starts the newest row");
+		resetPaints(harness.tui);
+
+		handleInput("\x1b[B");
+		const second = component.render(40);
+		assert.equal(harness.tui.requestRenderCalls, 1, "Down requested one render");
+		assert.equal(
+			second[2].trimEnd(),
+			`  ${newest[1]}`,
+			"the first press landed on the second wrapped line of the same row",
+		);
+
+		handleInput("\x1b[B");
+		const third = component.render(40);
+		assert.equal(harness.tui.requestRenderCalls, 2, "the second Down requested one render");
+		assert.equal(
+			third[2].trimEnd(),
+			`  ${next[0]}`,
+			"the second press reached the next row, so each press is one wrapped line",
+		);
+	});
+
+	test("G paints the last wrapped line and g paints the first", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 8 });
+		// Five view rows against eight body rows, so three rows of travel remain.
+		harness.terminal.rows = 10;
+		const { component, handleInput } = await mountAskLog(harness);
+
+		const top = component.render(100);
+		assert.match(askNav(top), /\(line 1\/8\)$/, "the frame opens on the first line");
+
+		handleInput("G");
+		const end = component.render(100);
+		assert.match(askNav(end), /\(line 4\/8\)$/, "G stops at the last full page");
+		assert.match(
+			end.at(-3) ?? "",
+			/10:00:01 implementer\/bash/,
+			"the last wrapped line, the oldest row, is in view at G",
+		);
+
+		handleInput("g");
+		const back = component.render(100);
+		assert.match(askNav(back), /\(line 1\/8\)$/, "g returns to the first line");
+		assert.match(back[2], /10:00:08 implementer\/bash/, "the newest row leads again at g");
+	});
+
+	test("q, Q, and Esc each close the overlay once", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 1 });
+		const { mount, handleInput } = await mountAskLog(harness);
+
+		for (const key of ["\x1b", "q", "Q"]) {
+			const before = mount.doneValues.length;
+			handleInput(key);
+			assert.equal(
+				mount.doneValues.length,
+				before + 1,
+				`key ${JSON.stringify(key)} closed the overlay exactly once`,
+			);
+		}
+		assert.deepEqual(mount.doneValues, [undefined, undefined, undefined], "each close passes no value");
+	});
+
+	test("a normal key while the overlay is open is ignored", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 3 });
+		const { component, mount, handleInput } = await mountAskLog(harness);
+		const before = component.render(80);
+		resetPaints(harness.tui);
+
+		for (const key of ["x", "j", "k", " ", "1", "/"]) handleInput(key);
+
+		assert.equal(mount.doneValues.length, 0, "no ignored key closed the overlay");
+		assert.equal(harness.tui.requestRenderCalls, 0, "an ignored key requested no render");
+		assert.deepEqual(component.render(80), before, "the frame did not move");
+	});
+
+	test("an empty ring paints the placeholder, the nav line, and one rule on each side", async () => {
+		const harness = setup({ enabled: true });
+		const { component } = await mountAskLog(harness);
+
+		const lines = component.render(100);
+
+		assert.ok(
+			lines.some((line) => line.trimEnd() === "(no child asks)"),
+			"the empty ring paints the placeholder",
+		);
+		assert.match(askNav(lines), /\(line 1\/1\)$/, "the nav line still paints");
+		assert.equal(
+			lines.filter((line) => line.trimEnd() === "─".repeat(96)).length,
+			2,
+			"one rule sits on each side of the placeholder",
+		);
+	});
+
+	test("at width 20 every line fits and each token stays whole", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 2 });
+		const { component } = await mountAskLog(harness);
+
+		const lines = component.render(20);
+
+		assert.ok(lines.length > 0, "the overlay rendered lines at width 20");
+		for (const line of lines) {
+			assert.ok(visibleWidth(line) <= 20, `line exceeds 20 cells: ${JSON.stringify(line)}`);
+		}
+		const joined = lines.join("\n");
+		for (const token of ["10:00:02", "implementer/bash", "waiting=0", "place=slot"]) {
+			assert.ok(joined.includes(token), `the wrap split the token ${token}`);
+		}
+	});
+
+	test("in RPC mode the command notifies and mounts nothing", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 1 });
+		const mounts = harness.overlay.calls.length;
+		const rpcCtx = { ...harness.ctx, mode: "rpc" } as unknown as ExtensionContext;
+
+		await harness.askLog("", rpcCtx);
+
+		assert.equal(harness.overlay.calls.length, mounts, "no overlay mounted in RPC mode");
+		assert.ok(
+			harness.notifications.some(
+				(note) => note.level === "error" && /requires interactive mode/.test(note.message),
+			),
+			"the command notified that the overlay needs interactive mode",
+		);
 	});
 });
