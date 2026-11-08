@@ -35,10 +35,26 @@ string.
 
 ## Path Forms on pi
 
-The gate decides a path by its shape, not by the working directory. For a
-worker and the orchestrator, a repository-relative path with no parent segment
-allows a write. Any other path asks for a worker or the orchestrator. The gate
-denies that path for a reader. For a judged agent, a path that reaches no rule
-falls to the mode default, which denies. A session with no active agent and no
-run record keeps only the global rows and allows. The pi permission table and its README
-own the zones and the path forms.
+The gate decides a path by the shape of the path string, never by the working
+directory.
+
+A repository-relative path with no parent segment allows a write for a worker
+and for the orchestrator.
+
+Two other forms allow, and both come from a table row. An absolute path at or
+under `/tmp` with no parent segment allows for a worker and for the
+orchestrator. An absolute `agent-notes` path with no parent segment allows for
+the orchestrator, and allows a worker profession inside its own notes zone.
+
+Another path asks for a worker or the orchestrator, unless its string skips the
+ask row. A path with a parent segment asks before any skip. Two shapes skip it,
+and both need an absolute path with no parent segment. The first is an absolute
+path whose string holds a segment that ends in `tmp`. The second is an absolute
+path whose string holds a segment that ends in `agent-notes`. It covers the
+orchestrator and a worker in its own notes zone. A skipped path gets no ask: it
+allows inside a zone, and otherwise falls to the mode default. That default
+denies. The pi README names the two shapes. The gate denies a reader outside its
+own notes zone. A session with no active agent and no run record keeps only the
+global rows and allows.
+
+The pi permission table and its README own the zones and the path forms.

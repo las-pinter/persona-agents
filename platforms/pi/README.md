@@ -195,8 +195,10 @@ then class row) → a per-segment ask (global row first, then class row) → cla
 allow → the `deny-by-default` default. Deny wins over ask, ask wins over allow,
 and every segment of a compound command must pass.
 - **Write zones** come from the resolved role: the session cwd, the role's
-`agent-notes` folders, and `/tmp` allow; a parent segment, a home path, and any
-other absolute path ask. See `## Editable write zones`.
+`agent-notes` folders, and `/tmp` allow, each with no parent segment. A parent
+segment and a home path ask. Another absolute path asks, unless its string
+skips the ask row, and a skipped ask row denies. See
+`## Editable write zones`.
 - **The overlay is optional.** The live file `~/.pi/agent/permissions.json` is
 unversioned local policy. Its `deny` and `ask` rows are appended after the table's
 global rows at factory time. The table already carries the 17 entries that file
@@ -498,30 +500,36 @@ list in its agent file:
 
 | Agent | Zones (edit + write) |
 |---|---|
-| orchestrator | the session working directory, any `agent-notes/**` path, and `/tmp/**`; any other path asks |
+| orchestrator | a repository-relative path with no parent segment, an absolute `agent-notes` path with no parent segment, and `/tmp` with no parent segment; another path asks, unless it skips the ask row |
 | planner | `agent-notes/planner/**` and `agent-notes/project-notes/**` |
 | researcher | `agent-notes/researcher/**` |
 | reviewer | `agent-notes/reviewer/**` |
-| implementer | the session working directory, `agent-notes/implementer/**`, and `/tmp/**` |
-| tester | the session working directory, `agent-notes/tester/**`, and `/tmp/**` |
+| implementer | a repository-relative path with no parent segment, `agent-notes/implementer/**`, and `/tmp/**`, each with no parent segment |
+| tester | a repository-relative path with no parent segment, `agent-notes/tester/**`, and `/tmp/**`, each with no parent segment |
 | mascot | none (read-only) |
 
-Any other path asks for the worker and the orchestrator, and a reader denies
-it. On pi the engine cannot resolve a path against the working directory, so
-the rows name the path forms directly. A
-relative path with no parent segment allows: it is the repository under the
-session working directory. A
-path with a parent segment asks, a home-relative (`~`) path asks, and any other
-absolute path asks. Two exceptions allow. The first is an absolute path that
-holds an `agent-notes` segment and no parent segment, because the notes tree
-sits outside the working directory. The second is `/tmp` and every path under
-it that carries no parent segment, for the `edit` tool and the `write` tool.
-Residual for the first: that
-exception cannot be anchored to one home folder, so any absolute path with an
-`agent-notes` segment allows. Residual for the second: the gate compares the
-raw path string. It does not resolve a symbolic link, and it does not read the
-link target. A planted link under `/tmp` can reach any path. The owner accepted
-this risk.
+Another path asks for the worker and the orchestrator, unless its string skips
+the ask row. A reader denies it. On pi the engine cannot resolve a path against
+the working directory. So the rows name the path forms directly, as the table
+above lists them. A path with a parent segment asks. A home-relative (`~`) path
+asks. Another absolute path asks, unless its string skips the ask row. Two
+exceptions allow. The first is an absolute path in its own notes zone that holds
+an `agent-notes` segment and no parent segment. The notes tree sits outside the
+working directory, so the rows cannot name it from the cwd. The second is
+`/tmp` and every path under it that carries no parent segment, for the `edit`
+tool and the `write` tool.
+
+Three residuals follow. First, the notes exception cannot be anchored to one
+home folder, so any absolute `agent-notes` path allows. It allows for the
+orchestrator, and for a worker in its own notes zone. Second, the gate compares
+the raw path string. It does not resolve a symbolic link, and it does not read
+the link target. A planted link under `/tmp` can reach any path. The owner
+accepted this risk. Third, two path shapes skip the ask row. One is an absolute
+path with no parent segment whose string holds a segment that ends in `tmp`.
+The other is an absolute path with no parent segment whose string holds a
+segment that ends in `agent-notes`. A skipped ask falls to the mode default,
+which denies, unless a zone row allows the path. So `/etc/tmp` denies, and
+`/repo/my-agent-notes/a.md` denies for the orchestrator.
 
 ## Personas and themes
 
