@@ -61,7 +61,6 @@ so the journal history stays in one place.
 <USER_HOME>/agent-notes/<AGENT_TYPE>/
 ├── journals/
 │   ├── daily/     YYYY-MM-DD.md                   (only dailies not yet consolidated)
-│   ├── incoming/  <YYYYmmddTHHMMSSnnnnnnnnn>.md   (blocks not yet written)
 │   ├── archive/
 │   │   └── daily/ YYYY-MM-DD.md                   (dailies already consolidated)
 │   ├── weekly/    YYYY-Wnn.md
@@ -72,12 +71,9 @@ so the journal history stays in one place.
 Journal filenames are plain — no agent suffix. The profession lives in the
 directory path.
 
-The `journals/` folder also holds `.journal-write.lock`. The script makes that
-file. The script never removes it. The script removes a block after the write,
-on exit 0. A failed removal prints a warning. A failure before the removal
-keeps the block. A failure after the removal exits nonzero with no block. The
-exit-4 fallback leaves its block in place. When the attempt ends, the session
-names the block path in its report. No other step removes a block.
+The `journals/` folder also holds `.journal-write.lock`. The script creates
+that file. The script removes it on release. The script keeps the last broken
+record in `.journal-write.prev`.
 
 ---
 
@@ -104,121 +100,65 @@ last line.
 > **LIMIT — 100 lines.** The limit applies to every journal level: daily,
 > weekly, monthly, yearly.
 > The limit is a report gate. It is not a trim order.
-> An `append` or a `replace` that prints `gate over` is reported to the owner.
-> Report the line count and the file path. Never trim a daily file by hand.
+> No script prints a line count. Judge the size of the file from your own read.
+> Report an over-limit file to the owner, with its path and your own count.
 > The weekly consolidation brings the content under the limit. The merged text
-> must fit before the `replace` call.
-> A session may compress its own block before it appends. Keep another author's
-> text verbatim when you append.
-> `replace` serves the weekly, monthly, and yearly files only. It never serves
-> a daily.
+> must fit before the write.
+> Never trim a daily file by hand.
 
 For the correct current date use the `date` bash command.
 
-Keep an append block short: about 10 text lines is a target, not a hard limit.
-Use one line per fact. No line repeats a fact that a commit message or an earlier block already holds. The
-100-line limit above stays. The 200-line writer limit under **Block file
-format** is a hard maximum, not a target.
+Keep your own text short: about 10 lines is a target, not a hard limit. Use one
+line per fact.
 
-### Append through the write script (shared journal cave)
+Keep another session's lines. The **Merge rule** owns the fold.
 
-Journal files under agent-notes may be written by MORE THAN ONE session (e.g.
-several sessions of the same profession sharing one home directory). A rewrite
-clobbers the other sessions' entries. Follow these rules on EVERY update:
+### Write procedure
 
-1. Every journal text write goes through `scripts/journal-write.sh` in this
-   skill folder, except two. A block file under `incoming/` is the first: the
-   `write` tool makes it. The rule 6 fallback is the second. The archive move
-   writes no text. Run the script with bash and the skill folder path as the
-   platform shows it, unquoted. A platform whose allow entry names a tilde form
-   keeps that tilde. This is one complete call:
-   `bash SKILL_DIR/scripts/journal-write.sh append --agent orchestrator --section persona-agents --block BLOCK_DIR/20261028T214012123456789.md`
-   Every command example marks a placeholder in one of two ways: an upper-case
-   word such as `SKILL_DIR`, or an angle-bracket word such as `<AGENT_TYPE>`.
-   Replace each placeholder with the real value. The command carries no
-   redirect, no heredoc, and no lock command. The script holds the lock
-   itself.
-2. Write your own block first with the `write` tool. Put it in the `incoming/`
-   folder that the folder tree names. Take the file name and the session stamp
-   from Block file format. Put only your own text in the block.
-3. Run `append --agent <AGENT_TYPE> --section <project> --block <absolute block
-   path>`. The script waits for the lock. The script adds your block to today's
-   daily.
-4. Never use the `write` or the `edit` tool on a journal file at any level. One
-   bounded exception is the `append` exit-4 fallback on an existing target.
-   Rule 6 holds the only copy of that fallback. The `write` tool creates one
-   file in a journal folder: a block under `incoming/`.
-5. Never copy another author's text into an append block. A consolidation block
-   is the exception: it carries the merged text of every source file. The
-   script never rewrites a section it did not receive.
-6. If `append` exits 4, the script could not write the target. The error line
-   names the cause. Four causes come before the lock is taken: the lock folder
-   create, the lock file open, the block record read, and the block record
-   count. On any of them, stop. Do not edit the journal. Report the failure
-   and the block path.
-   Every other cause follows a taken lock. Run the exit-4 fallback only when
-   the target exists. Re-read the target. Add your block with a targeted
-   `edit`. Put the discrepancy note at the end of your own text in the target.
-   Leave the block file in place. Name its path in your report. If the target
-   does not exist, do not edit. Report the failure. Write no journal file.
-7. If `append` exits 5, the lock wait was too short. Retry the same call with a
-   larger `--timeout`. The largest value is 120 seconds. Never edit the journal
-   on exit 5. Never change the block text between the calls. If a retry at 120
-   seconds also exits 5, stop. Report the block path. Do not edit the journal.
-8. Exits 1, 2, and 3 do not permit a fallback. Exit 1 is a usage error. Exit 2
-   is bad input. Fix the call. Run the same block file again. Exit 3 means an
-   `--expect` mismatch. Use the recovery in `CONSOLIDATE`. If the script is
-   absent, write no journal at all and report a stale install.
+Journal files under agent-notes may be written by MORE THAN ONE session. One
+lock covers the whole agent folder, so hold one level at a time.
 
-The script checks the block once before the lock. It checks record 2, the Work
-Log heading, the section heading, the first text line, the level-2 heading
-count, and the presence of a text line again under the lock. It checks the
-record limit, the stamp, and the path once.
+The lock turns stale 600 seconds after `hold`. The `deadline` line from `hold`
+names that moment. Finish the write before the deadline. A lost lock lets
+another session write and release, and your later write then destroys that
+text. A second `hold` with the same agent and session refreshes the lock and
+keeps the token. Re-hold when the merge runs long.
 
-### Block file format
+`<SESSION>` is the session name. Make it once at the start of the session with
+`date +%Y%m%dT%H%M%S%N`. The name must be unique to the session. A host whose
+`date` command prints a literal letter instead of nanoseconds must add the
+process id to the name.
 
-- Folder: `<USER_HOME>/agent-notes/<AGENT_TYPE>/journals/incoming/`.
-- Name: the output of `date +%Y%m%dT%H%M%S%N`, plus `.md`.
-- Line 1 holds the session stamp. Its shape is exactly:
-  `<!-- session: <UTC date>T<UTC time>Z <AGENT_TYPE> <session> -->`.
-- This is one complete stamp:
-  `<!-- session: 2026-10-28T21:40:12Z orchestrator 20261028T214012123456789 -->`.
-- The UTC time comes from `date -u +%Y-%m-%dT%H:%M:%SZ`.
-- `<AGENT_TYPE>` must equal the `--agent` value. Its shape is
-  `[a-z][a-z0-9-]*`.
-- `<session>` holds 1 to 64 characters from `[A-Za-z0-9._-]`. The block file
-  name without `.md` is a valid session name.
-- Line 2 is empty or absent. Line 3 and later hold the block text.
-- Line 3 and later must hold at least one text line. A block with no text line
-  is refused, because the writer would keep a bare session stamp.
-- On `append`, the writer refuses a heading in two places. Line 3 and later
-  must not hold the `## Work Log` heading or the `### <project>` heading of the
-  current section, because the writer prints both headings itself. The first
-  text line must not be a level-1, a level-2, or a level-3 heading, because a
-  group ends on each of them. A block starts with text. A section heading
-  belongs below the text, so an entry can carry its own decisions,
-  verification, issues, and lessons sections. A block may open such a section
-  only when the target does not already hold that heading. A level-4 heading
-  and deeper stays allowed, because no group ends on one.
-- One to three leading spaces, any trailing space or tab, and a closing hash
-  run after the heading text do not change a heading. The same rule serves the
-  target, so a heading with a leading space is still found and still ends its
-  group.
-- On `append`, the writer refuses a block that carries a level-2 heading the
-  target already holds, so the day keeps one copy of each section. The compare
-  is by exact text, like the work log find. The compare does not skip a code
-  fence, so a heading inside a code fence counts as held.
-- On `append`, the writer refuses a block that carries one level-2 heading
-  twice. The writer prints both copies, so the day would hold two sections with
-  one name.
-- The writer finds the `## Work Log` heading by its exact text. A target that
-  holds a variant, such as `## Work log` or `## Work Log:`, gets a second group
-  at the end of the file. Write no heading variant.
-- The script validates line 1. The script keeps line 1 in the journal.
-- The script checks the block file suffix and the stamp shape. It does not
-  compare the file name to the stamp.
-- At most 200 lines, stamp included. Split a longer `append` block into two
-  `append` calls. Never split a `replace` block. Shorten the merge instead.
+1. Run `hold`. This is one complete call:
+   `bash SKILL_DIR/scripts/journal-write.sh hold --agent <AGENT_TYPE> --session <SESSION>`
+2. Read the whole target file.
+3. Merge your text into the matching section. Apply the **Merge rule**.
+4. Run `release` with the token that `hold` printed:
+   `bash SKILL_DIR/scripts/journal-write.sh release --agent <AGENT_TYPE> --session <SESSION> --token <TOKEN>`
+5. On exit 5, follow the recovery under **Error Handling**.
+
+The `hold` call comes before your read. The `release` call comes after your
+`write`. No step measures the file. The read in step 2 gives the size for the
+limit above.
+
+Run the script with bash and the skill folder path as the platform shows it,
+unquoted. A platform whose allow entry names a tilde form keeps that tilde.
+Put the real value in each placeholder. The command carries no redirect,
+no heredoc, and no lock command. The script holds the lock itself.
+
+`<AGENT_TYPE>` must equal the agent type that this skill resolved. `--token` is
+required by `release` and not by `hold`.
+
+If `hold` or `release` exits nonzero, follow **Error Handling**.
+
+### Merge rule
+
+- Keep every commit hash, verdict, and open item.
+- Fold a repeated fact to one line.
+- When two lines conflict, keep both lines and record the conflict under
+  `## Issues / Blockers`.
+- Write the whole file in one `write` call.
+- Hold one level at a time.
 
 ---
 
@@ -309,25 +249,9 @@ Key rules:
 
 ## Entry Types
 
-- **CREATE** — `append` on an absent or empty file. The script writes the
-  `# <today>` header, then the block, under the lock. An append with a section
-  also writes the `## Work Log` heading and the `### <project>` heading. A
-  CREATE that exits 4 and leaves no target follows rule 6.
-- **APPEND** — `append`. Later work the same day, or work from another session.
-  The script adds the block under its `### <project>` subsection.
-- **CONSOLIDATE** — the merge serves a weekly, monthly, or yearly file.
-  `replace` never serves a daily. Do these three steps:
-  1. Run `check --agent <AGENT_TYPE> --level <level> --name <period> --show`.
-     The body and the digest come from that one read.
-  2. Merge the body. Write the merged text to a new block under `incoming/`
-     with the `write` tool. Use the Block file format.
-  3. Run `replace --agent <AGENT_TYPE> --level <level> --name <period>
-     --block <absolute block path> --expect <digest>`.
-  Required flags are `--agent`, `--level`, `--block`, and `--expect`.
-  Optional flags are `--name`, `--home`, and `--timeout`. The script defaults a
-  missing `--name` to the current period. A missing required flag exits 1. A
-  `--level daily` exits 2. An `--expect` mismatch exits 3. Run `check` again.
-  Redo the merge.
+One write procedure serves daily, weekly, monthly, and yearly. The level
+changes the path and the merge size, not the procedure. A file that does not
+exist yet is made by the same single `write` call.
 
 ---
 
@@ -367,8 +291,8 @@ only when a task needs old detail that the summaries do not have.
 | **Yearly** | First run of a new year | 12 monthly files | `YYYY.md` |
 
 First run of a new ISO week: consolidate the dailies of the previous
-ISO week into `YYYY-Wnn.md`. Read the source files first. Then send the merged
-result through the write script's `replace` subcommand. After a missed week,
+ISO week into `YYYY-Wnn.md`. Read the source files first. Then write the merged
+result with the procedure under `### Write procedure`. After a missed week,
 consolidate each closed ISO week that has unconsolidated dailies into its own
 weekly file.
 
@@ -403,70 +327,31 @@ had it).
 
 - Journal file not found on read → normal, no work was done that period.
   Continue.
-- Directory missing on write → the write script creates the target folder.
-- **Write script, exit 1** — usage error. Target unchanged.
-- **Write script, exit 2** — bad input. The causes are:
-  - the agent name: it fails `[a-z][a-z0-9-]*`;
-  - the section name: it fails its pattern;
-  - the timeout: it is outside 1 to 120 seconds;
-  - the level: it is not a known level;
-  - the level: it is `daily` on `replace`;
-  - the name: it does not match the level;
-  - `--expect`: it is neither `new` nor a digest;
-  - `--home`: it is not an absolute path;
-  - `--home`: it does not resolve;
-  - `--home`: it holds no `agent-notes` folder;
-  - the home folder: none is found;
-  - the block path: it is not absolute;
-  - the block path: it does not resolve;
-  - the block path: it is outside the `incoming/` folder;
-  - the block name: it does not end in `.md`;
-  - the block: it is not a regular file;
-  - the block: it is not readable;
-  - the block: it is longer than 200 records;
-  - block record 1: it is not a session stamp;
-  - block record 1: it names another agent;
-  - block record 2: it holds text;
-  - block record 3 or later: it is the `## Work Log` heading, on `append`;
-  - block record 3 or later: it is the current section heading, on `append`;
-  - the block: its first text line is a level-1, a level-2, or a level-3
-    heading, on `append`;
-  - the block: it holds no text line;
-  - the block: it carries one level-2 heading twice, on `append`;
-  - the insert anchor, on `append`: it is a bare session stamp;
-  - the target: it holds a carriage return;
-  - the target: it already holds a level-2 heading that the block carries, on
-    `append`.
-  Target unchanged, block kept. Fix a block-side cause in the block. A
-  target-side cause needs the owner: the owner removes the bare stamp, adds its
-  text, removes the carriage return, or merges the duplicate heading into the
-  existing section. The caller may edit the block and append again, and may not
-  edit the journal. Then run the same block file again.
-- **Write script, exit 3** — `--expect` mismatch. The causes are: a target
-  that changed since the `check` read, `--expect new` on a present target, and
-  `--expect <digest>` on an absent target. Target unchanged, block kept. Run
-  `check` again. Redo the merge.
-- **Write script, exit 4** — an IO failure. The causes are:
-  - the lock folder create;
-  - the lock file open;
-  - the block record read;
-  - the block record count;
-  - the block read;
-  - the target read;
-  - the target record count;
-  - the target folder create;
-  - the temp file create;
-  - the temp file write;
-  - the temp record count;
-  - the chmod;
-  - the rename;
-  - the digest.
-  Target unchanged, block kept. On `append`, rule 6 of the write section
-  applies. On `replace`, fix the IO cause. Run `check` again. Redo the merge.
-  Never edit a `replace` target by hand. These four causes come before the
-  lock: the lock folder create, the lock file open, the block record read, and
-  the block record count.
-- **Write script, exit 5** — lock wait exceeded `--timeout`. Target unchanged,
-  block kept. Rule 7 of the write section applies.
-- **Write script, any nonzero exit** — one stderr line names each path the
-  script knows. An early failure knows no target. Nothing is silent.
+- A missing level folder is not an error. Your `write` call creates it.
+
+| Code | Subcommand | Meaning |
+|------|------------|---------|
+| 0 | hold, release | success |
+| 1 | hold, release | usage error: an unknown subcommand, an unknown flag, a missing value, a repeated flag, a flag that does not apply to the subcommand, a positional argument, or a missing required flag |
+| 2 | hold, release | bad input: a value starts with a dash, a value fails its pattern, or no home folder was found |
+| 3 | hold, release | IO failure: lock folder create, record read, record write, claim restore |
+| 4 | hold | the wait exceeded `--timeout`, a refresh whose create lost the name, or an incomplete record found while acquiring |
+| 5 | release | the lock file is gone or holds an incomplete record, or the record does not match your agent, session, and token |
+
+- A nonzero exit prints one line that names the cause and the paths that the
+  script knows.
+- Two lines are exact and carry no prefix: `held <path> by <session> since
+  <UTC ISO>` and `lock lost <path>`.
+- On exit 1, 2, or 3 from `hold`, write no journal. Report the failure line.
+- On exit 1 or 2 from `release`, the flag value is wrong. Fix the flag value
+  and repeat the call with the same token.
+- On exit 3 from `release`, the journal is already written. Read the failure
+  line. Check the folder path and its permission. Then repeat the call with
+  the same token. Do not write the journal again.
+- On exit 4, the lock was not taken. Retry `hold` with a larger `--timeout`, up
+  to 120 seconds.
+- On exit 5, recover in three steps:
+  1. Re-read the file.
+  2. Merge your text again.
+  3. Repeat the write procedure from step 1.
+- The line limit above is prose. No write is blocked by a number.

@@ -135,7 +135,8 @@ platform:
   so a legitimate line that carries that text asks or is denied. A journal
   call with `--home` asks on opencode and is denied on Kiro, but pi and Claude
   allow it. The script path check limits that call to the installed script.
-  The session stamp check and the `replace` digest check limit what it writes.
+  The token decides which lock a `release` call may remove. `hold` takes no
+  token.
   The opencode separator asks are journal scoped and rely on last-match-wins.
   On pi, a root ask and a queued child ask share one panel slot, so only one
   panel is live on the terminal. The second ask waits, first in first out. A

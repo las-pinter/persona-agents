@@ -6,8 +6,8 @@ description: Orchestrator journal root and the orchestrator startup report.
 # Journal Management (Orchestrator)
 
 Load **journal-management-generic** first. It owns the journal procedure: the
-folder layout, reading, the write script, the `append` and `replace` write
-model, the entry structure, the 100-line limit, and the consolidation rules.
+folder layout, reading, the write procedure, the merge rule, the entry
+structure, the line limit, and the consolidation rules.
 Do not restate it here.
 
 ## Orchestrator Additions
