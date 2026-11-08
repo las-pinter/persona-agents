@@ -1,16 +1,16 @@
 /**
  * Sidebar panel renderers — pure.
  *
- * Composes the six right-column panels: AGENTS (tree), STATUS, SESSION,
+ * Composes the seven right-column panels: AGENTS (tree), STATUS, LOG, SESSION,
  * WORKSPACE, MCP, TODOS. Every function is pure: no fs, no timers, no pi runtime
  * import.
- * The only external import is `truncateToWidth`/`visibleWidth`, so every line
- * fits the column width.
+ * The only external imports are `truncateToWidth`/`visibleWidth` and
+ * `wrapTextWithAnsi`, so every line fits the column width.
  *
  * `sidebar-render.test.ts` runs under plain Node (type stripping).
  */
 
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
@@ -36,6 +36,11 @@ export const SECTION_RULE_CHAR = "─";
 export const AGENTS_PAD_MIN = 4; // blank lines buy a stable footprint, so lower panels do not jump
 /** Fixed STATUS panel lines, header included. The shape is constant. */
 export const STATUS_PAD_MIN = 4;
+/**
+ * Fixed LOG panel lines, header included: one header and 4 text lines. The
+ * newest rows wrap at the panel width and the panel stops at the budget.
+ */
+export const LOG_PANEL_LINES = 5;
 
 /** Status spinner. One glyph per animation frame. */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -141,6 +146,12 @@ export interface StatusSnapshot {
 	askAgeMs: number | null;
 }
 
+/**
+ * One LOG panel row: one ask event, newest first at index 0. The shape is the
+ * ring shape from `ask-record.ts`, so the snapshot field needs no copy.
+ */
+export type AskLogRow = AskLogEvent;
+
 /** Everything the sidebar paints in one frame. */
 export interface SidebarSnapshot {
 	cwd: string;
@@ -148,7 +159,7 @@ export interface SidebarSnapshot {
 	/** STATUS panel data. Absent means nothing was probed yet. */
 	status?: StatusSnapshot;
 	/** The newest ask queue events, newest first. Absent means no log read yet. */
-	askLog?: AskLogEvent[];
+	askLog?: AskLogRow[];
 	session: SessionSnapshot;
 	workspace: WorkspaceSnapshot;
 	mcp: McpSnapshot;
@@ -487,6 +498,55 @@ export function renderStatusPanel(
 	return lines.map((line) => clipLine(line, width));
 }
 
+/**
+ * The LOG panel body: the header with the ring count, then the newest rows,
+ * each wrapped to the width. The panel stops after 4 text lines, so a row that
+ * does not fit keeps the lines that still fit and the panel ends there. A
+ * missing ring paints the empty panel.
+ */
+export function askLogLines(
+	rows: AskLogRow[] | null | undefined,
+	width: number,
+	theme: SidebarTheme = {},
+): string[] {
+	const list = rows ?? [];
+	const lines: string[] = [header(theme, ` LOG ${list.length} `)];
+	const budget = LOG_PANEL_LINES - 1;
+
+	if (list.length === 0) {
+		lines.push("(no child asks)");
+	} else {
+		let used = 0;
+		for (const row of list) {
+			if (used >= budget) break;
+			const text = oneLine(row.text);
+			// A zero width clips every line to empty, so skip the wrapper there.
+			const wrapped = width >= 1 ? wrapTextWithAnsi(text, width) : [text];
+			for (const line of wrapped) {
+				if (used >= budget) break;
+				lines.push(line);
+				used += 1;
+			}
+		}
+	}
+
+	return lines.map((line) => clipLine(line, width));
+}
+
+/**
+ * The LOG panel: `askLogLines` padded to the fixed `LOG_PANEL_LINES` height, so
+ * the panels below do not jump when the ring is short.
+ */
+export function renderAskLogPanel(
+	rows: AskLogRow[] | null | undefined,
+	width: number,
+	theme: SidebarTheme,
+): string[] {
+	const lines = askLogLines(rows, width, theme);
+	while (lines.length < LOG_PANEL_LINES) lines.push(clipLine("", width));
+	return lines.slice(0, LOG_PANEL_LINES);
+}
+
 /** One SESSION stats row, the label padded to a fixed column. */
 function sessionRow(label: string, value: string): string {
 	return `${label.padEnd(SESSION_LABEL_WIDTH)}${value}`;
@@ -801,10 +861,18 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 
 	const status = snapshot.status ?? null;
 
+	// The panel paints the id, the phase, and the text. The stamp is in the text.
+	const askLog = (snapshot.askLog ?? []).map((row) => ({
+		askId: row.askId,
+		phase: row.phase,
+		text: row.text,
+	}));
+
 	return JSON.stringify({
 		cwd: snapshot.cwd,
 		tree,
 		status,
+		askLog,
 		session,
 		workspace,
 		mcp,
@@ -880,10 +948,11 @@ export function renderSidebarPanel(
 	const now = Date.now();
 	const treePanel = renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now);
 	const statusPanel = renderStatusPanel(snapshot.status, width, theme);
+	const logPanel = renderAskLogPanel(snapshot.askLog, width, theme);
 	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
 	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
 	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage);
-	const upper = [treePanel, statusPanel, sessionPanel, workspacePanel, mcpPanel];
+	const upper = [treePanel, statusPanel, logPanel, sessionPanel, workspacePanel, mcpPanel];
 	// The +upper.length counts the section rules, including the rule before TODOS.
 	const usedByUpper = upper.reduce((sum, panel) => sum + panel.length, 0) + upper.length;
 	const todosHeight = Math.max(0, limit - usedByUpper);

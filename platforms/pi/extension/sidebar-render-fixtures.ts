@@ -7,7 +7,14 @@
 
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { SessionSnapshot, SidebarSnapshot, SidebarTheme, WorkspaceSnapshot } from "./sidebar-render.ts";
+import type { AskPhase } from "./ask-record.ts";
+import type {
+	AskLogRow,
+	SessionSnapshot,
+	SidebarSnapshot,
+	SidebarTheme,
+	WorkspaceSnapshot,
+} from "./sidebar-render.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
 
 export const theme: SidebarTheme = {
@@ -78,6 +85,60 @@ export function makeSnapshot(overrides: Partial<SidebarSnapshot> = {}): SidebarS
 		tps: 0,
 		...overrides,
 	};
+}
+
+/**
+ * Four ask rows, newest first, as `sidebar-data.ts` writes them: the clock, the
+ * role and tool, and the flag text of the child ask warning line. One row is
+ * longer than width 45, so the panel wraps it.
+ */
+export function makeAskLogRows(): AskLogRow[] {
+	const rows: Array<{ role: string; phase: AskPhase; flags: string }> = [
+		{ role: "implementer/bash", phase: "expiry", flags: "waiting=0 shown=none place=slot parked=0 surface=yes" },
+		{ role: "tester/bash", phase: "arrival", flags: "waiting=0 shown=this place=slot parked=1 surface=yes" },
+		{ role: "reviewer/edit", phase: "expiry", flags: "waiting=1 shown=none place=queue parked=0 surface=yes" },
+		{ role: "planner/write", phase: "arrival", flags: "waiting=0 shown=none place=slot parked=0 surface=no" },
+	];
+	return rows.map((row, index) => {
+		const clock = `10:00:0${4 - index}`;
+		return {
+			askId: `root#${clock}`,
+			phase: row.phase,
+			at: `2026-11-07T${clock}.000Z`,
+			text: `${clock} ${row.role} ${row.flags}`,
+		};
+	});
+}
+
+/**
+ * The reference data the height budget names: 3 tree nodes, 2 changed files
+ * with stats, 2 MCP servers, 4 todos, and a full LOG ring. The position of every
+ * drop point depends on these line counts.
+ */
+export function makeBudgetSnapshot(): SidebarSnapshot {
+	const child = makeNode({ runId: "child", parentRunId: "root", depth: 1, agent: "implementer" });
+	const sibling = makeNode({ runId: "sibling", parentRunId: "root", depth: 1, agent: "tester" });
+	return makeSnapshot({
+		tree: [makeNode({ runId: "root", agent: "orchestrator", task: "work", children: [child, sibling] })],
+		askLog: makeAskLogRows(),
+		workspace: makeWorkspace({
+			changed: ["a.ts", "b.md"],
+			changedCount: 2,
+			files: [
+				{ path: "a.ts", added: 40, removed: 2, untracked: false },
+				{ path: "b.md", added: 3, removed: 1, untracked: false },
+			],
+		}),
+		mcp: [
+			{ name: "context7", configured: true, connected: true, status: "connected" },
+			{ name: "exa", configured: true, connected: false, status: "disconnected" },
+		],
+		todos: Array.from({ length: 4 }, (_value, index) => ({
+			id: String(index),
+			text: `todo ${index}`,
+			done: false,
+		})),
+	});
 }
 
 export function assertFits(lines: string[], width: number): void {
