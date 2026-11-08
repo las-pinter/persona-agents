@@ -21,16 +21,17 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
+import { visibleWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import {
 	SIDEBAR_CONFIG_ENV,
 	SIDEBAR_DEFAULT_WIDTH,
 	getSidebarCompositor,
 } from "./sidebar.ts";
-import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS } from "./overlays.ts";
+import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS, TreeOverlayComponent } from "./overlays.ts";
 import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, type RunEvent } from "./tree-log.ts";
+import { makeNode, makeSnapshot, theme as fixtureTheme } from "./sidebar-render-fixtures.ts";
 import {
 	makeTerminal,
 	makeTui,
@@ -121,6 +122,17 @@ interface Harness {
 /** The zero-based row indexes that carry the tree selection marker. */
 function markedRows(lines: string[]): number[] {
 	return lines.flatMap((line, index) => (line.includes(SELECTION_MARKER) ? [index] : []));
+}
+
+/** The spinner icon on the marked tree row. */
+function treeRowIcon(lines: string[]): string {
+	const row = lines.find((line) => line.trimStart().startsWith(`${SELECTION_MARKER} `));
+	assert.ok(row, "a marked row paints");
+	const [mark, icon, agent] = row.trimStart().split(/\s+/);
+	assert.equal(mark, SELECTION_MARKER, "the row carries the selection marker");
+	assert.equal(agent, "implementer", "the marker sits on the seeded node row");
+	assert.ok(icon !== undefined && icon.length > 0, `the row carries an icon: ${JSON.stringify(row)}`);
+	return icon;
 }
 
 /** The temp dir of the running test, removed in `afterEach`. */
@@ -444,6 +456,32 @@ describe("tree overlay runtime path", () => {
 		}
 	});
 
+	test("the running-node icon follows the frame getter, not a frame captured at construction", () => {
+		const harness = setup({ enabled: true });
+		const snapshot = makeSnapshot({
+			tree: [makeNode({ runId: "run-test-1", agent: "implementer", status: "running", task: "build it" })],
+		});
+		// A mutable counter stands in for the spinner frame; a captured value cannot move.
+		let frames = 0;
+		const component = new TreeOverlayComponent(
+			harness.tui as unknown as TUI,
+			fixtureTheme,
+			() => snapshot,
+			() => {},
+			() => frames,
+		);
+
+		const first = treeRowIcon(component.render(80));
+		frames = 1;
+		const second = treeRowIcon(component.render(80));
+
+		assert.notEqual(
+			second,
+			first,
+			"the second render kept the first icon, so the frame was captured at construction",
+		);
+	});
+
 	test("Esc, q, and Q each close the overlay once", async () => {
 		const harness = setup({ enabled: true, log: true });
 		await harness.tree("", harness.ctx);
@@ -688,6 +726,19 @@ describe("ask log overlay runtime path", () => {
 		assert.ok(counter, `the nav line leads with the page counter: ${JSON.stringify(nav)}`);
 		assert.ok(Number(counter[1]) > MAX_ASK_VIEW_ROWS, "the wrapped body is taller than the view cap");
 		assert.equal(bodyRows, MAX_ASK_VIEW_ROWS - ASK_FRAME_ROWS, "the view height stops at the cap minus the frame rows");
+	});
+
+	test("a 24-row terminal paints a 23-line frame from the fixed height budget", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 30 });
+		// A fixed height of 24 rows leaves 24 - 5 = 19 rows for the body.
+		harness.terminal.rows = 24;
+		const { component } = await mountAskLog(harness);
+
+		const lines = component.render(100);
+
+		// 19 body rows plus 4 chrome lines (header, two rules, nav) is 23 lines.
+		assert.equal(lines.length, 23, "a 24-row terminal paints 19 view rows and 4 chrome lines");
+		assert.match(askNav(lines), /^\(line 1\/30\) ·/, "the ring is taller than the view, so the top page paints");
 	});
 
 	test("q, Q, and Esc each close the overlay once", async () => {

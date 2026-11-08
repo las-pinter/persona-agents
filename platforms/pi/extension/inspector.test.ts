@@ -34,8 +34,8 @@ function captureCommands(): Map<string, CapturedCommand> {
 	return commands;
 }
 
-/** Open one archived run in the inspector and flatten its lines. */
-async function inspectDetail(arg: string): Promise<string> {
+/** Open one archived run in the inspector and flatten its lines at one width. */
+async function inspectDetail(arg: string, width = 200): Promise<string> {
 	const commands = captureCommands();
 	let component: { render(width: number): string[] } | undefined;
 	await commands.get("inspect")?.handler(arg, {
@@ -48,7 +48,7 @@ async function inspectDetail(arg: string): Promise<string> {
 			},
 		},
 	});
-	return component?.render(200).join("\n") ?? "";
+	return component?.render(width).join("\n") ?? "";
 }
 
 test("the inspector overlay carries invalidate and re-renders after it", async () => {
@@ -251,21 +251,8 @@ test("a narrow inspector leads the nav line with the whole page counter", async 
 	const task = toInspectTask(makeSingle({ task: "do the thing" }));
 	archiveRun({ at: "2024-01-13T00:00:00.000Z", mode: "single", agentScope: "user", results: [task] });
 
-	const commands = captureCommands();
-	let component: { render(width: number): string[] } | undefined;
-	await commands.get("inspect")?.handler("last", {
-		mode: "tui",
-		ui: {
-			custom: async (
-				factory: (tui: unknown, theme: unknown, keys: unknown, done: (v: unknown) => void) => unknown,
-			) => {
-				component = factory({}, {}, {}, () => {}) as { render(width: number): string[] };
-			},
-		},
-	});
-
-	const lines = component?.render(24) ?? [];
-	const nav = (lines.at(-1) ?? "").trimEnd();
+	const detail = await inspectDetail("last", 24);
+	const nav = (detail.split("\n").at(-1) ?? "").trimEnd();
 	assert.match(nav, /^\(line 1\/\d+\)/, `the counter leads at width 24: ${JSON.stringify(nav)}`);
 	assert.ok(!nav.includes("q/Esc close"), "the narrow frame cut a key hint, not the counter");
 });

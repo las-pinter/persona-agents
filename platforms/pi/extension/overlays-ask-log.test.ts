@@ -4,7 +4,7 @@
  * `askLogViewRows` is pure, so these tests feed it rows and numbers directly.
  * The mount, the keys, and the mode gate live in `tree-ui.test.ts`.
  *
- * Run: node --experimental-strip-types --test platforms/pi/extension/ask-log-view.test.ts
+ * Run: node --experimental-strip-types --test platforms/pi/extension/overlays-ask-log.test.ts
  */
 
 import { describe, test } from "node:test";
