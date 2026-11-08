@@ -7,7 +7,7 @@
  * and the render request. `sidebar.test.ts` covers the pure planner alone.
  * The same file also covers the `/agents-tree` overlay runtime path: the mount
  * options, the marked row, the close keys, the selection move, and the widget
- * clear on dispose.
+ * clear on dispose. The `/ask-log` path adds the page keys and the view cap.
  *
  * Fakes only: no real TTY, no real timers left running, and no write to the
  * real `~/.pi/agent/persona-agents-sidebar.json` (each test uses a temp path).
@@ -27,7 +27,7 @@ import {
 	SIDEBAR_DEFAULT_WIDTH,
 	getSidebarCompositor,
 } from "./sidebar.ts";
-import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
+import { MAX_ASK_VIEW_ROWS, bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, type RunEvent } from "./tree-log.ts";
 import {
@@ -585,10 +585,10 @@ describe("ask log overlay runtime path", () => {
 
 		const lines = component.render(80);
 
-		assert.match(lines[0], /ASK LOG — 2 events · newest first/, "the header carries the ring count");
+		assert.equal(lines[0].trimEnd(), "  ASK LOG — 2 events · newest first", "the header carries the ring count on the row indent");
 		assert.match(lines[2], /10:00:02 implementer\/bash/, "the newest row paints first");
 		assert.match(lines[3], /10:00:01 implementer\/bash/, "the older row paints second");
-		assert.match(askNav(lines), /\(line 1\/2\)$/, "the nav line starts at the first line");
+		assert.match(askNav(lines), /^\(line 1\/2\) ·/, "the nav line starts at the first line");
 	});
 
 	test("Down moves one wrapped line, so a wrapped row takes two presses", async () => {
@@ -631,11 +631,11 @@ describe("ask log overlay runtime path", () => {
 		const { component, handleInput } = await mountAskLog(harness);
 
 		const top = component.render(100);
-		assert.match(askNav(top), /\(line 1\/8\)$/, "the frame opens on the first line");
+		assert.match(askNav(top), /^\(line 1\/8\) ·/, "the frame opens on the first line");
 
 		handleInput("G");
 		const end = component.render(100);
-		assert.match(askNav(end), /\(line 4\/8\)$/, "G stops at the last full page");
+		assert.match(askNav(end), /^\(line 4\/8\) ·/, "G stops at the last full page");
 		assert.match(
 			end.at(-3) ?? "",
 			/10:00:01 implementer\/bash/,
@@ -644,8 +644,49 @@ describe("ask log overlay runtime path", () => {
 
 		handleInput("g");
 		const back = component.render(100);
-		assert.match(askNav(back), /\(line 1\/8\)$/, "g returns to the first line");
+		assert.match(askNav(back), /^\(line 1\/8\) ·/, "g returns to the first line");
 		assert.match(back[2], /10:00:08 implementer\/bash/, "the newest row leads again at g");
+	});
+
+	test("PgDn twice stops at the last full page and PgUp at the top stays on line 1", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 8 });
+		// Five view rows against eight body rows, so three rows of travel remain.
+		harness.terminal.rows = 10;
+		const { component, handleInput } = await mountAskLog(harness);
+
+		const top = component.render(100);
+		assert.match(askNav(top), /^\(line 1\/8\) ·/, "the frame opens on the first line");
+
+		handleInput("\x1b[5~");
+		const atTop = component.render(100);
+		assert.match(askNav(atTop), /^\(line 1\/8\) ·/, "PgUp at the first page keeps line 1");
+		assert.equal(atTop[2], top[2], "PgUp at the first page did not move the first body line");
+
+		// The page step is fifteen, past the three rows of travel, so it clamps.
+		handleInput("\x1b[6~");
+		const once = component.render(100);
+		assert.match(askNav(once), /^\(line 4\/8\) ·/, "one PgDn stops at the last full page");
+
+		handleInput("\x1b[6~");
+		const twice = component.render(100);
+		assert.match(askNav(twice), /^\(line 4\/8\) ·/, "a second PgDn stays at the last full page");
+		assert.deepEqual(twice, once, "a second PgDn did not scroll past the last page");
+	});
+
+	test("a terminal above the view cap still paints a frame of the cap height", async () => {
+		const harness = setup({ enabled: true, log: true, asks: 50 });
+		// Two hundred rows is twice the cap, so only the cap can bound the frame.
+		harness.terminal.rows = 200;
+		const { component } = await mountAskLog(harness);
+
+		// A narrow width wraps each row, so the body is taller than the cap.
+		const lines = component.render(20);
+		const bodyRows = lines.length - 4;
+		const nav = lines.at(-1) ?? "";
+		const counter = /^\(line 1\/(\d+)\)/.exec(nav);
+		assert.ok(counter, `the nav line leads with the page counter: ${JSON.stringify(nav)}`);
+		assert.ok(Number(counter[1]) > MAX_ASK_VIEW_ROWS, "the wrapped body is taller than the view cap");
+		assert.equal(bodyRows, MAX_ASK_VIEW_ROWS - 5, "the view height stops at the cap minus the frame rows");
 	});
 
 	test("q, Q, and Esc each close the overlay once", async () => {
@@ -687,7 +728,7 @@ describe("ask log overlay runtime path", () => {
 			lines.some((line) => line.trimEnd() === "(no child asks)"),
 			"the empty ring paints the placeholder",
 		);
-		assert.match(askNav(lines), /\(line 1\/1\)$/, "the nav line still paints");
+		assert.match(askNav(lines), /^\(line 1\/1\) ·/, "the nav line still paints");
 		assert.equal(
 			lines.filter((line) => line.trimEnd() === "─".repeat(96)).length,
 			2,

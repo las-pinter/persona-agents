@@ -231,6 +231,29 @@ test("the tally counts a record with no ask id once", () => {
 	assert.deepEqual(tally.latest(), { tool: "bash", at: AT }, "the fallback record stamps the newest");
 });
 
+test("the tally counts two legacy records with no id as two", () => {
+	// Two older log lines carry no id, so a constant fallback key would fold them.
+	const legacyAt = (at: string, tool: string): RunEvent =>
+		({
+			v: 1,
+			type: "ask",
+			runId: CHILD_A,
+			parentRunId: null,
+			depth: 1,
+			agent: "implementer",
+			persona: null,
+			status: "idle",
+			at,
+			ask: { tool, role: "implementer", verdict: "allow", phase: "settle", flags: "" },
+		}) as unknown as RunEvent;
+	const tally = createAskTally();
+	tally.observe(legacyAt(AT, "bash"));
+	tally.observe(legacyAt("2026-01-01T00:00:01.000Z", "read"));
+	assert.deepEqual(tally.usage(), { bash: 1, read: 1 }, "two legacy records count two times");
+	assert.equal(tally.usage().bash + tally.usage().read, 2, "the tally holds two asks");
+	assert.deepEqual(tally.latest(), { tool: "read", at: "2026-01-01T00:00:01.000Z" });
+});
+
 test("the ask log keeps the newest 50 events and ignores a settle", () => {
 	const { dir, logPath } = tempLog();
 	const restore = useLog(logPath);

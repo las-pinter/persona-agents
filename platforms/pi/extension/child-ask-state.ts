@@ -145,6 +145,19 @@ export function clearAllSurfaces(
 	}
 }
 
+/**
+ * The ask counter per session. Two asks in the same millisecond share a stamp,
+ * so the counter keeps their ids apart and the log folds them as two asks.
+ */
+const askSeqBySession = new Map<string, number>();
+
+/** One ask id: the session, the millisecond stamp, and the session counter. */
+function mintAskId(sessionId: string): string {
+	const seq = (askSeqBySession.get(sessionId) ?? 0) + 1;
+	askSeqBySession.set(sessionId, seq);
+	return `${sessionId}#${new Date().toISOString()}#${seq}`;
+}
+
 /** Build one request, with the fields the gate supplied and a fresh cancel. */
 export function newRequest(
 	input: ChildAskInput,
@@ -155,7 +168,7 @@ export function newRequest(
 		role: input.role,
 		toolName: input.toolName,
 		// One id per request, so its arrival and its verdict share a key.
-		askId: `${input.sessionId}#${new Date().toISOString()}`,
+		askId: mintAskId(input.sessionId),
 		key: input.key,
 		model: input.model,
 		remember: input.remember,

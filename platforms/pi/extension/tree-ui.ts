@@ -503,11 +503,12 @@ export function askLogViewRows(
 	// The tail must stay in view, so the offset stops at the last full page.
 	const start = Math.min(Math.max(0, Math.floor(offset) || 0), Math.max(0, body.length - height));
 	const lines = [
-		` ASK LOG — ${list.length} events · newest first`,
+		`${ASK_ROW_INDENT}ASK LOG — ${list.length} events · newest first`,
 		askRule(width),
 		...body.slice(start, start + height),
 		askRule(width),
-		`↑/↓/PgUp/PgDn scroll · g/G top/end · q/Esc close (line ${start + 1}/${body.length})`,
+		// The counter leads, so a narrow terminal cuts a key hint and not the position.
+		`(line ${start + 1}/${body.length}) · ↑/↓/PgUp/PgDn scroll · g/G top/end · q/Esc close`,
 	];
 	return lines.map((line) => clipLine(line, width));
 }
