@@ -787,26 +787,25 @@ describe("doctrine: the journal write script", () => {
 		repoRoot, "content", "skills", "common", "journal-management-generic", "scripts", "journal-write.sh",
 	);
 	const home = "/home/u";
-	const block = `${home}/agent-notes/orchestrator/journals/incoming/1.md`;
-	const append = `bash ${script} append --agent orchestrator --section persona-agents --block ${block}`;
+	const session = "20261108T201812123456789";
+	const token = `${session}-4242`;
+	const hold = `bash ${script} hold --agent orchestrator --session ${session} --home ${home}`;
+	const release = `bash ${script} release --agent orchestrator --session ${session} --token ${token} --home ${home}`;
 	const reason = (profession: string, command: string): string =>
 		decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
 
-	test("J1 an append from the installed skill path is allowed", () => {
-		assert.equal(bash("orchestrator", append), "allow");
-		assert.match(reason("orchestrator", append), /journal write script runs without a prompt/);
+	test("J1 a hold from the installed skill path is allowed", () => {
+		assert.equal(bash("orchestrator", hold), "allow");
+		assert.match(reason("orchestrator", hold), /journal write script runs without a prompt/);
 	});
 
-	test("J2 check and replace are allowed", () => {
-		const check = `bash ${script} check --agent orchestrator --level weekly --name 2026-W43 --show`;
-		const replace = `bash ${script} replace --agent orchestrator --level weekly --name 2026-W43 --block ${block} --expect new`;
-		assert.equal(bash("orchestrator", check), "allow");
-		assert.equal(bash("orchestrator", replace), "allow");
+	test("J2 a release is allowed", () => {
+		assert.equal(bash("orchestrator", release), "allow");
 	});
 
 	test("J3 the hook process prints an allow", () => {
 		const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", doctrineScript], {
-			input: JSON.stringify({ agent_type: "persona-agents:orchestrator", tool_name: "Bash", tool_input: { command: append } }),
+			input: JSON.stringify({ agent_type: "persona-agents:orchestrator", tool_name: "Bash", tool_input: { command: hold } }),
 			env: { ...process.env, CLAUDE_PLUGIN_ROOT: repoRoot },
 			encoding: "utf8",
 		});
@@ -825,11 +824,11 @@ describe("doctrine: the journal write script", () => {
 			const alias = path.join(tmp, "journal-write.sh");
 			fs.symlinkSync(script, alias);
 			const refused = [
-				"bash /tmp/journal-write.sh append",
-				`bash ${path.join(copyDir, "journal-write.sh")} append`,
-				`bash ${alias} append`,
-				`bash ${path.join(repoRoot, "install.sh")} append`,
-				"bash content/skills/common/journal-management-generic/scripts/journal-write.sh append",
+				"bash /tmp/journal-write.sh hold",
+				`bash ${path.join(copyDir, "journal-write.sh")} hold`,
+				`bash ${alias} hold`,
+				`bash ${path.join(repoRoot, "install.sh")} hold`,
+				"bash content/skills/common/journal-management-generic/scripts/journal-write.sh hold",
 				`bash ${script}`,
 				`bash ${script} --help`,
 				`bash ${script} status`,
@@ -841,43 +840,51 @@ describe("doctrine: the journal write script", () => {
 	});
 
 	test("J5 a missing flag value is left to the script", () => {
-		assert.equal(bash("orchestrator", `bash ${script} append --agent`), "allow");
+		assert.equal(bash("orchestrator", `bash ${script} hold --agent`), "allow");
 	});
 
 	test("J6 a second segment cancels the allow", () => {
 		const cancelled = [
-			`bash ${script} append --block x; rm -rf y`,
-			`bash ${script} append --block x && git status`,
-			`bash ${script} append --block x | tee log`,
-			`bash ${script} append --block x $(date)`,
+			`bash ${script} hold --agent x; rm -rf y`,
+			`bash ${script} hold --agent x && git status`,
+			`bash ${script} hold --agent x | tee log`,
+			`bash ${script} hold --agent x $(date)`,
 			// A newline, a backtick, a process substitution, and a heredoc each lose the allow.
-			`bash ${script} append --block x\nrm -rf y`,
-			`bash ${script} append --block x \`date\``,
-			`bash ${script} append --block x <(date)`,
-			`bash ${script} append --block x <<'EOF'\nhello\nEOF`,
-			`cd /repo && ${append}`,
+			`bash ${script} hold --agent x\nrm -rf y`,
+			`bash ${script} hold --agent x \`date\``,
+			`bash ${script} hold --agent x <(date)`,
+			`bash ${script} hold --agent x <<'EOF'\nhello\nEOF`,
+			`cd /repo && ${hold}`,
 		];
 		for (const command of cancelled) assert.equal(bash("orchestrator", command), "none", command);
 	});
 
 	test("J7 the other six professions stay ungated", () => {
 		for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
-			assert.equal(bash(profession, append), "none", profession);
+			assert.equal(bash(profession, hold), "none", profession);
 		}
 	});
 
 	test("J8 no wrapper and no redirect is ever allowed", () => {
 		const wrapped = [
-			`bash -c '${append}'`,
-			`sudo ${append}`,
-			`env ${append}`,
-			`/tmp/bash ${script} append --agent orchestrator --block x`,
-			`bash ${script} append --block x > /tmp/out`,
+			`bash -c '${hold}'`,
+			`sudo ${hold}`,
+			`env ${hold}`,
+			`/tmp/bash ${script} hold --agent orchestrator`,
+			`bash ${script} hold --agent orchestrator > /tmp/out`,
 		];
 		for (const command of wrapped) assert.notEqual(bash("orchestrator", command), "allow", command);
 	});
 
 	test("J9 a stronger verdict beats the allow", () => {
-		assert.equal(bash("orchestrator", `${append} && git push`), "ask");
+		assert.equal(bash("orchestrator", `${hold} && git push`), "ask");
+	});
+
+	test("J10 the removed subcommands get no allow", () => {
+		for (const removed of ["append", "check", "replace"]) {
+			assert.equal(bash("orchestrator", `bash ${script} ${removed} --agent orchestrator`), "none", removed);
+		}
+		assert.equal(bash("orchestrator", hold), "allow");
+		assert.equal(bash("orchestrator", release), "allow");
 	});
 });

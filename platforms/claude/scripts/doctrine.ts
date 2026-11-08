@@ -16,7 +16,7 @@
 //                     orchestrator: ask; every other agent: deny
 //   cp, mv, rsync     orchestrator and implementer: ask; the rest: deny
 //   bash <plugin root>/content/skills/common/journal-management-generic/
-//   scripts/journal-write.sh <append|check|replace> ...
+//   scripts/journal-write.sh <hold|release> ...
 //                     orchestrator: allow; every other agent: no decision
 //
 // Allow is given only when every segment of the command is a plain history
@@ -384,7 +384,7 @@ const JOURNAL_SCRIPT = resolve(
 	"..", "..", "..",
 	"content", "skills", "common", "journal-management-generic", "scripts", "journal-write.sh",
 );
-const JOURNAL_SUBCOMMANDS = new Set(["append", "check", "replace"]);
+const JOURNAL_SUBCOMMANDS = new Set(["hold", "release"]);
 
 /** Split one segment into shell words, removing quotes. */
 export function shellWords(segment: string): string[] {
@@ -537,7 +537,7 @@ function segmentGates(segment: string, profession: string, depth: number): Hit[]
 }
 
 /**
- * True only for `bash <installed script> <append|check|replace> ...` run by the
+ * True only for `bash <installed script> <hold|release> ...` run by the
  * orchestrator. The hook checks the path and the subcommand; the script owns
  * every flag value and exits 1 or 2 with no write.
  */

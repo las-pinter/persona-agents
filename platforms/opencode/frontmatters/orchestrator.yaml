@@ -108,7 +108,7 @@ permissions:
     resource: "bash ~/.config/opencode/skills/common/journal-management-generic/scripts/journal-write.sh *"
     effect: allow
   # The trailing star also matches a separator tail, so a call such as
-  # `journal-write.sh append; cp x y` would match the allow. The cp, mv, and
+  # `journal-write.sh hold; cp x y` would match the allow. The cp, mv, and
   # rsync asks are anchored at the command start and cannot see a tail, and an
   # unmatched tail command (rm) has no later entry, so the allow would run it.
   # These asks sit after the allow because the last match wins.
@@ -134,8 +134,8 @@ permissions:
   # call could write outside the declared agent folder. The ask sits after the
   # allow entry because the last match wins.
   # --agent needs no ask. The value must match ^[a-z][a-z0-9-]*$. It selects a
-  # sibling journal folder only. The block must sit in that folder's incoming
-  # path and carry that agent's stamp, so orchestrator text cannot cross.
+  # sibling lock folder only. The call takes or releases one lock file there and
+  # writes no journal text, so orchestrator text cannot cross.
   - action: shell
     resource: "*journal-write.sh*--home*"
     effect: ask
