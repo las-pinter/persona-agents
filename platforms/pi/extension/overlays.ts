@@ -25,7 +25,7 @@ import { findNode, flattenTree, type TreeNode } from "./tree-model.ts";
 
 /** The `/ask-log` view height clamp, in view rows. */
 export const MAX_ASK_VIEW_ROWS = 100;
-/** Four painted chrome rows plus one spare, so the last line never wraps. */
+/** Four painted chrome rows plus one spare; a frame on the last terminal row scrolls the screen. */
 export const ASK_FRAME_ROWS = 5;
 /** The indentation every ask row carries. */
 const ASK_ROW_INDENT = "  ";

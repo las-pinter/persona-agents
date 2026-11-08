@@ -28,10 +28,14 @@ import { bindTreeSidebar, registerTreeUi } from "./tree-ui.ts";
 
 /**
  * The outer pi session exports PI_AGENT_TREE_LOG. Its live tree log would fill
- * the panel and hide the width rule under test. Save the value so each test can
- * run against an empty tree and then restore the outer environment.
+ * the panel and hide the width rule under test. `setup` saves the value for its
+ * own cycle, so a test runs against an empty tree and `cleanupHarness` restores
+ * the value that cycle saw. A second importer in the same process gets its own
+ * save, because the flag clears when a cycle restores.
  */
-const ORIGINAL_TREE_LOG = process.env[ENV_TREE_LOG];
+let ORIGINAL_TREE_LOG: string | undefined;
+/** True while the current cycle holds a saved tree log value. */
+let treeLogSaved = false;
 
 /** Raw terminal columns before the compositor narrows them. */
 export const RAW_COLUMNS = 200;
@@ -140,6 +144,11 @@ export function setup(config: { enabled?: boolean; width?: number; log?: boolean
 	const configPath = join(dir, "persona-agents-sidebar.json");
 	writeFileSync(configPath, JSON.stringify(config));
 	process.env[SIDEBAR_CONFIG_ENV] = configPath;
+	// Save the tree log once per cycle; a second `setup` keeps the same baseline.
+	if (!treeLogSaved) {
+		treeLogSaved = true;
+		ORIGINAL_TREE_LOG = process.env[ENV_TREE_LOG];
+	}
 	// Force an empty tree so the test never reads the live tree log.
 	delete process.env[ENV_TREE_LOG];
 	if (config.log) {
@@ -199,6 +208,8 @@ export function setup(config: { enabled?: boolean; width?: number; log?: boolean
 		},
 	};
 
+	// SAFETY: the fake satisfies only the members the sidebar glue reads; the
+	// real type carries far more, so the cast states that narrow contract.
 	const ctx = {
 		mode: "tui",
 		cwd: "/tmp",
@@ -210,6 +221,8 @@ export function setup(config: { enabled?: boolean; width?: number; log?: boolean
 		sessionManager: { getBranch: () => [] },
 	} as unknown as ExtensionContext;
 
+	// SAFETY: the fake registers commands and events only; the real type carries
+	// the whole extension surface, so the cast states that narrow contract.
 	const pi = {
 		registerCommand(name: string, options: { handler: SidebarHandler }): void {
 			commands.set(name, options.handler);
@@ -242,4 +255,5 @@ export function cleanupHarness(): void {
 	delete process.env[SIDEBAR_CONFIG_ENV];
 	if (ORIGINAL_TREE_LOG === undefined) delete process.env[ENV_TREE_LOG];
 	else process.env[ENV_TREE_LOG] = ORIGINAL_TREE_LOG;
+	treeLogSaved = false;
 }
