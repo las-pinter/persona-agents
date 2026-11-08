@@ -2,7 +2,7 @@
  * LOG panel tests: the five fixed lines, the wrap rule, the cut, and the slot.
  *
  * Runs under plain Node (type stripping):
- *   npm test -- platforms/pi/extension/sidebar-render-asklog.test.ts
+ *   npm test -- platforms/pi/extension/sidebar-render-ask-log.test.ts
  */
 
 import { test } from "node:test";

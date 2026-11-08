@@ -17,107 +17,28 @@
 
 import { afterEach, describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { readFileSync, writeFileSync } from "node:fs";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
-import {
-	SIDEBAR_CONFIG_ENV,
-	SIDEBAR_DEFAULT_WIDTH,
-	getSidebarCompositor,
-} from "./sidebar.ts";
+import { SIDEBAR_DEFAULT_WIDTH, getSidebarCompositor } from "./sidebar.ts";
 import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS, TreeOverlayComponent } from "./overlays.ts";
-import { bindTreeSidebar, disposeTreeSidebar, registerTreeUi } from "./tree-ui.ts";
+import { disposeTreeSidebar } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { appendEvent, type RunEvent } from "./tree-log.ts";
+import { appendEvent } from "./tree-log.ts";
 import { makeNode, makeSnapshot, theme as fixtureTheme } from "./sidebar-render-fixtures.ts";
+import { paintCalls, resetPaints } from "./sidebar-terminal-fixtures.ts";
 import {
-	makeTerminal,
-	makeTui,
-	paintCalls,
-	resetPaints,
-	type FakeTerminal,
-	type FakeTui,
-} from "./sidebar-terminal-fixtures.ts";
+	RAW_COLUMNS,
+	cleanupHarness,
+	setup,
+	type Harness,
+	type OverlayMount,
+} from "./tree-ui-fixtures.ts";
 
-/**
- * The outer pi session exports PI_AGENT_TREE_LOG. Its live tree log would fill
- * the panel and hide the width rule under test. Save the value so each test can
- * run against an empty tree and then restore the outer environment.
- */
-const ORIGINAL_TREE_LOG = process.env[ENV_TREE_LOG];
-
-/** Raw terminal columns before the compositor narrows them. */
-const RAW_COLUMNS = 200;
-/** Terminal rows; drives the panel height budget. */
-const RAW_ROWS = 30;
 /** Section-rule glyph the pure renderer repeats to the panel width. */
 const SECTION_RULE_CHAR = "─";
 /** Selection marker glyph the tree overlay puts on the selected row. */
 const SELECTION_MARKER = "▶";
-
-/** One recorded `ctx.ui.notify` call. */
-interface Notification {
-	message: string;
-	level: string | undefined;
-}
-
-/** The real command handler shape the fake pi captures. */
-type SidebarHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
-
-/** The overlay options a tree panel passes to `ctx.ui.custom`. */
-interface CustomOptions {
-	overlay?: boolean;
-	overlayOptions?: {
-		width?: string;
-		maxHeight?: string;
-		anchor?: string;
-		margin?: { top?: number };
-	};
-}
-
-/** One recorded `ctx.ui.custom` call: the options, the done callback, the mount. */
-interface OverlayMount {
-	options: CustomOptions | undefined;
-	/** Each value the factory's `done` callback received, in order. */
-	doneValues: unknown[];
-	component: Component | undefined;
-}
-
-/** The fakes the last `ctx.ui.custom` call mounted. */
-interface MountedOverlay {
-	/** The component the last call mounted. */
-	component: Component | undefined;
-	/** Every `custom` call, in mount order. */
-	calls: OverlayMount[];
-}
-
-/** One recorded `ctx.ui.setWidget` call. */
-interface WidgetCall {
-	key: string;
-	content: unknown;
-}
-
-/** A bound glue instance and the fakes it was bound to. */
-interface Harness {
-	configPath: string;
-	terminal: FakeTerminal;
-	tui: FakeTui;
-	notifications: Notification[];
-	handler: SidebarHandler;
-	/** The `/agent-inspect` handler. */
-	inspect: SidebarHandler;
-	/** The `/agents-tree` handler. */
-	tree: SidebarHandler;
-	/** The `/ask-log` handler. */
-	askLog: SidebarHandler;
-	/** Set by the fake `ctx.ui.custom`. */
-	overlay: MountedOverlay;
-	/** Every `ctx.ui.setWidget` call, in order. */
-	widgets: WidgetCall[];
-	ctx: ExtensionContext;
-}
 
 /** The zero-based row indexes that carry the tree selection marker. */
 function markedRows(lines: string[]): number[] {
@@ -135,149 +56,10 @@ function treeRowIcon(lines: string[]): string {
 	return icon;
 }
 
-/** The temp dir of the running test, removed in `afterEach`. */
-let currentDir: string | null = null;
-
 afterEach(() => {
 	disposeTreeSidebar();
-	if (currentDir !== null) rmSync(currentDir, { recursive: true, force: true });
-	currentDir = null;
-	delete process.env[SIDEBAR_CONFIG_ENV];
-	if (ORIGINAL_TREE_LOG === undefined) delete process.env[ENV_TREE_LOG];
-	else process.env[ENV_TREE_LOG] = ORIGINAL_TREE_LOG;
+	cleanupHarness();
 });
-
-/**
- * One arrival ask event, written into the shared log. The ring keeps an
- * arrival, so the snapshot carries this row.
- */
-function askEvent(index: number, flags = "waiting=0 shown=none place=slot"): RunEvent {
-	const clock = `10:00:${String(index + 1).padStart(2, "0")}`;
-	return {
-		v: 1,
-		type: "ask",
-		runId: "run-test-1",
-		parentRunId: null,
-		depth: 0,
-		agent: "implementer",
-		persona: null,
-		status: "idle",
-		at: `2026-11-07T${clock}.000Z`,
-		ask: {
-			tool: "bash",
-			role: "implementer",
-			verdict: "pending",
-			askId: `root#${clock}`,
-			phase: "arrival",
-			flags,
-		},
-	};
-}
-
-/**
- * Bind the real glue to fakes. Writes the config file first so the resolved
- * width is deterministic, then registers the commands and binds the TUI path.
- */
-function setup(config: { enabled?: boolean; width?: number; log?: boolean; asks?: number }): Harness {
-	const dir = mkdtempSync(join(tmpdir(), "pa-tree-ui-"));
-	currentDir = dir;
-	const configPath = join(dir, "persona-agents-sidebar.json");
-	writeFileSync(configPath, JSON.stringify(config));
-	process.env[SIDEBAR_CONFIG_ENV] = configPath;
-	// Force an empty tree so the test never reads the live tree log.
-	delete process.env[ENV_TREE_LOG];
-	if (config.log) {
-		const logPath = join(dir, "tree.log");
-		appendEvent(logPath, {
-			v: 1,
-			type: "start",
-			runId: "run-test-1",
-			parentRunId: null,
-			depth: 0,
-			agent: "implementer",
-			persona: null,
-			status: "running",
-			at: new Date().toISOString(),
-			task: "build it",
-		});
-		for (let index = 0; index < (config.asks ?? 0); index += 1) appendEvent(logPath, askEvent(index));
-		process.env[ENV_TREE_LOG] = logPath;
-	}
-
-	const terminal = makeTerminal(RAW_COLUMNS, RAW_ROWS);
-	const tui = makeTui(terminal);
-
-	const notifications: Notification[] = [];
-	const commands = new Map<string, SidebarHandler>();
-	const overlay: MountedOverlay = { component: undefined, calls: [] };
-	const widgets: WidgetCall[] = [];
-	const identityTheme = {
-		bold: (text: string): string => text,
-		dim: (text: string): string => text,
-	};
-
-	const ui = {
-		// The factory hands over the tui; capture it by invoking it.
-		setWidget(key: string, content: unknown, _options?: unknown): void {
-			widgets.push({ key, content });
-			if (typeof content === "function") {
-				(content as (tuiArg: unknown, themeArg: unknown) => unknown)(tui, identityTheme);
-			}
-		},
-		notify(message: string, level?: string): void {
-			notifications.push({ message, level });
-		},
-		// The handler mounts through `custom`; capture the component it returns.
-		custom(
-			factory: (tui: unknown, theme: unknown, keys: unknown, done: (value: unknown) => void) => unknown,
-			options?: CustomOptions,
-		): Promise<void> {
-			const mount: OverlayMount = { options, doneValues: [], component: undefined };
-			overlay.calls.push(mount);
-			const done = (value: unknown): void => {
-				mount.doneValues.push(value);
-			};
-			mount.component = factory(tui, identityTheme, {}, done) as Component;
-			overlay.component = mount.component;
-			return Promise.resolve();
-		},
-	};
-
-	const ctx = {
-		mode: "tui",
-		cwd: "/tmp",
-		hasUI: true,
-		ui,
-		model: { id: "test-model" },
-		thinkingLevel: null,
-		getContextUsage: () => ({ tokens: null, contextWindow: 128000, percent: null }),
-		sessionManager: { getBranch: () => [] },
-	} as unknown as ExtensionContext;
-
-	const pi = {
-		registerCommand(name: string, options: { handler: SidebarHandler }): void {
-			commands.set(name, options.handler);
-		},
-		on(_event: string, _handler: unknown): () => void {
-			return () => {};
-		},
-		exec: async (): Promise<{ code: number; stdout: string }> => ({ code: 0, stdout: "" }),
-		events: { on: (_channel: string, _handler: unknown): (() => void) => () => {} },
-	} as unknown as ExtensionAPI;
-
-	registerTreeUi(pi);
-	bindTreeSidebar(ctx);
-
-	const handler = commands.get("sidebar");
-	assert.ok(handler, "the /sidebar command was not registered");
-	const inspect = commands.get("agent-inspect");
-	assert.ok(inspect, "the /agent-inspect command was not registered");
-	const tree = commands.get("agents-tree");
-	assert.ok(tree, "the /agents-tree command was not registered");
-	const askLog = commands.get("ask-log");
-	assert.ok(askLog, "the /ask-log command was not registered");
-	return { configPath, terminal, tui, notifications, handler, inspect, tree, askLog, overlay, widgets, ctx };
-}
 
 // --- /sidebar width wiring ---------------------------------------------------
 test("a valid /sidebar width persists, reinstalls the compositor, and renders", async () => {

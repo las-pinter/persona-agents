@@ -13,28 +13,22 @@
  * process's data only. The tree log is the only cross-process source.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import {
-	type ExtensionAPI,
-	type ExtensionContext,
-	getAgentDir,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createAskLog, createAskTally, type AskLog, type AskTally } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
 import { readEvents } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
+import { studySlug } from "./study-status.ts";
 import {
-	parseStatusFile,
-	pickActiveStudy,
-	sortBriefNames,
-	studySlug,
-	type StudyEntry,
-	type StudyFields,
-} from "./study-status.ts";
+	isSafeName,
+	readActiveStudy,
+	readMcpJsonServers,
+	resolveMcpJsonPath,
+} from "./sidebar-sources.ts";
 import type {
 	McpServerStatus,
 	SessionSnapshot,
@@ -163,90 +157,6 @@ function emptySnapshot(): SidebarSnapshot {
 		status: emptyStatus(),
 		askLog: [],
 	};
-}
-
-/** The agent directory's `mcp.json`, guarded against a missing helper. */
-function resolveMcpJsonPath(): string {
-	try {
-		return join(getAgentDir(), "mcp.json");
-	} catch {
-		return join(homedir(), ".pi", "agent", "mcp.json");
-	}
-}
-
-/** Server names from `mcp.json`. A missing or bad file gives `[]`. */
-function readMcpJsonServers(filePath: string): string[] {
-	try {
-		const raw = readFileSync(filePath, "utf8");
-		const parsed: unknown = JSON.parse(raw);
-		if (typeof parsed !== "object" || parsed === null) return [];
-		const servers = (parsed as { mcpServers?: unknown }).mcpServers;
-		if (typeof servers !== "object" || servers === null) return [];
-		return Object.keys(servers as Record<string, unknown>);
-	} catch {
-		/* missing or malformed mcp.json is not an error */
-		return [];
-	}
-}
-
-/** A name that cannot escape its parent folder: no separator and no dot word. */
-function isSafeName(name: string): boolean {
-	return name.length > 0 && name !== "." && name !== ".." && !/[\\/]/.test(name);
-}
-
-/** Read and parse one `status.md`. A missing or malformed file gives `null`. */
-function readStatusFields(filePath: string): StudyFields | null {
-	try {
-		return parseStatusFile(readFileSync(filePath, "utf8"));
-	} catch {
-		/* a missing status.md is not an error */
-		return null;
-	}
-}
-
-/** One study folder's brief names, sorted. A missing folder gives `[]`. */
-function readBriefNames(briefsDir: string): string[] {
-	try {
-		const names = readdirSync(briefsDir).filter(
-			(name) => isSafeName(name) && name.endsWith(".md"),
-		);
-		return sortBriefNames(names);
-	} catch {
-		/* a missing briefs folder is not an error */
-		return [];
-	}
-}
-
-/** One active study and its brief names, read from the notes tree. */
-export interface ActiveStudyRead {
-	study: StudyEntry | null;
-	briefs: string[];
-}
-
-/**
- * Read the studies tree under `studiesRoot`. `isSafeName` keeps every joined
- * name inside the tree; a symbolic link inside the tree is still followed. A
- * missing tree, a missing `status.md`, or a throwing read gives an empty read.
- */
-export function readActiveStudy(studiesRoot: string): ActiveStudyRead {
-	const entries: StudyEntry[] = [];
-	try {
-		const names = readdirSync(studiesRoot, { withFileTypes: true })
-			.filter((dirent) => dirent.isDirectory() && isSafeName(dirent.name))
-			.map((dirent) => dirent.name)
-			.sort();
-		for (const name of names) {
-			entries.push({
-				folder: name,
-				fields: readStatusFields(join(studiesRoot, name, "status.md")),
-			});
-		}
-	} catch {
-		return { study: null, briefs: [] };
-	}
-	const study = pickActiveStudy(entries);
-	if (!study) return { study: null, briefs: [] };
-	return { study, briefs: readBriefNames(join(studiesRoot, study.folder, "briefs")) };
 }
 
 /** One row parsed from `git status --porcelain`. */

@@ -25,7 +25,7 @@ import { findNode, flattenTree, type TreeNode } from "./tree-model.ts";
 
 /** The `/ask-log` view height clamp, in view rows. */
 export const MAX_ASK_VIEW_ROWS = 100;
-/** The chrome allowance subtracted from the terminal height. */
+/** Four painted chrome rows plus one spare, so the last line never wraps. */
 export const ASK_FRAME_ROWS = 5;
 /** The indentation every ask row carries. */
 const ASK_ROW_INDENT = "  ";
@@ -207,7 +207,7 @@ export function askLogViewRows(
 	return lines.map((line) => clipLine(line, width));
 }
 
-/** The view height for the terminal: the chrome rows are kept off the total. */
+/** Terminal height minus the frame budget: four painted rows and one spare row. */
 function askViewHeight(tui: TUI): number {
 	let rows = 24;
 	try {
