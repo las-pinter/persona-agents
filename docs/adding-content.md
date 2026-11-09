@@ -137,8 +137,7 @@ The rules that apply:
 - The last rule names the themed subagent pattern: `goblin-*`, `wh40k-*`,
   `wh40kOrk-*`, `pub-*`, `caveman-*`, `cyberpunk-*`, `catcrew-*`, or
   `fantasy-*`.
-- Do not write journal protocols in a persona. The orchestrator
-  `journal-management` skill owns them.
+- Do not write journal protocols in a persona. The journal skills own them.
 - Match the voice to the theme.
 
 To test a persona change, generate the agent. The OpenCode file must hold one
