@@ -73,7 +73,8 @@ directory path.
 
 The `journals/` folder also holds `.journal-write.lock`. The script creates
 that file. The script removes it on release. The script keeps the last broken
-record in `.journal-write.prev`.
+record in `.journal-write.prev` and a failed restore's claim in
+`.journal-write.claim.*`.
 
 ---
 
@@ -334,7 +335,7 @@ had it).
 | 0 | hold, release | success |
 | 1 | hold, release | usage error: an unknown subcommand, an unknown flag, a missing value, a repeated flag, a flag that does not apply to the subcommand, a positional argument, or a missing required flag |
 | 2 | hold, release | bad input: a value starts with a dash, a value fails its pattern, or no home folder was found |
-| 3 | hold, release | IO failure: lock folder create, record read, record write, claim restore |
+| 3 | hold, release | IO failure: lock folder create, record read, record write, claim restore, release claim fault |
 | 4 | hold | the wait exceeded `--timeout`, a refresh whose create lost the name, or an incomplete record found while acquiring |
 | 5 | release | the lock file is gone or holds an incomplete record, or the record does not match your agent, session, and token |
 

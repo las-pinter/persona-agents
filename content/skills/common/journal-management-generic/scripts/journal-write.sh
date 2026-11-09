@@ -14,12 +14,14 @@ readonly TIMEOUT_LIMIT=120
 readonly AGENT_RE='^[a-z][a-z0-9-]*$'
 readonly SESSION_RE='^[A-Za-z0-9._-]{1,64}$'
 readonly TOKEN_RE='^[A-Za-z0-9._-]{1,80}$'
+# Internal status: held_fail made the lock and printed its one hold block.
+readonly HELD_CREATED=10
 
 # The lock path is known only after the parse, so a failure line names it when
 # the slot is set. A usage error runs before the path exists.
 LOCK=""
-# The record file and the claim file go away on every exit, so a killed call
-# leaves no stray file in the journals folder.
+# The record and claim temp files go away on exit, except a claim kept when its
+# restore copy fails; that claim is then the last record copy.
 TMP=""
 CLAIM=""
 
@@ -57,9 +59,11 @@ EOF
 }
 
 # One line per failure keeps the cause readable for a caller that reads stderr.
+# The third argument names the path a kept record lives at; it defaults to the lock.
 fail() {
     local line="Error: $2"
-    if [[ -n "$LOCK" ]]; then line="$line: $LOCK"; fi
+    local path="${3-$LOCK}"
+    if [[ -n "$path" ]]; then line="$line: $path"; fi
     printf '%s\n' "$line" >&2
     exit "$1"
 }
@@ -179,36 +183,46 @@ drop_claim() {
 
 # A claimed record goes back to the lock name only when no newer lock took it.
 # The caller did not make that record, so a failed link never removes it: the
-# bytes go to the previous-record file and the claim file stays on disk.
+# bytes go to the previous-record file and the claim stays only when that copy fails.
 restore_claim() {
-    if ln -- "$CLAIM" "$LOCK" 2>/dev/null; then
+    local claim="$CLAIM"
+    if ln -- "$claim" "$LOCK" 2>/dev/null; then
         drop_claim
         return 0
     fi
-    cp -- "$CLAIM" "$PREV" 2>/dev/null || true
-    # The claim is cleared so the EXIT trap keeps the record that it holds.
+    if cp -- "$claim" "$PREV" 2>/dev/null; then
+        drop_claim
+        fail 3 "lock restore failed, record kept" "$PREV"
+    fi
+    # The claim is cleared so the EXIT trap keeps the only copy.
     CLAIM=""
-    fail 3 "lock restore failed, claimed record kept"
+    fail 3 "lock restore failed, claimed record kept" "$claim"
 }
 
 # A refresh claims the record and detects whether it is still the own one,
 # then removes the claim and creates again. A lost create is a held lock.
 refresh_lock() {
-    local rc=0
+    local token="$1" at="$2" deadline="$3" rc=0 status=0
     claim_lock || rc=$?
-    if ((rc == 1)); then held_fail; fi
+    if ((rc == 1)); then
+        held_fail "$deadline" || status=$?
+        return "$status"
+    fi
     if ((rc == 2)); then
         # The own record went before the claim, so nothing is left to refresh.
-        if create_lock "$1" "$2"; then return 0; fi
-        held_fail
+        if create_lock "$token" "$at"; then return 0; fi
+        held_fail "$deadline" || status=$?
+        return "$status"
     fi
     if ! claim_matches_probe; then
         restore_claim
-        held_fail
+        held_fail "$deadline" || status=$?
+        return "$status"
     fi
     drop_claim
-    if create_lock "$1" "$2"; then return 0; fi
-    held_fail
+    if create_lock "$token" "$at"; then return 0; fi
+    held_fail "$deadline" || status=$?
+    return "$status"
 }
 
 # A stale record is kept for the owner to read, then the claim is dropped so the
@@ -249,29 +263,63 @@ emit_hold() {
     printf 'deadline %s\n' "$(iso_of "$((at + LOCK_TTL))")"
 }
 
-# Exit 4 names the holder and the moment it took the lock.
+# Exit 4 names the holder and the moment it took the lock. A free name is
+# created, and the distinct return stops the caller from a second emit.
 held_fail() {
-    probe_lock
+    local deadline="$1" at="" token=""
+    while :; do
+        probe_lock
+        if [[ "$PROBE" != "absent" ]]; then break; fi
+        at="$(date +%s)"
+        token="$SESSION-$$"
+        if create_lock "$token" "$at"; then
+            emit_hold "$token" "$at"
+            return "$HELD_CREATED"
+        fi
+        # A failed link is re-probed on the next turn, bounded by the deadline.
+        if (($(date +%s) >= deadline)); then break; fi
+        sleep 1
+    done
+    if [[ "$PROBE" == "absent" ]]; then
+        # A free name at the bound is still the create case.
+        at="$(date +%s)"
+        token="$SESSION-$$"
+        if create_lock "$token" "$at"; then
+            emit_hold "$token" "$at"
+            return "$HELD_CREATED"
+        fi
+        probe_lock
+    fi
     if [[ "$PROBE" == "complete" ]]; then
         printf 'held %s by %s since %s\n' "$LOCK" "${REC[1]}" "$(iso_of "${REC[3]}")" >&2
-    else
-        printf 'Error: lock record is incomplete: %s\n' "$LOCK" >&2
+        exit 4
     fi
-    exit 4
+    if [[ "$PROBE" == "incomplete" ]]; then
+        printf 'Error: lock record is incomplete: %s\n' "$LOCK" >&2
+        exit 4
+    fi
+    fail 3 "lock create failed"
 }
 
 run_hold() {
-    local start=$SECONDS age=0 at="" token=""
+    local deadline=$(($(date +%s) + TIMEOUT)) age=0 at="" token="" rc=0
     while :; do
-        # The deadline is tested on every turn, so a break that keeps failing
-        # ends instead of re-probing with no bound.
-        if ((SECONDS - start >= TIMEOUT)); then held_fail; fi
+        # The deadline comes from the epoch clock once, so a break that keeps
+        # failing ends within the timeout plus one poll.
+        if (($(date +%s) >= deadline)); then
+            held_fail "$deadline" || rc=$?
+            if ((rc == HELD_CREATED)); then return 0; fi
+            return "$rc"
+        fi
         probe_lock
         if [[ "$PROBE" == "complete" ]]; then
             # A lock this session already holds is refreshed, never waited on.
             if [[ "${REC[0]}" == "$AGENT" && "${REC[1]}" == "$SESSION" ]]; then
                 at="$(date +%s)"
-                refresh_lock "${REC[2]}" "$at"
+                rc=0
+                refresh_lock "${REC[2]}" "$at" "$deadline" || rc=$?
+                if ((rc == HELD_CREATED)); then return 0; fi
+                if ((rc != 0)); then return "$rc"; fi
                 emit_hold "${REC[2]}" "$at"
                 return 0
             fi
@@ -281,9 +329,15 @@ run_hold() {
                 sleep 1
                 continue
             fi
-            if ! break_stale "$age"; then continue; fi
+            if ! break_stale "$age"; then
+                sleep 1
+                continue
+            fi
         elif [[ "$PROBE" == "incomplete" ]]; then
-            if ! break_stale 0; then continue; fi
+            if ! break_stale 0; then
+                sleep 1
+                continue
+            fi
         fi
         at="$(date +%s)"
         token="$SESSION-$$"
@@ -297,7 +351,10 @@ run_hold() {
             sleep 1
             continue
         fi
-        held_fail
+        rc=0
+        held_fail "$deadline" || rc=$?
+        if ((rc == HELD_CREATED)); then return 0; fi
+        return "$rc"
     done
 }
 
@@ -311,12 +368,17 @@ lost_fail() {
 # The release claims the record and proves it is the own one, so it never
 # removes a lock that another session made after the read.
 run_release() {
+    local rc=0
     probe_lock
     if [[ "$PROBE" != "complete" || "${REC[0]}" != "$AGENT" ||
         "${REC[1]}" != "$SESSION" || "${REC[2]}" != "$TOKEN" ]]; then
         lost_fail
     fi
-    if ! claim_lock; then lost_fail; fi
+    claim_lock || rc=$?
+    # A failed move with the name still present cannot tell our record from a
+    # double fault, so this window stays exit 3 and does not widen the table.
+    if ((rc == 1)); then fail 3 "lock release claim failed"; fi
+    if ((rc == 2)); then lost_fail; fi
     if ! claim_matches_probe; then
         restore_claim
         lost_fail
