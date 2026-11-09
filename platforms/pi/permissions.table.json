@@ -283,7 +283,7 @@
     {
       "id": "file.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
       "roles": ["implementer"], "verb": ["rm"], "flags": "named", "arg": "any",
-      "reason": "A named file removal requires user approval"
+      "reason": "A file removal requires user approval"
     },
     {
       "id": "git.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
@@ -427,7 +427,7 @@
     {
       "id": "file.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
       "verb": ["rm"], "flags": "named", "arg": "any",
-      "reason": "A named file removal requires user approval"
+      "reason": "A file removal requires user approval"
     },
     {
       "id": "git.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],

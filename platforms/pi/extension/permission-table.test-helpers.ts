@@ -413,12 +413,18 @@ export const RELEASE_VERBS = [
 /** Copy, move, and sync forms. */
 export const COPY_SYNC = ["cp a b", "mv a b", "rsync -a a b", "env A=1 cp a b"];
 
-/** A single named file removal, and the git form of the same intent. */
+/** A notes file and folder for the removal probes. */
+export const NOTES_REMOVE_FILE = `${FIXTURE_ROOT}/agent-notes/project-notes/briefs/04-release-note.md`;
+export const NOTES_REMOVE_DIR = `${FIXTURE_ROOT}/agent-notes/project-notes/briefs`;
+
+/** A single-file removal, and the git form of the same intent. */
 export const REMOVE_NAMED = [
 	"rm a.txt",
 	"rm -f a.txt",
 	"rm --force a.txt",
 	"rm a.txt b.txt",
+	`rm ${NOTES_REMOVE_FILE}`,
+	`rm -f ${NOTES_REMOVE_FILE}`,
 	"git rm a.txt",
 ];
 
@@ -428,6 +434,8 @@ export const REMOVE_RECURSIVE = [
 	"rm -rf build",
 	"rm -fr build",
 	"rm --recursive build",
+	`rm -r ${NOTES_REMOVE_DIR}`,
+	`rm -rf ${NOTES_REMOVE_DIR}`,
 ];
 
 /** The mandatory global deny forms. */

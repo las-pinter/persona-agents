@@ -35,7 +35,7 @@ import {
 	DIR_SLOT_ASK, DIR_SLOT_READER_ASK, FETCH_REFSPEC, FIND_WRITE, FIXTURE_ROOT,
 	FORCE_STRATEGY_ALLOW, FORCE_STRATEGY_ASK, FUNCTION_DEF, gateVerdict,
 	GLOBAL_DENY_BASH, GLOBAL_OPT_ALLOW, GLOBAL_OPT_ASK, grant, LONG_OPT_ASK,
-	matches, MKDIR_ALLOW, NON_PATH_PROBES, ORCH_SCRIPTS, OVER_ASK, PATH_PROBES,
+	matches, MKDIR_ALLOW, NON_PATH_PROBES, NOTES_REMOVE_FILE, ORCH_SCRIPTS, OVER_ASK, PATH_PROBES,
 	PLAIN_ASK_FREE, PLAIN_HISTORY, READER_ALLOWED, READER_BLOCKED, RELEASE_ASK,
 	RELEASE_VERBS, REMOVE_NAMED, REMOVE_RECURSIVE, ROLES, rowMatches, rowReason,
 	sampleFor, shippedDecision, shippedVerdict, SLOT_ALLOW_ROWS, slotProbe,
@@ -501,6 +501,18 @@ test("a recursive removal denies for every class and never asks", () => {
 			assert.equal(verdictOf(classes[cls], "bash", probe), "deny", `${cls}: ${probe}`);
 			assert.equal(askMatches(classes[cls], "bash", probe), false, `${cls} asks for ${probe}`);
 			assert.equal(shippedVerdict("orchestrator", "bash", probe), "deny", probe);
+		}
+	}
+});
+
+test("a flagless removal on a notes path asks for the orchestrator and the implementer", () => {
+	// The `named` flag class guards against a recursive option, so the removal
+	// ask row owns the plain and the named forms on any path.
+	for (const probe of [`rm ${NOTES_REMOVE_FILE}`, `rm -f ${NOTES_REMOVE_FILE}`]) {
+		assert.equal(rowMatches("file.remove.ask", probe), true, probe);
+		for (const role of ["orchestrator", "implementer"] as Role[]) {
+			assert.equal(gateVerdict(role, "bash", probe), "ask", `${role}: ${probe}`);
+			assert.equal(shippedVerdict(role, "bash", probe), "ask", `${role}: ${probe}`);
 		}
 	}
 });

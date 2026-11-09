@@ -225,11 +225,11 @@ again.
   `git branch` is one read row with a listing-only tail: a branch write form falls
   outside the tail and reaches deny-by-default, so no class can create, move, or
   delete a branch through the read row.
-- **File removal.** A single named `rm` asks for the orchestrator and the
-  implementer. It is denied to every other class. The `-f`, `--force`, and
-  multi-name forms ask the same way. A recursive form (`-r`, `-rf`, `-fr`,
-  `--recursive`) stays a hard deny for every class. `git rm` carries the same
-  rule.
+- **File removal.** A plain `rm` asks for the orchestrator and the
+  implementer, on any path. A removal that names one file asks the same way,
+  and so does a removal with a force flag or more than one name. It is denied
+  to every other class. A recursive form (`-r`, `-rf`, `-fr`, `--recursive`)
+  stays a hard deny for every class. `git rm` carries the same rule.
 - **Deliberately omitted commands.** The shared read rows omit `xxd`, `printf`,
   `sha256sum`, `mktemp`, `test`, `mdl`, and a `.venv/bin/<tool>` wrapper, so
   deny-by-default blocks them. They also omit `git remote`, `git reflog`,

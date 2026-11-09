@@ -822,6 +822,7 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 		// segment, so a branch write form falls outside the row.
 		body += `(?=(?:\\s+(?:${LADDER["branch-list"]}))*\\s*$)`;
 	} else if (row.flags === "named") {
+		// The `named` class name is historical: it owns the plain form, not a named flag.
 		// A named-form row owns the plain form only. A recursive option in the same
 		// segment makes the row match nothing, so the recursive deny row keeps that
 		// form and the ask row never covers it. The scan skips quoted words, as the
