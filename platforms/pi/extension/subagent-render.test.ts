@@ -172,6 +172,16 @@ test("the card header paints the round and the resume mark before the duration",
 	}
 });
 
+test("a resume mark with no round keeps its own leading space on the card", () => {
+	const tool = captureTool();
+	const result = makeResult(makeDetails("single", [makeSingle({ round: undefined, resumed: true })]));
+
+	for (const expanded of [false, true]) {
+		const line = render(tool, result, expanded, {}).split("\n")[0];
+		assert.equal(line, "✓ tester (user) ↺", `expanded=${expanded}`);
+	}
+});
+
 test("an aborted run prints its error text once in the card", () => {
 	const tool = captureTool();
 	const failed = makeSingle({ exitCode: 1, stopReason: "aborted", errorMessage: "boom" });

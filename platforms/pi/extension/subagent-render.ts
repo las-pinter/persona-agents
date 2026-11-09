@@ -11,6 +11,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { formatDuration } from "./duration.ts";
 import { SubagentParams } from "./subagent-schema.ts";
+import { roundMark } from "./subagent-marks.ts";
 import {
 	type ResultText,
 	type SingleResult,
@@ -204,9 +205,6 @@ export const renderSubagentResult: RenderResultFn = (result, { expanded }, theme
 		typeof runDurationMs === "number" && Number.isFinite(runDurationMs)
 			? ` ${theme.fg("dim", formatDuration(runDurationMs))}`
 			: "";
-	// The round marks sit before the duration: the round, then the resume glyph.
-	const roundMark = (r: SingleResult): string =>
-		`${typeof r.round === "number" ? ` r${r.round}` : ""}${r.resumed === true ? "↺" : ""}`;
 
 	const renderDisplayItems = (items: DisplayItem[], limit?: number) => {
 		const toShow = limit ? items.slice(-limit) : items;

@@ -13,6 +13,7 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
+import { roundMark } from "./subagent-marks.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
 
 /** Changed names shown inline in WORKSPACE before the `… +N more` mark. */
@@ -321,10 +322,7 @@ function nodeMetrics(node: TreeNode, now: number): string {
 	const tokenText = tokens === null ? "-" : formatCount(tokens);
 	const turnsText = node.usage ? `${node.usage.turns}t` : "-";
 	const toolsText = `${Math.max(0, Math.floor(node.toolCount ?? 0))}⚒`;
-	const roundText = typeof node.round === "number" ? ` r${node.round}` : "";
-	// A resume mark with no round takes its own space, so the marks never touch.
-	const resumeText = node.resumed === true ? `${roundText ? "" : " "}↺` : "";
-	return `${elapsed} ${tokenText} ${turnsText} ${toolsText}${roundText}${resumeText}`;
+	return `${elapsed} ${tokenText} ${turnsText} ${toolsText}${roundMark(node)}`;
 }
 
 /** A fixed-cell context bar. `█` is filled, `░` is empty. */

@@ -46,7 +46,7 @@ const RUN_T0 = Date.parse("2026-10-07T00:00:00.000Z");
 function roundRun(round?: number, resumed?: boolean): RunEvent[] {
 	const at = (offsetMs: number): string => new Date(RUN_T0 + offsetMs).toISOString();
 	const usage: RunUsage = { input: 1000, output: 500, cost: 0.1, turns: 7 };
-	const marks = round === undefined ? {} : { round, resumed };
+	const marks = round === undefined && resumed === undefined ? {} : { round, resumed };
 	return [
 		{
 			v: 1,
@@ -325,6 +325,10 @@ test("a round-1 run paints the round and no resume mark", () => {
 
 test("a log with no round paints the line it painted before the round marks", () => {
 	assert.equal(roundLine(roundRun()), "✓ tester 1m05s 1.5k 7t 3⚒");
+});
+
+test("a resumed run with no round keeps one leading space before the resume mark", () => {
+	assert.equal(roundLine(roundRun(undefined, true)), "✓ tester 1m05s 1.5k 7t 3⚒ ↺");
 });
 
 test("a rich agent line stays readable and fits width 45", () => {
