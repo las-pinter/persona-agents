@@ -123,7 +123,11 @@ export interface RuleRow {
 	 * `compileRole`; every other profession falls through to its own rule.
 	 */
 	roles?: Role[];
-	/** Also select this `roles` row in `compileClass`, so an unnamed agent of the class gets it. */
+	/**
+	 * Also select this `roles` row in `compileClass`, so an unnamed agent of the
+	 * class gets it. The value must be `true`: an explicit `false` fails the table
+	 * check, so omit the field to leave the row out.
+	 */
 	unnamed?: boolean;
 	/** Leading literal words of the command, or the secret family of a path row. */
 	verb?: string[];

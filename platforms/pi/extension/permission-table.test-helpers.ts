@@ -70,8 +70,8 @@ export function gateVerdict(role: Role, tool: string, probe: string): "deny" | "
 
 /**
  * The decision the shipped table reaches through the real engine for one role,
- * one tool, and one probe. The rule sets come from the compiled table, so the
- * engine's segment split, `cd` fold, and dequote probes stay in play.
+ * one tool, and one probe: the role's compiled rule set on the engine path
+ * `sourceDecision` runs.
  */
 export function shippedDecision(
 	role: Role,
@@ -79,14 +79,12 @@ export function shippedDecision(
 	probe: string,
 	isSessionAllowed?: (rule: RawRule) => boolean,
 ): Decision {
-	return evaluateCommandRules(
-		probe,
-		tool === "bash",
-		compileRole(RULE_ROWS, role),
-		"deny-by-default",
+	return sourceDecision(
+		{ ruleSets: compileRole(RULE_ROWS, role), mode: "deny-by-default" },
 		tool,
+		probe,
 		role,
-		isSessionAllowed === undefined ? {} : { isSessionAllowed },
+		isSessionAllowed,
 	);
 }
 
@@ -101,15 +99,25 @@ export function shippedVerdict(
 
 /**
  * The engine decision for one resolved gate source: the real gate path, with the
- * shipped segment split and the mode the factory chose.
+ * shipped segment split and the mode the factory chose. The session grant is
+ * passed through, so `shippedDecision` can delegate here with a compiled set.
  */
 export function sourceDecision(
 	resolved: { ruleSets: RuleSets; mode: PermissionMode },
 	tool: string,
 	probe: string,
 	agentName: string | null,
+	isSessionAllowed?: (rule: RawRule) => boolean,
 ): Decision {
-	return evaluateCommandRules(probe, tool === "bash", resolved.ruleSets, resolved.mode, tool, agentName, {});
+	return evaluateCommandRules(
+		probe,
+		tool === "bash",
+		resolved.ruleSets,
+		resolved.mode,
+		tool,
+		agentName,
+		isSessionAllowed === undefined ? {} : { isSessionAllowed },
+	);
 }
 
 /** The reason of one shipped row, read from the table that owns it. */

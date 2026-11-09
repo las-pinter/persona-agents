@@ -138,14 +138,11 @@ test("the 86 rows carry 61 ids: a shared rule is one row per class", () => {
 
 test("every row reaches a class set and every flag class is used", () => {
 	const { classes } = compileTable(RULE_ROWS);
+	// One rule per tool name a row lists. These counts are pinned literals, so a
+	// fault in the `rowsForClass` filter cannot agree with itself here.
+	const pinned: Record<RoleClass, number> = { reader: 51, worker: 61, orchestrator: 66 };
 	for (const cls of CLASS_ORDER) {
-		// Every row a class owns emits one rule per tool it names. The class row
-		// set comes from `rowsForClass`, so a widened `roles` row counts too.
-		const expected = rowsForClass(RULE_ROWS, cls).reduce(
-			(total, row) => total + row.tool.trim().split(/\s+/).length,
-			0,
-		);
-		assert.equal(ruleCount(classes[cls]), expected, cls);
+		assert.equal(ruleCount(classes[cls]), pinned[cls], cls);
 	}
 	const used = new Set<string>(RULE_ROWS.map((row) => row.flags ?? "none"));
 	for (const flags of FLAG_CLASSES) {
