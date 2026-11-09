@@ -300,11 +300,13 @@ function textOf(event: RunEvent, ask: AskRecord): string {
 }
 
 /**
- * The readers' contract: a record with no kind is an ask event. The ring is the
- * only caller, so every reader receives its rows through this one boundary and
- * can never mislabel a plain line as an ask.
+ * The readers' contract: a record with no kind is an ask event. The ring maps
+ * every row through this one boundary, so a reader cannot mislabel a plain line
+ * as an ask.
+ *
+ * @internal The boundary test calls this directly. Production code reads `rows`.
  */
-function logRowOf(row: AskLogEvent): AskLogEvent {
+export function logRowOf(row: AskLogEvent): AskLogEvent {
 	return { ...row, kind: row.kind === "log" ? "log" : "ask" };
 }
 

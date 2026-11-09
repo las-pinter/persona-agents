@@ -495,7 +495,7 @@ researcher, reviewer. Mascot is excluded. Each allowed agent lists
 - `/sidebar [on|off|width <n>]` — show or hide the right column, or set its width (10 to 120). A bare `/sidebar` toggles.
 - `/agents-tree` — open the live tree overlay. Up/down selects a node.
 - `/agent-inspect [runId|last]` — open one node's detail.
-- `/ask-log` — open the child ask history, newest first. Up/down and PgUp/PgDn scroll by wrapped line, `g`/`G` jump to either end, `q`/Esc close.
+- `/ask-log` — open the log ring (ask events and plain lines), newest first. Up/down and PgUp/PgDn scroll by wrapped line, `g`/`G` jump to either end, `q`/Esc close.
 - `/retro` — print-only blameless session retrospective; run `/reload` after install. The command name for each platform is in [content/skills/common/retro/SKILL.md](../../content/skills/common/retro/SKILL.md).
 
 The retro skill sets `disable-model-invocation: true`, so only the user starts

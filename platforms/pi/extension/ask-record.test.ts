@@ -20,9 +20,11 @@ import {
 	createAskTally,
 	flushPendingLogEvents,
 	logLineEvent,
+	logRowOf,
 	recordAsk,
 	recordAskLine,
 	recordLogLine,
+	type AskLogEvent,
 } from "./ask-record.ts";
 import { unbindChildAsk } from "./child-ask.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
@@ -612,4 +614,12 @@ test("every row a reader receives carries its kind", () => {
 		["ask", "log"],
 		"a reader tells an ask row from a plain line without guessing",
 	);
+});
+
+test("a record with no kind reads as an ask at the one read boundary", () => {
+	// An older producer wrote no kind. The boundary supplies it, so a reader
+	// cannot mislabel an ask event as a plain line or the other way round.
+	const legacy = { askId: "ask-1", phase: "arrival", at: AT, text: "00:00:00 implementer/bash" };
+	assert.equal(logRowOf(legacy as AskLogEvent).kind, "ask", "a missing kind reads as an ask");
+	assert.equal(logRowOf({ ...legacy, kind: "log" } as AskLogEvent).kind, "log", "a named kind is kept");
 });

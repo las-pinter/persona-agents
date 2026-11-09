@@ -559,7 +559,7 @@ describe("ask log overlay runtime path", () => {
 		const lines = component.render(100);
 
 		assert.ok(
-			lines.some((line) => line.trimEnd() === "  (no child asks)"),
+			lines.some((line) => line.trimEnd() === "  (no log events)"),
 			"the empty ring paints the placeholder on the row indent",
 		);
 		assert.match(askNav(lines), /^\(line 1\/1\) ·/, "the nav line still paints");

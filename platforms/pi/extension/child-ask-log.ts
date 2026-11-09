@@ -11,7 +11,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { GateRequest, RootState } from "./child-ask-state.ts";
 
 /**
- * A short stable form of a session id, so one warning line fits a terminal. A
+ * A short stable form of a session id, so one log row fits a terminal. A
  * cut id ends with the cut marker, so a cut id never reads as a full id.
  */
 export function shortId(sessionId: string): string {

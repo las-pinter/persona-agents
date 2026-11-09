@@ -102,7 +102,7 @@ describe("ask log view frame", () => {
 		assert.equal(lines.length, 5, "header, rule, placeholder, rule, nav");
 		assert.match(lines[0], /ASK LOG — 0 events · newest first\s*$/);
 		assert.equal(lines[1].trimEnd(), RULE.repeat(59));
-		assert.equal(lines[2].trimEnd(), "  (no child asks)", "the placeholder sits on the row indent");
+		assert.equal(lines[2].trimEnd(), "  (no log events)", "the placeholder sits on the row indent");
 		assert.equal(lines.at(-2)?.trimEnd(), RULE.repeat(59), "the empty frame still carries one closing rule");
 		assert.match(navLine(lines), /^\(line 1\/1\) ·/);
 

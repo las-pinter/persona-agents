@@ -169,7 +169,7 @@ function askRule(width: number): string {
  * placeholder line, indented like a row so it lines up under the title.
  */
 function askLogBodyLines(rows: AskLogRow[], width: number): string[] {
-	if (rows.length === 0) return [`${ASK_ROW_INDENT}(no child asks)`];
+	if (rows.length === 0) return [`${ASK_ROW_INDENT}(no log events)`];
 	const wrapWidth = Math.max(ASK_WRAP_MIN, width - ASK_ROW_INDENT.length);
 	const lines: string[] = [];
 	for (const row of rows) {
