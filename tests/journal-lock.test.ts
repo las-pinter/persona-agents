@@ -420,6 +420,59 @@ describe("C — a dead holder is broken", () => {
 		assert.ok(rows(fs.readFileSync(sleepLog, "utf8")).length >= 1, "the incomplete retry made one sleep");
 	});
 
+	test("an absent-name retry sleeps before the next poll", () => {
+		const home = makeHome();
+		const sleepLog = path.join(home, "sleeps");
+		const lnMark = path.join(home, "ln-count");
+		const catMark = path.join(home, "cat-count");
+		// The first create loses to a name another writer makes, and the first lock
+		// read then finds the name gone. So the caller takes the absent-name retry
+		// turn and the second create wins. The sleep marks that turn, so a removed
+		// sleep leaves no row while the run still holds the lock.
+		const shim = makeShimDir({
+			sleep: [
+				"#!/usr/bin/env bash",
+				'printf "%s\\n" "$*" >>"$SLEEP_LOG"',
+				`exec ${realToolPath("sleep")} "$@"`,
+			].join("\n"),
+			ln: [
+				"#!/usr/bin/env bash",
+				'if [ -f "$LN_MARK" ]; then',
+				`  exec ${realToolPath("ln")} "$@"`,
+				"fi",
+				': >"$LN_MARK"',
+				'args=("$@")',
+				'target="${args[${#args[@]}-1]}"',
+				'printf "agent orchestrator\\nsession boss\\ntoken boss-1\\nat %s\\nhost test-host\\n" "$(date +%s)" >"$target"',
+				"exit 1",
+			].join("\n"),
+			cat: [
+				"#!/usr/bin/env bash",
+				'target=""',
+				'for arg in "$@"; do target="$arg"; done',
+				'if [ "${target##*/}" = ".journal-write.lock" ] && [ -f "$target" ] && [ ! -f "$CAT_MARK" ]; then',
+				'  : >"$CAT_MARK"',
+				'  rm -f -- "$target"',
+				"  exit 1",
+				"fi",
+				`exec ${realToolPath("cat")} "$@"`,
+			].join("\n"),
+		});
+
+		const result = run(
+			home,
+			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "1"],
+			{ ...shimPath(shim), SLEEP_LOG: sleepLog, LN_MARK: lnMark, CAT_MARK: catMark },
+			15000,
+		);
+
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(rows(result.stdout).length, 4, `one hold block: ${result.stdout}`);
+		assert.equal(recordOf(home).session, SESSION, "the caller owns the lock");
+		assert.equal(fs.existsSync(sleepLog), true, "the absent-name retry slept before the next poll");
+		assert.equal(rows(fs.readFileSync(sleepLog, "utf8")).length, 1, "the absent-name retry made one sleep");
+	});
+
 	test("a hold ends within the timeout bound plus one poll", () => {
 		const home = makeHome();
 		const clock = path.join(home, "clock");
@@ -774,6 +827,67 @@ describe("F — a record that goes away mid-call", () => {
 		assert.match(rowOf(result.stdout, "token"), new RegExp(`^${SESSION}-\\d+$`), result.stdout);
 		assert.equal(recordOf(home).session, SESSION, "the caller owns the lock");
 		assert.equal(fs.existsSync(prevPath(home)), false, "an absent record is not kept");
+	});
+
+	test("a name that goes at the final probe names the lost name, not a create", () => {
+		const home = makeHome();
+		const clock = path.join(home, "clock");
+		const sleepLog = path.join(home, "sleeps");
+		const start = 1000000000;
+		fs.writeFileSync(clock, `${start}\n`);
+		const realCat = realToolPath("cat");
+		// The create loses to a name that another writer makes, and the next read
+		// finds the name gone. So no create failed when the final probe ran.
+		const shim = makeShimDir({
+			date: [
+				"#!/usr/bin/env bash",
+				'for arg in "$@"; do',
+				'  if [ "$arg" = "+%s" ]; then',
+				'    cat "$CLOCK"',
+				"    exit 0",
+				"  fi",
+				"done",
+				`exec ${realToolPath("date")} "$@"`,
+			].join("\n"),
+			sleep: [
+				"#!/usr/bin/env bash",
+				'printf "%s\\n" "$*" >>"$SLEEP_LOG"',
+				'now=$(cat "$CLOCK")',
+				'printf "%s\\n" "$((now + 1))" >"$CLOCK"',
+			].join("\n"),
+			ln: [
+				"#!/usr/bin/env bash",
+				'args=("$@")',
+				'target="${args[${#args[@]}-1]}"',
+				'printf "agent orchestrator\\nsession boss\\ntoken boss-1\\nat %s\\nhost test-host\\n" "$(cat "$CLOCK")" >"$target"',
+				"exit 1",
+			].join("\n"),
+			cat: [
+				"#!/usr/bin/env bash",
+				'target=""',
+				'for arg in "$@"; do target="$arg"; done',
+				'if [ "${target##*/}" = ".journal-write.lock" ] && [ -f "$target" ]; then',
+				'  rm -f -- "$target"',
+				"  exit 1",
+				"fi",
+				`exec ${realCat} "$@"`,
+			].join("\n"),
+		});
+
+		const result = run(
+			home,
+			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "1"],
+			{ ...shimPath(shim), CLOCK: clock, SLEEP_LOG: sleepLog },
+			15000,
+		);
+
+		assert.equal(result.status, 3, result.stderr);
+		assert.equal(rows(result.stderr).length, 1, `one error line: ${result.stderr}`);
+		assert.equal(
+			result.stderr,
+			`Error: lock name went before the create: ${lockPath(home)}\n`,
+			`the error names the lost name: ${result.stderr}`,
+		);
 	});
 
 	test("a refresh that loses the record to another breaker creates again", () => {

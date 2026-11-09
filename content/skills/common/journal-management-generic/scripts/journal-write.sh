@@ -3,6 +3,8 @@ set -euo pipefail
 
 # ============================================================================
 # journal-write.sh — Take, refresh, and release the journal write lock.
+# Single responsibility: the take, refresh, and release of one lock, which is why
+# this file sits in the 501 to 1000 band.
 # The usage text lives in usage() only, so there is one copy to keep true.
 # ============================================================================
 
@@ -50,7 +52,8 @@ Exit codes:
      flag, a flag that is not valid for the subcommand, or a positional argument
   2  bad input: a flag value that fails its pattern, or a home folder that is
      not an absolute path
-  3  IO failure: lock folder create, record read, record write
+  3  IO failure: lock folder create, record read, record write, or a lock name
+     gone before the create
   4  the lock is held and the wait exceeded --timeout
   5  release did not own the lock
 A record older than $LOCK_TTL seconds is stale, so the hold deadline names the
@@ -201,28 +204,30 @@ restore_claim() {
 
 # A refresh claims the record and detects whether it is still the own one,
 # then removes the claim and creates again. A lost create is a held lock.
+# held_fail prints its block and returns the created status, or exits. Each
+# branch returns that status; the || : guard only stops set -e on it.
 refresh_lock() {
-    local token="$1" at="$2" deadline="$3" rc=0 status=0
+    local token="$1" at="$2" deadline="$3" rc=0
     claim_lock || rc=$?
     if ((rc == 1)); then
-        held_fail "$deadline" || status=$?
-        return "$status"
+        held_fail "$deadline" || :
+        return "$HELD_CREATED"
     fi
     if ((rc == 2)); then
         # The own record went before the claim, so nothing is left to refresh.
         if create_lock "$token" "$at"; then return 0; fi
-        held_fail "$deadline" || status=$?
-        return "$status"
+        held_fail "$deadline" || :
+        return "$HELD_CREATED"
     fi
     if ! claim_matches_probe; then
         restore_claim
-        held_fail "$deadline" || status=$?
-        return "$status"
+        held_fail "$deadline" || :
+        return "$HELD_CREATED"
     fi
     drop_claim
     if create_lock "$token" "$at"; then return 0; fi
-    held_fail "$deadline" || status=$?
-    return "$status"
+    held_fail "$deadline" || :
+    return "$HELD_CREATED"
 }
 
 # A stale record is kept for the owner to read, then the claim is dropped so the
@@ -298,7 +303,8 @@ held_fail() {
         printf 'Error: lock record is incomplete: %s\n' "$LOCK" >&2
         exit 4
     fi
-    fail 3 "lock create failed"
+    # The create lost to a name that the final probe then found gone.
+    fail 3 "lock name went before the create"
 }
 
 run_hold() {
