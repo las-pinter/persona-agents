@@ -10,7 +10,7 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { assembleTree, findNode, flattenTree } from "./tree-model.ts";
+import { assembleTree, findNode, flattenTree, flattenTreeKeeping } from "./tree-model.ts";
 import type { RunEvent } from "./tree-log.ts";
 import { logLineEvent } from "./ask-record.ts";
 
@@ -234,6 +234,21 @@ test("flattenTree visits parents before children", () => {
 	const roots = assembleTree(twoLevelEvents(), T0 + 100, 1000);
 	assert.deepEqual(
 		flattenTree(roots).map((node) => node.runId),
+		["root", "child"],
+	);
+});
+
+test("flattenTreeKeeping keeps a repeat the flatten drops", () => {
+	const roots = assembleTree(twoLevelEvents(), T0 + 100, 1000);
+	const root = roots[0];
+	if (root === undefined) throw new Error("the fixture has no root");
+	const doubled = [root, root];
+	assert.deepEqual(
+		flattenTreeKeeping(doubled).map((node) => node.runId),
+		["root", "child", "root", "child"],
+	);
+	assert.deepEqual(
+		flattenTree(doubled).map((node) => node.runId),
 		["root", "child"],
 	);
 });

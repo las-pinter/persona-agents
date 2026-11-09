@@ -7,27 +7,7 @@
  */
 
 import type { SidebarSnapshot } from "./sidebar-render.ts";
-import type { TreeNode } from "./tree-model.ts";
-
-/** Depth-first walk, parents before children, original sibling order. */
-function walk(nodes: TreeNode[], out: TreeNode[]): void {
-	for (const node of nodes) {
-		out.push(node);
-		walk(node.children, out);
-	}
-}
-
-/**
- * Flatten a forest depth-first, keeping every node.
- *
- * The keep is defensive only: `assembleTree` stores one node per run id, so a
- * shipped snapshot never repeats one. `flattenTree` drops a repeat instead.
- */
-function flatten(nodes: TreeNode[]): TreeNode[] {
-	const out: TreeNode[] = [];
-	walk(nodes, out);
-	return out;
-}
+import { flattenTreeKeeping } from "./tree-model.ts";
 
 /**
  * A signature that changes when any painted content changes.
@@ -39,7 +19,7 @@ function flatten(nodes: TreeNode[]): TreeNode[] {
  * they cannot trigger a needless repaint.
  */
 export function treeSignature(snapshot: SidebarSnapshot): string {
-	const tree = flatten(snapshot.tree ?? []).map((node) => ({
+	const tree = flattenTreeKeeping(snapshot.tree ?? []).map((node) => ({
 		runId: node.runId,
 		status: node.status,
 		orphan: node.orphan,

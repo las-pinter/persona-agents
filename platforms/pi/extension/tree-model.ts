@@ -260,6 +260,25 @@ export function flattenTree(nodes: TreeNode[]): TreeNode[] {
 	return out;
 }
 
+/**
+ * Depth-first walk that keeps every node, a repeated run id included.
+ *
+ * `flattenTree` drops a repeat instead. `assembleTree` stores one node per run
+ * id, so a shipped forest never repeats one; the keep is defensive, and it
+ * stops a key or a paint from hiding a node the forest actually holds.
+ */
+export function flattenTreeKeeping(nodes: TreeNode[]): TreeNode[] {
+	const out: TreeNode[] = [];
+	const walk = (list: TreeNode[]): void => {
+		for (const node of list) {
+			out.push(node);
+			walk(node.children);
+		}
+	};
+	walk(nodes);
+	return out;
+}
+
 /** Find one node by run id in a forest. */
 export function findNode(nodes: TreeNode[], runId: string): TreeNode | undefined {
 	return flattenTree(nodes).find((node) => node.runId === runId);

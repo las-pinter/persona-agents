@@ -9,7 +9,7 @@
  * The "narrow columns + wrap doRender + paint a right column" technique is
  * implemented here. No upstream source was copied.
  *
- * This module also owns the toggle config (Design L): an atomic write to
+ * This module also owns the toggle config: an atomic write to
  * `~/.pi/agent/persona-agents-sidebar.json`. It NEVER touches `settings.json`.
  *
  * `sidebar.test.ts` runs under plain Node with a fake terminal; no real TTY.
@@ -448,7 +448,7 @@ export function disposeSidebarCompositor(): void {
 	}
 }
 
-// --- toggle config (Design L) -----------------------------------------------
+// --- toggle config -----------------------------------------------------------
 
 /** Persisted toggle shape. */
 export interface SidebarConfig {

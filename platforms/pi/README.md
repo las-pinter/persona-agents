@@ -28,6 +28,8 @@ module below lives in `extension/`, except the shipped table data file):
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
 | `ask-record.ts` | The one extension log ring: ask events and plain lines, one file, one cap, one order |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
+| `tree-signature.ts` | Pure repaint key: serializes every painted field, so an unchanged key skips the paint |
+| `tree-selection.ts` | Pure keyboard selection over the overlay's node id list: next and previous, with wrap |
 | `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
@@ -218,8 +220,9 @@ again.
 
 - **Row groups.** The shipped file holds 86 rows: 22 global, 15 reader, 22
   worker, and 27 orchestrator. A class resolves to 36 reader, 44 worker, or 49
-  orchestrator rows: a class compile drops a `roles` row unless the row sets
-  `unnamed`.
+  orchestrator rows, and to 51 reader, 61 worker, or 66 orchestrator rules: a
+  class compile drops a `roles` row unless the row sets `unnamed`, and one
+  compiled row yields one rule per tool name it lists.
 - **Unnamed agents.** A row that sets `unnamed` joins its class compile, so an
   agent with a non-shipped name and that class gets the row. A false value is
   refused, so the field is set or absent. The three ask rows for `cp`, `mv`,

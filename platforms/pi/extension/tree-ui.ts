@@ -59,7 +59,7 @@ import { treeSignature } from "./tree-signature.ts";
 export const SPINNER_MS = 90;
 /** Git branch command timeout. */
 const GIT_TIMEOUT_MS = 2000;
-/** Bounded RPC summary height: RPC mode gets a short string, never a full column. */
+/** Bounded RPC summary height: RPC mode gets a string list, never a full column. */
 const RPC_MAX_LINES = 10;
 /** RPC summary render width. */
 const RPC_WIDTH = 60;

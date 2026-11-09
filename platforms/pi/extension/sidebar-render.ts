@@ -15,7 +15,7 @@ import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works
 import { ASK_HISTORY_MAX, type AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import { roundMark } from "./subagent-marks.ts";
-import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
+import { flattenTreeKeeping, type TreeNode, type TreeNodeStatus } from "./tree-model.ts";
 
 /** Changed names shown inline in WORKSPACE before the `… +N more` mark. */
 export const WORKSPACE_CHANGED_SHOWN = 4;
@@ -341,29 +341,9 @@ export function contextBarColor(percent: number): string {
 	return "success";
 }
 
-/** Depth-first walk, parents before children, original sibling order. */
-function walk(nodes: TreeNode[], out: TreeNode[]): void {
-	for (const node of nodes) {
-		out.push(node);
-		walk(node.children, out);
-	}
-}
-
-/**
- * Flatten a forest depth-first, keeping every node.
- *
- * This copies the walk in `tree-signature.ts`, because this module takes the
- * tree model as a type only and needs no runtime link to it.
- */
-function flatten(nodes: TreeNode[]): TreeNode[] {
-	const out: TreeNode[] = [];
-	walk(nodes, out);
-	return out;
-}
-
 /** True when at least one node in the forest is running. */
 export function hasRunningNode(tree: TreeNode[]): boolean {
-	return flatten(tree ?? []).some((node) => node.status === "running");
+	return flattenTreeKeeping(tree ?? []).some((node) => node.status === "running");
 }
 
 /** The branch glyph prefix for one node. A top-level node has no connector. */
@@ -444,7 +424,7 @@ export function renderAgentTreePanel(
 ): string[] {
 	const lines: string[] = [header(theme, " AGENTS ")];
 	const budget = Math.max(0, Math.floor(height) - 1);
-	const nodes = flatten(tree ?? []);
+	const nodes = flattenTreeKeeping(tree ?? []);
 
 	if (nodes.length === 0) {
 		if (budget >= 1) lines.push("(no active agents)");
