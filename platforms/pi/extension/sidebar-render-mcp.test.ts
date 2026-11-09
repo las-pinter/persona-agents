@@ -13,7 +13,6 @@ import {
 	type SidebarSnapshot,
 	type SidebarTheme,
 	renderMcpPanel,
-	treeSignature,
 } from "./sidebar-render.ts";
 import {
 	countMcpTool,
@@ -26,6 +25,7 @@ import {
 	totalMcpCount,
 } from "./mcp-usage.ts";
 import type { RunEvent } from "./tree-log.ts";
+import { treeSignature } from "./tree-signature.ts";
 
 const theme: SidebarTheme = {
 	bold: (text) => text,

@@ -17,10 +17,10 @@
  * the widget factory, so the compositor can wrap `tui.doRender`. The built-in
  * footer is never replaced.
  *
- * Deviation from the plan (Design Task 17): the git branch is read with
- * `pi.exec("git", ["branch", "--show-current"])`, NOT from a `setFooter`
- * factory. Replacing the footer risks breaking the built-in footer, so the glue
- * runs git itself on the git cadence and pushes the branch into `setBranch`.
+ * The git branch is read with `pi.exec("git", ["branch", "--show-current"])`,
+ * not from a `setFooter` factory. Replacing the footer risks breaking the
+ * built-in footer, so the glue runs git itself on the git cadence and pushes
+ * the branch into `setBranch`.
  *
  * Every timer body, render call, and command handler is wrapped so the TUI
  * never crashes in any mode.
@@ -49,17 +49,17 @@ import {
 import {
 	hasRunningNode,
 	renderSidebarPanel,
-	treeSignature,
 	type SidebarSnapshot,
 	type SidebarTheme,
 } from "./sidebar-render.ts";
 import { flattenTree, type TreeNode } from "./tree-model.ts";
+import { treeSignature } from "./tree-signature.ts";
 
 /** Spinner tick cadence while a node runs. */
 export const SPINNER_MS = 90;
 /** Git branch command timeout. */
 const GIT_TIMEOUT_MS = 2000;
-/** Bounded RPC summary height, per the plan. */
+/** Bounded RPC summary height: RPC mode gets a short string, never a full column. */
 const RPC_MAX_LINES = 10;
 /** RPC summary render width. */
 const RPC_WIDTH = 60;

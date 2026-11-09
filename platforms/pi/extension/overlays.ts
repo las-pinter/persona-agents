@@ -6,7 +6,7 @@
  * getter, so a mount never captures a stale copy.
  *
  * Three components live here: the `/agents-tree` node list, the
- * `/agent-inspect` node detail, and the `/ask-log` history. The ask-log frame
+ * `/agent-inspect` node detail, and the `/ask-log` log ring. The ask-log frame
  * math is pure and exported, so a test can feed it rows and numbers directly.
  */
 
@@ -14,14 +14,13 @@ import { Key, matchesKey, wrapTextWithAnsi, type Component, type TUI } from "@ea
 import {
 	clipLine,
 	renderNodeDetail,
-	selectNext,
-	selectPrev,
 	statusIcon,
 	type AskLogRow,
 	type SidebarSnapshot,
 	type SidebarTheme,
 } from "./sidebar-render.ts";
 import { findNode, flattenTree, type TreeNode } from "./tree-model.ts";
+import { selectNext, selectPrev } from "./tree-selection.ts";
 
 /** The `/ask-log` view height clamp, in view rows. */
 export const MAX_ASK_VIEW_ROWS = 100;

@@ -4,14 +4,14 @@
  * Runs under plain Node (type stripping):
  *   npm test -- platforms/pi/extension/sidebar-render-compose.test.ts
  *
- * Covers panel composition, width and height fitting, the tree signature,
- * selection, theme fallback, and the detail overlay.
+ * Covers panel composition, width and height fitting, theme fallback, and the
+ * detail overlay. The repaint signature and the selection walk hold their own
+ * test files.
  */
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
-	type SidebarSnapshot,
 	type SidebarTheme,
 	type StatusSnapshot,
 	AGENTS_PAD_MIN,
@@ -25,10 +25,7 @@ import {
 	renderStatusPanel,
 	renderTodosPanel,
 	renderWorkspacePanel,
-	selectNext,
-	selectPrev,
 	statusIcon,
-	treeSignature,
 } from "./sidebar-render.ts";
 import {
 	assertFits,
@@ -93,20 +90,7 @@ test("a token in the color map is colored while a missing token stays plain", ()
 	assert.ok(!calls.includes("muted"));
 });
 
-// --- selection ---------------------------------------------------------------
-
-test("selectNext and selectPrev wrap, fall back on an unknown id, and tolerate an empty list", () => {
-	assert.equal(selectNext(["a", "b", "c"], "c"), "a");
-	assert.equal(selectPrev(["a", "b", "c"], "a"), "c");
-	assert.equal(selectNext(["a", "b"], "zzz"), "a");
-	assert.equal(selectPrev(["a", "b", "c"], "zzz"), "c");
-	assert.equal(selectNext(["a"], "a"), "a");
-	assert.equal(selectPrev(["a"], "a"), "a");
-	assert.equal(selectNext([], null), null);
-	assert.equal(selectPrev([], "x"), "x");
-});
-
-// --- composition, width, and signature ---------------------------------------
+// --- composition, width, and height ------------------------------------------
 
 test("renderSidebarPanel stacks AGENTS first", () => {
 	const child = makeNode({ runId: "c1", parentRunId: "root", depth: 1, agent: "tester" });
@@ -336,6 +320,18 @@ test("renderSidebarPanel fills height 37 and gives the freed rule line to TODOS"
 	);
 });
 
+test("renderSidebarPanel restores the TODOS rule at height 38 and fills 38", () => {
+	// One row above the free-rule height, TODOS has its own budget line, so the
+	// rule above it returns and the seven panels plus six rules fill the column.
+	const lines = content(renderSidebarPanel(makeBudgetSnapshot(), 80, 38, theme, 0));
+	const rule = SECTION_RULE_CHAR.repeat(80);
+	assert.equal(lines.length, 38, "the column fills 38");
+	const todosStart = lines.findIndex((line) => line === " TODOS");
+	assert.ok(todosStart > 0, "TODOS paints its header at height 38");
+	assert.equal(lines[todosStart - 1], rule, "the rule above TODOS is back at height 38");
+	assert.equal(lines.filter((line) => line === rule).length, 6, "six rules carry the seven panels");
+});
+
 test("renderSidebarPanel paints the turn marker from the snapshot", () => {
 	const snapshot = makeSnapshot({
 		tree: [],
@@ -404,102 +400,6 @@ test("renderSidebarPanel paints all seven headers in order at height 40", () => 
 		"LOG",
 	]);
 	assert.equal(lines.length, 40, "the column uses the whole height");
-});
-
-// --- selection edge cases ----------------------------------------------------
-
-// --- treeSignature coverage --------------------------------------------------
-
-test("treeSignature changes for every field the panels paint", () => {
-	const n = (overrides: Partial<Parameters<typeof makeNode>[0]>) =>
-		makeSnapshot({ tree: [makeNode({ runId: "n1", ...overrides })] });
-	const long = "t".repeat(80);
-	const mcp = (connected: boolean, status: "connected" | "disconnected" | "unknown") =>
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected, status }] });
-	const file = (added: number) =>
-		makeSnapshot({
-			workspace: makeWorkspace({ files: [{ path: "a.ts", added, removed: 0, untracked: false }] }),
-		});
-	const usage = (cost: number) => n({ usage: { input: 1, output: 2, cost, turns: 3 } });
-	const status = (overrides: Partial<StatusSnapshot> = {}) =>
-		makeSnapshot({
-			status: {
-				study: "study-a",
-				stage: "full",
-				briefs: ["01-a.md"],
-				nextAction: "brief 01",
-				head: "abc1234",
-				askCounts: { bash: 1 },
-				askTool: "bash",
-				askAgeMs: 1000,
-				...overrides,
-			},
-		});
-	const askLog = (text: string) =>
-		makeSnapshot({
-			askLog: [{ kind: "ask", askId: "root#1", phase: "expiry", at: "2026-11-07T00:00:00.000Z", text }],
-		});
-	const cases: Array<[string, SidebarSnapshot, SidebarSnapshot]> = [
-		["node status", n({ status: "running" }), n({ status: "done" })],
-		["node depth", n({ depth: 0 }), n({ depth: 1 })],
-		["task after char 64", n({ task: `${long}A` }), n({ task: `${long}B` })],
-		["output preview after char 64", n({ outputPreview: `${long}A` }), n({ outputPreview: `${long}B` })],
-		["node usage", usage(0.1), usage(0.2)],
-		["tool count", n({ toolCount: 1 }), n({ toolCount: 2 })],
-		["node round", n({ round: 1 }), n({ round: 2 })],
-		["node resumed", n({ resumed: false }), n({ resumed: true })],
-		["null error vs empty error", n({ error: null }), n({ error: "" })],
-		[
-			"session model",
-			makeSnapshot({ session: makeSession({ model: "model-a" }) }),
-			makeSnapshot({ session: makeSession({ model: "model-b" }) }),
-		],
-		[
-			"session turns",
-			makeSnapshot({ session: makeSession({ turns: 1 }) }),
-			makeSnapshot({ session: makeSession({ turns: 2 }) }),
-		],
-		[
-			"workspace branch",
-			makeSnapshot({ workspace: makeWorkspace({ branch: "dev" }) }),
-			makeSnapshot({ workspace: makeWorkspace({ branch: "main" }) }),
-		],
-		["workspace file stat", file(1), file(2)],
-		["MCP connected", mcp(false, "disconnected"), mcp(true, "connected")],
-		["MCP status only", mcp(false, "unknown"), mcp(false, "disconnected")],
-		[
-			"todo done flag",
-			makeSnapshot({ todos: [{ id: "1", text: "a", done: false }] }),
-			makeSnapshot({ todos: [{ id: "1", text: "a", done: true }] }),
-		],
-		[
-			"todo text",
-			makeSnapshot({ todos: [{ id: "1", text: "first", done: false }] }),
-			makeSnapshot({ todos: [{ id: "1", text: "second", done: false }] }),
-		],
-		["todos turn marker", makeSnapshot({ todosTurnMarker: false }), makeSnapshot({ todosTurnMarker: true })],
-		["status study", status(), status({ study: "study-b" })],
-		["status stage", status(), status({ stage: "draft" })],
-		["status briefs", status(), status({ briefs: ["01-a.md", "02-b.md"] })],
-		["status next action", status(), status({ nextAction: "brief 02" })],
-		["status head", status(), status({ head: "def5678" })],
-		["status ask count", status(), status({ askCounts: { bash: 2 } })],
-		["status ask tool", status(), status({ askTool: "edit" })],
-		["status ask age", status(), status({ askAgeMs: 2000 })],
-		["askLog row text", askLog("a"), askLog("b")],
-		[
-			"askLog row stamp",
-			makeSnapshot({
-				askLog: [{ kind: "log", askId: "", phase: "settle", at: "2026-11-07T00:00:00.000Z", text: "same" }],
-			}),
-			makeSnapshot({
-				askLog: [{ kind: "log", askId: "", phase: "settle", at: "2026-11-07T00:00:01.000Z", text: "same" }],
-			}),
-		],
-	];
-	for (const [label, before, after] of cases) {
-		assert.notEqual(treeSignature(before), treeSignature(after), label);
-	}
 });
 
 // --- detail overlay clipping and placeholders --------------------------------

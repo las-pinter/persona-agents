@@ -349,7 +349,12 @@ function walk(nodes: TreeNode[], out: TreeNode[]): void {
 	}
 }
 
-/** Flatten a forest depth-first. */
+/**
+ * Flatten a forest depth-first, keeping every node.
+ *
+ * This copies the walk in `tree-signature.ts`, because this module takes the
+ * tree model as a type only and needs no runtime link to it.
+ */
 function flatten(nodes: TreeNode[]): TreeNode[] {
 	const out: TreeNode[] = [];
 	walk(nodes, out);
@@ -794,113 +799,6 @@ export function renderNodeDetail(
 }
 
 /**
- * A signature that changes when any painted content changes.
- *
- * Serializes every field a panel or the node-detail view paints, with
- * `JSON.stringify`. `null` and `""` stay distinct, and no field is sliced.
- * Tasks are already capped at append time, so the full value is safe. Node
- * fields no view paints (`bytesIn`, `bytesOut`, `children`) stay out, so
- * they cannot trigger a needless repaint.
- */
-export function treeSignature(snapshot: SidebarSnapshot): string {
-	const tree = flatten(snapshot.tree ?? []).map((node) => ({
-		runId: node.runId,
-		status: node.status,
-		orphan: node.orphan,
-		agent: node.agent,
-		depth: node.depth,
-		task: node.task,
-		toolCount: node.toolCount,
-		round: node.round ?? null,
-		resumed: node.resumed === true,
-		outputPreview: node.outputPreview,
-		usage: node.usage,
-		exitCode: node.exitCode ?? null,
-		error: node.error ?? null,
-	}));
-
-	const session = snapshot.session
-		? {
-				model: snapshot.session.model,
-				thinkingLevel: snapshot.session.thinkingLevel,
-				contextTokens: snapshot.session.contextTokens,
-				contextWindow: snapshot.session.contextWindow,
-				contextPercent: snapshot.session.contextPercent,
-				cost: snapshot.session.cost,
-				tps: snapshot.session.tps,
-				tokensIn: snapshot.session.tokensIn,
-				tokensOut: snapshot.session.tokensOut,
-				turns: snapshot.session.turns,
-				sessionStartMs: snapshot.session.sessionStartMs,
-			}
-		: null;
-
-	const workspace = snapshot.workspace
-		? {
-				cwd: snapshot.workspace.cwd,
-				branch: snapshot.workspace.branch,
-				changed: snapshot.workspace.changed,
-				changedCount: snapshot.workspace.changedCount,
-				files: snapshot.workspace.files,
-			}
-		: null;
-
-	const mcp = (snapshot.mcp ?? []).map((server) => ({
-		name: server.name,
-		configured: server.configured,
-		connected: server.connected,
-		status: server.status,
-	}));
-
-	const todos = (snapshot.todos ?? []).map((todo) => ({
-		id: todo.id,
-		text: todo.text ?? "",
-		done: todo.done,
-	}));
-
-	const status = snapshot.status ?? null;
-
-	// The stamp joins the key so two rows with one text still repaint; the
-	// painters read the row text only.
-	const askLog = (snapshot.askLog ?? []).map((row) => ({
-		askId: row.askId,
-		phase: row.phase,
-		at: row.at,
-		text: row.text,
-	}));
-
-	return JSON.stringify({
-		cwd: snapshot.cwd,
-		tree,
-		status,
-		askLog,
-		session,
-		workspace,
-		mcp,
-		mcpUsage: snapshot.mcpUsage ?? {},
-		todos,
-		todosTurnMarker: snapshot.todosTurnMarker === true,
-		tps: snapshot.tps,
-	});
-}
-
-/** Move the selection down one id and wrap. An unknown current selects the first. */
-export function selectNext(ids: string[], current: string | null): string | null {
-	if (ids.length === 0) return current;
-	const index = current === null ? -1 : ids.indexOf(current);
-	if (index < 0) return ids[0];
-	return ids[(index + 1) % ids.length];
-}
-
-/** Move the selection up one id and wrap. An unknown current selects the last. */
-export function selectPrev(ids: string[], current: string | null): string | null {
-	if (ids.length === 0) return current;
-	const index = current === null ? -1 : ids.indexOf(current);
-	if (index < 0) return ids[ids.length - 1];
-	return ids[(index - 1 + ids.length) % ids.length];
-}
-
-/**
  * Stack the panels in priority order. When the height is too small, lower
  * panels are dropped first; the tree keeps the top slot. A dim, full-width
  * rule separates adjacent panels. Each rule counts against the height budget.
@@ -943,9 +841,8 @@ function composePanels(
 /**
  * Compose the full right column.
  *
- * Deviation from the plan: a `height` (line-budget) parameter is added. The
- * plan signature has no height, but a per-panel budget needs one. `frame`
- * drives the running spinner.
+ * The `height` parameter is a line budget: each panel takes a share of it, so
+ * the compositor needs the column height. `frame` drives the running spinner.
  */
 export function renderSidebarPanel(
 	snapshot: SidebarSnapshot,

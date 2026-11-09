@@ -6,9 +6,8 @@
  * does NOT import `sidebar-render.ts`, so the renderers stay pure and the
  * compositor stays decoupled.
  *
- * Clean-room re-implementation of the "narrow columns + wrap doRender + paint a
- * right column" technique, written from the plan alone. No upstream source was
- * copied (Task 7).
+ * The "narrow columns + wrap doRender + paint a right column" technique is
+ * implemented here. No upstream source was copied.
  *
  * This module also owns the toggle config (Design L): an atomic write to
  * `~/.pi/agent/persona-agents-sidebar.json`. It NEVER touches `settings.json`.

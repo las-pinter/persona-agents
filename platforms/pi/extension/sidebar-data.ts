@@ -48,7 +48,7 @@ export const MCP_POLL_MS = 5000;
 export const STUDY_POLL_MS = 5000;
 /** TPS sliding window. */
 export const TPS_WINDOW_MS = 2000;
-/** A running node older than this is stale, per the plan. */
+/** A running node with no log record for this long is stale. */
 export const STALE_MS = 5 * 60 * 1000;
 /** Git command timeout. */
 const GIT_TIMEOUT_MS = 2000;
