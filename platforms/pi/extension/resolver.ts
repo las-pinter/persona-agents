@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { recordLogLine } from "./ask-record.ts";
 
 export type AgentScope = "user" | "project" | "both";
 export type AgentSource = "user" | "project" | "package";
@@ -151,7 +152,7 @@ const CLASSES_ABOVE_READER: readonly PermissionClass[] = ["worker", "orchestrato
 function warnOnce(seen: Set<string>, filePath: string, line: string): void {
 	if (seen.has(filePath)) return;
 	seen.add(filePath);
-	console.warn(line);
+	recordLogLine({ text: line });
 }
 
 /**

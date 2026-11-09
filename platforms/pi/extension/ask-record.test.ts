@@ -8,7 +8,7 @@
  * Run: npm test -- platforms/pi/extension/ask-record.test.ts
  */
 
-import { after, afterEach, before, test } from "node:test";
+import { afterEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,25 +18,19 @@ import {
 	ASK_ROOT_RUN_ID,
 	createAskLog,
 	createAskTally,
+	flushPendingLogEvents,
+	logLineEvent,
+	logRowOf,
 	recordAsk,
 	recordAskLine,
+	recordLogLine,
+	type AskLogEvent,
 } from "./ask-record.ts";
 import { unbindChildAsk } from "./child-ask.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { CHILD_A, ROOT, captureRoot, childAsk, rootAsk, setup } from "./gate-child-ask-fixture.ts";
 import { appendEvent, readAllEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
-
-const realError = console.error;
-
-// Every ask case logs a warning line, so one stub for the file lives here.
-before(() => {
-	console.error = (): void => {};
-});
-
-after(() => {
-	console.error = realError;
-});
 
 afterEach(() => {
 	unbindChildAsk();
@@ -365,7 +359,11 @@ test("one allow-once child ask appends an arrival and a settle record", { timeou
 		assert.equal(asks[0].runId, CHILD_A);
 		assert.equal(asks[0].depth, 1);
 		assert.equal(asks[0].agent, "implementer");
-		assert.match(asks[0].ask?.flags ?? "", /^queued=1 shown=none /, "the arrival carries its flags");
+		assert.match(
+			asks[0].ask?.flags ?? "",
+			/^root=\S+ phase=arrival queued=1 shown=none /,
+			"the arrival carries the root, the stage, and its queue flags",
+		);
 		assert.equal(asks[1].ask?.flags, "", "a settle carries no flags");
 	} finally {
 		unbindChildAsk();
@@ -441,8 +439,8 @@ test("a child ask that reaches the deadline writes an arrival and an expiry", { 
 		assert.equal(asks[0].runId, CHILD_A);
 		assert.match(
 			asks[1].ask?.flags ?? "",
-			/^waiting=0 shown=(none|this|other) place=(queue|slot) /,
-			"the expiry names where it stood",
+			/^root=\S+ phase=expiry waiting=0 shown=(none|this|other) place=(queue|slot) /,
+			"the expiry names the root, the stage, and where it stood",
 		);
 	} finally {
 		unbindChildAsk();
@@ -498,4 +496,130 @@ test("an ask record beside a run record keeps the run node", () => {
 		restore();
 		rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+test("a plain line writes one log record and folds into the ring beside an ask", () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	try {
+		recordAsk({
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			runId: CHILD_A,
+			depth: 1,
+			at: AT,
+			askId: "ask-1",
+			phase: "arrival",
+			flags: FLAGS,
+		});
+		recordLogLine({ text: "agent-stack: forced paint failed: the host refused", at: AT });
+
+		const events = readAllEvents(logPath);
+		assert.deepEqual(events.map((event) => event.type), ["ask", "log"], "one write each, in call order");
+		assert.equal(events[1].text, "agent-stack: forced paint failed: the host refused");
+		assert.equal(events[1].runId, ASK_ROOT_RUN_ID, "a plain line belongs to the root run");
+
+		const ring = createAskLog();
+		for (const event of events) ring.observe(event);
+		const rows = ring.rows();
+		assert.deepEqual(rows.map((row) => row.kind), ["ask", "log"], "one ring holds both kinds in one order");
+		assert.equal(
+			rows[0].text,
+			`00:00:00 implementer/bash ${FLAGS}`,
+			"the ask text is unchanged by the widening",
+		);
+		assert.equal(rows[1].text, events[1].text, "the plain line carries its own text");
+		assert.deepEqual(assembleTree(events, Date.parse(AT), 60_000), [], "neither kind paints a tree node");
+	} finally {
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("the ring caps a mix of kinds at one cap and keeps one order", () => {
+	const ring = createAskLog();
+	for (let index = 0; index < 30; index += 1) {
+		ring.observe(
+			recordAskLine({
+				tool: "bash",
+				role: "implementer",
+				verdict: "pending",
+				runId: CHILD_A,
+				depth: 1,
+				at: AT,
+				askId: `ask-${index}`,
+				phase: "arrival",
+				flags: FLAGS,
+			}),
+		);
+		ring.observe(logLineEvent({ text: `line ${index}`, at: AT }));
+	}
+	const rows = ring.rows();
+	assert.equal(rows.length, ASK_HISTORY_MAX, "the cap counts both kinds together");
+	assert.equal(rows[0].askId, "ask-5", "the oldest ten entries drop, whatever their kind");
+	assert.equal(rows[rows.length - 1].text, "line 29", "the newest plain line stays last");
+	assert.equal(rows.filter((row) => row.kind === "ask").length, 25, "half the ring is ask events");
+	assert.equal(rows.filter((row) => row.kind === "log").length, 25, "half the ring is plain lines");
+});
+
+test("a line written before the log path exists lands when the path appears", () => {
+	const { dir, logPath } = tempLog();
+	const previous = process.env[ENV_TREE_LOG];
+	try {
+		// Start from an empty held buffer, so an earlier case cannot leak in.
+		process.env[ENV_TREE_LOG] = logPath;
+		flushPendingLogEvents();
+		delete process.env[ENV_TREE_LOG];
+
+		recordLogLine({ text: "agent-stack: agent discovery failed; the gate stays installed", at: AT });
+		assert.equal(readAllEvents(logPath).length, 0, "no path writes no file");
+
+		// The panel folds the held lines, so the first paint shows them. The path
+		// then lands them in the log, oldest first, exactly once.
+		process.env[ENV_TREE_LOG] = logPath;
+		flushPendingLogEvents();
+		const events = readAllEvents(logPath);
+		assert.equal(events.length, 1, "the held line lands once");
+		assert.equal(events[0].type, "log");
+		assert.equal(events[0].at, AT, "the held stamp is kept");
+		assert.equal(events[0].text, "agent-stack: agent discovery failed; the gate stays installed");
+	} finally {
+		process.env[ENV_TREE_LOG] = logPath;
+		flushPendingLogEvents();
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("every row a reader receives carries its kind", () => {
+	const ring = createAskLog();
+	ring.observe(
+		recordAskLine({
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			runId: CHILD_A,
+			depth: 1,
+			at: AT,
+			askId: "ask-1",
+			phase: "arrival",
+			flags: FLAGS,
+		}),
+	);
+	ring.observe(logLineEvent({ text: "agent-stack: forced paint failed", at: AT }));
+	assert.deepEqual(
+		ring.rows().map((row) => row.kind),
+		["ask", "log"],
+		"a reader tells an ask row from a plain line without guessing",
+	);
+});
+
+test("a record with no kind reads as an ask at the one read boundary", () => {
+	// An older producer wrote no kind. The boundary supplies it, so a reader
+	// cannot mislabel an ask event as a plain line or the other way round.
+	const legacy = { askId: "ask-1", phase: "arrival", at: AT, text: "00:00:00 implementer/bash" };
+	assert.equal(logRowOf(legacy as AskLogEvent).kind, "ask", "a missing kind reads as an ask");
+	assert.equal(logRowOf({ ...legacy, kind: "log" } as AskLogEvent).kind, "log", "a named kind is kept");
 });

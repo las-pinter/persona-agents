@@ -15,7 +15,7 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { askPanelSlot } from "./ask-panel-slot.ts";
-import { recordAsk } from "./ask-record.ts";
+import { recordAsk, recordLogLine } from "./ask-record.ts";
 import { boundRunRegistry, UNKNOWN_RUN_ROLE } from "./run-registry.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
@@ -315,7 +315,7 @@ export async function renderPermissionPrompt(
 				target.renderNow();
 			} catch (error) {
 				// The paint is cosmetic, so a failed paint must not fail the ask.
-				console.warn(`agent-stack: forced paint failed: ${(error as Error).message}`);
+				recordLogLine({ text: `agent-stack: forced paint failed: ${(error as Error).message}` });
 			}
 		};
 		const mounted = ctx.ui.custom<PermissionChoice>(

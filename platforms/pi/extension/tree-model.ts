@@ -195,8 +195,9 @@ export function assembleTree(events: RunEvent[], now: number, staleMs: number): 
 	const groups = new Map<string, RunEvent[]>();
 	for (const event of events) {
 		if (!event || typeof event.runId !== "string") continue;
-		// An ask record is a marker, never a node, so it joins no group.
-		if (event.type === "ask") continue;
+		// An ask record is a marker, never a node, so it joins no group. A plain log
+		// line is a message about the session, not a run, so it joins no group either.
+		if (event.type === "ask" || event.type === "log") continue;
 		if (event.type === "clear") {
 			const parsed = Date.parse(event.at);
 			if (Number.isFinite(parsed) && parsed > clearAt) clearAt = parsed;

@@ -28,7 +28,6 @@ import type { AgentConfig } from "./resolver.ts";
 import { DEBUG_AGENT_STACK_PATH, setActiveAgent, setActivePersona } from "./state.ts";
 import { ENV_PARENT_RUN_ID, ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
 import { MAX_EVENTS_READ, MAX_LOG_BYTES, readAllEvents, readEvents } from "./tree-log.ts";
-
 const DEBUG_ENV = "PI_AGENT_STACK_DEBUG";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
@@ -237,22 +236,37 @@ test("missing alwaysLoad entries warn and leave a visible marker", async () => {
 	setActivePersona(null);
 	setActiveAgent(testAgent({ alwaysLoad: ["fixture-does-not-exist"] }));
 
-	const prompt = await promptFor(harness, tmpRoot);
+	const { result: prompt, warnings } = await withWarnings(() => promptFor(harness, tmpRoot));
 
 	assert.match(prompt, /MISSING skill for alwaysLoad entry: fixture-does-not-exist/);
+	assert.deepEqual(
+		warnings,
+		["agent-stack: alwaysLoad entry resolves to no skill: fixture-does-not-exist"],
+		"the missing entry writes one line into the extension log",
+	);
 });
 
-/** Collect every console.warn line while `run` executes, then restore the console. */
+/** A log path no other case reads, so one case never sees another's lines. */
+let caseCounter = 0;
+function caseLogPath(): string {
+	caseCounter += 1;
+	return path.join(os.tmpdir(), `extension-log-${process.pid}-${caseCounter}-${Date.now()}.ndjson`);
+}
+
+/** Collect every extension log line `run` writes, then return them. */
 async function withWarnings<T>(run: () => Promise<T>): Promise<{ result: T; warnings: string[] }> {
-	const warnings: string[] = [];
-	const original = console.warn;
-	console.warn = (...args: unknown[]) => {
-		warnings.push(args.map((arg) => String(arg)).join(" "));
-	};
+	const previous = process.env[ENV_TREE_LOG];
+	const logPath = caseLogPath();
+	process.env[ENV_TREE_LOG] = logPath;
 	try {
-		return { result: await run(), warnings };
+		const result = await run();
+		const warnings = readAllEvents(logPath)
+			.filter((event) => event.type === "log" && typeof event.text === "string")
+			.map((event) => event.text ?? "");
+		return { result, warnings };
 	} finally {
-		console.warn = original;
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
 	}
 }
 

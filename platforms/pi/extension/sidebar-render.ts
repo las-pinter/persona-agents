@@ -859,10 +859,12 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 
 	const status = snapshot.status ?? null;
 
-	// The panel paints the id, the phase, and the text. The stamp is in the text.
+	// The stamp joins the key so two rows with one text still repaint; the
+	// painters read the row text only.
 	const askLog = (snapshot.askLog ?? []).map((row) => ({
 		askId: row.askId,
 		phase: row.phase,
+		at: row.at,
 		text: row.text,
 	}));
 

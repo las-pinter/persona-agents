@@ -1,12 +1,13 @@
 /**
- * Child ask log: one warning line per arrival and one per expiry.
+ * Child ask log: one line per arrival and one per expiry.
  *
  * The line carries the root, the child, the tool, and the state fields, so a
- * stuck child leaves a trace in the console. The writer catches its own throw,
- * because a broken console must not skip the settle.
+ * stuck child leaves a trace in the extension log ring and the LOG panel. The
+ * writer catches its own throw, because a broken log must not skip the settle.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { recordLogLine } from "./ask-record.ts";
 import type { GateRequest, RootState } from "./child-ask-state.ts";
 
 /**
@@ -18,15 +19,14 @@ export function shortId(sessionId: string): string {
 }
 
 /**
- * Write one ask warning line. A console that throws must not skip the settle,
- * so this call catches its own throw. The catch stays empty, because a dropped
- * warning line has no second place to go.
+ * Write one ask line into the extension log ring. A failing write must not skip
+ * the settle, so this call catches its own throw.
  */
 export function warnAskLine(line: string): void {
 	try {
-		console.error(line);
+		recordLogLine({ text: line });
 	} catch {
-		// A broken console must not turn a blocked child into a stuck child.
+		// A failed log write must not turn a blocked child into a stuck child.
 	}
 }
 

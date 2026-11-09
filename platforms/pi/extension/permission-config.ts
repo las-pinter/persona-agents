@@ -35,6 +35,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { validateRow, validateRows, type RuleRow, type Verdict } from "./permission-table.ts";
+import { recordLogLine } from "./ask-record.ts";
 import type { RawRule } from "./command-segments.ts";
 
 /** The environment variable that sets the shipped table path. */
@@ -281,9 +282,9 @@ export function loadGlobalRules(file: string = overlayFile()): OverlayRules {
 		return { deny: stamp(cfg.deny ?? []), ask: stamp(cfg.ask ?? []) };
 	} catch (error) {
 		const problem = fault(error);
-		console.error(
-			`permission gate: cannot load ${file}: ${problem}; every tool call is denied until the file is fixed`,
-		);
+		recordLogLine({
+			text: `permission gate: cannot load ${file}: ${problem}; every tool call is denied until the file is fixed`,
+		});
 		return {
 			deny: [
 				{
@@ -299,14 +300,14 @@ export function loadGlobalRules(file: string = overlayFile()): OverlayRules {
 
 function reportFailure(file: string, error: unknown): string {
 	const line = `permission gate: cannot load ${file}: ${fault(error)}; every tool call is denied until the file is fixed`;
-	console.error(line);
+	recordLogLine({ text: line });
 	return line;
 }
 
 function reportRefusal(file: string, why: string): void {
-	console.error(
-		`permission gate: refused ${file}: ${why}, so the shipped default stays in force`,
-	);
+	recordLogLine({
+		text: `permission gate: refused ${file}: ${why}, so the shipped default stays in force`,
+	});
 }
 
 /** The real path of a file that exists, or a refusal line and `null`. */

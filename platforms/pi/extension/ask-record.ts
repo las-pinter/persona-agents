@@ -1,6 +1,7 @@
 /**
  * Ask records: one line per ask stage in the shared tree log, plus the pure
- * tally the STATUS panel reads and the pure ring the LOG panel reads.
+ * tally the STATUS panel reads and the pure ring the LOG panel reads. The ring
+ * holds every extension message: an ask queue event, and a plain log line.
  *
  * The record is written in the ask plumbing, never in the gate. The writer is
  * best-effort, so a lost record never breaks an ask. The tally and the ring
@@ -124,6 +125,83 @@ export function recordAsk(input: RecordAskInput): void {
 	}
 }
 
+/** The caller fields of one plain log line. */
+export interface RecordLogInput {
+	/** The finished line. Whitespace collapses, so one message stays one line. */
+	text: string;
+	/** Defaults to `ASK_ROOT_RUN_ID`. */
+	runId?: string;
+	/** Defaults to the current time. */
+	at?: string;
+}
+
+/**
+ * Lines written before the log path exists, oldest first. The ring folds them,
+ * so a line that arrives before the sidebar still paints with the first frame.
+ */
+let pendingLogs: RunEvent[] = [];
+
+/** The plain lines held for a log path that does not exist yet, oldest first. */
+export function pendingLogEvents(): RunEvent[] {
+	return pendingLogs.slice();
+}
+
+/** Build one `log` event. Pure: the caller supplies every field. */
+export function logLineEvent(input: { text: string; at: string; runId?: string }): RunEvent {
+	return {
+		v: 1,
+		type: "log",
+		runId: input.runId ?? ASK_ROOT_RUN_ID,
+		parentRunId: null,
+		depth: 0,
+		agent: "",
+		persona: null,
+		status: "idle",
+		at: input.at,
+		text: input.text,
+	};
+}
+
+/**
+ * Write the held lines when a log path exists, oldest first. A missing path
+ * keeps them, so a later call still writes them. One event shifts per pass, so
+ * a throw keeps the lines not yet written.
+ */
+export function flushPendingLogEvents(): void {
+	if (pendingLogs.length === 0) return;
+	try {
+		const logPath = process.env[ENV_TREE_LOG];
+		if (!logPath) return;
+		while (pendingLogs.length > 0) {
+			appendEvent(logPath, pendingLogs[0]);
+			pendingLogs.shift();
+		}
+	} catch {
+		// A lost line must never break the caller.
+	}
+}
+
+/**
+ * Append one plain line to the shared tree log. This is the one entry point for
+ * an extension message that is not an ask event, so the ring keeps one order.
+ * A line written before the log path exists is held, up to the ring cap, and
+ * the ring folds it until the flush writes it.
+ */
+export function recordLogLine(input: RecordLogInput): void {
+	const text = input.text.replace(/\s+/g, " ").trim();
+	if (text.length === 0) return;
+	try {
+		const event = logLineEvent({ text, at: input.at ?? new Date().toISOString(), runId: input.runId });
+		pendingLogs.push(event);
+		if (pendingLogs.length > ASK_HISTORY_MAX) {
+			pendingLogs = pendingLogs.slice(pendingLogs.length - ASK_HISTORY_MAX);
+		}
+		flushPendingLogEvents();
+	} catch {
+		// A lost line must never break the caller.
+	}
+}
+
 /** The folded ask counts and the newest record. */
 export interface AskTally {
 	/** Fold one event. One ask counts once, whatever its stages. */
@@ -174,13 +252,26 @@ export function createAskTally(): AskTally {
 	};
 }
 
-/** One ask event kept for the LOG panel and the overlay. */
+/** The kind of one ring entry: an ask queue event, or a plain extension line. */
+export type LogKind = "ask" | "log";
+
+/**
+ * One entry kept for the LOG panel and the overlay.
+ *
+ * The readers' contract: every entry a reader receives carries a kind, and the
+ * ring normalizes an entry that has none to an ask event. So no reader can
+ * mislabel a plain line as an ask.
+ */
 export interface AskLogEvent {
+	/** `ask` for an ask queue event, `log` for a plain line. */
+	kind: LogKind;
+	/** The ask this entry belongs to. Empty on a plain line. */
 	askId: string;
+	/** The ask stage. A plain line carries `settle`, because it has no stage. */
 	phase: AskPhase;
 	/** ISO stamp of the record. */
 	at: string;
-	/** The panel line: `<HH:MM:SS> <role>/<tool> <flags>`. */
+	/** The panel line: `<HH:MM:SS> <role>/<tool> <flags>`, or the plain line text. */
 	text: string;
 }
 
@@ -189,7 +280,7 @@ export const ASK_HISTORY_MAX = 50;
 
 /** The ring the LOG panel and the overlay read. */
 export interface AskLog {
-	/** Fold one event. Only an arrival and an expiry are kept. */
+	/** Fold one event: an arrival, an expiry, or one plain line. */
 	observe(event: RunEvent): void;
 	/** The kept events, oldest first. */
 	rows(): AskLogEvent[];
@@ -209,23 +300,43 @@ function textOf(event: RunEvent, ask: AskRecord): string {
 }
 
 /**
+ * The readers' contract: a record with no kind is an ask event. Every reader
+ * receives its rows through this one boundary, so a later reader can never
+ * mislabel a plain line as an ask.
+ */
+export function logRowOf(row: AskLogEvent): AskLogEvent {
+	return { ...row, kind: row.kind === "log" ? "log" : "ask" };
+}
+
+/**
  * Make one ring. It keeps an arrival and an expiry, because those are the two
  * stages a waiting child passes. A settle carries no queue state, so it is not
- * a panel event. The oldest event drops past `ASK_HISTORY_MAX`.
+ * a panel event. A plain line is kept whole. The oldest entry drops past
+ * `ASK_HISTORY_MAX`, whatever its kind, so one ring holds one order.
  */
 export function createAskLog(): AskLog {
 	let ring: AskLogEvent[] = [];
+	const push = (entry: AskLogEvent): void => {
+		ring.push(entry);
+		if (ring.length > ASK_HISTORY_MAX) ring = ring.slice(ring.length - ASK_HISTORY_MAX);
+	};
 	return {
 		observe(event: RunEvent): void {
-			if (!event || event.type !== "ask") return;
+			if (!event) return;
+			if (event.type === "log") {
+				if (typeof event.text !== "string" || event.text.length === 0) return;
+				push({ kind: "log", askId: "", phase: "settle", at: event.at, text: event.text });
+				return;
+			}
+			if (event.type !== "ask") return;
 			const ask = event.ask;
 			if (!ask || typeof ask.askId !== "string" || ask.askId.length === 0) return;
 			if (ask.phase !== "arrival" && ask.phase !== "expiry") return;
-			ring.push({ askId: ask.askId, phase: ask.phase, at: event.at, text: textOf(event, ask) });
-			if (ring.length > ASK_HISTORY_MAX) ring = ring.slice(ring.length - ASK_HISTORY_MAX);
+			push({ kind: "ask", askId: ask.askId, phase: ask.phase, at: event.at, text: textOf(event, ask) });
 		},
 		rows(): AskLogEvent[] {
-			return ring.slice();
+			// The one read boundary: `logRowOf` supplies the kind a reader needs.
+			return ring.map(logRowOf);
 		},
 		reset(): void {
 			ring = [];

@@ -26,6 +26,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
 | `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent tool strip, run-id allocation |
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
+| `ask-record.ts` | The one extension log ring: ask events and plain lines, one file, one cap, one order |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
 | `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STATUS, LOG, SESSION, WORKSPACE, MCP, TODOS) |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
@@ -450,6 +451,16 @@ process. The child loader carries no extension set, and the `todo` tool guards a
 child session by id, so a child's session and todo data is not visible to the
 root sidebar. The root counts its own MCP tool starts and folds each child's
 counts through the tree log into one session tally.
+
+The extension keeps ONE log ring, and the owning file is `ask-record.ts`. The
+ring holds two kinds of entry: an ask queue event, and a plain extension line.
+Every extension message goes there, not to the console. Two writers feed the one
+file and the one ring: `recordAsk` writes an ask record, and `recordLogLine`
+writes a plain line. Both use one cap and one order. Only a plain line is held:
+the writer keeps it, up to the cap, until the log path exists, and the ring
+folds it so it shows on the first paint of the panel. An ask record written
+before the log path exists is dropped, as it always was. Do not add
+`console.log`, `console.warn`, or `console.error` to a module here.
 
 The tree comes from a shared append-only NDJSON log. The root creates the log in
 `os.tmpdir()`, unique per root. The root compacts the log when it grows past the

@@ -16,10 +16,10 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createAskLog, createAskTally, type AskLog, type AskTally } from "./ask-record.ts";
+import { createAskLog, createAskTally, pendingLogEvents, type AskLog, type AskTally } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
-import { readEvents } from "./tree-log.ts";
+import { readEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
 import { studySlug } from "./study-status.ts";
@@ -434,13 +434,24 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		applyMcpUsage();
 	}
 
+	/**
+	 * Rebuild the ring from the held lines and the log tail, newest first. A line
+	 * written before the log path existed is held in the writer, so it folds here
+	 * and paints with the first frame of the panel.
+	 */
+	function applyAskLog(events: RunEvent[]): void {
+		state.askLog.reset();
+		for (const event of pendingLogEvents()) state.askLog.observe(event);
+		for (const event of events) state.askLog.observe(event);
+		state.snapshot.askLog = state.askLog.rows().reverse();
+	}
+
 	/** Read the shared tree log into the snapshot. */
 	function refreshTree(): void {
 		const logPath = process.env[ENV_TREE_LOG];
 		if (!logPath) {
 			state.snapshot.tree = [];
-			state.snapshot.askLog = [];
-			state.askLog.reset();
+			applyAskLog([]);
 			applyMcpUsage();
 			return;
 		}
@@ -453,9 +464,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		for (const event of events) state.askTally.observe(event);
 		applyStatusAsk();
 		// This read returns the whole kept tail, so the ring is rebuilt not appended.
-		state.askLog.reset();
-		for (const event of events) state.askLog.observe(event);
-		state.snapshot.askLog = state.askLog.rows().reverse();
+		applyAskLog(events);
 	}
 
 	/** Write the folded ask counts and the newest ask age into the STATUS panel. */

@@ -12,6 +12,7 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { assembleTree, findNode, flattenTree } from "./tree-model.ts";
 import type { RunEvent } from "./tree-log.ts";
+import { logLineEvent } from "./ask-record.ts";
 
 const T0 = 1_700_000_000_000;
 
@@ -346,4 +347,26 @@ test("a log with no round leaves both node fields undefined", () => {
 		assert.equal(node.round, undefined, `${node.runId} carries no round`);
 		assert.equal(node.resumed, undefined, `${node.runId} carries no resume flag`);
 	}
+});
+
+test("a log record paints no node and leaves every run alone", () => {
+	// The root run id is a session id, and a plain line carries `root`, so a log
+	// record that folds as a run would add a phantom node to the AGENTS panel.
+	const events: RunEvent[] = [
+		makeEvent({ runId: "run-root", type: "start", at: at(0) }),
+		makeEvent({ runId: "child", type: "start", parentRunId: "run-root", depth: 1, at: at(10) }),
+		makeEvent({ runId: "child", type: "end", parentRunId: "run-root", depth: 1, at: at(20), status: "done" }),
+		makeEvent({ runId: "run-root", type: "end", at: at(30), status: "done" }),
+		logLineEvent({ text: "agent-stack: forced paint failed: the host refused", at: at(40) }),
+	];
+	const roots = assembleTree(events, T0 + 100, 1000);
+	assert.equal(roots.length, 1, "the log record adds no root");
+	assert.equal(roots[0]?.runId, "run-root");
+	assert.deepEqual(
+		flattenTree(roots).map((node) => node.runId),
+		["run-root", "child"],
+		"only the two run nodes paint",
+	);
+	assert.equal(roots[0]?.status, "done", "the log record does not reopen the run");
+	assert.equal(roots[0]?.endedAt, at(30), "the run keeps its own end stamp");
 });

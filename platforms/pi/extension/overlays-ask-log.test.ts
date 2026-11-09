@@ -21,6 +21,7 @@ function makeRows(count: number): AskLogRow[] {
 	return Array.from({ length: count }, (_value, index) => {
 		const clock = `10:00:${String(count - index).padStart(2, "0")}`;
 		return {
+			kind: "ask" as const,
 			askId: `root#${clock}`,
 			phase: "arrival" as const,
 			at: `2026-11-07T${clock}.000Z`,
@@ -61,6 +62,31 @@ describe("ask log view frame", () => {
 				"  10:00:01 implementer/bash waiting=0 shown=none place=slot",
 			],
 			"the body is the ring in order, newest first, indented two spaces",
+		);
+	});
+
+	test("a plain line in the ring keeps its text and breaks no row", () => {
+		const rows: AskLogRow[] = [
+			{
+				kind: "log",
+				askId: "",
+				phase: "settle",
+				at: "2026-11-07T10:00:04.000Z",
+				text: "agent-stack: forced paint failed: the host said no",
+			},
+			...makeRows(2),
+		];
+		const lines = askLogViewRows(rows, 60, 0, 10);
+
+		assert.equal(lines[0].trimEnd(), "  ASK LOG — 3 events · newest first", "the title counts every entry");
+		assert.deepEqual(
+			lines.slice(2, -2).map((line) => line.trimEnd()),
+			[
+				"  agent-stack: forced paint failed: the host said no",
+				"  10:00:02 implementer/bash waiting=0 shown=none place=slot",
+				"  10:00:01 implementer/bash waiting=0 shown=none place=slot",
+			],
+			"the plain line and both ask rows keep their text",
 		);
 	});
 
@@ -129,6 +155,7 @@ describe("ask log view frame", () => {
 
 	test("one row that wraps to two lines takes two offsets", () => {
 		const long: AskLogRow = {
+			kind: "ask",
 			askId: "root#a",
 			phase: "arrival",
 			at: "2026-11-07T10:00:09.000Z",

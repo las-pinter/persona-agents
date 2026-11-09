@@ -34,7 +34,7 @@ export interface RunUsage {
 /** One tree event. One JSON line per event. */
 export interface RunEvent {
 	v: 1;
-	type: "start" | "update" | "end" | "clear" | "ask";
+	type: "start" | "update" | "end" | "clear" | "ask" | "log";
 	runId: string;
 	parentRunId: string | null;
 	depth: number;
@@ -52,6 +52,8 @@ export interface RunEvent {
 	mcpUsage?: Record<string, number>;
 	/** The settled ask on an `ask` record. Absent on every other type. */
 	ask?: AskRecord;
+	/** The line of a `log` record. Absent on every other type. */
+	text?: string;
 	/** The session round this run took. Absent on an old record. */
 	round?: number;
 	/** True when the round reopened a saved session. Absent on an old record. */
@@ -94,7 +96,7 @@ function truncateUtf8(value: string, maxBytes: number): string {
 }
 
 /** The variable-length text fields that `fitEventLine` may shrink. */
-type TextField = "task" | "outputPreview" | "error";
+type TextField = "task" | "outputPreview" | "error" | "text";
 
 /**
  * Serialize one event so its line, including the trailing newline, never
@@ -111,7 +113,7 @@ function fitEventLine(event: RunEvent): string {
 	let line = JSON.stringify(candidate);
 	if (Buffer.byteLength(line, "utf8") <= maxLineBytes) return line;
 
-	const fields: TextField[] = ["task", "outputPreview", "error"];
+	const fields: TextField[] = ["task", "outputPreview", "error", "text"];
 	let budget = maxLineBytes;
 	for (let pass = 0; pass < 12; pass++) {
 		for (const field of fields) {
@@ -129,6 +131,7 @@ function fitEventLine(event: RunEvent): string {
 	delete candidate.task;
 	delete candidate.outputPreview;
 	delete candidate.error;
+	delete candidate.text;
 	line = JSON.stringify(candidate);
 	if (Buffer.byteLength(line, "utf8") > maxLineBytes) return "";
 	return line;
@@ -199,11 +202,12 @@ export function readAllEvents(logPath: string): RunEvent[] {
  * Malformed lines are skipped silently. A missing file returns an empty list.
  *
  * The cap `min(max ?? MAX_EVENTS_READ, MAX_EVENTS_READ)` covers the tail only.
- * Every run also keeps its `start` and `end` records, and the newest `clear`
- * record stays. An old `start` keeps the children attached. An old `end` stops
- * a stale rebuild. The extra records grow with the run
- * count, which compaction bounds. The result keeps the file order. A `max` of
- * zero or less reads nothing.
+ * A plain `log` record rides outside that count, so a chatty session cannot
+ * push a run `update` out of the budget. Every run also keeps its `start` and
+ * `end` records, and the newest `clear` record stays. An old `start` keeps the
+ * children attached. An old `end` stops a stale rebuild. The extra records grow
+ * with the run count, which compaction bounds. The result keeps the file order.
+ * A `max` of zero or less reads nothing.
  */
 export function readEvents(logPath: string, max?: number): RunEvent[] {
 	const events = readAllEvents(logPath);
@@ -213,9 +217,18 @@ export function readEvents(logPath: string, max?: number): RunEvent[] {
 	const keep = new Set<number>();
 	// The newest clear is the last one, because the log is append-only.
 	let newestClear = -1;
+	let tailCount = 0;
 	for (let index = events.length - 1; index >= 0; index--) {
 		const event = events[index];
-		if (events.length - index <= limit) keep.add(index);
+		// A plain line is a message, not a run record, so it spends no budget.
+		if (event.type === "log") {
+			keep.add(index);
+			continue;
+		}
+		if (tailCount < limit) {
+			keep.add(index);
+			tailCount += 1;
+		}
 		if (event.type === "start" || event.type === "end") {
 			keep.add(index);
 			continue;

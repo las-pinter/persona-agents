@@ -102,6 +102,7 @@ export function makeAskLogRows(): AskLogRow[] {
 	return rows.map((row, index) => {
 		const clock = `10:00:0${4 - index}`;
 		return {
+			kind: "ask" as const,
 			askId: `root#${clock}`,
 			phase: row.phase,
 			at: `2026-11-07T${clock}.000Z`,

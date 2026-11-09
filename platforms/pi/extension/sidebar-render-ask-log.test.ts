@@ -64,6 +64,32 @@ test("a ring of four short rows keeps five lines and paints the newest first", (
 
 // --- the wrap and the cut ----------------------------------------------------
 
+test("a plain line in the ring paints beside the ask rows", () => {
+	const rows = [
+		{
+			kind: "log" as const,
+			askId: "",
+			phase: "settle" as const,
+			at: "2026-11-07T10:00:05.000Z",
+			text: "agent-stack: forced paint failed",
+		},
+		{
+			kind: "ask" as const,
+			askId: "root#ask",
+			phase: "expiry" as const,
+			at: "2026-11-07T10:00:04.000Z",
+			text: "10:00:04 implementer/bash place=slot",
+		},
+	];
+	const lines = content(renderAskLogPanel(rows, 60, theme));
+	assert.equal(lines.length, LOG_PANEL_LINES, "the panel keeps its fixed height");
+	assert.equal(lines[0], " LOG 2", "the header counts every kept entry");
+	assert.equal(lines[1], "agent-stack: forced paint failed", "the plain line paints whole");
+	assert.equal(lines[2], "10:00:04 implementer/bash place=slot", "the ask row text is unchanged");
+	assert.equal(lines[3], "", "the short ring pads to five lines");
+	assertFits(renderAskLogPanel(rows, 60, theme), 60);
+});
+
 test("at width 45 the newest expiry row keeps place=slot whole", () => {
 	assert.equal(content(askLogLines(makeAskLogRows(), 45))[0], " LOG 4");
 	const textLines = content(askLogLines(makeAskLogRows(), 45)).slice(1);
@@ -83,6 +109,7 @@ test("a ring of five rows wraps the newest row at width 45", () => {
 	const rows = [
 		...makeAskLogRows(),
 		{
+			kind: "ask" as const,
 			askId: "root#older",
 			phase: "expiry" as const,
 			at: "2026-11-07T10:00:00.000Z",

@@ -18,11 +18,20 @@ import * as path from "node:path";
 
 import { evaluateCommandRules, type RuleSets } from "./command-segments.ts";
 import { loadGlobalRules } from "./permissions.ts";
+import { readAllEvents } from "./tree-log.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
 
 /** One throwaway directory per run. No test carries a real home path. */
 const dir = mkdtempSync(path.join(tmpdir(), "global-permissions-"));
 
 type GlobalRules = ReturnType<typeof loadGlobalRules>;
+
+/** A log path no other case reads, so one case never sees another's lines. */
+let caseCounter = 0;
+function caseLogPath(): string {
+	caseCounter += 1;
+	return path.join(dir, `log-${caseCounter}.ndjson`);
+}
 
 function writeFile(name: string, text: string): string {
 	const file = path.join(dir, name);
@@ -32,15 +41,18 @@ function writeFile(name: string, text: string): string {
 
 /** Run the loader and capture the log lines it writes. */
 function load(file: string): { rules: GlobalRules; lines: string[] } {
-	const lines: string[] = [];
-	const original = console.error;
-	console.error = (...args: unknown[]) => {
-		lines.push(args.map((value) => String(value)).join(" "));
-	};
+	const previous = process.env[ENV_TREE_LOG];
+	const logPath = caseLogPath();
+	process.env[ENV_TREE_LOG] = logPath;
 	try {
-		return { rules: loadGlobalRules(file), lines };
+		const rules = loadGlobalRules(file);
+		const lines = readAllEvents(logPath)
+			.filter((event) => event.type === "log" && typeof event.text === "string")
+			.map((event) => event.text ?? "");
+		return { rules, lines };
 	} finally {
-		console.error = original;
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
 	}
 }
 

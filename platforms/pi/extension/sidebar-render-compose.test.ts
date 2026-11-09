@@ -400,7 +400,7 @@ test("treeSignature changes for every field the panels paint", () => {
 		});
 	const askLog = (text: string) =>
 		makeSnapshot({
-			askLog: [{ askId: "root#1", phase: "expiry", at: "2026-11-07T00:00:00.000Z", text }],
+			askLog: [{ kind: "ask", askId: "root#1", phase: "expiry", at: "2026-11-07T00:00:00.000Z", text }],
 		});
 	const cases: Array<[string, SidebarSnapshot, SidebarSnapshot]> = [
 		["node status", n({ status: "running" }), n({ status: "done" })],
@@ -450,6 +450,15 @@ test("treeSignature changes for every field the panels paint", () => {
 		["status ask tool", status(), status({ askTool: "edit" })],
 		["status ask age", status(), status({ askAgeMs: 2000 })],
 		["askLog row text", askLog("a"), askLog("b")],
+		[
+			"askLog row stamp",
+			makeSnapshot({
+				askLog: [{ kind: "log", askId: "", phase: "settle", at: "2026-11-07T00:00:00.000Z", text: "same" }],
+			}),
+			makeSnapshot({
+				askLog: [{ kind: "log", askId: "", phase: "settle", at: "2026-11-07T00:00:01.000Z", text: "same" }],
+			}),
+		],
 	];
 	for (const [label, before, after] of cases) {
 		assert.notEqual(treeSignature(before), treeSignature(after), label);

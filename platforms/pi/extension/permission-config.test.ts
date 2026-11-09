@@ -28,6 +28,8 @@ import {
 import { compileClass, compileRole, countTable, type RuleRow } from "./permission-table.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 import { evaluateCommandRules, type RuleSets } from "./command-segments.ts";
+import { readAllEvents } from "./tree-log.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
 
 /** One throwaway directory per run. No test carries a real home path. */
 const dir = mkdtempSync(path.join(tmpdir(), "permission-config-"));
@@ -48,17 +50,27 @@ function basePaths(extra: ConfigPaths = {}): ConfigPaths {
 	return { override: NO_OVERRIDE, overlay: OVERLAY, ...extra };
 }
 
-/** Load the config and capture the log lines, so a fault is testable. */
+/** A log path no other case reads, so one case never sees another's lines. */
+let caseCounter = 0;
+function caseLogPath(): string {
+	caseCounter += 1;
+	return path.join(dir, `log-${caseCounter}.ndjson`);
+}
+
+/** Load the config and capture the log lines it writes. */
 function load(paths: ConfigPaths): { config: PermissionConfig; lines: string[] } {
-	const lines: string[] = [];
-	const original = console.error;
-	console.error = (...args: unknown[]) => {
-		lines.push(args.map((value) => String(value)).join(" "));
-	};
+	const previous = process.env[ENV_TREE_LOG];
+	const logPath = caseLogPath();
+	process.env[ENV_TREE_LOG] = logPath;
 	try {
-		return { config: loadPermissionConfig(paths), lines };
+		const config = loadPermissionConfig(paths);
+		const lines = readAllEvents(logPath)
+			.filter((event) => event.type === "log" && typeof event.text === "string")
+			.map((event) => event.text ?? "");
+		return { config, lines };
 	} finally {
-		console.error = original;
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
 	}
 }
 

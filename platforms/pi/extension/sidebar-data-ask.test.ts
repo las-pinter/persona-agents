@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { recordAsk } from "./ask-record.ts";
+import { flushPendingLogEvents, recordAsk, recordLogLine } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
 import { renderStatusPanel } from "./sidebar-render.ts";
@@ -255,6 +255,65 @@ test("a reload keeps the count from the log", async () => {
 		first.dispose();
 		second.dispose();
 		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a plain line folds into the ring beside the ask rows and paints no node", async () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	appendAskPair();
+	recordLogLine({ text: "agent-stack: alwaysLoad entry resolves to no skill: ghost" });
+	const data = createSidebarData(fakePi());
+	try {
+		data.subscribe(fakeCtx());
+		await flush();
+		const rows = data.snapshot().askLog ?? [];
+		assert.equal(rows.length, 3, "both ask stages and the plain line are kept");
+		assert.equal(rows[0].kind, "log", "the newest entry is the plain line");
+		assert.equal(rows[0].text, "agent-stack: alwaysLoad entry resolves to no skill: ghost");
+		assert.equal(rows[1].kind, "ask", "the ask rows keep their kind");
+		assert.equal(
+			rows[1].text,
+			"00:00:01 implementer/bash waiting=0 shown=none place=slot parked=1 surface=yes",
+			"the ask text is unchanged",
+		);
+		assert.deepEqual(data.snapshot().tree, [], "a plain line paints no tree node");
+	} finally {
+		data.dispose();
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a line held before the log path exists paints on the first fold", async () => {
+	const { dir, logPath } = tempLog();
+	const previous = process.env[ENV_TREE_LOG];
+	// No log path, so the writer holds the line and the ring alone carries it.
+	delete process.env[ENV_TREE_LOG];
+	const data = createSidebarData(fakePi());
+	try {
+		recordLogLine({ text: "agent-stack: forced paint failed: no host" });
+		data.subscribe(fakeCtx());
+		await flush();
+		const rows = data.snapshot().askLog ?? [];
+		assert.equal(rows.length, 1, "the held line paints with the first frame");
+		assert.equal(rows[0].kind, "log");
+		assert.equal(rows[0].text, "agent-stack: forced paint failed: no host");
+
+		// The path lands the same line in the log, so a later paint reads it there.
+		process.env[ENV_TREE_LOG] = logPath;
+		flushPendingLogEvents();
+		data.dispose();
+		const again = createSidebarData(fakePi());
+		again.subscribe(fakeCtx());
+		await flush();
+		assert.equal(again.snapshot().askLog?.length, 1, "the landed line appears once");
+		again.dispose();
+	} finally {
+		data.dispose();
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
 		rmSync(dir, { recursive: true, force: true });
 	}
 });

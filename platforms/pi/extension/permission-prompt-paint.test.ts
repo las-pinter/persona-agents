@@ -16,8 +16,12 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { buildPromptModel, renderPermissionPrompt } from "./permission-prompt.ts";
+import { readAllEvents } from "./tree-log.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
 
 /** A theme that keeps the text plain. These tests never render a frame. */
 const stubTheme = {
@@ -110,18 +114,27 @@ function fakePromptCtx(renderNow?: (force?: boolean) => void): FakeHost {
 	return { ctx, mounted, paints, panel: () => panel };
 }
 
-/** Collect the `console.warn` lines a run logs, then restore the console. */
+/** A log path no other case reads, so one case never sees another's lines. */
+let caseCounter = 0;
+function caseLogPath(): string {
+	caseCounter += 1;
+	return path.join(tmpdir(), `paint-log-${process.pid}-${caseCounter}-${Date.now()}.ndjson`);
+}
+
+/** Collect the log lines a run writes, then return them. */
 async function collectWarnings<T>(run: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
-	const lines: string[] = [];
-	const original = console.warn;
-	console.warn = (...args: unknown[]): void => {
-		lines.push(args.map(String).join(" "));
-	};
+	const previous = process.env[ENV_TREE_LOG];
+	const logPath = caseLogPath();
+	process.env[ENV_TREE_LOG] = logPath;
 	try {
 		const result = await run();
+		const lines = readAllEvents(logPath)
+			.filter((event) => event.type === "log" && typeof event.text === "string")
+			.map((event) => event.text ?? "");
 		return { result, lines };
 	} finally {
-		console.warn = original;
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
 	}
 }
 

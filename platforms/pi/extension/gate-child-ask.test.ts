@@ -8,7 +8,7 @@
  * Run: npm test
  */
 
-import { after, afterEach, before, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
 	CHILD_ASK_DEADLINE_MS,
@@ -43,56 +43,45 @@ import {
 	type PermissionChoice,
 } from "./permission-prompt.ts";
 import { newRunRecord } from "./run-registry.ts";
+import { createAskLog, type AskLogEvent } from "./ask-record.ts";
+import { readAllEvents } from "./tree-log.ts";
+import { ENV_TREE_LOG } from "./depth.ts";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
+import { rmSync } from "node:fs";
 
-/** The console channel a line came through, so a line is forwarded the same way. */
-type LoggedChannel = "error" | "warn";
+/** The log file of the current case, so one case reads no other. */
+let caseLog = "";
+let caseCounter = 0;
 
-/** One console line the extension logs, with its channel and full argument list. */
+/** The ask rows of the current case, oldest first, folded the way the panel folds them. */
+function askRows(): AskLogEvent[] {
+	const ring = createAskLog();
+	for (const event of readAllEvents(caseLog)) ring.observe(event);
+	return ring.rows();
+}
+
+/** One row of the ring. */
 interface LoggedLine {
-	channel: LoggedChannel;
 	text: string;
-	args: unknown[];
 }
 
-/** Every console line the extension logs, so a warning case reads it and none prints. */
-const logged: LoggedLine[] = [];
-const realConsole = { error: console.error, warn: console.warn };
-
-/** Record one console call on the channel that carried it. */
-function record(channel: LoggedChannel, args: unknown[]): void {
-	logged.push({ channel, text: args.map((arg) => String(arg)).join(" "), args });
+/** The ask rows of the current case at one stage, oldest first. */
+function linesWith(phase: "arrival" | "expiry"): LoggedLine[] {
+	return askRows()
+		.filter((row) => row.phase === phase)
+		.map((row) => ({ text: row.text }));
 }
 
-/** The logged lines that start with one prefix. */
-function linesWith(prefix: string): LoggedLine[] {
-	return logged.filter((line) => line.text.startsWith(prefix));
-}
-
-/** Forward each non child-ask line to the real console, then clear the log. */
-function forwardLogged(): void {
-	// A line from another case is a real fault, so it reaches its own channel.
-	for (const line of logged) {
-		if (line.text.startsWith("agent-stack: child ask ")) continue;
-		if (line.channel === "error") realConsole.error(...line.args);
-		else realConsole.warn(...line.args);
-	}
-	logged.length = 0;
-}
-
-// Every child ask case logs two lines, so one stub for the file lives here.
-before(() => {
-	console.error = (...args: unknown[]): void => record("error", args);
-	console.warn = (...args: unknown[]): void => record("warn", args);
-});
-
-after(() => {
-	console.error = realConsole.error;
-	console.warn = realConsole.warn;
+beforeEach(() => {
+	caseCounter += 1;
+	caseLog = path.join(tmpdir(), `gate-child-ask-log-${process.pid}-${caseCounter}-${Date.now()}.ndjson`);
+	process.env[ENV_TREE_LOG] = caseLog;
 });
 
 afterEach(() => {
 	unbindChildAsk();
-	forwardLogged();
+	rmSync(caseLog, { force: true });
 });
 
 // --- one root prompt ---------------------------------------------------------
@@ -333,15 +322,18 @@ test("warnings: an arrival line and a deadline line name the ask and its state",
 	const result = await childAsk(s, CHILD_A);
 	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 
-	// Split by source, so a missing line names itself in its own assertion.
-	const queued = linesWith("agent-stack: child ask queued ");
-	const expired = linesWith("agent-stack: child ask expired ");
-	assert.equal(queued.length, 1, "one arrival line");
-	assert.equal(expired.length, 1, "one deadline line");
+	// Split by stage, so a missing row names itself in its own assertion.
+	const queued = linesWith("arrival");
+	const expired = linesWith("expiry");
+	assert.equal(queued.length, 1, "one arrival row");
+	assert.equal(expired.length, 1, "one deadline row");
 
-	assert.ok(queued[0].text.includes(`root=${ROOT} `), "the arrival line names the root");
-	assert.match(queued[0].text, /child=implementer /, "the arrival line names the child role");
-	assert.match(queued[0].text, /tool=bash /, "the arrival line names the tool");
+	assert.match(
+		queued[0].text,
+		/^\d{2}:\d{2}:\d{2} implementer\/bash root=\S+ phase=arrival /,
+		"the arrival row names the child, the tool, the root, and the stage",
+	);
+	assert.ok(queued[0].text.includes(`root=${ROOT} `), "the arrival row names the root");
 	assert.match(
 		queued[0].text,
 		/queued=1 shown=none parked=0 surface=yes$/,
@@ -350,12 +342,10 @@ test("warnings: an arrival line and a deadline line name the ask and its state",
 
 	assert.match(
 		expired[0].text,
-		/^agent-stack: child ask expired with no answer before the deadline /,
-		"the deadline line says plainly that no answer arrived",
+		/^\d{2}:\d{2}:\d{2} implementer\/bash root=\S+ phase=expiry /,
+		"the deadline row names the child, the tool, the root, and the stage",
 	);
-	assert.ok(expired[0].text.includes(`root=${ROOT} `), "the deadline line names the root");
-	assert.match(expired[0].text, /child=implementer /, "the deadline line names the child role");
-	assert.match(expired[0].text, /tool=bash /, "the deadline line names the tool");
+	assert.ok(expired[0].text.includes(`root=${ROOT} `), "the deadline row names the root");
 	assert.match(
 		expired[0].text,
 		/waiting=0 shown=this place=slot parked=1 surface=yes$/,
@@ -379,8 +369,8 @@ test("warnings: a waiter reports the panel of the request ahead, not its own", {
 	await drainMicrotasks();
 
 	// The second request waits behind the first, which owns the only panel.
-	const queued = linesWith("agent-stack: child ask queued ");
-	assert.equal(queued.length, 2, "two arrival lines");
+	const queued = linesWith("arrival");
+	assert.equal(queued.length, 2, "two arrival rows");
 	assert.match(
 		queued[1].text,
 		/queued=2 shown=other parked=1 surface=yes$/,
@@ -392,17 +382,17 @@ test("warnings: a waiter reports the panel of the request ahead, not its own", {
 	t.mock.timers.tick(20);
 	await drainMicrotasks();
 
-	const expired = linesWith("agent-stack: child ask expired ");
-	assert.equal(expired.length, 2, "two deadline lines");
+	const expired = linesWith("expiry");
+	assert.equal(expired.length, 2, "two deadline rows");
 	assert.match(
 		expired[0].text,
-		/child=implementer tool=bash waiting=1 shown=this place=slot /,
-		"the head line names its own child, tool, count, panel, and place",
+		/implementer\/bash root=\S+ phase=expiry waiting=1 shown=this place=slot /,
+		"the head row names its own child, tool, count, panel, and place",
 	);
 	assert.match(
 		expired[1].text,
-		/child=tester tool=bash waiting=0 shown=this place=slot /,
-		"the next line names its own child, tool, count, panel, and place",
+		/tester\/bash root=\S+ phase=expiry waiting=0 shown=this place=slot /,
+		"the next row names its own child, tool, count, panel, and place",
 	);
 
 	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
@@ -427,12 +417,12 @@ test("warnings: an expiry at the panel slot says where the request stood", { tim
 	t.mock.timers.tick(CHILD_ASK_DEADLINE_MS);
 	await drainMicrotasks();
 
-	const expired = linesWith("agent-stack: child ask expired ");
-	assert.equal(expired.length, 1, "one deadline line");
+	const expired = linesWith("expiry");
+	assert.equal(expired.length, 1, "one deadline row");
 	assert.match(
 		expired[0].text,
 		/waiting=0 shown=none place=slot parked=1 surface=yes$/,
-		"the line says the mount began, not that the request stayed queued",
+		"the row says the mount began, not that the request stayed queued",
 	);
 	assert.deepEqual(await child, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
 
@@ -462,16 +452,16 @@ test("warnings: an expiry still in the queue says where the request stood", { ti
 	t.mock.timers.tick(1000);
 	await drainMicrotasks();
 
-	const expired = linesWith("agent-stack: child ask expired ");
-	assert.equal(expired.length, 2, "two deadline lines");
+	const expired = linesWith("expiry");
+	assert.equal(expired.length, 2, "two deadline rows");
 	assert.match(
 		expired[0].text,
-		/child=implementer tool=bash waiting=1 shown=none place=slot /,
+		/implementer\/bash root=\S+ phase=expiry waiting=1 shown=none place=slot /,
 		"the head's mount began while the root held the slot",
 	);
 	assert.match(
 		expired[1].text,
-		/child=tester tool=bash waiting=0 shown=none place=queue parked=1 /,
+		/tester\/bash root=\S+ phase=expiry waiting=0 shown=none place=queue parked=1 /,
 		"the waiter never began a mount, so it stayed queued",
 	);
 	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
@@ -530,79 +520,47 @@ test("warnings: a 29-character root id is cut and marked on the line", { timeout
 	);
 
 	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
-	const queued = linesWith("agent-stack: child ask queued ");
-	assert.equal(queued.length, 1, "one arrival line");
+	const queued = linesWith("arrival");
+	assert.equal(queued.length, 1, "one arrival row");
 	assert.ok(queued[0].text.includes(`root=${longRoot.slice(0, 12)}… `), "the cut id carries its marker");
-	assert.ok(!queued[0].text.includes(longRoot), "the whole long root id never reaches the line");
+	assert.ok(!queued[0].text.includes(longRoot), "the whole long root id never reaches the row");
 });
 
-// Only this case pins the guard: a throwing console may not skip the settle.
-test("warnings: a console that throws still blocks the child at the deadline", { timeout: 2000 }, async () => {
+// Only this case pins the writer guard: a throw inside the log write may not
+// skip the deadline block or leave the request in the queue.
+test("warnings: a log writer that throws still blocks the child at the deadline", { timeout: 2000 }, async () => {
 	const s = setup({ never: true, timeoutMs: 20 });
 	await captureRoot(s);
-	const restore = console.error;
-	console.error = (): void => {
-		throw new Error("console is gone");
-	};
+
+	// The writer reads the log path from the environment. Only that one key
+	// throws, so the rest of the gate keeps its own environment.
+	const realEnv = process.env;
+	const envDescriptor = Object.getOwnPropertyDescriptor(process, "env");
+	Object.defineProperty(process, "env", {
+		configurable: true,
+		get(): NodeJS.ProcessEnv {
+			return new Proxy(realEnv, {
+				get(target, key, receiver): unknown {
+					if (key === ENV_TREE_LOG) throw new Error("the log environment is gone");
+					return Reflect.get(target, key, receiver);
+				},
+			});
+		},
+	});
 	try {
 		const result = await childAsk(s, CHILD_A);
 		assert.deepEqual(
 			result,
 			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
-			"the deadline verdict must arrive although the console threw",
+			"the deadline block must arrive although the write threw",
 		);
 		assert.equal(childAskQueue()?.waiting(ROOT), 0, "the request left the queue");
 	} finally {
-		console.error = restore;
-	}
-});
-
-// This case logs a line with no child-ask prefix, so the forward must carry it
-// to the real console on the channel it came through.
-test("console forward: a foreign line reaches the real console on its own channel", { timeout: 2000 }, () => {
-	const errorLine = "console forward: this line came through error";
-	const warnLine = "console forward: this line came through warn";
-	const arrived: Record<LoggedChannel, unknown[][]> = { error: [], warn: [] };
-	const restore = { error: realConsole.error, warn: realConsole.warn };
-	realConsole.error = (...args: unknown[]): void => {
-		arrived.error.push(args);
-	};
-	realConsole.warn = (...args: unknown[]): void => {
-		arrived.warn.push(args);
-	};
-	try {
-		console.error(errorLine, "error detail");
-		console.warn(warnLine, "warn detail");
-
-		assert.deepEqual(
-			logged,
-			[
-				{ channel: "error", text: `${errorLine} error detail`, args: [errorLine, "error detail"] },
-				{ channel: "warn", text: `${warnLine} warn detail`, args: [warnLine, "warn detail"] },
-			],
-			"the recorder keeps the channel, the text, and the full argument list of each line",
-		);
-
-		forwardLogged();
-
-		assert.deepEqual(
-			arrived.error,
-			[[errorLine, "error detail"]],
-			"the error line is forwarded on error, once, with both arguments",
-		);
-		assert.deepEqual(
-			arrived.warn,
-			[[warnLine, "warn detail"]],
-			"the warn line is forwarded on warn, once, with both arguments",
-		);
-	} finally {
-		realConsole.error = restore.error;
-		realConsole.warn = restore.warn;
+		if (envDescriptor) Object.defineProperty(process, "env", envDescriptor);
 	}
 });
 
 // --- FIFO --------------------------------------------------------------------
-
 test("FIFO: arrival order holds and a denied head shows the next request", { timeout: 2000 }, async () => {
 	const s = setup({ answers: ["Deny", "Allow once"] });
 	await captureRoot(s);

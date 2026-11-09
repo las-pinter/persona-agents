@@ -32,7 +32,6 @@ import {
 	shortId,
 	shownField,
 	waitingApart,
-	warnAskLine,
 } from "./child-ask-log.ts";
 import { pump, release } from "./child-ask-mount.ts";
 import {
@@ -135,15 +134,16 @@ export class ChildAskQueue {
 			state.queue.push(request);
 			// Read the fields first, so a queued request shows on the line.
 			const root = shortId(state.rootSessionId);
-			const flags = arrivalFlags(
+			const flags = `root=${root} phase=arrival ${arrivalFlags(
 				surfacesOf(this.states, registry),
 				state,
 				// The pump mounts this request later, so the panel is another or none.
 				shownField(state.visible, request) as ArrivalShownValue,
 				state.queue.length,
-			);
-			const line = `agent-stack: child ask queued root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
+			)}`;
 			// The arrival writes one record with the same id the verdict will carry.
+			// The root, the stage, the child, and the tool ride in the record flags,
+			// so one event paints one row.
 			recordAsk({
 				tool: request.toolName,
 				role: request.role,
@@ -154,8 +154,6 @@ export class ChildAskQueue {
 				phase: "arrival",
 				flags,
 			});
-			// A silent queue hides a child that waits for an owner who never sees it.
-			warnAskLine(line);
 			// Batch requests that arrive in one tick, so the title counts them all.
 			queueMicrotask(() => pump(this.states, this.live, this.render, state));
 		});
@@ -196,16 +194,15 @@ export class ChildAskQueue {
 	/** The deadline path. The child is blocked, and the next request shows. */
 	private expire(state: RootState, request: GateRequest): void {
 		if (request.settled) return;
-		// Read the position first, so the line names where this request stood.
+		// Read the position first, so the row names where this request stood.
 		const root = shortId(state.rootSessionId);
-		const flags = expiryFlags(
+		const flags = `root=${root} phase=expiry ${expiryFlags(
 			surfacesOf(this.states, state.registry),
 			state,
 			shownField(state.visible, request),
 			placeField(state, request),
 			waitingApart(state, request),
-		);
-		const line = `agent-stack: child ask expired with no answer before the deadline root=${root} child=${request.role} tool=${request.toolName} ${flags}`;
+		)}`;
 		// One expired ask writes one record, before the settle frees the request.
 		recordAsk({
 			tool: request.toolName,
@@ -217,9 +214,8 @@ export class ChildAskQueue {
 			phase: "expiry",
 			flags,
 		});
-		// The verdict goes first, so a blocking console write never delays it.
+		// The verdict goes first, so a slow record write never delays the block.
 		settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
-		warnAskLine(line);
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
 		// A parked mount clears itself in its own finally. This path never clears

@@ -18,6 +18,7 @@ import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts";
 import { MAX_LOG_BYTES, appendEvent, compactLog, compactionLiveRuns, createRootLogPath } from "./tree-log.ts";
+import { flushPendingLogEvents, recordLogLine } from "./ask-record.ts";
 import { inChildBuild, skipsDefaults } from "./child-session.ts";
 
 function debugLog(...parts: unknown[]): void {
@@ -82,6 +83,9 @@ function initTreeRoot(): void {
 			status: "idle",
 			at: new Date().toISOString(),
 		});
+		// A line written before this path existed is held in the writer. It lands
+		// here, so the first sidebar paint reads it from the log with the rest.
+		flushPendingLogEvents();
 		compactIfNeeded(logPath, rootRunId);
 	} catch {
 		// Logging must never break a session.
@@ -332,7 +336,9 @@ export default function (pi: ExtensionAPI): void {
 			discovery = cwd ? discoverAgents(cwd, "both") : discoverAgents(getAgentDir(), "both");
 		} catch (error) {
 			const fault = error instanceof Error ? error.message : String(error);
-			console.warn(`agent-stack: agent discovery failed; the permission gate stays installed: ${fault}`);
+			recordLogLine({
+				text: `agent-stack: agent discovery failed; the permission gate stays installed: ${fault}`,
+			});
 			discovery = { agents: [], personas: [], projectAgentsDir: null };
 		}
 
@@ -489,7 +495,7 @@ export default function (pi: ExtensionAPI): void {
 				debugLog("mandatory skill bytes:", injectedBytes, "cap:", bodyCap, "budget:", injectionBudget);
 				for (const pattern of agent.alwaysLoad) {
 					if (matchSkills([pattern], discoveredSkills).length === 0) {
-						console.warn(`agent-stack: alwaysLoad entry resolves to no skill: ${pattern}`);
+						recordLogLine({ text: `agent-stack: alwaysLoad entry resolves to no skill: ${pattern}` });
 						extra += `\n\nMISSING skill for alwaysLoad entry: ${pattern}`;
 					}
 				}

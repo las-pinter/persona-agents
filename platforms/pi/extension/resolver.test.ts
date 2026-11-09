@@ -17,6 +17,7 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
+import { readAllEvents } from "./tree-log.ts";
 import { loadAgentsFromDir, loadTemplateAgents, type AgentConfig, type PermissionClass } from "./resolver.ts";
 
 const ROLE_CLASS: Record<string, PermissionClass> = {
@@ -93,19 +94,33 @@ test("an unknown permission class fails with the file name and the value", (t) =
 
 // --- user and project agent files --------------------------------------------
 
-/** Collect the `console.warn` lines a call logs, then restore the console. */
+/** A log path no other case reads, so one case never sees another's lines. */
+let caseCounter = 0;
+function caseLogPath(): string {
+	caseCounter += 1;
+	return path.join(os.tmpdir(), `resolver-log-${process.pid}-${caseCounter}-${Date.now()}.ndjson`);
+}
+
+/** Every `log` line in one log file. */
+function logLines(logPath: string): string[] {
+	return readAllEvents(logPath)
+		.filter((event) => event.type === "log" && typeof event.text === "string")
+		.map((event) => event.text ?? "")
+		.filter((text) => text.length > 0);
+}
+
+/** Collect the log lines a call writes, then return them. */
 function captureWarnings(run: () => void): string[] {
-	const lines: string[] = [];
-	const original = console.warn;
-	console.warn = (...args: unknown[]) => {
-		lines.push(args.map((arg) => String(arg)).join(" "));
-	};
+	const previous = process.env[ENV_TREE_LOG];
+	const logPath = caseLogPath();
+	process.env[ENV_TREE_LOG] = logPath;
 	try {
 		run();
 	} finally {
-		console.warn = original;
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
 	}
-	return lines;
+	return logLines(logPath);
 }
 
 /** A temp `.pi/agents` directory holding one agent file. */
@@ -283,26 +298,19 @@ test("a malformed agent file does not stop the gate from installing", async (t) 
 		else process.env[key] = value;
 	};
 	setEnv(ENV_RUN_ID, "resolver-gate-root");
-	setEnv(ENV_TREE_LOG, path.join(project, "tree-log.ndjson"));
+	const gateLog = path.join(project, "tree-log.ndjson");
+	setEnv(ENV_TREE_LOG, gateLog);
 
 	try {
 		const { pi, handlers } = makePi();
-		const warnings: string[] = [];
-		const originalWarn = console.warn;
-		console.warn = (...args: unknown[]) => {
-			warnings.push(args.map((arg) => String(arg)).join(" "));
-		};
-		try {
-			assert.doesNotThrow(() => extension(pi), "a malformed agent file must not reach the factory");
-			for (const handler of handlers.get("session_start") ?? []) {
-				await handler(
-					{ type: "session_start" },
-					{ cwd: project, sessionManager: { getSessionId: () => "resolver-gate-session" } },
-				);
-			}
-		} finally {
-			console.warn = originalWarn;
+		assert.doesNotThrow(() => extension(pi), "a malformed agent file must not reach the factory");
+		for (const handler of handlers.get("session_start") ?? []) {
+			await handler(
+				{ type: "session_start" },
+				{ cwd: project, sessionManager: { getSessionId: () => "resolver-gate-session" } },
+			);
 		}
+		const warnings = logLines(gateLog);
 
 		assert.ok(
 			warnings.some((line) => line.includes("agent discovery failed")),

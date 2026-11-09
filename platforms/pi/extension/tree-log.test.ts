@@ -146,6 +146,31 @@ test("readEvents returns exactly the capped tail when the log is longer", () => 
 	assert.equal(events[events.length - 1]?.runId, `run-${total - 1}`);
 });
 
+test("plain lines spend no tail budget, so a chatty session keeps the run updates", () => {
+	const path = logPath();
+	appendEvent(path, makeEvent({ runId: "root", type: "start" }));
+	// A chatty session writes many plain lines between two run updates.
+	for (let index = 0; index < 100; index++) {
+		appendEvent(
+			path,
+			makeEvent({ runId: "root", type: "log", status: "idle", agent: "", text: `line ${index}` }),
+		);
+	}
+	for (let index = 0; index < 5; index++) {
+		appendEvent(path, makeEvent({ runId: "root", type: "update", toolCount: index }));
+	}
+
+	const events = readEvents(path, 3);
+	const updates = events.filter((event) => event.type === "update");
+	assert.equal(updates.length, 3, "the tail keeps three run records, not three of any kind");
+	assert.equal(updates.at(-1)?.toolCount, 4, "the newest run update survives the chatty lines");
+	assert.equal(
+		events.filter((event) => event.type === "log").length,
+		100,
+		"every plain line rides outside the budget",
+	);
+});
+
 test("a start record older than the cap survives with one capped tail", () => {
 	const path = logPath();
 	appendEvent(path, makeEvent({ runId: "root", type: "start", at: new Date(0).toISOString() }));
