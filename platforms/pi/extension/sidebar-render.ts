@@ -1,17 +1,18 @@
 /**
  * Sidebar panel renderers — pure.
  *
- * Composes the seven right-column panels: AGENTS (tree), STATUS, LOG, SESSION,
- * WORKSPACE, MCP, TODOS. Every function is pure: no fs, no timers, no pi runtime
- * import.
+ * Composes the seven right-column panels: AGENTS (tree), STATUS, SESSION,
+ * WORKSPACE, MCP, TODOS, LOG. Every function is pure: no fs, no timers, no pi
+ * runtime import.
  * The only external imports are `truncateToWidth`/`visibleWidth` and
- * `wrapTextWithAnsi`, so every line fits the column width.
+ * `wrapTextWithAnsi`, so every line fits the column width. The ring cap comes
+ * in from `ask-record.ts`, because the owner of the ring owns its cap.
  *
  * `sidebar-render.test.ts` runs under plain Node (type stripping).
  */
 
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import type { AskLogEvent } from "./ask-record.ts";
+import { ASK_HISTORY_MAX, type AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import { roundMark } from "./subagent-marks.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
@@ -148,7 +149,7 @@ export interface StatusSnapshot {
 }
 
 /**
- * One LOG panel row: one ask event, newest first at index 0. The shape is the
+ * One LOG panel row: one ring entry, newest first at index 0. The shape is the
  * ring shape from `ask-record.ts`, so the snapshot field needs no copy.
  */
 export type AskLogRow = AskLogEvent;
@@ -159,7 +160,7 @@ export interface SidebarSnapshot {
 	tree: TreeNode[];
 	/** STATUS panel data. Absent means nothing was probed yet. */
 	status?: StatusSnapshot;
-	/** The newest ask queue events, newest first. Absent means no log read yet. */
+	/** The newest ring entries, newest first. Absent means no log read yet. */
 	askLog?: AskLogRow[];
 	session: SessionSnapshot;
 	workspace: WorkspaceSnapshot;
@@ -497,10 +498,10 @@ export function renderStatusPanel(
 }
 
 /**
- * The LOG panel body: the header with the ring count, then the newest rows,
- * each wrapped to the width. The panel stops after 4 text lines, so a row that
- * does not fit keeps the lines that still fit and the panel ends there. A
- * missing ring paints the empty panel.
+ * The LOG panel body: the header with the kept row count against the ring cap,
+ * then the newest rows, each wrapped to the width. The panel stops after 4 text
+ * lines, so a row that does not fit keeps the lines that still fit and the panel
+ * ends there. A missing ring paints the empty panel.
  */
 export function askLogLines(
 	rows: AskLogRow[] | null | undefined,
@@ -508,11 +509,11 @@ export function askLogLines(
 	theme: SidebarTheme = {},
 ): string[] {
 	const list = rows ?? [];
-	const lines: string[] = [header(theme, ` LOG ${list.length} `)];
+	const lines: string[] = [header(theme, ` LOG ${list.length}/${ASK_HISTORY_MAX} `)];
 	const budget = LOG_PANEL_LINES - 1;
 
 	if (list.length === 0) {
-		lines.push("(no child asks)");
+		lines.push("(no log events)");
 	} else {
 		let used = 0;
 		for (const row of list) {
@@ -533,7 +534,7 @@ export function askLogLines(
 
 /**
  * The LOG panel: `askLogLines` padded to the fixed `LOG_PANEL_LINES` height, so
- * the panels below do not jump when the ring is short.
+ * the foot of the column keeps a stable footprint when the ring is short.
  */
 export function renderAskLogPanel(
 	rows: AskLogRow[] | null | undefined,
@@ -952,10 +953,14 @@ export function renderSidebarPanel(
 	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
 	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
 	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage);
-	const upper = [treePanel, statusPanel, logPanel, sessionPanel, workspacePanel, mcpPanel];
-	// The +upper.length counts the section rules, including the rule before TODOS.
-	const usedByUpper = upper.reduce((sum, panel) => sum + panel.length, 0) + upper.length;
-	const todosHeight = Math.max(0, limit - usedByUpper);
+	const upper = [treePanel, statusPanel, sessionPanel, workspacePanel, mcpPanel];
+	// Seven panels carry six section rules: four between the five panels above,
+	// one before TODOS, one before LOG. TODOS takes the leftover above LOG, which
+	// keeps its fixed five lines at the foot of the column.
+	const ruleCount = upper.length + 1;
+	const usedByFixed =
+		upper.reduce((sum, panel) => sum + panel.length, 0) + ruleCount + logPanel.length;
+	const todosHeight = Math.max(0, limit - usedByFixed);
 	const todosPanel = renderTodosPanel(
 		snapshot.todos,
 		width,
@@ -963,6 +968,6 @@ export function renderSidebarPanel(
 		theme,
 		snapshot.todosTurnMarker === true,
 	);
-	const panels = [...upper, todosPanel].filter((panel) => panel.length > 0);
+	const panels = [...upper, todosPanel, logPanel].filter((panel) => panel.length > 0);
 	return composePanels(ctx, panels, theme);
 }

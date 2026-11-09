@@ -1,13 +1,13 @@
 /**
- * Child ask log: one line per arrival and one per expiry.
+ * Child ask log: the pure field builders for one arrival line and one expiry
+ * line.
  *
  * The line carries the root, the child, the tool, and the state fields, so a
  * stuck child leaves a trace in the extension log ring and the LOG panel. The
- * writer catches its own throw, because a broken log must not skip the settle.
+ * writer sits in `child-ask.ts`, which records before it settles.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { recordLogLine } from "./ask-record.ts";
 import type { GateRequest, RootState } from "./child-ask-state.ts";
 
 /**
@@ -16,18 +16,6 @@ import type { GateRequest, RootState } from "./child-ask-state.ts";
  */
 export function shortId(sessionId: string): string {
 	return sessionId.length <= 12 ? sessionId : `${sessionId.slice(0, 12)}…`;
-}
-
-/**
- * Write one ask line into the extension log ring. A failing write must not skip
- * the settle, so this call catches its own throw.
- */
-export function warnAskLine(line: string): void {
-	try {
-		recordLogLine({ text: line });
-	} catch {
-		// A failed log write must not turn a blocked child into a stuck child.
-	}
 }
 
 /** The `shown` values: the named request's own panel, another panel, or none. */

@@ -29,7 +29,7 @@ export interface AskRecord {
 	askId: string;
 	/** The stage the record reports. */
 	phase: AskPhase;
-	/** The state fields the warning line printed. A settle carries none. */
+	/** The flag fields the panel row prints. A settle carries none. */
 	flags: string;
 }
 
@@ -300,11 +300,11 @@ function textOf(event: RunEvent, ask: AskRecord): string {
 }
 
 /**
- * The readers' contract: a record with no kind is an ask event. Every reader
- * receives its rows through this one boundary, so a later reader can never
- * mislabel a plain line as an ask.
+ * The readers' contract: a record with no kind is an ask event. The ring is the
+ * only caller, so every reader receives its rows through this one boundary and
+ * can never mislabel a plain line as an ask.
  */
-export function logRowOf(row: AskLogEvent): AskLogEvent {
+function logRowOf(row: AskLogEvent): AskLogEvent {
 	return { ...row, kind: row.kind === "log" ? "log" : "ask" };
 }
 

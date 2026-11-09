@@ -26,7 +26,7 @@ const RULE = SECTION_RULE_CHAR.repeat(80);
 
 /** The painted LOG block: the header and its text lines, up to the next rule. */
 function logBlock(lines: string[]): number {
-	const start = lines.findIndex((line) => line.trim() === "LOG 4");
+	const start = lines.findIndex((line) => line.trim() === "LOG 4/50");
 	assert.ok(start >= 0, "the LOG header paints");
 	const rest = lines.slice(start + 1);
 	const stop = rest.findIndex((line) => line === RULE);
@@ -38,7 +38,7 @@ function logBlock(lines: string[]): number {
 test("an empty ring paints the header and the placeholder in five lines", () => {
 	const lines = content(renderAskLogPanel([], 80, theme));
 	assert.equal(lines.length, LOG_PANEL_LINES);
-	assert.deepEqual(lines, [" LOG 0", "(no child asks)", "", "", ""]);
+	assert.deepEqual(lines, [" LOG 0/50", "(no log events)", "", "", ""]);
 	assertFits(renderAskLogPanel([], 80, theme), 80);
 });
 
@@ -54,7 +54,7 @@ test("a ring of four short rows keeps five lines and paints the newest first", (
 	const lines = content(renderAskLogPanel(rows, 45, theme));
 	assert.equal(lines.length, LOG_PANEL_LINES);
 	assert.deepEqual(lines, [
-		" LOG 4",
+		" LOG 4/50",
 		"10:00:04 implementer/bash",
 		"10:00:03 implementer/bash",
 		"10:00:02 implementer/bash",
@@ -83,7 +83,7 @@ test("a plain line in the ring paints beside the ask rows", () => {
 	];
 	const lines = content(renderAskLogPanel(rows, 60, theme));
 	assert.equal(lines.length, LOG_PANEL_LINES, "the panel keeps its fixed height");
-	assert.equal(lines[0], " LOG 2", "the header counts every kept entry");
+	assert.equal(lines[0], " LOG 2/50", "the header counts every kept entry against the cap");
 	assert.equal(lines[1], "agent-stack: forced paint failed", "the plain line paints whole");
 	assert.equal(lines[2], "10:00:04 implementer/bash place=slot", "the ask row text is unchanged");
 	assert.equal(lines[3], "", "the short ring pads to five lines");
@@ -91,7 +91,7 @@ test("a plain line in the ring paints beside the ask rows", () => {
 });
 
 test("at width 45 the newest expiry row keeps place=slot whole", () => {
-	assert.equal(content(askLogLines(makeAskLogRows(), 45))[0], " LOG 4");
+	assert.equal(content(askLogLines(makeAskLogRows(), 45))[0], " LOG 4/50");
 	const textLines = content(askLogLines(makeAskLogRows(), 45)).slice(1);
 	// The wrap breaks on whitespace, so the flag token survives in one piece.
 	assert.ok(
@@ -118,7 +118,7 @@ test("a ring of five rows wraps the newest row at width 45", () => {
 	];
 	// The ring holds five rows; the panel paints the four text lines it has.
 	assert.deepEqual(content(renderAskLogPanel(rows, 45, theme)), [
-		" LOG 5",
+		" LOG 5/50",
 		"10:00:04 implementer/bash waiting=0",
 		"shown=none place=slot parked=0 surface=yes",
 		"10:00:03 tester/bash waiting=0 shown=this",
@@ -141,7 +141,7 @@ test("at width 40 the budget cuts row 0 after three lines and row 1 after one", 
 	const body = content(askLogLines(makeAskLogRows(), 40, theme));
 	assert.equal(body.length, LOG_PANEL_LINES, "the budget stops the list at five lines");
 	assert.deepEqual(body, [
-		" LOG 4",
+		" LOG 4/50",
 		"10:00:04 implementer/bash waiting=0",
 		"shown=none place=slot parked=0",
 		"surface=yes",
@@ -171,27 +171,36 @@ for (const width of [0, 1, 10, 20, 45, 120]) {
 
 // --- the slot and the height budget ------------------------------------------
 
-test("the LOG panel keeps its five lines before the panels below shrink", () => {
-	for (const height of [16, 24, 30]) {
-		const block = logBlock(content(renderSidebarPanel(makeBudgetSnapshot(), 80, height, theme, 0)));
-		assert.equal(block, 5, `LOG paints five lines at height ${height}`);
+test("the LOG panel keeps its five lines at the foot of the column", () => {
+	for (const height of [36, 40, 60]) {
+		const lines = content(renderSidebarPanel(makeBudgetSnapshot(), 80, height, theme, 0));
+		assert.equal(logBlock(lines), 5, `LOG paints five lines at height ${height}`);
+		assert.notEqual(lines[lines.length - 1], RULE, "no rule paints below the log panel");
 	}
 });
 
-test("a short column drops the right number of lines from the panels below", () => {
-	const at = (height: number): string[] => renderSidebarPanel(makeBudgetSnapshot(), 80, height, theme, 0);
-	const tall = at(30);
-	const medium = at(16);
-	const short = at(12);
+test("a short column shrinks TODOS first, then drops LOG before MCP", () => {
+	const at = (height: number): string[] => content(renderSidebarPanel(makeBudgetSnapshot(), 80, height, theme, 0));
+	const tall = at(40);
+	const noTodos = at(37);
+	const noLog = at(35);
+	const short = at(29);
 
-	// AGENTS 4, STATUS 4, LOG 5, SESSION 9, and three rules paint at height 30.
-	assert.equal(tall.length, 25, "the reference column paints 25 of 30 lines");
-	// SESSION 9 lines and its rule leave at height 16.
-	assert.equal(medium.length, 25 - (9 + 1));
-	// LOG 5 lines and its rule leave at height 12.
-	assert.equal(short.length, 25 - (9 + 1) - (5 + 1));
-	assert.ok(tall.some((line) => line.includes(" SESSION ")), "SESSION paints at height 30");
-	assert.ok(!medium.some((line) => line.includes(" SESSION ")), "SESSION drops at height 16");
-	assert.ok(medium.some((line) => line.includes(" LOG ")), "LOG still paints at height 16");
-	assert.ok(!short.some((line) => line.includes(" LOG ")), "LOG drops at height 12");
+	// At 40 TODOS still gets three lines and the log keeps five at the foot.
+	assert.equal(tall.length, 40, "the column uses the whole height");
+	assert.ok(tall.some((line) => line === " TODOS"), "TODOS paints at height 40");
+	assert.equal(logBlock(tall), 5, "LOG paints five lines at height 40");
+
+	// At 37 TODOS has no line left, and the log still paints below MCP.
+	assert.ok(!noTodos.some((line) => line === " TODOS"), "TODOS shrinks away at height 37");
+	assert.equal(logBlock(noTodos), 5, "LOG still paints its five lines at height 37");
+
+	// At 35 the log is the first whole panel to leave, and MCP stays.
+	assert.ok(!noLog.some((line) => line.startsWith(" LOG ")), "LOG drops at height 35");
+	assert.ok(noLog.some((line) => line === " MCP"), "MCP still paints at height 35");
+
+	// At 29 the log and MCP are gone, and the panels above them stay in order.
+	assert.ok(!short.some((line) => line.startsWith(" LOG ")), "LOG stays dropped at height 29");
+	assert.ok(!short.some((line) => line === " MCP"), "MCP drops at height 29");
+	assert.ok(short.some((line) => line === " WORKSPACE"), "WORKSPACE still paints at height 29");
 });

@@ -28,7 +28,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
 | `ask-record.ts` | The one extension log ring: ask events and plain lines, one file, one cap, one order |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
-| `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STATUS, LOG, SESSION, WORKSPACE, MCP, TODOS) |
+| `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
 | `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
@@ -142,7 +142,7 @@ Template fields (YAML):
 | `model` | string | optional `provider/model` override for subagent runs |
 | `persona` | string | default persona reference: `theme/name`, `name`, or `theme` |
 | `skills` | string[] | glob bindings to skills under `content/skills/` (package), `~/.pi/agent/skills/` (user), and `.pi/skills/` (project). `"orchestrator/*"` matches every skill in the orchestrator group; each matched skill is injected as an on-demand index entry (name, description, path) and the agent reads the `SKILL.md` when the task matches |
-| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total writes no warning; the measured total, cap, and budget go to the debug log when it is enabled. A pattern that resolves to no skill logs `console.warn` and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
+| `alwaysLoad` | string[] | skills **guaranteed** injected into the prompt at startup as `## Mandatory skill: <id>` blocks. The whole body is always injected, whatever its size and whatever the running total: an over-threshold body or an over-budget total writes no warning; the measured total, cap, and budget go to the debug log when it is enabled. A pattern that resolves to no skill writes one line to the log ring and leaves `MISSING skill for alwaysLoad entry: …` in the prompt — never silent. Overlap with `skills:` is deduped (alwaysLoad wins) |
 | `resources` | string[] | file globs relative to the session cwd (`!` = exclude). Small files are inlined (≤4 KiB), larger ones listed as paths (≤32 KiB total, ≤8 dir depth, skips `.git`/`node_modules`/…) |
 | `permissionClass` | string | permission fence class: `reader`, `worker`, or `orchestrator`. A template this repository ships must name one. A user or project agent file may omit it, and a blank value counts as omitted: it loads as `reader`. A user or project file that names a class above `reader` is clamped to `reader` with one warning that names the file. An unknown value throws, and discovery then logs one line while the permission gate still installs |
 
@@ -431,36 +431,42 @@ The sidebar owns the right column. It paints SEVEN panels:
 1. AGENTS — the live agent tree.
 2. STATUS — the active study, its stage and brief count, the next action, the
    short HEAD, and the newest ask.
-3. LOG — the newest child ask events, newest first, five lines tall, wrapped at
-   the column width.
-4. SESSION — model, thinking level, context use, cost, and tokens per second.
-5. WORKSPACE — cwd, git branch, and the changed-file count.
-6. MCP — configured servers, an inferred connection dot, a per-server `xN`
+3. SESSION — model, thinking level, context use, cost, and tokens per second.
+4. WORKSPACE — cwd, git branch, and the changed-file count.
+5. MCP — configured servers, an inferred connection dot, a per-server `xN`
    use count, and a `total xN` line.
-7. TODOS — the `todo` tool's list.
+6. TODOS — the `todo` tool's list.
+7. LOG — the newest log ring entries, newest first, five lines tall at the foot
+   of the column, wrapped at the column width. The header reads `LOG n/50`: the
+   kept row count against the ring cap.
 
-A short terminal drops whole panels from the end of that list: TODOS first,
-MCP, WORKSPACE, SESSION, LOG, then STATUS. At height 30 the column paints
-AGENTS, STATUS, LOG, and SESSION. At 24 and 16 it paints AGENTS, STATUS, and
-LOG. At 12 it paints AGENTS and STATUS.
+TODOS takes the height that the fixed panels leave, the five-line LOG panel at
+the foot included. A short column first shrinks TODOS line by line. When TODOS
+is empty, whole panels drop from the end of the list: LOG first, then TODOS,
+MCP, WORKSPACE, SESSION, then STATUS. AGENTS never drops. With a full ring and
+two changed files, a column of 30 rows paints AGENTS, STATUS, SESSION,
+WORKSPACE, and MCP.
 
-The tree and the MCP counts are cross-process. The STATUS, LOG, SESSION,
-WORKSPACE, and TODOS panels show the root process's data only. The LOG panel
-reads the ask events in the shared log and folds them into a ring in the root
-process. The child loader carries no extension set, and the `todo` tool guards a
-child session by id, so a child's session and todo data is not visible to the
-root sidebar. The root counts its own MCP tool starts and folds each child's
-counts through the tree log into one session tally.
+The tree and the MCP counts are cross-process. The STATUS, SESSION, WORKSPACE,
+TODOS, and LOG panels show the root process's data only. The LOG panel reads the
+ask events and the plain lines in the shared log and folds them into one ring in
+the root process. The child loader carries no extension set, and the `todo` tool
+guards a child session by id, so a child's session and todo data is not visible
+to the root sidebar. The root counts its own MCP tool starts and folds each
+child's counts through the tree log into one session tally.
 
 The extension keeps ONE log ring, and the owning file is `ask-record.ts`. The
 ring holds two kinds of entry: an ask queue event, and a plain extension line.
-Every extension message goes there, not to the console. Two writers feed the one
-file and the one ring: `recordAsk` writes an ask record, and `recordLogLine`
-writes a plain line. Both use one cap and one order. Only a plain line is held:
-the writer keeps it, up to the cap, until the log path exists, and the ring
-folds it so it shows on the first paint of the panel. An ask record written
-before the log path exists is dropped, as it always was. Do not add
-`console.log`, `console.warn`, or `console.error` to a module here.
+Every extension message goes there, not to the console. The one exception is the
+opt-in debug file: a `debugLog` line goes to
+`os.tmpdir()/pi-agent-stack-debug.log`, and only when `PI_AGENT_STACK_DEBUG` is
+set. Two writers feed the one file and the one ring: `recordAsk` writes an ask
+record, and `recordLogLine` writes a plain line. The ring caps both kinds at
+`ASK_HISTORY_MAX` and keeps one order. Only a plain line is held: the writer
+keeps it, up to the cap, until the log path exists, and the ring folds it so it
+shows on the first paint of the panel. An ask record written before the log path
+exists is dropped, as it always was. Do not add `console.log`, `console.warn`,
+or `console.error` to a module here.
 
 The tree comes from a shared append-only NDJSON log. The root creates the log in
 `os.tmpdir()`, unique per root. The root compacts the log when it grows past the

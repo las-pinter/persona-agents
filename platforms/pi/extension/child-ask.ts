@@ -214,7 +214,7 @@ export class ChildAskQueue {
 			phase: "expiry",
 			flags,
 		});
-		// The verdict goes first, so a slow record write never delays the block.
+		// The record lands before the settle, so a slow write cannot hide the expiry.
 		settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
