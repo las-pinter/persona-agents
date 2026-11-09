@@ -603,7 +603,7 @@ export function registerTreeUi(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("ask-log", {
-		description: "Open the child ask history",
+		description: "Open the log ring, newest first",
 		handler: async (_args: string, ctx) => {
 			try {
 				if (ctx.mode !== "tui") {

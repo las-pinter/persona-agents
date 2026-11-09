@@ -617,8 +617,8 @@ test("every row a reader receives carries its kind", () => {
 });
 
 test("a record with no kind reads as an ask at the one read boundary", () => {
-	// An older producer wrote no kind. The boundary supplies it, so a reader
-	// cannot mislabel an ask event as a plain line or the other way round.
+	// The read boundary supplies the kind, so a record that carries no kind
+	// reads as an ask and never as a plain line.
 	const legacy = { askId: "ask-1", phase: "arrival", at: AT, text: "00:00:00 implementer/bash" };
 	assert.equal(logRowOf(legacy as AskLogEvent).kind, "ask", "a missing kind reads as an ask");
 	assert.equal(logRowOf({ ...legacy, kind: "log" } as AskLogEvent).kind, "log", "a named kind is kept");

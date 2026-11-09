@@ -295,7 +295,7 @@ test("renderSidebarPanel gives TODOS the leftover height and shows every item", 
 	assert.ok(!lines.some((line) => line.includes("more")), "no overflow marker when every item fits");
 });
 
-test("renderSidebarPanel gives TODOS the height left after 34 upper lines", () => {
+test("renderSidebarPanel gives TODOS the height left after the 34 fixed lines", () => {
 	const height = 40;
 	const todos = Array.from({ length: 8 }, (_value, index) => ({
 		id: String(index),
@@ -314,6 +314,26 @@ test("renderSidebarPanel gives TODOS the height left after 34 upper lines", () =
 	);
 	assert.equal(todosEnd - todosStart, height - 34, "TODOS gets limit minus the 34 fixed lines");
 	assert.equal(lines.length - todosEnd, 6, "one rule and the five-line log stay below TODOS");
+});
+
+test("renderSidebarPanel fills height 37 and gives the freed rule line to TODOS", () => {
+	// AGENTS to MCP take 26 lines and LOG takes five. Six rules would need 38
+	// lines, so the rule above TODOS is freed and TODOS paints a one-line
+	// header in its place.
+	const lines = content(renderSidebarPanel(makeBudgetSnapshot(), 80, 37, theme, 0));
+	const rule = SECTION_RULE_CHAR.repeat(80);
+	assert.equal(lines.length, 37, "the column fills the limit");
+	const todosStart = lines.findIndex((line) => line === " TODOS");
+	assert.ok(todosStart > 0, "TODOS paints its header at height 37");
+	assert.notEqual(lines[todosStart - 1], rule, "the freed rule line above TODOS is gone");
+	assert.equal(lines[todosStart + 1], rule, "one rule still separates TODOS from LOG");
+	assert.equal(lines.filter((line) => line === rule).length, 5, "five rules carry the seven panels");
+	assert.ok(lines[lines.length - 5].startsWith(" LOG "), "LOG keeps its five lines at the foot");
+	assert.equal(
+		renderTodosPanel(makeBudgetSnapshot().todos, 80, 1, theme).length,
+		1,
+		"the one-line TODOS budget paints one line and never a negative height",
+	);
 });
 
 test("renderSidebarPanel paints the turn marker from the snapshot", () => {

@@ -441,11 +441,12 @@ The sidebar owns the right column. It paints SEVEN panels:
    kept row count against the ring cap.
 
 TODOS takes the height that the fixed panels leave, the five-line LOG panel at
-the foot included. A short column first shrinks TODOS line by line. When TODOS
-is empty, whole panels drop from the end of the list: LOG first, then TODOS,
-MCP, WORKSPACE, SESSION, then STATUS. AGENTS never drops. With a full ring and
-two changed files, a column of 30 rows paints AGENTS, STATUS, SESSION,
-WORKSPACE, and MCP.
+the foot included. A short column first shrinks TODOS line by line. The last
+line above TODOS is its own rule, and TODOS takes that line as a one-line
+header, so no row goes unused. When TODOS is empty, whole panels drop from the
+end of the list: LOG first, then TODOS, MCP, WORKSPACE, SESSION, then STATUS.
+AGENTS never drops. With a full ring and two changed files, a column of 30 rows
+paints AGENTS, STATUS, SESSION, WORKSPACE, and MCP.
 
 The tree and the MCP counts are cross-process. The STATUS, SESSION, WORKSPACE,
 TODOS, and LOG panels show the root process's data only. The LOG panel reads the

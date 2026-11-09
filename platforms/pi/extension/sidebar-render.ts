@@ -904,14 +904,26 @@ export function selectPrev(ids: string[], current: string | null): string | null
  * Stack the panels in priority order. When the height is too small, lower
  * panels are dropped first; the tree keeps the top slot. A dim, full-width
  * rule separates adjacent panels. Each rule counts against the height budget.
+ * `noRuleBefore` names the index of one panel that paints with no rule above
+ * it, so a freed rule line can carry that panel's header instead.
  */
-function composePanels(ctx: PanelContext, panels: string[][], theme: SidebarTheme): string[] {
+function composePanels(
+	ctx: PanelContext,
+	panels: string[][],
+	theme: SidebarTheme,
+	noRuleBefore: number = -1,
+): string[] {
 	const limit = Math.max(0, Math.floor(ctx.height));
 	if (limit <= 0) return [];
 
-	// Height of the first `count` panels plus one rule between each pair.
+	// One rule sits between each pair of kept panels, except above the panel at
+	// `noRuleBefore`, which takes a freed rule line as its own first line.
+	const ruleCount = (count: number): number =>
+		Math.max(0, count - 1) - (noRuleBefore > 0 && noRuleBefore < count ? 1 : 0);
+
+	// Height of the first `count` panels plus their rules.
 	const stackedHeight = (count: number): number => {
-		let total = Math.max(0, count - 1);
+		let total = ruleCount(count);
 		for (let index = 0; index < count; index++) total += panels[index].length;
 		return total;
 	};
@@ -921,7 +933,7 @@ function composePanels(ctx: PanelContext, panels: string[][], theme: SidebarThem
 
 	const lines: string[] = [];
 	for (let index = 0; index < count; index++) {
-		if (index > 0) lines.push(sectionRule(theme, ctx.width));
+		if (index > 0 && index !== noRuleBefore) lines.push(sectionRule(theme, ctx.width));
 		lines.push(...panels[index]);
 	}
 	if (lines.length > limit) lines.length = limit;
@@ -954,13 +966,17 @@ export function renderSidebarPanel(
 	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
 	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage);
 	const upper = [treePanel, statusPanel, sessionPanel, workspacePanel, mcpPanel];
+	const upperLines = upper.reduce((sum, panel) => sum + panel.length, 0);
 	// Seven panels carry six section rules: four between the five panels above,
 	// one before TODOS, one before LOG. TODOS takes the leftover above LOG, which
 	// keeps its fixed five lines at the foot of the column.
-	const ruleCount = upper.length + 1;
-	const usedByFixed =
-		upper.reduce((sum, panel) => sum + panel.length, 0) + ruleCount + logPanel.length;
-	const todosHeight = Math.max(0, limit - usedByFixed);
+	const fixedHeight = upperLines + (upper.length + 1) + logPanel.length;
+	const leftover = limit - fixedHeight;
+	// A dropped TODOS frees its own rule line. TODOS then takes that line as a
+	// one-line header with no rule above it, so the column fills the limit.
+	const ruleFreeHeight = upperLines + upper.length + logPanel.length;
+	const todosHeight = leftover > 0 ? leftover : Math.max(0, limit - ruleFreeHeight);
+	const joinedTodos = leftover <= 0 && todosHeight > 0;
 	const todosPanel = renderTodosPanel(
 		snapshot.todos,
 		width,
@@ -969,5 +985,6 @@ export function renderSidebarPanel(
 		snapshot.todosTurnMarker === true,
 	);
 	const panels = [...upper, todosPanel, logPanel].filter((panel) => panel.length > 0);
-	return composePanels(ctx, panels, theme);
+	const todosIndex = joinedTodos ? panels.indexOf(todosPanel) : -1;
+	return composePanels(ctx, panels, theme, todosIndex);
 }

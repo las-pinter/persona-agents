@@ -219,7 +219,7 @@ function askViewHeight(tui: TUI): number {
 	return Math.max(5, Math.min(rows, MAX_ASK_VIEW_ROWS) - ASK_FRAME_ROWS);
 }
 
-/** The `/ask-log` overlay: the ask history, wrapped, scrolled by wrapped line. */
+/** The `/ask-log` overlay: the log ring, wrapped, scrolled by wrapped line. */
 export class AskLogOverlayComponent implements Component {
 	wantsKeyRelease = false;
 	private readonly tui: TUI;
