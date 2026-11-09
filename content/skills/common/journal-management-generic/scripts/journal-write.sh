@@ -22,14 +22,21 @@ readonly HELD_CREATED=10
 # The lock path is known only after the parse, so a failure line names it when
 # the slot is set. A usage error runs before the path exists.
 LOCK=""
-# The record and claim temp files go away on exit, except a claim kept when its
-# restore copy fails; that claim is then the last record copy.
+# The exit and signal traps share one cleanup path, so the record and claim
+# temp files go away on exit and on a caught signal. A hard kill cannot be
+# trapped: it leaves at most one of the two temp files behind, and none before
+# the first temp file or after cleanup. An orphan claim blocks no writer.
 TMP=""
 CLAIM=""
 
-# The trap body is inline, so shellcheck sees the two removes it protects.
-trap 'if [[ -n "$TMP" ]]; then rm -f -- "$TMP" 2>/dev/null || true; fi
-      if [[ -n "$CLAIM" ]]; then rm -f -- "$CLAIM" 2>/dev/null || true; fi' EXIT
+cleanup() {
+    if [[ -n "$TMP" ]]; then rm -f -- "$TMP" 2>/dev/null || true; fi
+    if [[ -n "$CLAIM" ]]; then rm -f -- "$CLAIM" 2>/dev/null || true; fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 usage() {
     cat <<EOF
@@ -79,8 +86,7 @@ REC=()
 
 # A record is complete when it holds the five names in order and a numeric at.
 # The caller passes the text it read, so one read serves the digest and this
-# parse. An empty lock file and a short record both return 1, and the caller
-# reads them as a stale lock.
+# parse. An empty file and a short record return 1, read as a stale lock.
 read_record() {
     local parsed=""
     REC=()
@@ -134,8 +140,6 @@ write_record() {
     TMP="$(mktemp "$JOURNALS/.journal-write.XXXXXX" 2>/dev/null)" || fail 3 "temp file create failed"
     if ! printf 'agent %s\nsession %s\ntoken %s\nat %s\nhost %s\n' \
         "$AGENT" "$SESSION" "$token" "$at" "$HOST" >"$TMP" 2>/dev/null; then
-        rm -f -- "$TMP" 2>/dev/null || true
-        TMP=""
         fail 3 "record write failed"
     fi
 }
@@ -156,17 +160,16 @@ create_lock() {
 }
 
 # The lock name moves to a private claim path, so one rename wins and every
-# other breaker finds the name gone.
-# 0 the claim holds the record, 1 a record is still at the lock name, 2 it is
-# gone. A failed move is tested, so a present record is never read as gone.
+# other breaker finds the name gone. 0 the claim holds the record, 1 a record
+# is still at the lock name, 2 it is gone: a failed move is never read as gone.
 claim_lock() {
     local path=""
     path="$(mktemp "$JOURNALS/.journal-write.claim.XXXXXX" 2>/dev/null)" || fail 3 "claim file create failed"
+    CLAIM="$path"
     if mv -- "$LOCK" "$path" 2>/dev/null; then
-        CLAIM="$path"
         return 0
     fi
-    rm -f -- "$path" 2>/dev/null || true
+    drop_claim
     if [[ -e "$LOCK" ]]; then return 1; fi
     return 2
 }
@@ -184,9 +187,8 @@ drop_claim() {
     CLAIM=""
 }
 
-# A claimed record goes back to the lock name only when no newer lock took it.
-# The caller did not make that record, so a failed link never removes it: the
-# bytes go to the previous-record file and the claim stays only when that copy fails.
+# A claimed record returns to the lock name only when no newer lock took it.
+# A failed link sends the bytes to the prev file; a failed copy keeps the claim.
 restore_claim() {
     local claim="$CLAIM"
     if ln -- "$claim" "$LOCK" 2>/dev/null; then
@@ -197,15 +199,14 @@ restore_claim() {
         drop_claim
         fail 3 "lock restore failed, record kept" "$PREV"
     fi
-    # The claim is cleared so the EXIT trap keeps the only copy.
+    # The claim is cleared so the trap keeps the only copy.
     CLAIM=""
     fail 3 "lock restore failed, claimed record kept" "$claim"
 }
 
-# A refresh claims the record and detects whether it is still the own one,
-# then removes the claim and creates again. A lost create is a held lock.
-# held_fail prints its block and returns the created status, or exits. Each
-# branch returns that status; the || : guard only stops set -e on it.
+# A refresh claims the record, detects whether it is still the own one, removes
+# the claim, and creates again. A created lock returns 0; every other branch
+# returns the held_fail status, and the || : guard only stops set -e on it.
 refresh_lock() {
     local token="$1" at="$2" deadline="$3" rc=0
     claim_lock || rc=$?
@@ -230,9 +231,8 @@ refresh_lock() {
     return "$HELD_CREATED"
 }
 
-# A stale record is kept for the owner to read, then the claim is dropped so the
-# caller can retry the create once. A record that changed goes back, untouched.
-# Returns 1 when this caller did not break the record, so the hold re-probes.
+# A stale record is kept for the owner, and the claim is dropped so the caller
+# retries the create once. A changed record goes back; 1 means the hold re-probes.
 break_stale() {
     local rc=0
     claim_lock || rc=$?
