@@ -156,6 +156,8 @@ export const ROW_RATIONALE: Record<string, string> = {
 		"A git file removal carries the same intent as a plain one, so the removal ask row covers it for the two professions that may remove a file.",
 	"shell.verify.script":
 		"The retired worker list allowed npm run with any script name, so one row names the verb and leaves the script word free.",
+	"shell.verify.reader":
+		"The reviewer runs the three verification scripts, so one reader-class row narrows to that profession and leaves the planner, the researcher, and the mascot denied.",
 };
 
 /** A form the table blocks, with the reason and the sample the test checks. */

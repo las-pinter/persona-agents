@@ -93,9 +93,14 @@ compiler writes the pattern. Translation notes:
 - The `cd X && …` / `git -C X …` forms (pi permits the first token only) are
   folded into the allow regexes so delegates don't get stuck on command
   prefixes. The verification and build rows carry no fold, so a moved test or
-  build command falls to the mode default. The `-C` value must be a path: a
-  value with a quote, a backslash, no slash and no `.git` ending, or an equals
-  sign and no leading `/`, `./`, `../`, or `~` is not a path, and the form asks
+  build command falls to the mode default. The orchestrator, the implementer,
+  the tester, and the reviewer hold a verification allow. The reviewer row names
+  that profession only, so the planner, the researcher, and the mascot keep the
+  mode default. A row with `roles` applies only when the agent names a shipped
+  profession, so an unnamed class-compiled agent gets the mode default.
+  The `-C` value must be a path: a value with a quote, a backslash, no slash and
+  no `.git` ending, or an equals sign and no leading `/`, `./`, `../`, or `~` is
+  not a path, and the form asks
   for the orchestrator because the engine matches `-c` and `-C` alike. A
   leading `cd X` before any separator folds the segment to `cd X && …`, so a
   `cd X || sudo true` line is rewritten to `cd X && sudo true` for allow
@@ -209,9 +214,9 @@ again.
 
 ### Table doctrine
 
-- **Row groups.** The shipped file holds 85 rows: 22 global, 14 reader, 22
-  worker, and 27 orchestrator. A class resolves to 36 reader, 44 worker, or 49
-  orchestrator rows.
+- **Row groups.** The shipped file holds 86 rows: 22 global, 15 reader, 22
+  worker, and 27 orchestrator. A class resolves to 36 reader, 41 worker, or 49
+  orchestrator rows, because a class compile drops a `roles` row.
 - **Fences.** A deny row that names an option requires that option, so the bare
   command stays untouched. `find` denies on `-exec`, `-fls`, and the `-fprint`
   forms. `git tag` denies a short or long delete form at every abbreviation.

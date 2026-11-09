@@ -83,27 +83,32 @@ const ANALYSIS_TOOLS = [
 
 // --- row counts -------------------------------------------------------------
 
-test("the table holds 85 rows: 22 global, 14 reader, 22 worker, 27 orchestrator", () => {
+test("the table holds 86 rows: 22 global, 15 reader, 22 worker, 27 orchestrator", () => {
 	const counts = countTable(RULE_ROWS);
-	assert.equal(counts.total, 85);
+	assert.equal(counts.total, 86);
 	assert.equal(counts.byGroup.global, 22);
-	assert.equal(counts.byGroup.reader, 14);
+	assert.equal(counts.byGroup.reader, 15);
 	assert.equal(counts.byGroup.worker, 22);
 	assert.equal(counts.byGroup.orchestrator, 27);
 });
 
-test("every class resolves to 36, 44, and 49 rows", () => {
+test("every class resolves to 36, 41, and 49 rows", () => {
 	const counts = countTable(RULE_ROWS);
 	assert.equal(counts.byClass.reader, 36);
-	assert.equal(counts.byClass.worker, 44);
+	assert.equal(counts.byClass.worker, 41);
 	assert.equal(counts.byClass.orchestrator, 49);
-	assert.deepEqual(rowsForClass(RULE_ROWS, "reader"), [...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "reader")]);
+	assert.deepEqual(
+		rowsForClass(RULE_ROWS, "reader"),
+		[...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "reader")].filter(
+			(row) => row.roles === undefined,
+		),
+	);
 });
 
-test("the 85 rows carry 60 ids: a shared rule is one row per class", () => {
+test("the 86 rows carry 61 ids: a shared rule is one row per class", () => {
 	// One id is one rule. A rule that three classes share is three rows with one
 	// id, so the id count is the number of distinct rules, not of rows.
-	assert.equal(countTable(RULE_ROWS).uniqueIds, 60);
+	assert.equal(countTable(RULE_ROWS).uniqueIds, 61);
 	const shared = new Map<string, number>();
 	for (const row of RULE_ROWS) shared.set(row.id, (shared.get(row.id) ?? 0) + 1);
 	assert.equal(shared.get("read.any"), 3);
@@ -122,9 +127,12 @@ test("the 85 rows carry 60 ids: a shared rule is one row per class", () => {
 test("every row reaches a class set and every flag class is used", () => {
 	const { classes } = compileTable(RULE_ROWS);
 	for (const cls of CLASS_ORDER) {
-		// Every row a class owns emits one rule per tool it names: no row is dropped.
+		// Every row a class owns emits one rule per tool it names, except a
+		// `roles` row, which only a named profession gets.
 		const expected = RULE_ROWS.filter(
-			(row) => row.classes.length === CLASS_ORDER.length || row.classes.includes(cls),
+			(row) =>
+				row.roles === undefined &&
+				(row.classes.length === CLASS_ORDER.length || row.classes.includes(cls)),
 		).reduce((total, row) => total + row.tool.trim().split(/\s+/).length, 0);
 		assert.equal(ruleCount(classes[cls]), expected, cls);
 	}
@@ -465,6 +473,19 @@ test("the gate source binds a custom agent name to its class", () => {
 	const resolved = compileGateSource()(agentFor({ name: "my-helper", permissionClass: "reader" }));
 	assert.equal(resolved.mode, "deny-by-default");
 	assert.deepEqual(resolved.ruleSets, compileClass(RULE_ROWS, "reader"));
+});
+
+test("an unnamed reader-class agent gets the mode default for the verification scripts", () => {
+	const resolved = compileGateSource()(agentFor({ name: "my-helper", permissionClass: "reader" }));
+	assert.equal(resolved.mode, "deny-by-default");
+	// No row matches, so deny-by-default turns the call into a deny.
+	for (const probe of ["npm test", "npm run typecheck", "npm run lint"]) {
+		assert.equal(
+			verdictOf(resolved.ruleSets, "bash", probe),
+			"none",
+			`${probe} matched a row for an unnamed reader agent`,
+		);
+	}
 });
 
 test("the gate source binds a mismatched class to the named class", () => {

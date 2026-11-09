@@ -26,10 +26,10 @@
  *   - the prefix forms of `git.history.prefixed`.
  *
  * A row is scoped to a class, and a class holds more than one profession. A row
- * that carries `roles` narrows that class scope to the professions it names, so
- * `compileRole` gives the row to a named profession only. `compileClass` keeps
- * the row, because a class is the union of its professions and carries no
- * profession of its own.
+ * that carries `roles` applies only to the professions it names, so
+ * `compileRole` selects it for a named profession. `compileClass` drops the row,
+ * because a class carries no profession name, so an unnamed agent falls to the
+ * mode default.
  *
  * A form the row vocabulary cannot express is a schema change, not a local
  * exception here. `validateRows` refuses a row that breaks the schema, and the
@@ -892,11 +892,11 @@ function failUnknownClass(): never {
 
 /**
  * The rows a class gets: every global row, then the class rows in table order.
- * A class is the union of its professions, so a `roles` row stays here; the
- * profession filter is `rowsForRole`.
+ * A class carries no profession name, so a `roles` row is left to `rowsForRole`
+ * and an unnamed agent falls to the mode default.
  */
 export function rowsForClass(rows: readonly RuleRow[], cls: RoleClass): RuleRow[] {
-	return rows.filter((row) => isGlobal(row) || row.classes.includes(cls));
+	return rows.filter((row) => row.roles === undefined && (isGlobal(row) || row.classes.includes(cls)));
 }
 
 /**
@@ -916,12 +916,15 @@ export function rowsForRole(rows: readonly RuleRow[], role: Role): RuleRow[] {
 /**
  * The five rule sets for one class. A class has no notes zone, so a `notes:own`
  * row binds to no zone here and matches nothing; compile the role for that row.
+ * A `roles` row names a profession, so a class compile skips it and an unnamed
+ * agent falls to the mode default.
  */
 export function compileClass(rows: readonly RuleRow[], cls: RoleClass): RuleSets {
 	validateRows(rows);
 	if (!CLASSES.has(cls)) return failUnknownClass();
 	const sets = emptyRuleSets();
 	for (const row of rows) {
+		if (row.roles !== undefined) continue;
 		const global = isGlobal(row);
 		if (!global && !row.classes.includes(cls)) continue;
 		targetSet(sets, row, !global).push(...rulesForRow(row, null));

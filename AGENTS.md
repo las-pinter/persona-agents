@@ -115,8 +115,9 @@ platform:
   Kiro, and an ASK on Claude Code.
 - Accepted risks: `rebase --exec` and `rebase -i` are allowed. On pi, the
   orchestrator may run the three verification scripts, and the test script
-  covers test files it can write, so a self-graded run is possible; CI reruns
-  the same suite, and the install step is the barrier. On Claude Code
+  covers test files it can write, so a self-graded run is possible. The reviewer
+  may run them too, and a passing suite is its own evidence; CI reruns the same
+  suite, and the install step is the barrier. On Claude Code
   and pi, `git -C` to another repository is allowed, and the hooks and config
   of that repository run. On opencode, a bare star or question mark in an
   allowed command can expand to an option name from a planted file. On Claude

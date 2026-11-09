@@ -102,8 +102,8 @@ test("a parent segment, a home path, and a foreign absolute path ask", () => {
 
 // --- the reader toolchain ---------------------------------------------------
 
-test("a reader class runs no test or build runner", () => {
-	for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+test("a reader role with no verify row runs no test or build runner", () => {
+	for (const role of ["planner", "researcher", "mascot"] as Role[]) {
 		const sets = compileRole(RULE_ROWS, role);
 		for (const probe of READER_BLOCKED) {
 			assert.equal(allowMatches(sets, "bash", probe), false, `${role} runs ${probe}`);
@@ -111,6 +111,14 @@ test("a reader class runs no test or build runner", () => {
 		for (const probe of READER_ALLOWED) {
 			assert.equal(allowMatches(sets, "bash", probe), true, `${role} lost the probe ${probe}`);
 		}
+	}
+	// The reviewer holds the three verification scripts and no other blocked probe.
+	const reviewer = compileRole(RULE_ROWS, "reviewer");
+	for (const probe of READER_BLOCKED) {
+		assert.equal(allowMatches(reviewer, "bash", probe), ORCH_SCRIPTS.includes(probe), `reviewer: ${probe}`);
+	}
+	for (const probe of READER_ALLOWED) {
+		assert.equal(allowMatches(reviewer, "bash", probe), true, `reviewer lost the probe ${probe}`);
 	}
 });
 
@@ -295,7 +303,7 @@ test("the implementer allows npm test, npm run typecheck, and tsc --noEmit", () 
 
 test("a verification or build command does not carry the cd fold", () => {
 	for (const probe of CD_FOLD_BLOCKED) {
-		for (const role of ["orchestrator", "implementer", "tester"] as Role[]) {
+		for (const role of ["orchestrator", "implementer", "tester", "reviewer"] as Role[]) {
 			assert.equal(allowMatches(compileRole(RULE_ROWS, role), "bash", probe), false, `${role}: ${probe}`);
 		}
 	}
@@ -303,11 +311,16 @@ test("a verification or build command does not carry the cd fold", () => {
 	assert.equal(allowMatches(compileClass(RULE_ROWS, "orchestrator"), "bash", "cd /fixture && git status"), true);
 });
 
-test("a reader role still denies npm test", () => {
-	for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+test("a reader role with no verify row still denies npm test", () => {
+	for (const role of ["planner", "researcher", "mascot"] as Role[]) {
 		for (const probe of ["npm test", "npm run typecheck", "npm run build", "tsc", "tsc --noEmit", "pytest"]) {
 			assert.equal(allowMatches(compileRole(RULE_ROWS, role), "bash", probe), false, `${role} runs ${probe}`);
 		}
+	}
+	// The reviewer holds the three scripts and still denies the other forms.
+	const reviewer = compileRole(RULE_ROWS, "reviewer");
+	for (const probe of ["npm run build", "tsc", "tsc --noEmit", "pytest"]) {
+		assert.equal(allowMatches(reviewer, "bash", probe), false, `reviewer runs ${probe}`);
 	}
 });
 
@@ -315,9 +328,11 @@ test("a trailing flag on npm test is judged by the orchestrator row rule, not th
 	// Both rows carry the bare flag class, so both end at the script word.
 	assert.equal(rowMatches("shell.verify", "npm test"), true, "the orchestrator row lost npm test");
 	assert.equal(rowMatches("shell.verify.worker", "npm test"), true, "the worker row lost npm test");
+	assert.equal(rowMatches("shell.verify.reader", "npm test"), true, "the reviewer row lost npm test");
 	for (const probe of ["npm test --watch", "npm test extra"]) {
 		assert.equal(rowMatches("shell.verify", probe), false, `the orchestrator row covers ${probe}`);
 		assert.equal(rowMatches("shell.verify.worker", probe), false, `the worker row covers ${probe}`);
+		assert.equal(rowMatches("shell.verify.reader", probe), false, `the reviewer row covers ${probe}`);
 	}
 	// The worker row keeps the bare forms the retired lists carried.
 	for (const probe of WORKER_ROW_TAIL) {
@@ -857,6 +872,7 @@ test("an ask row names npm publish and npx, and every other wrong npm form falls
 test("a leading cd does not allow a verification script, with either separator", () => {
 	for (const probe of ["cd x && npm test", "cd x ; npm test", "cd x && npm run lint", "cd x && npm run typecheck"]) {
 		assert.equal(shippedVerdict("orchestrator", "bash", probe), "default", probe);
+		assert.equal(shippedVerdict("reviewer", "bash", probe), "default", probe);
 	}
 });
 
@@ -895,21 +911,34 @@ test("the planner falls to the mode default on npm test and the run scripts", ()
 	}
 });
 
-test("the implementer and the tester allow the verification scripts and the reviewer does not", () => {
-	for (const role of ["implementer", "tester"] as Role[]) {
+test("the implementer, the tester, and the reviewer allow the verification scripts and the other reader roles do not", () => {
+	for (const role of ["implementer", "tester", "reviewer"] as Role[]) {
 		for (const probe of ORCH_SCRIPTS) {
 			assert.equal(shippedVerdict(role, "bash", probe), "allow", `${role}: ${probe}`);
 		}
 	}
-	// Shipped difference: the reviewer is a reader-class role and holds no npm row.
-	for (const probe of ORCH_SCRIPTS) {
-		assert.equal(shippedVerdict("reviewer", "bash", probe), "default", `reviewer: ${probe}`);
+	// Shipped difference: the reviewer row narrows to that profession, so a
+	// sibling reader role with no row falls to the mode default.
+	for (const role of ["planner", "researcher", "mascot"] as Role[]) {
+		for (const probe of ORCH_SCRIPTS) {
+			assert.equal(shippedVerdict(role, "bash", probe), "default", `${role}: ${probe}`);
+		}
 	}
 });
 
-test("a reviewer never allows an npm form", () => {
-	for (const probe of ["npm", "npm run *", "npm run build", "npm publish"]) {
-		assert.notEqual(shippedVerdict("reviewer", "bash", probe), "allow", probe);
+test("the reviewer never allows a wrong npm form", () => {
+	for (const probe of WRONG_NPM) {
+		if (ORCH_SCRIPTS.includes(probe)) continue;
+		const verdict = shippedVerdict("reviewer", "bash", probe);
+		if (ASK_RUNNER.has(probe)) {
+			assert.equal(verdict, "ask", probe);
+			continue;
+		}
+		assert.ok(verdict === "deny" || verdict === "default", `${probe} returned ${verdict}`);
+	}
+	// The reviewer keeps the three verification scripts.
+	for (const probe of ORCH_SCRIPTS) {
+		assert.equal(shippedVerdict("reviewer", "bash", probe), "allow", probe);
 	}
 });
 

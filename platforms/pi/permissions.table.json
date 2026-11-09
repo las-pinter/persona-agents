@@ -353,6 +353,11 @@
       "reason": "A named project verification script is allowed"
     },
     {
+      "id": "shell.verify.reader", "tool": "bash", "verdict": "allow", "classes": ["reader"], "roles": ["reviewer"],
+      "verb": ["npm test", "npm run typecheck", "npm run lint"], "flags": "bare", "noCd": true, "arg": "any",
+      "reason": "The reviewer holds the three verification scripts and no other reader role does"
+    },
+    {
       "id": "shell.verify.cargo", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
       "verb": ["cargo nextest", "cargo deny check"], "noCd": true, "arg": "any",
       "reason": "A cargo verification command is allowed"

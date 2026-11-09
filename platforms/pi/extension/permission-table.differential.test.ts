@@ -543,16 +543,18 @@ test("a quoted or escaped directory-option value is never looser than the legacy
 	}
 });
 
-test("a worker role runs npm test and a reader role denies it", () => {
+test("a worker role and the reviewer run npm test and the other reader roles deny it", () => {
 	// Two differential probes: the same command, judged for a worker class and a
-	// reader class. A worker class must keep the retired allow; a reader class
-	// must not gain it.
+	// reader class. A worker class must keep the retired allow, the reviewer must
+	// hold its new row, and a reader role with no row must not gain the allow.
 	const workerProbe: Probe = { tool: "bash", probe: "npm test" };
 	for (const role of ["implementer", "tester"] as Role[]) {
 		assert.equal(decide(legacySets(role), workerProbe), "allow", `${role} lost npm test in the legacy list`);
 		assert.equal(decide(compileRole(RULE_ROWS, role), workerProbe), "allow", `${role} cannot run npm test`);
 	}
-	for (const role of ["planner", "reviewer", "researcher", "mascot"] as Role[]) {
+	assert.equal(decide(legacySets("reviewer"), workerProbe), "allow", "the reviewer lost npm test in the legacy list");
+	assert.equal(decide(compileRole(RULE_ROWS, "reviewer"), workerProbe), "allow", "the reviewer cannot run npm test");
+	for (const role of ["planner", "researcher", "mascot"] as Role[]) {
 		assert.equal(decide(compileRole(RULE_ROWS, role), workerProbe), "deny", `${role} runs npm test`);
 	}
 });
