@@ -5,7 +5,7 @@
  * corpus here, so no helper and no probe list is copied into two test files.
  */
 
-import { evaluateCommandRules, type Decision, type RawRule, type RuleSets } from "./command-segments.ts";
+import { evaluateCommandRules, type Decision, type PermissionMode, type RawRule, type RuleSets } from "./command-segments.ts";
 import { compileRole, roleZone, rulesForRow, type Role, type RuleRow } from "./permission-table.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 
@@ -97,6 +97,19 @@ export function shippedVerdict(
 	isSessionAllowed?: (rule: RawRule) => boolean,
 ): Decision["kind"] {
 	return shippedDecision(role, tool, probe, isSessionAllowed).kind;
+}
+
+/**
+ * The engine decision for one resolved gate source: the real gate path, with the
+ * shipped segment split and the mode the factory chose.
+ */
+export function sourceDecision(
+	resolved: { ruleSets: RuleSets; mode: PermissionMode },
+	tool: string,
+	probe: string,
+	agentName: string | null,
+): Decision {
+	return evaluateCommandRules(probe, tool === "bash", resolved.ruleSets, resolved.mode, tool, agentName, {});
 }
 
 /** The reason of one shipped row, read from the table that owns it. */

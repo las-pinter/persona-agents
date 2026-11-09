@@ -12,7 +12,7 @@
  *   3. a spanning ask       (global ask rows, then class ask rows)
  *   4. a per-segment ask    (global ask rows, then class ask rows)
  *   5. class allow rows
- *   6. the mode default     (`deny-by-default`; nothing unnamed runs)
+ *   6. the mode default     (`deny-by-default`; an unnamed agent gets its class rows)
  *
  * Deny wins over ask wins over allow, and every segment of a compound command
  * must pass.

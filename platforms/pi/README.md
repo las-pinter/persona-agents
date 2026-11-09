@@ -97,7 +97,8 @@ compiler writes the pattern. Translation notes:
   the tester, and the reviewer hold a verification allow. The reviewer row names
   that profession only, so the planner, the researcher, and the mascot keep the
   mode default. A row with `roles` applies only when the agent names a shipped
-  profession, so an unnamed class-compiled agent gets the mode default.
+  profession, so an unnamed class-compiled agent gets the mode default, unless
+  the row sets `unnamed` (see `### Table doctrine`).
   The `-C` value must be a path: a value with a quote, a backslash, no slash and
   no `.git` ending, or an equals sign and no leading `/`, `./`, `../`, or `~` is
   not a path, and the form asks
@@ -215,8 +216,18 @@ again.
 ### Table doctrine
 
 - **Row groups.** The shipped file holds 86 rows: 22 global, 15 reader, 22
-  worker, and 27 orchestrator. A class resolves to 36 reader, 41 worker, or 49
-  orchestrator rows, because a class compile drops a `roles` row.
+  worker, and 27 orchestrator. A class resolves to 36 reader, 44 worker, or 49
+  orchestrator rows: a class compile drops a `roles` row unless the row sets
+  `unnamed`.
+- **Unnamed agents.** A row that sets `unnamed` joins its class compile, so an
+  agent with a non-shipped name and that class gets the row. A false value is
+  refused, so the field is set or absent. The three ask rows for `cp`, `mv`,
+  `rsync`, `rm`, and `git rm` set it, so an unnamed worker-class agent asks, as
+  a named implementer does. A named tester and a named reviewer still deny these
+  commands. The resolver clamps a user or project agent file to the reader
+  class, so the worker widening binds a package agent only today. No other
+  `roles` row sets `unnamed`, so an unnamed reader-class agent keeps the mode
+  default and holds no verification script.
 - **Fences.** A deny row that names an option requires that option, so the bare
   command stays untouched. `find` denies on `-exec`, `-fls`, and the `-fprint`
   forms. `git tag` denies a short or long delete form at every abbreviation.
@@ -230,11 +241,12 @@ again.
   `git branch` is one read row with a listing-only tail: a branch write form falls
   outside the tail and reaches deny-by-default, so no class can create, move, or
   delete a branch through the read row.
-- **File removal.** A plain `rm` asks for the orchestrator and the
-  implementer, on any path. A removal that names one file asks the same way,
-  and so does a removal with a force flag or more than one name. It is denied
-  to every other class. A recursive form (`-r`, `-rf`, `-fr`, `--recursive`)
-  stays a hard deny for every class. `git rm` carries the same rule.
+- **File removal.** A plain `rm` asks for the orchestrator, the implementer,
+  and an unnamed worker-class agent, on any path. A removal that names one file
+  asks the same way, and so does a removal with a force flag or more than one
+  name. It is denied to every other role. A recursive form (`-r`, `-rf`, `-fr`,
+  `--recursive`) stays a hard deny for every class. `git rm` carries the same
+  rule.
 - **Deliberately omitted commands.** The shared read rows omit `xxd`, `printf`,
   `sha256sum`, `mktemp`, `test`, `mdl`, and a `.venv/bin/<tool>` wrapper, so
   deny-by-default blocks them. They also omit `git remote`, `git reflog`,

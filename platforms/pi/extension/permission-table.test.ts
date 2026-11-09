@@ -48,7 +48,9 @@ import {
 	allowMatches,
 	denyMatches,
 	gateVerdict,
+	rowReason,
 	ruleCount,
+	sourceDecision,
 	verdictOf,
 } from "./permission-table.test-helpers.ts";
 
@@ -92,17 +94,27 @@ test("the table holds 86 rows: 22 global, 15 reader, 22 worker, 27 orchestrator"
 	assert.equal(counts.byGroup.orchestrator, 27);
 });
 
-test("every class resolves to 36, 41, and 49 rows", () => {
+test("every class resolves to 36, 44, and 49 rows", () => {
 	const counts = countTable(RULE_ROWS);
 	assert.equal(counts.byClass.reader, 36);
-	assert.equal(counts.byClass.worker, 41);
+	assert.equal(counts.byClass.worker, 44);
 	assert.equal(counts.byClass.orchestrator, 49);
+	// One filter decides a class row set: the three ask rows widen to an unnamed
+	// worker, so the worker class holds every worker-group row.
 	assert.deepEqual(
-		rowsForClass(RULE_ROWS, "reader"),
-		[...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "reader")].filter(
-			(row) => row.roles === undefined,
-		),
+		rowsForClass(RULE_ROWS, "worker"),
+		[...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "worker")],
 	);
+	// The reader class still drops its one `roles` row, the reviewer allow.
+	const dropped = [...rowsForGroup(RULE_ROWS, "global"), ...rowsForGroup(RULE_ROWS, "reader")].filter(
+		(row) => !rowsForClass(RULE_ROWS, "reader").includes(row),
+	);
+	assert.deepEqual(dropped.map((row) => row.id), ["shell.verify.reader"]);
+});
+
+test("only the three ask rows widen to an unnamed agent", () => {
+	const widened = RULE_ROWS.filter((row) => row.unnamed === true).map((row) => row.id);
+	assert.deepEqual(widened, ["file.move.ask", "file.remove.ask", "git.remove.ask"]);
 });
 
 test("the 86 rows carry 61 ids: a shared rule is one row per class", () => {
@@ -127,13 +139,12 @@ test("the 86 rows carry 61 ids: a shared rule is one row per class", () => {
 test("every row reaches a class set and every flag class is used", () => {
 	const { classes } = compileTable(RULE_ROWS);
 	for (const cls of CLASS_ORDER) {
-		// Every row a class owns emits one rule per tool it names, except a
-		// `roles` row, which only a named profession gets.
-		const expected = RULE_ROWS.filter(
-			(row) =>
-				row.roles === undefined &&
-				(row.classes.length === CLASS_ORDER.length || row.classes.includes(cls)),
-		).reduce((total, row) => total + row.tool.trim().split(/\s+/).length, 0);
+		// Every row a class owns emits one rule per tool it names. The class row
+		// set comes from `rowsForClass`, so a widened `roles` row counts too.
+		const expected = rowsForClass(RULE_ROWS, cls).reduce(
+			(total, row) => total + row.tool.trim().split(/\s+/).length,
+			0,
+		);
 		assert.equal(ruleCount(classes[cls]), expected, cls);
 	}
 	const used = new Set<string>(RULE_ROWS.map((row) => row.flags ?? "none"));
@@ -267,6 +278,23 @@ test("an ask row with flags any and no span fails the load", () => {
 		/probe\.row.*must set span/,
 	);
 	assert.doesNotThrow(() => validateRows([bashRow({ verdict: "ask", flags: "any", span: true })]));
+});
+
+test("unnamed must be a boolean on a roles row", () => {
+	assert.doesNotThrow(() =>
+		validateRows([bashRow({ classes: ["worker"], roles: ["implementer"], unnamed: true })]),
+	);
+	assert.throws(
+		() => validateRows([bashRow({ classes: ["worker"], roles: ["implementer"], unnamed: "yes" as never })]),
+		/probe\.row.*unnamed must be a boolean/,
+	);
+	// A false value widens nothing, so the schema refuses it instead of ignoring it.
+	assert.throws(
+		() => validateRows([bashRow({ classes: ["worker"], roles: ["implementer"], unnamed: false })]),
+		/probe\.row.*omit a false value/,
+	);
+	// A row with no `roles` already joins the class compile, so unnamed is empty.
+	assert.throws(() => validateRows([bashRow({ unnamed: true })]), /probe\.row.*must name roles/);
 });
 
 test("a probe row must be a deny row and carries no verb", () => {
@@ -486,6 +514,46 @@ test("an unnamed reader-class agent gets the mode default for the verification s
 			`${probe} matched a row for an unnamed reader agent`,
 		);
 	}
+});
+
+/** The three ask rows that widen to an unnamed worker-class agent. */
+const UNNAMED_WORKER_ASK = ["cp a b", "mv a b", "rsync -a a b", "rm a.txt", "git rm a.txt"];
+
+test("an unnamed worker-class agent asks for cp, mv, rsync, rm, and git rm", () => {
+	const resolved = compileGateSource()(agentFor({ name: "my-helper", permissionClass: "worker" }));
+	assert.equal(resolved.mode, "deny-by-default");
+	for (const probe of UNNAMED_WORKER_ASK) {
+		assert.equal(verdictOf(resolved.ruleSets, "bash", probe), "ask", probe);
+	}
+	// The widening stops at these three rows: a recursive removal denies, and the
+	// class rows an unnamed worker already holds still allow.
+	assert.equal(verdictOf(resolved.ruleSets, "bash", "rm -rf build"), "deny");
+	assert.equal(verdictOf(resolved.ruleSets, "bash", "cargo build"), "allow");
+});
+
+test("the shipped gate source asks an unnamed worker-class agent for cp through the engine", () => {
+	const agent = agentFor({ name: "my-helper", permissionClass: "worker", source: "package" });
+	const resolved = compileGateSource()(agent);
+	const decision = sourceDecision(resolved, "bash", "cp a b", agent.name);
+	assert.equal(decision.kind, "ask", "the engine reached no ask for cp a b");
+	if (decision.kind !== "ask") return;
+	assert.equal(decision.source, "agent");
+	assert.equal(decision.rule.reason, rowReason("file.move.ask"));
+});
+
+test("the named roles keep their verdict for the three ask rows", () => {
+	for (const probe of UNNAMED_WORKER_ASK) {
+		assert.equal(gateVerdict("implementer", "bash", probe), "ask", probe);
+		for (const role of ["tester", "reviewer"] as Role[]) {
+			assert.equal(gateVerdict(role, "bash", probe), "deny", `${role}: ${probe}`);
+		}
+	}
+});
+
+test("the reviewer asks for npx and a package publish", () => {
+	// Both rows are global asks, and an ask outranks the reviewer verification allow.
+	assert.equal(gateVerdict("reviewer", "bash", "npx create-app"), "ask");
+	assert.equal(gateVerdict("reviewer", "bash", "npm publish"), "ask");
 });
 
 test("the gate source binds a mismatched class to the named class", () => {

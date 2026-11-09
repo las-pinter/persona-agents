@@ -277,17 +277,17 @@
     },
     {
       "id": "file.move.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
-      "roles": ["implementer"], "verb": ["cp", "mv", "rsync"], "arg": "any",
+      "roles": ["implementer"], "unnamed": true, "verb": ["cp", "mv", "rsync"], "arg": "any",
       "reason": "A file copy, move, or sync requires user approval"
     },
     {
       "id": "file.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
-      "roles": ["implementer"], "verb": ["rm"], "flags": "named", "arg": "any",
+      "roles": ["implementer"], "unnamed": true, "verb": ["rm"], "flags": "named", "arg": "any",
       "reason": "A file removal requires user approval"
     },
     {
       "id": "git.remove.ask", "tool": "bash", "verdict": "ask", "classes": ["worker"],
-      "roles": ["implementer"], "verb": ["git"], "sub": ["rm"], "flags": "named", "arg": "any",
+      "roles": ["implementer"], "unnamed": true, "verb": ["git"], "sub": ["rm"], "flags": "named", "arg": "any",
       "reason": "A git file removal requires user approval"
     },
     {

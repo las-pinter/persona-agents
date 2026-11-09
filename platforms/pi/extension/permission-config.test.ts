@@ -25,7 +25,7 @@ import {
   type ConfigPaths,
   type PermissionConfig,
 } from "./permission-config.ts";
-import { compileRole, countTable, type RuleRow } from "./permission-table.ts";
+import { compileClass, compileRole, countTable, type RuleRow } from "./permission-table.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 import { evaluateCommandRules, type RuleSets } from "./command-segments.ts";
 
@@ -93,7 +93,7 @@ test("the shipped default file holds 86 rows and the frozen counts", () => {
 	assert.equal(counts.byGroup.worker, 22);
 	assert.equal(counts.byGroup.orchestrator, 27);
 	assert.equal(counts.byClass.reader, 36);
-	assert.equal(counts.byClass.worker, 41);
+	assert.equal(counts.byClass.worker, 44);
 	assert.equal(counts.byClass.orchestrator, 49);
 	assert.equal(counts.uniqueIds, 61);
 });
@@ -161,6 +161,46 @@ test("an override adds one row", () => {
 	assert.equal(config.rows.length, 87);
 	const added = config.rows.find((row) => row.id === "custom.fetch-ask");
 	assert.ok(added !== undefined && added.layer === "override");
+	assert.equal(verdict(compileRole(config.rows, "implementer"), "bash", "curl https://example.test"), "ask");
+});
+
+test("an override row with unnamed widens to its class compile", () => {
+	const row = {
+		id: "custom.copy-ask",
+		tool: "bash",
+		verdict: "ask",
+		classes: ["worker"],
+		roles: ["implementer"],
+		unnamed: true,
+		verb: ["curl"],
+		arg: "any",
+		reason: "A network fetch requires user approval",
+	};
+	const file = write("unnamed-row.json", { version: 1, patch: [{ id: row.id, row }] });
+	const { config, lines } = load(basePaths({ override: file }));
+	assert.deepEqual(lines, []);
+	assert.equal(config.rows.length, 87);
+	assert.equal(verdict(compileClass(config.rows, "worker"), "bash", "curl https://example.test"), "ask");
+	// The named profession keeps the row; a named tester does not get it.
+	assert.equal(verdict(compileRole(config.rows, "implementer"), "bash", "curl https://example.test"), "ask");
+	assert.equal(verdict(compileRole(config.rows, "tester"), "bash", "curl https://example.test"), "default");
+});
+
+test("an override row without unnamed leaves the class compile alone", () => {
+	const row = {
+		id: "custom.copy-ask",
+		tool: "bash",
+		verdict: "ask",
+		classes: ["worker"],
+		roles: ["implementer"],
+		verb: ["curl"],
+		arg: "any",
+		reason: "A network fetch requires user approval",
+	};
+	const file = write("named-only-row.json", { version: 1, patch: [{ id: row.id, row }] });
+	const { config, lines } = load(basePaths({ override: file }));
+	assert.deepEqual(lines, []);
+	assert.equal(verdict(compileClass(config.rows, "worker"), "bash", "curl https://example.test"), "default");
 	assert.equal(verdict(compileRole(config.rows, "implementer"), "bash", "curl https://example.test"), "ask");
 });
 

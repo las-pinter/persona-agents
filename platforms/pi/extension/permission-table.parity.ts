@@ -135,7 +135,7 @@ export const CHANGE_RULINGS: Record<string, { reason: string; ruling: string }> 
 		ruling: "The three-class model is the doctrine, and a shared read row is the unit.",
 	},
 	"role-scope": {
-		reason: "A row is narrowed from a class to named professions, so an unnamed profession falls to deny-by-default.",
+		reason: "A row is narrowed from a class to named professions, so an unnamed profession falls to deny-by-default unless the row sets `unnamed`.",
 		ruling: "The profession rule wins over the class rule, and a fall-through deny is fail-safe.",
 	},
 };

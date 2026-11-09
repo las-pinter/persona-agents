@@ -29,7 +29,8 @@
  * that carries `roles` applies only to the professions it names, so
  * `compileRole` selects it for a named profession. `compileClass` drops the row,
  * because a class carries no profession name, so an unnamed agent falls to the
- * mode default.
+ * mode default. A `roles` row that sets `unnamed` is the exception: it joins its
+ * class compile, so an unnamed agent of that class gets the row.
  *
  * A form the row vocabulary cannot express is a schema change, not a local
  * exception here. `validateRows` refuses a row that breaks the schema, and the
@@ -122,6 +123,8 @@ export interface RuleRow {
 	 * `compileRole`; every other profession falls through to its own rule.
 	 */
 	roles?: Role[];
+	/** Also select this `roles` row in `compileClass`, so an unnamed agent of the class gets it. */
+	unnamed?: boolean;
 	/** Leading literal words of the command, or the secret family of a path row. */
 	verb?: string[];
 	/** Literal words that follow the head, joined in order. */
@@ -194,6 +197,7 @@ const ROW_FIELDS = new Set<string>([
 	"verdict",
 	"classes",
 	"roles",
+	"unnamed",
 	"verb",
 	"sub",
 	"flags",
@@ -551,6 +555,11 @@ export function validateRow(row: RuleRow): void {
 			named.add(role);
 		}
 	}
+	if (row.unnamed !== undefined) {
+		if (typeof row.unnamed !== "boolean") fail(row.id, "unnamed must be a boolean");
+		if (row.unnamed === false) fail(row.id, "unnamed widens a row only, so omit a false value");
+		if (row.roles === undefined) fail(row.id, "unnamed widens a roles row, so the row must name roles");
+	}
 	if (CLASS_ORDER.every((cls) => row.classes.includes(cls)) && row.verdict === "allow" && !isToolAllow(row)) {
 		fail(row.id, "a global allow row must name tools only and carry no command geometry");
 	}
@@ -615,7 +624,7 @@ export function validateRow(row: RuleRow): void {
 }
 
 function geometry(row: RuleRow): string {
-	// `roles` stays out: two class rows of one id narrow to different
+	// `roles` and `unnamed` stay out: two class rows of one id narrow to different
 	// professions, so a roles comparison would refuse the pair.
 	return JSON.stringify({
 		tool: row.tool,
@@ -893,10 +902,15 @@ function failUnknownClass(): never {
 /**
  * The rows a class gets: every global row, then the class rows in table order.
  * A class carries no profession name, so a `roles` row is left to `rowsForRole`
- * and an unnamed agent falls to the mode default.
+ * and an unnamed agent falls to the mode default. A `roles` row that sets
+ * `unnamed` joins the set, so an unnamed agent of that class gets the row.
  */
 export function rowsForClass(rows: readonly RuleRow[], cls: RoleClass): RuleRow[] {
-	return rows.filter((row) => row.roles === undefined && (isGlobal(row) || row.classes.includes(cls)));
+	return rows.filter(
+		(row) =>
+			(row.roles === undefined || row.unnamed === true) &&
+			(isGlobal(row) || row.classes.includes(cls)),
+	);
 }
 
 /**
@@ -916,18 +930,15 @@ export function rowsForRole(rows: readonly RuleRow[], role: Role): RuleRow[] {
 /**
  * The five rule sets for one class. A class has no notes zone, so a `notes:own`
  * row binds to no zone here and matches nothing; compile the role for that row.
- * A `roles` row names a profession, so a class compile skips it and an unnamed
- * agent falls to the mode default.
+ * The row set comes from `rowsForClass`, so one filter decides which rows a
+ * class holds.
  */
 export function compileClass(rows: readonly RuleRow[], cls: RoleClass): RuleSets {
 	validateRows(rows);
 	if (!CLASSES.has(cls)) return failUnknownClass();
 	const sets = emptyRuleSets();
-	for (const row of rows) {
-		if (row.roles !== undefined) continue;
-		const global = isGlobal(row);
-		if (!global && !row.classes.includes(cls)) continue;
-		targetSet(sets, row, !global).push(...rulesForRow(row, null));
+	for (const row of rowsForClass(rows, cls)) {
+		targetSet(sets, row, !isGlobal(row)).push(...rulesForRow(row, null));
 	}
 	return sets;
 }

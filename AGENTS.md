@@ -151,9 +151,10 @@ Kiro, where no role template carries the entry. The opencode role templates
 carry a `gh run` deny fence, and the Claude Code publish gate denies it. On
 pi, the implementer template names `gh run` with a deny entry, and the other pi
 role templates reach DENY through the deny-by-default mode. `cp`, `mv`, and
-`rsync` ASK for the orchestrator and the implementer, and are denied to the
-rest. The global file asks for `git push` and `gh pr` for every agent. It is
-live and unversioned.
+`rsync` ASK for the orchestrator and the implementer, and are denied to every
+other named role. `platforms/pi/README.md` owns the unnamed-agent case for
+these rows and the two removal rows. The global file asks for `git push` and
+`gh pr` for every agent. It is live and unversioned.
 
 On pi, a child ask is queued, not denied, and the owner's answer becomes the
 child's verdict. `platforms/pi/README.md` owns the queue mechanics, the deadline
