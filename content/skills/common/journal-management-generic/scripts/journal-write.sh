@@ -19,6 +19,17 @@ readonly TOKEN_RE='^[A-Za-z0-9._-]{1,80}$'
 # Internal status: held_fail made the lock and printed its one hold block.
 readonly HELD_CREATED=10
 
+# A retry sleeps POLL seconds: JOURNAL_WRITE_POLL_MS overrides it, an unset or invalid value keeps one.
+POLL=1
+POLL_MS="${JOURNAL_WRITE_POLL_MS:-}"
+# The pattern takes a plain decimal, so no leading zero ever reads as octal.
+if [[ "$POLL_MS" =~ ^(0|[1-9][0-9]{0,3})$ ]]; then
+    POLL_MS=$((10#$POLL_MS))
+    if ((POLL_MS >= 1 && POLL_MS <= 1000)); then
+        POLL="$(awk -v ms="$POLL_MS" 'BEGIN { printf "%.3f", ms / 1000 }')"
+    fi
+fi
+
 # The lock path is known only after the parse, so a failure line names it when
 # the slot is set. A usage error runs before the path exists.
 LOCK=""
@@ -287,7 +298,7 @@ held_fail() {
         fi
         # A failed link is re-probed on the next turn, bounded by the deadline.
         if (($(date +%s) >= deadline)); then break; fi
-        sleep 1
+        sleep "$POLL"
     done
     if [[ "$PROBE" == "absent" ]]; then
         # A free name at the bound is still the create case.
@@ -336,16 +347,16 @@ run_hold() {
             age=$(($(date +%s) - REC[3]))
             if ((age < 0)); then age=0; fi
             if ((age <= LOCK_TTL)); then
-                sleep 1
+                sleep "$POLL"
                 continue
             fi
             if ! break_stale "$age"; then
-                sleep 1
+                sleep "$POLL"
                 continue
             fi
         elif [[ "$PROBE" == "incomplete" ]]; then
             if ! break_stale 0; then
-                sleep 1
+                sleep "$POLL"
                 continue
             fi
         fi
@@ -358,7 +369,7 @@ run_hold() {
         # An absent lock that another writer just made is waited on. A broken
         # stale lock that a third writer took again refuses at once.
         if [[ "$PROBE" == "absent" ]]; then
-            sleep 1
+            sleep "$POLL"
             continue
         fi
         rc=0

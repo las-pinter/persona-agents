@@ -3,6 +3,8 @@
  *
  * Every case runs the real shipped script by absolute path with a throw-away
  * home under os.tmpdir(), so no case reads or writes the real home folder.
+ * Each spawn sets JOURNAL_WRITE_POLL_MS, so a retry poll is 50 ms, not one
+ * second. A case that proves the default removes the variable with "".
  *
  * Run: npm test
  */
@@ -76,10 +78,26 @@ export type RunEnv = Record<string, string>;
 /** The longest one script call may run before the case fails, not hangs. */
 export const RUN_TIMEOUT_MS = 30000;
 
+/** The retry poll width in milliseconds, so a poll is not a one second wait. */
+export const FAST_POLL_MS = "50";
+
+/**
+ * The child environment: HOME, the fast poll, and the values the case names.
+ * An empty value removes the variable, so a case proves the unset default.
+ */
+function childEnv(home: string, env: RunEnv): NodeJS.ProcessEnv {
+	const out: NodeJS.ProcessEnv = { ...process.env, HOME: home, JOURNAL_WRITE_POLL_MS: FAST_POLL_MS };
+	for (const [key, value] of Object.entries(env)) {
+		if (value === "") delete out[key];
+		else out[key] = value;
+	}
+	return out;
+}
+
 /** The one spawn call, with the environment the case chooses. */
 export function runRaw(args: string[], home: string, env: RunEnv = {}, timeoutMs?: number): RunResult {
 	const result = spawnSync("bash", [writeScript, ...args], {
-		env: { ...process.env, HOME: home, ...env },
+		env: childEnv(home, env),
 		encoding: "utf8",
 		timeout: timeoutMs ?? RUN_TIMEOUT_MS,
 	});
@@ -98,7 +116,7 @@ export interface SpawnedRun {
 
 export function spawnRun(home: string, args: string[], env: RunEnv = {}): SpawnedRun {
 	const child = spawn("bash", [writeScript, ...args, "--home", home], {
-		env: { ...process.env, HOME: home, ...env },
+		env: childEnv(home, env),
 	});
 	let stdout = "";
 	let stderr = "";
