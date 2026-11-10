@@ -148,6 +148,12 @@ export function assertFits(lines: string[], width: number): void {
 	}
 }
 
+/**
+ * A LOG panel header line. Matches the trimmed line, so leading padding does
+ * not count, and the word must stand alone.
+ */
+export const LOG_HEADER_RE = /^LOG(\s|$)/;
+
 /** Lines are right-padded to the column width; trim for content checks. */
 export function content(lines: string[]): string[] {
 	return lines.map((line) => line.trimEnd());

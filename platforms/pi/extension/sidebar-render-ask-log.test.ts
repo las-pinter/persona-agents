@@ -15,6 +15,7 @@ import {
 	renderSidebarPanel,
 } from "./sidebar-render.ts";
 import {
+	LOG_HEADER_RE,
 	assertFits,
 	content,
 	makeAskLogRows,
@@ -26,7 +27,7 @@ const RULE = SECTION_RULE_CHAR.repeat(80);
 
 /** The painted LOG block: the header and its text lines, up to the next rule. */
 function logBlock(lines: string[]): number {
-	const start = lines.findIndex((line) => line.trim() === "LOG 4/50");
+	const start = lines.findIndex((line) => line.trim() === "LOG");
 	assert.ok(start >= 0, "the LOG header paints");
 	const rest = lines.slice(start + 1);
 	const stop = rest.findIndex((line) => line === RULE);
@@ -38,7 +39,7 @@ function logBlock(lines: string[]): number {
 test("an empty ring paints the header and the placeholder in five lines", () => {
 	const lines = content(renderAskLogPanel([], 80, theme));
 	assert.equal(lines.length, LOG_PANEL_LINES);
-	assert.deepEqual(lines, [" LOG 0/50", "(no log events)", "", "", ""]);
+	assert.deepEqual(lines, [" LOG", "(no log events)", "", "", ""]);
 	assertFits(renderAskLogPanel([], 80, theme), 80);
 });
 
@@ -54,12 +55,28 @@ test("a ring of four short rows keeps five lines and paints the newest first", (
 	const lines = content(renderAskLogPanel(rows, 45, theme));
 	assert.equal(lines.length, LOG_PANEL_LINES);
 	assert.deepEqual(lines, [
-		" LOG 4/50",
+		" LOG",
 		"10:00:04 implementer/bash",
 		"10:00:03 implementer/bash",
 		"10:00:02 implementer/bash",
 		"10:00:01 implementer/bash",
 	]);
+});
+
+test("a full ring of 50 rows paints the plain header", () => {
+	// The trim at the cap is proven by "the ring stops at the cap" in
+	// ask-record.test.ts; this case proves a full ring paints no count.
+	const rows = Array.from({ length: 50 }, (_value, index) => ({
+		kind: "ask" as const,
+		askId: `root#full-${index}`,
+		phase: "expiry" as const,
+		at: "2026-11-07T10:00:00.000Z",
+		text: `10:00:00 tester/bash waiting=0 row=${index}`,
+	}));
+	const lines = content(renderAskLogPanel(rows, 80, theme));
+	assert.equal(lines.length, LOG_PANEL_LINES, "the full ring keeps the five-line panel");
+	assert.equal(lines[0], " LOG", "a full ring paints the plain header");
+	assertFits(renderAskLogPanel(rows, 80, theme), 80);
 });
 
 // --- the wrap and the cut ----------------------------------------------------
@@ -83,7 +100,7 @@ test("a plain line in the ring paints beside the ask rows", () => {
 	];
 	const lines = content(renderAskLogPanel(rows, 60, theme));
 	assert.equal(lines.length, LOG_PANEL_LINES, "the panel keeps its fixed height");
-	assert.equal(lines[0], " LOG 2/50", "the header counts every kept entry against the cap");
+	assert.equal(lines[0], " LOG", "the header carries no count");
 	assert.equal(lines[1], "agent-stack: forced paint failed", "the plain line paints whole");
 	assert.equal(lines[2], "10:00:04 implementer/bash place=slot", "the ask row text is unchanged");
 	assert.equal(lines[3], "", "the short ring pads to five lines");
@@ -91,7 +108,7 @@ test("a plain line in the ring paints beside the ask rows", () => {
 });
 
 test("at width 45 the newest expiry row keeps place=slot whole", () => {
-	assert.equal(content(askLogLines(makeAskLogRows(), 45))[0], " LOG 4/50");
+	assert.equal(content(askLogLines(makeAskLogRows(), 45))[0], " LOG");
 	const textLines = content(askLogLines(makeAskLogRows(), 45)).slice(1);
 	// The wrap breaks on whitespace, so the flag token survives in one piece.
 	assert.ok(
@@ -118,7 +135,7 @@ test("a ring of five rows wraps the newest row at width 45", () => {
 	];
 	// The ring holds five rows; the panel paints the four text lines it has.
 	assert.deepEqual(content(renderAskLogPanel(rows, 45, theme)), [
-		" LOG 5/50",
+		" LOG",
 		"10:00:04 implementer/bash waiting=0",
 		"shown=none place=slot parked=0 surface=yes",
 		"10:00:03 tester/bash waiting=0 shown=this",
@@ -141,7 +158,7 @@ test("at width 40 the budget cuts row 0 after three lines and row 1 after one", 
 	const body = content(askLogLines(makeAskLogRows(), 40, theme));
 	assert.equal(body.length, LOG_PANEL_LINES, "the budget stops the list at five lines");
 	assert.deepEqual(body, [
-		" LOG 4/50",
+		" LOG",
 		"10:00:04 implementer/bash waiting=0",
 		"shown=none place=slot parked=0",
 		"surface=yes",
@@ -203,11 +220,11 @@ test("a short column shrinks TODOS first, then drops LOG before MCP", () => {
 	assert.equal(logBlock(noTodos), 5, "LOG still paints its five lines at height 36");
 
 	// At 35 the log is the first whole panel to leave, and MCP stays.
-	assert.ok(!noLog.some((line) => line.startsWith(" LOG ")), "LOG drops at height 35");
+	assert.ok(!noLog.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG drops at height 35");
 	assert.ok(noLog.some((line) => line === " MCP"), "MCP still paints at height 35");
 
 	// At 29 the log and MCP are gone, and the panels above them stay in order.
-	assert.ok(!short.some((line) => line.startsWith(" LOG ")), "LOG stays dropped at height 29");
+	assert.ok(!short.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG stays dropped at height 29");
 	assert.ok(!short.some((line) => line === " MCP"), "MCP drops at height 29");
 	assert.ok(short.some((line) => line === " WORKSPACE"), "WORKSPACE still paints at height 29");
 });

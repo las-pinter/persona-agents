@@ -28,6 +28,7 @@ import {
 	statusIcon,
 } from "./sidebar-render.ts";
 import {
+	LOG_HEADER_RE,
 	assertFits,
 	content,
 	makeAskLogRows,
@@ -39,7 +40,7 @@ import {
 	theme,
 } from "./sidebar-render-fixtures.ts";
 
-const HEADER_RE = /^ (AGENTS|STATUS|LOG \d+\/\d+|SESSION|WORKSPACE|MCP|TODOS)$/;
+const HEADER_RE = /^ (AGENTS|STATUS|LOG|SESSION|WORKSPACE|MCP|TODOS)$/;
 
 /** The panel headers a composed column paints, in column order. */
 function visibleHeaders(lines: string[]): string[] {
@@ -198,7 +199,7 @@ test("a short tree at height 13 pads AGENTS to the minimum and drops SESSION", (
 	);
 	assert.equal(content(lines)[AGENTS_PAD_MIN - 1], "", "AGENTS pads with a blank line");
 	assert.ok(!lines.some((line) => line.includes(" SESSION ")), "SESSION is dropped at height 13");
-	assert.ok(!lines.some((line) => line.includes(" LOG ")), "LOG is dropped at height 13");
+	assert.ok(!lines.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG is dropped at height 13");
 });
 
 test("every composed line fits the width", () => {
@@ -312,7 +313,7 @@ test("renderSidebarPanel fills height 37 and gives the freed rule line to TODOS"
 	assert.notEqual(lines[todosStart - 1], rule, "the freed rule line above TODOS is gone");
 	assert.equal(lines[todosStart + 1], rule, "one rule still separates TODOS from LOG");
 	assert.equal(lines.filter((line) => line === rule).length, 5, "five rules carry the seven panels");
-	assert.ok(lines[lines.length - 5].startsWith(" LOG "), "LOG keeps its five lines at the foot");
+	assert.equal(lines[lines.length - 5].trim(), "LOG", "LOG keeps its five lines at the foot");
 	assert.equal(
 		renderTodosPanel(makeBudgetSnapshot().todos, 80, 1, theme).length,
 		1,
@@ -354,7 +355,7 @@ test("renderSidebarPanel drops lower panels first", () => {
 		mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
 		todos: [{ id: "1", text: "do it", done: false }],
 	});
-	const headers = [" AGENTS ", " STATUS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS ", " LOG "];
+	const headers = [" AGENTS ", " STATUS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS ", " LOG"];
 	for (const height of [0, 1, 3, 8, 12, 15, 16, 18, 24, 30]) {
 		const lines = renderSidebarPanel(snapshot, 80, height, theme, 0);
 		assert.ok(lines.length <= height, `height ${height} overflowed`);
@@ -380,7 +381,7 @@ test("renderSidebarPanel keeps the settled order at heights 30, 24, 16, and 12",
 test("renderSidebarPanel paints the log panel last, below TODOS", () => {
 	const painted = content(renderSidebarPanel(makeBudgetSnapshot(), 80, 40, theme, 0));
 	const todos = painted.findIndex((line) => line === " TODOS");
-	const log = painted.findIndex((line) => line.startsWith(" LOG "));
+	const log = painted.findIndex((line) => line.trim() === "LOG");
 	assert.ok(todos > 0, "TODOS paints at height 40");
 	assert.ok(log > todos, "the log panel sits below TODOS");
 	assert.equal(log, painted.length - 5, "the log panel closes the column with its five lines");

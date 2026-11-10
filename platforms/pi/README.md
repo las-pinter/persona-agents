@@ -441,8 +441,9 @@ The sidebar owns the right column. It paints SEVEN panels:
    use count, and a `total xN` line.
 6. TODOS — the `todo` tool's list.
 7. LOG — the newest log ring entries, newest first, five lines tall at the foot
-   of the column, wrapped at the column width. The header reads `LOG n/50`: the
-   kept row count against the ring cap.
+   of the column, wrapped at the column width. The header reads `LOG` with no
+   numbers: the panel carries generic log events, so a count tells the reader
+   nothing.
 
 TODOS takes the height that the fixed panels leave, the five-line LOG panel at
 the foot included. A shrinking column takes TODOS down line by line. At one

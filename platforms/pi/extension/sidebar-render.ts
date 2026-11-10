@@ -12,7 +12,7 @@
  */
 
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import { ASK_HISTORY_MAX, type AskLogEvent } from "./ask-record.ts";
+import type { AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import { roundMark } from "./subagent-marks.ts";
 import { flattenTreeKeeping, type TreeNode, type TreeNodeStatus } from "./tree-model.ts";
@@ -483,10 +483,11 @@ export function renderStatusPanel(
 }
 
 /**
- * The LOG panel body: the header with the kept row count against the ring cap,
- * then the newest rows, each wrapped to the width. The panel stops after 4 text
- * lines, so a row that does not fit keeps the lines that still fit and the panel
- * ends there. A missing ring paints the empty panel.
+ * The LOG panel body: the plain header, then the newest rows, each wrapped to
+ * the width. The panel carries generic log events, so a kept-against-cap count
+ * tells the reader nothing. The panel stops after 4 text lines, so a row that
+ * does not fit keeps the lines that still fit and the panel ends there. A
+ * missing ring paints the empty panel.
  */
 export function askLogLines(
 	rows: AskLogRow[] | null | undefined,
@@ -494,7 +495,7 @@ export function askLogLines(
 	theme: SidebarTheme = {},
 ): string[] {
 	const list = rows ?? [];
-	const lines: string[] = [header(theme, ` LOG ${list.length}/${ASK_HISTORY_MAX} `)];
+	const lines: string[] = [header(theme, " LOG ")];
 	const budget = LOG_PANEL_LINES - 1;
 
 	if (list.length === 0) {
