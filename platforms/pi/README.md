@@ -220,9 +220,9 @@ again.
 
 - **Row groups.** The shipped file holds 86 rows: 22 global, 15 reader, 22
   worker, and 27 orchestrator. A class resolves to 36 reader, 44 worker, or 49
-  orchestrator rows, and to 51 reader, 61 worker, or 66 orchestrator rules: a
-  class compile drops a `roles` row unless the row sets `unnamed`, and one
-  compiled row yields one rule per tool name it lists.
+  orchestrator rows. A class compile drops a `roles` row unless the row sets
+  `unnamed`. The drop leaves 51 reader, 61 worker, or 66 orchestrator rules, one
+  per tool name the row lists.
 - **Unnamed agents.** A row that sets `unnamed` joins its class compile, so an
   agent with a non-shipped name and that class gets the row. A false value is
   refused, so the field is set or absent. The three ask rows for `cp`, `mv`,

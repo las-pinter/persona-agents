@@ -264,8 +264,9 @@ export function flattenTree(nodes: TreeNode[]): TreeNode[] {
  * Depth-first walk that keeps every node, a repeated run id included.
  *
  * `flattenTree` drops a repeat instead. `assembleTree` stores one node per run
- * id, so a shipped forest never repeats one; the keep is defensive, and it
- * stops a key or a paint from hiding a node the forest actually holds.
+ * id, so a shipped forest never repeats one, and the keep is defensive. The
+ * sidebar paint reads through this walk; the overlay and `/agent-inspect` still
+ * use `flattenTree`.
  */
 export function flattenTreeKeeping(nodes: TreeNode[]): TreeNode[] {
 	const out: TreeNode[] = [];
