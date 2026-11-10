@@ -169,7 +169,7 @@ claim_lock() {
     if mv -- "$LOCK" "$path" 2>/dev/null; then
         return 0
     fi
-    drop_claim
+    drop_claim || :
     if [[ -e "$LOCK" ]]; then return 1; fi
     return 2
 }
@@ -182,8 +182,12 @@ claim_matches_probe() {
     [[ "$(digest_text "$text")" == "$PROBED_DIGEST" ]]
 }
 
+# A failed remove keeps the claim name in the slot, so the exit trap names the
+# leftover file again. A caller uses `|| :` only to stop set -e on the status.
 drop_claim() {
-    if [[ -n "$CLAIM" ]]; then rm -f -- "$CLAIM" 2>/dev/null || true; fi
+    if [[ -n "$CLAIM" ]] && ! rm -f -- "$CLAIM" 2>/dev/null; then
+        return 1
+    fi
     CLAIM=""
 }
 
@@ -192,11 +196,11 @@ drop_claim() {
 restore_claim() {
     local claim="$CLAIM"
     if ln -- "$claim" "$LOCK" 2>/dev/null; then
-        drop_claim
+        drop_claim || :
         return 0
     fi
     if cp -- "$claim" "$PREV" 2>/dev/null; then
-        drop_claim
+        drop_claim || :
         fail 3 "lock restore failed, record kept" "$PREV"
     fi
     # The claim is cleared so the trap keeps the only copy.
@@ -225,7 +229,7 @@ refresh_lock() {
         held_fail "$deadline" || :
         return "$HELD_CREATED"
     fi
-    drop_claim
+    drop_claim || :
     if create_lock "$token" "$at"; then return 0; fi
     held_fail "$deadline" || :
     return "$HELD_CREATED"
@@ -249,14 +253,14 @@ break_stale() {
     if ! cp -- "$CLAIM" "$PREV" 2>/dev/null; then
         # A vanished record is broken already, so the caller retries the create.
         if [[ -e "$CLAIM" ]]; then
-            drop_claim
+            drop_claim || :
             fail 3 "stale record copy failed"
         fi
-        drop_claim
+        drop_claim || :
         return 0
     fi
     printf 'stale %s age %ss\n' "$LOCK" "$1"
-    drop_claim
+    drop_claim || :
     return 0
 }
 
@@ -389,7 +393,7 @@ run_release() {
         restore_claim
         lost_fail
     fi
-    drop_claim
+    drop_claim || :
     printf 'released %s\n' "$LOCK"
     return 0
 }

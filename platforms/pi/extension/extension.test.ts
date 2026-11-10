@@ -267,6 +267,7 @@ async function withWarnings<T>(run: () => Promise<T>): Promise<{ result: T; warn
 	} finally {
 		if (previous === undefined) delete process.env[ENV_TREE_LOG];
 		else process.env[ENV_TREE_LOG] = previous;
+		fs.rmSync(logPath, { force: true });
 	}
 }
 

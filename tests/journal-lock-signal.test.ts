@@ -31,7 +31,7 @@ import {
 	spawnRun,
 	waitForMark,
 } from "./journal-lock-helpers.ts";
-import type { RunResult } from "./journal-lock-helpers.ts";
+import type { RunResult, SpawnedRun } from "./journal-lock-helpers.ts";
 
 const STALE_AGE = 601;
 
@@ -51,14 +51,20 @@ function tempNames(home: string): string[] {
 		);
 }
 
-/** Wait for one signalled run, so a run that hangs fails with the case name. */
-async function settled(what: string, done: Promise<RunResult>): Promise<RunResult> {
+/**
+ * Wait for one signalled run, so a run that hangs fails with the case name. The
+ * cap kills the child first, so a failed case leaves no process behind.
+ */
+async function settled(what: string, held: SpawnedRun, capMs: number = RUN_TIMEOUT_MS): Promise<RunResult> {
 	let timer: NodeJS.Timeout | undefined;
 	const cap = new Promise<RunResult>((_resolve, reject) => {
-		timer = setTimeout(() => reject(new Error(`the ${what} run passed ${RUN_TIMEOUT_MS} ms`)), RUN_TIMEOUT_MS);
+		timer = setTimeout(() => {
+			held.kill("SIGKILL");
+			reject(new Error(`the ${what} run passed ${capMs} ms`));
+		}, capMs);
 	});
 	try {
-		return await Promise.race([done, cap]);
+		return await Promise.race([held.done, cap]);
 	} finally {
 		if (timer) clearTimeout(timer);
 	}
@@ -92,7 +98,7 @@ describe("G — a caught signal cleans up", () => {
 			assert.equal(claimNames(home).length, 1, "the claim exists when the signal lands");
 
 			held.kill(signal);
-			const result = await settled(signal, held.done);
+			const result = await settled(signal, held);
 
 			assert.equal(claimNames(home).length, 0, `the claim is gone: ${result.stderr}`);
 			assert.deepEqual(tempNames(home), [], "the record temp is gone");
@@ -119,7 +125,7 @@ describe("G — a caught signal cleans up", () => {
 		assert.equal(tempNames(home).length, 1, "the record temp exists when the signal lands");
 
 		held.kill("SIGTERM");
-		const result = await settled("SIGTERM record write", held.done);
+		const result = await settled("SIGTERM record write", held);
 
 		assert.deepEqual(tempNames(home), [], `the record temp is gone: ${result.stderr}`);
 		assert.equal(claimNames(home).length, 0, "no claim is left");
@@ -127,6 +133,40 @@ describe("G — a caught signal cleans up", () => {
 		const fresh = run(home, ["hold", "--agent", AGENT, "--session", SESSION]);
 		assert.equal(fresh.status, 0, fresh.stderr);
 		assert.equal(recordOf(home).session, SESSION);
+	});
+
+	test("a run past the cap is killed, so no child process is left", async () => {
+		const home = makeHome();
+		const mark = path.join(home, "cap-marked");
+		const release = path.join(home, "cap-go");
+		// The claim copy stalls in the shim until this case releases it, so the run
+		// cannot end by itself before the cap fires.
+		const shim = makeShimDir({
+			cp: [
+				"#!/usr/bin/env bash",
+				': >"$CP_MARK"',
+				"waited=0",
+				'while [ ! -e "$CP_RELEASE" ] && [ "$waited" -lt 3000 ]; do',
+				"  sleep 0.01",
+				"  waited=$((waited + 1))",
+				"done",
+				`exec ${realToolPath("cp")} "$@"`,
+			].join("\n"),
+		});
+		plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
+		const held = spawnRun(home, ["hold", "--agent", AGENT, "--session", SESSION], {
+			...shimPath(shim),
+			CP_MARK: mark,
+			CP_RELEASE: release,
+		});
+		await waitForMark(mark);
+
+		await assert.rejects(settled("capped", held, 200), /the capped run passed 200 ms/);
+		// The shim holds the child's pipes, so the release comes before the await:
+		// a close event waits for every writer of the captured streams.
+		fs.writeFileSync(release, "");
+		const killed = await held.done;
+		assert.equal(killed.status, -1, "the child ends by signal, not by its own exit");
 	});
 });
 

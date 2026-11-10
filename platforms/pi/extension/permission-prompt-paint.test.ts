@@ -16,6 +16,7 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import type { Theme } from "@earendil-works/pi-coding-agent";
@@ -135,6 +136,7 @@ async function collectWarnings<T>(run: () => Promise<T>): Promise<{ result: T; l
 	} finally {
 		if (previous === undefined) delete process.env[ENV_TREE_LOG];
 		else process.env[ENV_TREE_LOG] = previous;
+		fs.rmSync(logPath, { force: true });
 	}
 }
 

@@ -165,9 +165,10 @@ export async function settle(ms: number): Promise<void> {
 }
 
 /**
- * A `date` shim folder that goes first on PATH. It sleeps on the epoch-second
- * read only, so a race window is wide and real, and it marks the sleep so a
- * case can start the second process inside that window.
+ * A `date` shim folder that goes first on PATH. The epoch-second read touches
+ * the mark, then waits for a release file the case touches after the other
+ * process returns, so a race window never depends on a sleep width. The wait
+ * is bounded, so a case that never releases fails instead of hanging.
  */
 export function makeDateShim(): string {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "journal-date-"));
@@ -178,8 +179,13 @@ export function makeDateShim(): string {
 		"#!/usr/bin/env bash",
 		'for arg in "$@"; do',
 		'  if [ "$arg" = "+%s" ]; then',
-		'    if [ -n "${JOURNAL_DATE_MARK:-}" ]; then : >"$JOURNAL_DATE_MARK"; fi',
-		'    sleep "${JOURNAL_DATE_SLEEP:-0}"',
+		'    if [ -n "${JOURNAL_GATE_MARK:-}" ]; then : >"$JOURNAL_GATE_MARK"; fi',
+		"    waited=0",
+		'    while [ ! -e "${JOURNAL_GATE_RELEASE:-}" ]; do',
+		"      sleep 0.01",
+		"      waited=$((waited + 1))",
+		'      if [ "$waited" -ge 2000 ]; then break; fi',
+		"    done",
 		"    break",
 		"  fi",
 		"done",
@@ -191,9 +197,13 @@ export function makeDateShim(): string {
 	return dir;
 }
 
-/** The shim environment: its folder first on PATH, a sleep width, and a mark. */
-export function shimEnv(shim: string, sleep: string, mark: string): RunEnv {
-	return { PATH: `${shim}:${process.env.PATH ?? ""}`, JOURNAL_DATE_SLEEP: sleep, JOURNAL_DATE_MARK: mark };
+/** The gate environment: the shim first on PATH, its mark, and its release file. */
+export function gateEnv(shim: string, mark: string, release: string): RunEnv {
+	return {
+		PATH: `${shim}:${process.env.PATH ?? ""}`,
+		JOURNAL_GATE_MARK: mark,
+		JOURNAL_GATE_RELEASE: release,
+	};
 }
 
 /** Wait for the shim mark, so the second process starts inside the window. */

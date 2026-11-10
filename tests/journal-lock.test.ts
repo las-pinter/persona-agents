@@ -17,6 +17,7 @@ import {
 	SESSION,
 	claimNames,
 	countingCksum,
+	gateEnv,
 	journalsDir,
 	lockPath,
 	makeDateShim,
@@ -34,7 +35,6 @@ import {
 	runAsync,
 	runRaw,
 	settle,
-	shimEnv,
 	shimPath,
 	staleAgeOf,
 	startAsync,
@@ -121,6 +121,37 @@ describe("C — a dead holder is broken", () => {
 
 		assert.match(fs.readFileSync(prevPath(home), "utf8"), /^session dead-session$/m);
 		assert.equal(recordOf(home).session, SESSION);
+	});
+
+	test("a failed claim remove keeps the name for the exit trap", () => {
+		const home = makeHome();
+		plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
+		// The first claim remove fails, so the slot must stay set for the trap to
+		// retry it. The second attempt forwards to the real tool and succeeds.
+		const shim = makeShimDir({
+			rm: [
+				"#!/usr/bin/env bash",
+				'case " $* " in',
+				'  *".journal-write.claim."*)',
+				'    if [ ! -f "$RM_SEEN" ]; then : >"$RM_SEEN"; exit 1; fi',
+				"    ;;",
+				"esac",
+				`exec ${realToolPath("rm")} "$@"`,
+			].join("\n"),
+		});
+
+		const result = run(
+			home,
+			["hold", "--agent", AGENT, "--session", SESSION],
+			{ ...shimPath(shim), RM_SEEN: path.join(home, "rm-seen") },
+		);
+
+		assert.equal(result.status, 0, `the failed remove keeps the hold status: ${result.stderr}`);
+		assert.match(result.stdout, /^stale /m, `the stale record is broken: ${result.stdout}`);
+		assert.match(fs.readFileSync(prevPath(home), "utf8"), /^session dead-session$/m);
+		assert.equal(recordOf(home).session, SESSION);
+		assert.equal(fs.existsSync(path.join(home, "rm-seen")), true, "the remove failed once");
+		assert.deepEqual(claimNames(home), [], "the trap names the claim again and removes it");
 	});
 
 	test("an empty lock file is stale at age 0", () => {
@@ -318,15 +349,16 @@ describe("C — a dead holder is broken", () => {
 	test("two breakers on one stale record leave exactly one holder", async () => {
 		const home = makeHome();
 		const shim = makeDateShim();
-		const mark = path.join(home, "slow-breaker-slept");
+		const mark = path.join(home, "slow-breaker-marked");
+		const release = path.join(home, "slow-breaker-go");
 		plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
 
-		// The slow breaker probes at once, then sleeps inside its epoch read, so
-		// the fast breaker breaks the record and creates in that window.
+		// The slow breaker probes at once, then waits inside its epoch read until
+		// this case releases it, so the fast breaker breaks and creates first.
 		const slow = startAsync(
 			home,
 			["hold", "--agent", AGENT, "--session", "slow", "--timeout", "1"],
-			shimEnv(shim, "0.8", mark),
+			gateEnv(shim, mark, release),
 		);
 		await waitForMark(mark);
 
@@ -335,6 +367,7 @@ describe("C — a dead holder is broken", () => {
 		assert.ok(staleAgeOf(fast.stdout) >= STALE_AGE, `the age is at least ${STALE_AGE}: ${fast.stdout}`);
 		assert.equal(recordOf(home).session, "fast");
 
+		fs.writeFileSync(release, "");
 		const slowResult = await slow;
 		assert.equal(slowResult.status, 4, slowResult.stderr);
 		assert.match(slowResult.stderr, /^held .* by fast since /m);
@@ -485,18 +518,24 @@ describe("E — refresh", () => {
 	test("a refresh never buries a lock that another session took", async () => {
 		const home = makeHome();
 		const shim = makeDateShim();
-		const mark = path.join(home, "refresh-slept");
+		const mark = path.join(home, "refresh-marked");
+		const release = path.join(home, "refresh-go");
 		plantLock(home, recordText("aa", "aa-1", nowSeconds() - STALE_AGE));
 
-		// The owner refreshes its own stale record; the epoch read sleeps, so the
-		// other session breaks the record and takes the lock in that window.
-		const refresh = startAsync(home, ["hold", "--agent", AGENT, "--session", "aa"], shimEnv(shim, "0.8", mark));
+		// The owner refreshes its own stale record; the epoch read waits until this
+		// case releases it, so the other session breaks and takes the lock first.
+		const refresh = startAsync(
+			home,
+			["hold", "--agent", AGENT, "--session", "aa"],
+			gateEnv(shim, mark, release),
+		);
 		await waitForMark(mark);
 
 		const breaker = run(home, ["hold", "--agent", AGENT, "--session", "bb"]);
 		assert.equal(breaker.status, 0, breaker.stderr);
 		assert.ok(staleAgeOf(breaker.stdout) >= STALE_AGE, `the age is at least ${STALE_AGE}: ${breaker.stdout}`);
 
+		fs.writeFileSync(release, "");
 		const refreshResult = await refresh;
 		assert.equal(refreshResult.status, 4, refreshResult.stderr);
 		assert.match(refreshResult.stderr, /^held .* by bb since /m);

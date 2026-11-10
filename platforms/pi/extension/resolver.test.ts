@@ -116,11 +116,12 @@ function captureWarnings(run: () => void): string[] {
 	process.env[ENV_TREE_LOG] = logPath;
 	try {
 		run();
+		return logLines(logPath);
 	} finally {
 		if (previous === undefined) delete process.env[ENV_TREE_LOG];
 		else process.env[ENV_TREE_LOG] = previous;
+		fs.rmSync(logPath, { force: true });
 	}
-	return logLines(logPath);
 }
 
 /** A temp `.pi/agents` directory holding one agent file. */
