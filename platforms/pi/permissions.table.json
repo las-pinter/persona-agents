@@ -405,6 +405,11 @@
       "reason": "A soft reset rewrites the commit chain and requires user approval"
     },
     {
+      "id": "git.history.read-tree-reset", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["git"], "sub": ["read-tree --reset -u", "read-tree -u --reset"], "flags": "listed", "arg": "any",
+      "reason": "A tree update that carries both the reset and the update flag is allowed for the orchestrator"
+    },
+    {
       "id": "git.history.prefixed", "tool": "bash", "verdict": "ask", "classes": ["orchestrator"],
       "verb": ["git"], "sub": ["add", "commit", "pull", "merge", "rebase", "tag"], "flags": "prefixed", "arg": "any",
       "reason": "An unknown global option or a wrapper prefix on a history command requires user approval"

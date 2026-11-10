@@ -48,6 +48,7 @@ import {
 	allowMatches,
 	denyMatches,
 	gateVerdict,
+	rowMatches,
 	rowReason,
 	ruleCount,
 	sourceDecision,
@@ -85,20 +86,20 @@ const ANALYSIS_TOOLS = [
 
 // --- row counts -------------------------------------------------------------
 
-test("the table holds 86 rows: 22 global, 15 reader, 22 worker, 27 orchestrator", () => {
+test("the table holds 87 rows: 22 global, 15 reader, 22 worker, 28 orchestrator", () => {
 	const counts = countTable(RULE_ROWS);
-	assert.equal(counts.total, 86);
+	assert.equal(counts.total, 87);
 	assert.equal(counts.byGroup.global, 22);
 	assert.equal(counts.byGroup.reader, 15);
 	assert.equal(counts.byGroup.worker, 22);
-	assert.equal(counts.byGroup.orchestrator, 27);
+	assert.equal(counts.byGroup.orchestrator, 28);
 });
 
-test("every class resolves to 36, 44, and 49 rows", () => {
+test("every class resolves to 36, 44, and 50 rows", () => {
 	const counts = countTable(RULE_ROWS);
 	assert.equal(counts.byClass.reader, 36);
 	assert.equal(counts.byClass.worker, 44);
-	assert.equal(counts.byClass.orchestrator, 49);
+	assert.equal(counts.byClass.orchestrator, 50);
 	// One filter decides a class row set: the three ask rows widen to an unnamed
 	// worker, so the worker class holds every worker-group row.
 	assert.deepEqual(
@@ -117,10 +118,10 @@ test("only the three ask rows widen to an unnamed agent", () => {
 	assert.deepEqual(widened, ["file.move.ask", "file.remove.ask", "git.remove.ask"]);
 });
 
-test("the 86 rows carry 61 ids: a shared rule is one row per class", () => {
+test("the 87 rows carry 62 ids: a shared rule is one row per class", () => {
 	// One id is one rule. A rule that three classes share is three rows with one
 	// id, so the id count is the number of distinct rules, not of rows.
-	assert.equal(countTable(RULE_ROWS).uniqueIds, 61);
+	assert.equal(countTable(RULE_ROWS).uniqueIds, 62);
 	const shared = new Map<string, number>();
 	for (const row of RULE_ROWS) shared.set(row.id, (shared.get(row.id) ?? 0) + 1);
 	assert.equal(shared.get("read.any"), 3);
@@ -140,7 +141,7 @@ test("every row reaches a class set and every flag class is used", () => {
 	const { classes } = compileTable(RULE_ROWS);
 	// One rule per tool name a row lists. These counts are pinned literals, so a
 	// fault in the `rowsForClass` filter cannot agree with itself here.
-	const pinned: Record<RoleClass, number> = { reader: 51, worker: 61, orchestrator: 66 };
+	const pinned: Record<RoleClass, number> = { reader: 51, worker: 61, orchestrator: 67 };
 	for (const cls of CLASS_ORDER) {
 		assert.equal(ruleCount(classes[cls]), pinned[cls], cls);
 	}
@@ -187,6 +188,30 @@ test("a class-only allow row does not leak into another class", () => {
 	assert.equal(allowMatches(classes.orchestrator, "bash", "cargo nextest"), true);
 	assert.equal(allowMatches(classes.reader, "write", "src/main.rs"), false);
 	assert.equal(allowMatches(classes.orchestrator, "write", "src/main.rs"), true);
+});
+
+test("the tree update row names one verb and both flags, and nothing else", () => {
+	const row = RULE_ROWS.find((item) => item.id === "git.history.read-tree-reset");
+	assert.ok(row !== undefined, "the tree update row is missing");
+	assert.deepEqual(row.classes, ["orchestrator"]);
+	assert.equal(row.verdict, "allow");
+	assert.deepEqual(row.verb, ["git"]);
+	for (const probe of ["git read-tree --reset -u HEAD", "git read-tree -u --reset HEAD"]) {
+		assert.equal(rowMatches("git.history.read-tree-reset", probe), true, probe);
+	}
+	// The row names one verb, so a bare form, a single flag, and every other
+	// tree verb stay outside it.
+	for (const probe of [
+		"git read-tree",
+		"git read-tree --reset HEAD",
+		"git read-tree -u HEAD",
+		"git reset --soft HEAD~1",
+		"git checkout main",
+		"git restore .",
+		"git stash",
+	]) {
+		assert.equal(rowMatches("git.history.read-tree-reset", probe), false, probe);
+	}
 });
 
 test("the ten analysis tools allow for every class and the write tools stay denied", () => {

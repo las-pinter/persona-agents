@@ -360,6 +360,62 @@ test("the plain history forms never ask and always allow", () => {
 	}
 });
 
+/** A tree update that carries both flags: the one form the allow row names. */
+const READ_TREE_RESET_ALLOW = [
+	"git read-tree --reset -u HEAD",
+	"git read-tree --reset -u 0123abc",
+	"git read-tree -u --reset HEAD",
+	"git -C /x read-tree --reset -u HEAD",
+	"cd /x && git read-tree --reset -u HEAD",
+];
+
+/** The same verb without both flags stays closed. */
+const READ_TREE_RESET_DENY = [
+	"git read-tree",
+	"git read-tree --reset",
+	"git read-tree -u",
+	"git read-tree --reset HEAD",
+	"git read-tree -u HEAD",
+	"git -C /x read-tree --reset HEAD",
+	"env A=1 git read-tree --reset -u HEAD",
+];
+
+test("a read-tree with both flags allows for the orchestrator only", () => {
+	for (const probe of READ_TREE_RESET_ALLOW) {
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "allow", probe);
+		assert.equal(askMatches(compileClass(RULE_ROWS, "orchestrator"), "bash", probe), false, probe);
+	}
+});
+
+test("a read-tree with both flags denies for a reader role and for a worker role", () => {
+	for (const role of ["planner", "implementer"] as Role[]) {
+		const sets = compileRole(RULE_ROWS, role);
+		for (const probe of READ_TREE_RESET_ALLOW) {
+			assert.equal(allowMatches(sets, "bash", probe), false, `${role}: ${probe}`);
+			assert.equal(gateVerdict(role, "bash", probe), "deny", `${role}: ${probe}`);
+		}
+	}
+});
+
+test("a read-tree without both flags denies for the orchestrator", () => {
+	for (const probe of READ_TREE_RESET_DENY) {
+		assert.equal(allowMatches(compileClass(RULE_ROWS, "orchestrator"), "bash", probe), false, probe);
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "default", probe);
+	}
+	// The new row names one tree verb, so the other tree verbs keep their verdict.
+	for (const probe of ["git checkout main", "git restore .", "git stash"]) {
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "default", probe);
+	}
+});
+
+test("a git -c override on the tree update asks and never allows", () => {
+	// The owner's global file is outside this repository, so this case reads the
+	// shipped table only.
+	const probe = "git -c core.hooksPath=/x read-tree --reset -u HEAD";
+	assert.equal(shippedVerdict("orchestrator", "bash", probe), "ask", probe);
+	assert.equal(allowMatches(compileClass(RULE_ROWS, "orchestrator"), "bash", probe), false, probe);
+});
+
 test("the git directory option takes a path, never a config key", () => {
 	const orchestrator = compileClass(RULE_ROWS, "orchestrator");
 	for (const path of DIR_SLOT_ALLOW) {

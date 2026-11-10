@@ -66,6 +66,8 @@ platform:
 - pi allows the six commands also with `git -C <path>`, `--no-pager`, `-p`,
   and a leading `cd x &&`. The gate derives the skill script folder from the
   loaded skill, so the journal script call needs no template entry.
+- On pi, the orchestrator also runs `git read-tree --reset -u <commit>`, which
+  overwrites uncommitted work, so the tree must be clean first.
 - opencode allows only a plain `git add`, `git commit`, `git merge`, and
   `git rebase`. `git pull` and `git tag` ask, because a bare star can expand
   to a planted `--upload-pack` or `-d` file. `git -C` forms ask, because a

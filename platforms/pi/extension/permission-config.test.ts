@@ -96,18 +96,18 @@ function fixtureRow(id: string): RuleRow {
 
 // --- the shipped default file ----------------------------------------------
 
-test("the shipped default file holds 86 rows and the frozen counts", () => {
+test("the shipped default file holds 87 rows and the frozen counts", () => {
 	const rows = loadTableFile(DEFAULT_TABLE_FILE);
 	const counts = countTable(rows);
-	assert.equal(counts.total, 86);
+	assert.equal(counts.total, 87);
 	assert.equal(counts.byGroup.global, 22);
 	assert.equal(counts.byGroup.reader, 15);
 	assert.equal(counts.byGroup.worker, 22);
-	assert.equal(counts.byGroup.orchestrator, 27);
+	assert.equal(counts.byGroup.orchestrator, 28);
 	assert.equal(counts.byClass.reader, 36);
 	assert.equal(counts.byClass.worker, 44);
-	assert.equal(counts.byClass.orchestrator, 49);
-	assert.equal(counts.uniqueIds, 61);
+	assert.equal(counts.byClass.orchestrator, 50);
+	assert.equal(counts.uniqueIds, 62);
 });
 
 test("the default file resolves from the module, not the working directory", () => {
@@ -130,7 +130,7 @@ test("an override changes one verdict for every row of that id", () => {
 	});
 	const { config, lines } = load(basePaths({ override: file }));
 	assert.deepEqual(lines, []);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	const changed = config.rows.filter((row) => row.id === "release.ask");
 	assert.equal(changed.length, 1);
 	assert.ok(changed.every((row) => row.verdict === "deny" && row.layer === "override"));
@@ -144,7 +144,7 @@ test("an override disables one row", () => {
 	});
 	const { config, lines } = load(basePaths({ override: file }));
 	assert.deepEqual(lines, []);
-	assert.equal(config.rows.length, 85);
+	assert.equal(config.rows.length, 86);
 	assert.equal(config.rows.some((row) => row.id === "npx.run"), false);
 	// The ask row is gone, so the call falls to the mode default.
 	assert.equal(verdict(compileRole(config.rows, "implementer"), "bash", "npx cowsay hi"), "default");
@@ -170,7 +170,7 @@ test("an override adds one row", () => {
 	});
 	const { config, lines } = load(basePaths({ override: file }));
 	assert.deepEqual(lines, []);
-	assert.equal(config.rows.length, 87);
+	assert.equal(config.rows.length, 88);
 	const added = config.rows.find((row) => row.id === "custom.fetch-ask");
 	assert.ok(added !== undefined && added.layer === "override");
 	assert.equal(verdict(compileRole(config.rows, "implementer"), "bash", "curl https://example.test"), "ask");
@@ -191,7 +191,7 @@ test("an override row with unnamed widens to its class compile", () => {
 	const file = write("unnamed-row.json", { version: 1, patch: [{ id: row.id, row }] });
 	const { config, lines } = load(basePaths({ override: file }));
 	assert.deepEqual(lines, []);
-	assert.equal(config.rows.length, 87);
+	assert.equal(config.rows.length, 88);
 	assert.equal(verdict(compileClass(config.rows, "worker"), "bash", "curl https://example.test"), "ask");
 	// The named profession keeps the row; a named tester does not get it.
 	assert.equal(verdict(compileRole(config.rows, "implementer"), "bash", "curl https://example.test"), "ask");
@@ -242,7 +242,7 @@ test("an override replaces every row of an id with one supplied row", () => {
 	assert.equal(replaced.length, 1);
 	assert.deepEqual(replaced[0]?.classes, ["reader", "worker"]);
 	// Two shipped git.fetch.deny rows collapse to one, so the total drops by one.
-	assert.equal(config.rows.length, 85);
+	assert.equal(config.rows.length, 86);
 });
 
 test("an override that changes the class list of an existing id fails closed", () => {
@@ -298,7 +298,7 @@ test("the global overlay loads after the rows and is stamped as overlay", () => 
 	});
 	const { config, lines } = load(basePaths({ overlay }));
 	assert.deepEqual(lines, []);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.equal(config.overlay.deny.length, 1);
 	assert.equal(config.overlay.deny[0].layer, "overlay");
 	const sets = compileRole(config.rows, "implementer");
@@ -401,7 +401,7 @@ test("a table path inside a repository is refused and the default stays in force
 	writeFileSync(planted, JSON.stringify({ version: 1, rows: [] }));
 	const { config, lines } = load(basePaths({ table: planted }));
 	assert.equal(config.errors.length, 0);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.ok(lines.some((line) => line.includes(planted)), lines.join("\n"));
 	assert.ok(config.overlay.deny.every((rule) => rule.reason !== FENCE_REASON));
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");
@@ -417,7 +417,7 @@ test("an override path inside a repository is refused and the shipped rows stay"
 	);
 	const { config, lines } = load(basePaths({ override: planted }));
 	assert.equal(config.errors.length, 0);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.ok(lines.some((line) => line.includes(planted)), lines.join("\n"));
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");
 });
@@ -425,7 +425,7 @@ test("an override path inside a repository is refused and the shipped rows stay"
 test("a relative table path is refused and the default stays in force", () => {
 	const { config, lines } = load(basePaths({ table: path.join("relative", "permissions.table.json") }));
 	assert.equal(config.errors.length, 0);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.equal(lines.length, 1);
 	assert.ok(lines[0].includes("absolute"), lines[0]);
 	assert.ok(config.overlay.deny.every((rule) => rule.reason !== FENCE_REASON));
@@ -434,7 +434,7 @@ test("a relative table path is refused and the default stays in force", () => {
 test("a relative override path is refused and the shipped rows stay", () => {
 	const { config, lines } = load(basePaths({ override: path.join("relative", "permissions.table.json") }));
 	assert.equal(config.errors.length, 0);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.equal(lines.length, 1);
 	assert.ok(lines[0].includes("absolute"), lines[0]);
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");
@@ -449,7 +449,7 @@ test("a symlinked table path that resolves inside a repository is refused", () =
 	symlinkSync(planted, link);
 	const { config, lines } = load(basePaths({ table: link }));
 	assert.equal(config.errors.length, 0);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.equal(lines.length, 1);
 	assert.ok(lines[0].includes(planted), lines[0]);
 	assert.ok(config.overlay.deny.every((rule) => rule.reason !== FENCE_REASON));
@@ -467,7 +467,7 @@ test("a symlinked override path that resolves inside a repository is refused", (
 	symlinkSync(planted, link);
 	const { config, lines } = load(basePaths({ override: link }));
 	assert.equal(config.errors.length, 0);
-	assert.equal(config.rows.length, 86);
+	assert.equal(config.rows.length, 87);
 	assert.equal(lines.length, 1);
 	assert.ok(lines[0].includes(planted), lines[0]);
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");

@@ -219,10 +219,10 @@ again.
 
 ### Table doctrine
 
-- **Row groups.** The shipped file holds 86 rows: 22 global, 15 reader, 22
-  worker, and 27 orchestrator. A class compile drops a `roles` row unless the
+- **Row groups.** The shipped file holds 87 rows: 22 global, 15 reader, 22
+  worker, and 28 orchestrator. A class compile drops a `roles` row unless the
   row sets `unnamed`, so only the reader class drops a row. The compile yields
-  51 reader, 61 worker, or 66 orchestrator rules, one rule per tool name a kept
+  51 reader, 61 worker, or 67 orchestrator rules, one rule per tool name a kept
   row lists.
 - **Unnamed agents.** A row that sets `unnamed` joins its class compile, so an
   agent with a non-shipped name and that class gets the row. A false value is
@@ -326,7 +326,7 @@ active agent runs under `allow-unless-matched` with only the global rows.
 **Git writes**: `AGENTS.md` owns the history doctrine, the forms that still
 ask, and the accepted-risk list. The pi mapping allows the six history
 commands also with `git -C <path>`, `--no-pager`, `-p`, and a leading
-`cd x &&`.
+`cd x &&`, and `git read-tree --reset -u` likewise.
 
 **Headless orchestrator runs (delegated/`-p`/`--mode json`) can run a plain
 commit**, but a commit in an exception form still blocks, for example a message

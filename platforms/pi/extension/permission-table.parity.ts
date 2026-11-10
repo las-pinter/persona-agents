@@ -154,6 +154,8 @@ export const ROW_RATIONALE: Record<string, string> = {
 		"A git directory option value that fails the path grammar had no ask row, so one row now sends every such value to the ask tier for the orchestrator.",
 	"git.remove.ask":
 		"A git file removal carries the same intent as a plain one, so the removal ask row covers it for the two professions that may remove a file.",
+	"git.history.read-tree-reset":
+		"A history regroup needs one tree update, so one narrow allow row names the reset and update flags and leaves every other form to deny-by-default.",
 	"shell.verify.script":
 		"The retired worker list allowed npm run with any script name, so one row names the verb and leaves the script word free.",
 	"shell.verify.reader":
