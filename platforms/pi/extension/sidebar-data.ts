@@ -16,17 +16,17 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createAskLog, createAskTally, pendingLogEvents, type AskLog, type AskTally } from "./ask-record.ts";
+import { createAskLog, pendingLogEvents, type AskLog } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
 import { readEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
-import { studySlug } from "./study-status.ts";
+import { visibleStudies } from "./study-status.ts";
 import {
 	isSafeName,
-	readActiveStudy,
 	readMcpJsonServers,
+	readStudies,
 	resolveMcpJsonPath,
 } from "./sidebar-sources.ts";
 import type {
@@ -99,28 +99,21 @@ interface InternalState {
 	rootCallIds: Set<string>;
 	/** Session-wide subagent MCP usage, folded from the shared tree log. */
 	mcpTally: McpTally;
-	/** Session-wide ask records, folded from the shared tree log. */
-	askTally: AskTally;
 	/** The newest ask queue events, rebuilt from the same log read. */
 	askLog: AskLog;
-	/** Short git HEAD, or `null` when the read failed. */
-	head: string | null;
+	/**
+	 * Study names that were open earlier in this process, so a closed study
+	 * keeps its row. Process-wide by design: a restart is the boundary, so a
+	 * session start does not clear it.
+	 */
+	seenStudies: Set<string>;
 	unsubs: Array<() => void>;
 	timers: Array<ReturnType<typeof setInterval>>;
 }
 
-/** A fully defined STATUS snapshot before the first read. */
+/** A fully defined STUDY STATUS snapshot before the first read. */
 function emptyStatus(): StatusSnapshot {
-	return {
-		study: null,
-		stage: null,
-		briefs: [],
-		nextAction: null,
-		head: null,
-		askCounts: {},
-		askTool: null,
-		askAgeMs: null,
-	};
+	return { studies: [] };
 }
 
 /** A fully defined snapshot before the first event. */
@@ -266,9 +259,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		rootMcpUsage: {},
 		rootCallIds: new Set<string>(),
 		mcpTally: createMcpTally(),
-		askTally: createAskTally(),
 		askLog: createAskLog(),
-		head: null,
+		seenStudies: new Set<string>(),
 		unsubs: [],
 		timers: [],
 	};
@@ -461,52 +453,25 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
 		for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);
 		applyMcpUsage();
-		for (const event of events) state.askTally.observe(event);
-		applyStatusAsk();
 		// This read returns the whole kept tail, so the ring is rebuilt not appended.
 		applyAskLog(events);
 	}
 
-	/** Write the folded ask counts and the newest ask age into the STATUS panel. */
-	function applyStatusAsk(): void {
-		const latest = state.askTally.latest();
-		const at = latest ? Date.parse(latest.at) : Number.NaN;
-		state.snapshot.status = {
-			...(state.snapshot.status ?? emptyStatus()),
-			askCounts: state.askTally.usage(),
-			askTool: latest?.tool ?? null,
-			// Whole seconds, so the repaint signature follows the printed age.
-			askAgeMs: Number.isFinite(at)
-				? Math.floor(Math.max(0, Date.now() - at) / 1000) * 1000
-				: null,
-		};
-	}
-
-	/** Write the current HEAD into the STATUS panel, keeping the other fields. */
-	function applyStatusHead(): void {
-		state.snapshot.status = { ...(state.snapshot.status ?? emptyStatus()), head: state.head };
-	}
-
 	/**
-	 * Read the active study under the project's notes tree and write the STATUS
-	 * panel. A missing tree, a missing `status.md`, or a throwing read paints
-	 * `no active study`, a `-` stage, `-` for the next action, and no briefs.
+	 * Read the current project's studies and write the STUDY STATUS list. A
+	 * closed study keeps its row for the life of the process, and a restart
+	 * drops it. A missing tree paints the empty list.
 	 */
 	function refreshStudy(): void {
 		const cwd = state.snapshot.cwd || state.snapshot.workspace.cwd;
 		const project = cwd ? basename(cwd) : "";
-		const read =
+		const rows =
 			project && isSafeName(project)
-				? readActiveStudy(join(homedir(), "agent-notes", "project-notes", project, "studies"))
-				: { study: null, briefs: [] };
-		const active = read.study;
+				? readStudies(join(homedir(), "agent-notes", "project-notes", project, "studies"))
+				: [];
 		state.snapshot.status = {
 			...(state.snapshot.status ?? emptyStatus()),
-			study: active ? studySlug(active.folder) : null,
-			stage: active?.fields?.stage ?? null,
-			briefs: active ? read.briefs : [],
-			nextAction: active?.fields?.nextAction ?? null,
-			head: state.head,
+			studies: visibleStudies(rows, state.seenStudies),
 		};
 	}
 
@@ -516,22 +481,17 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		const cwd = state.snapshot.workspace.cwd || state.snapshot.cwd;
 		if (!cwd) return;
 		if (typeof pi.exec !== "function") {
-			state.head = null;
-			applyStatusHead();
 			markGitUnavailable();
 			applyWorkspace();
 			return;
 		}
 		try {
-			const [status, numstat, head] = await Promise.all([
+			const [status, numstat] = await Promise.all([
 				pi.exec("git", ["status", "--porcelain"], { cwd, timeout: GIT_TIMEOUT_MS }),
 				pi.exec("git", ["diff", "--numstat", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
-				pi.exec("git", ["rev-parse", "--short", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
 			]);
 			// dispose() bumps the generation; drop a stale write after the await.
 			if (myGeneration !== generation) return;
-			state.head = head && head.code === 0 ? String(head.stdout ?? "").trim() || null : null;
-			applyStatusHead();
 			if (!status || status.code !== 0) {
 				markGitUnavailable();
 				applyWorkspace();
@@ -548,8 +508,6 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			state.files = files.slice(0, WORKSPACE_FILES_CAP);
 		} catch {
 			if (myGeneration !== generation) return;
-			state.head = null;
-			applyStatusHead();
 			markGitUnavailable();
 		}
 		applyWorkspace();

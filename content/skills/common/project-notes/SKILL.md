@@ -181,7 +181,7 @@ planner.
 ```markdown
 # <Study Title> — Status
 
-- **Stage:** full | done | blocked | abandoned
+- **Stage:** active | done | blocked | abandoned
 - **Updated:** YYYY-MM-DD
 - **Owner:** planner
 - **Next action:** <one line>
@@ -192,15 +192,15 @@ planner.
 
 | Date | Stage | Note |
 |------|-------|------|
-| YYYY-MM-DD | full | folder created |
+| YYYY-MM-DD | active | folder created |
 | YYYY-MM-DD | done | user accepted the study |
 ```
 
 Rules:
 
 1. Create `status.md` in the same action that creates the study folder. A new
-   study starts at `full`.
-2. Move the stage `full` → `done`. The stage `blocked` or `abandoned` may
+   study starts at `active`.
+2. Move the stage `active` → `done`. The stage `blocked` or `abandoned` may
    replace the current stage at any time. A study is `done` only on the user's
    explicit acceptance.
 3. Append one History row on every stage change.
@@ -217,7 +217,7 @@ Location: `studies/index.md` inside the project folder.
 
 | Study | Stage | Updated | Path |
 |-------|-------|---------|------|
-| <title> | full | YYYY-MM-DD | `studies/YYYY-MM-DD-<slug>/` |
+| <title> | active | YYYY-MM-DD | `studies/YYYY-MM-DD-<slug>/` |
 ```
 
 Rules:

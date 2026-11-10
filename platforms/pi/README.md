@@ -30,7 +30,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
 | `tree-signature.ts` | Pure repaint key: serializes every painted field, so an unchanged key skips the paint |
 | `tree-selection.ts` | Pure keyboard selection over the overlay's node id list: next and previous, with wrap |
-| `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
+| `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STUDY STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
 | `sidebar-config.ts` | The `/sidebar` toggle config: atomic write, width clamp, pure toggle and width plans |
@@ -295,10 +295,9 @@ reaches a root surface, and a root ask on a run with no surface. The record
 names the tool, the asking role, and the verdict. The root settle and the child
 settle write it in the ask plumbing (`permission-prompt.ts`,
 `child-ask-mount.ts`, and `child-ask.ts`), never in the gate. The sidebar folds
-the records the way it folds the MCP counts, and the STATUS panel prints the
-newest tool with its count and age. A count never subtracts, so a `clear` keeps
-it. The log lives under the OS temp dir, so a `/reload` keeps the record and a
-reboot loses it.
+the records the way it folds the MCP counts, and the LOG panel prints the
+shared ring. The log lives under the OS temp dir, so
+a `/reload` keeps the record and a reboot loses it.
 
 A run with no UI (`-p`, `--mode json`) has no surface to draw a prompt on, so an
 ask there fails closed with no prompt. A child ask does not fail closed while
@@ -433,8 +432,9 @@ OUT OF SCOPE for this feature. The tool strip stops the normal path only.
 The sidebar owns the right column. It paints SEVEN panels:
 
 1. AGENTS — the live agent tree.
-2. STATUS — the active study, its stage and brief count, the next action, the
-   short HEAD, and the newest ask.
+2. STUDY STATUS — one row per study of the current project, newest first: the
+   stage glyph, the study name, the brief count, and the age. The list stops at
+   four studies and marks the rest.
 3. SESSION — model, thinking level, context use, cost, and tokens per second.
 4. WORKSPACE — cwd, git branch, and the changed-file count.
 5. MCP — configured servers, an inferred connection dot, a per-server `xN`
@@ -446,20 +446,25 @@ The sidebar owns the right column. It paints SEVEN panels:
    nothing.
 
 TODOS takes the height that the fixed panels leave, the five-line LOG panel at
-the foot included. A shrinking column takes TODOS down line by line. At one
-height only — where the fixed panels and their six rules fill the column, 37
-rows with a full ring and two changed files — the rule above TODOS is freed,
-and TODOS takes that freed line as a one-line header, so no row goes unused.
-Below that height the freed rule does not help: the next row down drops TODOS
-whole, and each further row drops a whole panel from the end of the list, LOG
-first, then MCP, WORKSPACE, SESSION, then STATUS. A dropped panel leaves its
-rows unpainted. AGENTS never drops. With a full ring and two changed files, a
-column of 30 rows paints AGENTS, STATUS, SESSION, WORKSPACE, and MCP.
+the foot included. A shrinking column takes TODOS down line by line. The STUDY
+STATUS panel holds 2 to 6 lines: a title, one line per study up to four
+studies, and the overflow marker. Every drop height therefore follows the
+number of studies. With a full ring and two changed files, the fixed panels and
+their six rules fill the column at 36 rows with no study and at 40 rows with
+five studies. At that height only, TODOS takes the freed rule line as a
+one-line header, so no row goes unused. One row above it, TODOS has its own
+budget line and the rule above it returns. Below it, the next row down drops
+TODOS whole, and each further row drops a whole panel from the end of the list,
+LOG first, then MCP, WORKSPACE, SESSION, then STUDY STATUS. A dropped panel
+leaves its rows unpainted. AGENTS never drops. A column of 30 rows paints five
+panels with no study and up to two studies; three or more studies push MCP
+out, so four panels paint.
 
-The tree and the MCP counts are cross-process. The STATUS, SESSION, WORKSPACE,
-TODOS, and LOG panels show the root process's data only. The LOG panel reads the
-ask events and the plain lines in the shared log and folds them into one ring in
-the root process. The child loader carries no extension set, and the `todo` tool
+The tree and the MCP counts are cross-process. The STUDY STATUS, SESSION,
+WORKSPACE, TODOS, and LOG panels show the root process's data only. The LOG
+panel reads the ask events and the plain lines in the shared log and folds them
+into one ring in the root process. The child loader carries no extension set,
+and the `todo` tool
 guards a child session by id, so a child's session and todo data is not visible
 to the root sidebar. The root counts its own MCP tool starts and folds each
 child's counts through the tree log into one session tally.

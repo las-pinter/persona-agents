@@ -1,7 +1,7 @@
 /**
  * Ask records: one line per ask stage in the shared tree log, plus the pure
- * tally the STATUS panel reads and the pure ring the LOG panel reads. The ring
- * holds every extension message: an ask queue event, and a plain log line.
+ * ring the LOG panel reads. The ring holds every extension message: an ask
+ * queue event, and a plain log line.
  *
  * The record is written in the ask plumbing, never in the gate. The writer is
  * best-effort, so a lost record never breaks an ask. The tally and the ring

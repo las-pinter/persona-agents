@@ -1,23 +1,19 @@
 /**
  * Sidebar disk readers — impure.
  *
- * Reads `mcp.json`, one study `status.md`, and one study's brief folder for the
- * collector in `sidebar-data.ts`. This module holds no state and no timers. A
- * missing file, a missing folder, or a throwing read gives a defined default,
- * never an error.
+ * Reads `mcp.json` and the study folders for the collector in
+ * `sidebar-data.ts`. This module holds no state and no timers. A missing file,
+ * a missing folder, or a throwing read gives a defined default, never an error.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import {
-	parseStatusFile,
-	pickActiveStudy,
-	sortBriefNames,
-	type StudyEntry,
-	type StudyFields,
-} from "./study-status.ts";
+import { parseStatusFile, studySlug, type StudyFields, type StudyRow } from "./study-status.ts";
+
+/** The study folder that holds archived studies. The panel never lists it. */
+const ARCHIVED_STUDIES = "legacy_studies";
 
 /** The agent directory's `mcp.json`, guarded against a missing helper. */
 export function resolveMcpJsonPath(): string {
@@ -58,47 +54,48 @@ function readStatusFields(filePath: string): StudyFields | null {
 	}
 }
 
-/** One study folder's brief names, sorted. A missing folder gives `[]`. */
-function readBriefNames(briefsDir: string): string[] {
+/** Count the brief files under `briefsDir`. A missing folder gives 0. */
+function countBriefs(briefsDir: string): number {
 	try {
-		const names = readdirSync(briefsDir).filter(
+		return readdirSync(briefsDir).filter(
 			(name) => isSafeName(name) && name.endsWith(".md"),
-		);
-		return sortBriefNames(names);
+		).length;
 	} catch {
 		/* a missing briefs folder is not an error */
-		return [];
+		return 0;
 	}
-}
-
-/** One active study and its brief names, read from the notes tree. */
-export interface ActiveStudyRead {
-	study: StudyEntry | null;
-	briefs: string[];
 }
 
 /**
- * Read the studies tree under `studiesRoot`. `isSafeName` keeps every joined
- * name inside the tree; a symbolic link inside the tree is still followed. A
- * missing tree, a missing `status.md`, or a throwing read gives an empty read.
+ * Read every study folder under `studiesRoot`. The archived folder is skipped.
+ * A folder with no `status.md` is not a study. `isSafeName` keeps every joined
+ * name inside the tree. A missing tree or a throwing read gives `[]`.
  */
-export function readActiveStudy(studiesRoot: string): ActiveStudyRead {
-	const entries: StudyEntry[] = [];
+export function readStudies(studiesRoot: string): StudyRow[] {
+	const rows: StudyRow[] = [];
 	try {
 		const names = readdirSync(studiesRoot, { withFileTypes: true })
-			.filter((dirent) => dirent.isDirectory() && isSafeName(dirent.name))
+			.filter(
+				(dirent) =>
+					dirent.isDirectory() &&
+					isSafeName(dirent.name) &&
+					dirent.name !== ARCHIVED_STUDIES,
+			)
 			.map((dirent) => dirent.name)
 			.sort();
-		for (const name of names) {
-			entries.push({
-				folder: name,
-				fields: readStatusFields(join(studiesRoot, name, "status.md")),
+		for (const folder of names) {
+			const fields = readStatusFields(join(studiesRoot, folder, "status.md"));
+			if (!fields) continue;
+			rows.push({
+				folder,
+				name: studySlug(folder),
+				stage: fields.stage,
+				briefs: countBriefs(join(studiesRoot, folder, "briefs")),
+				updated: fields.updated,
 			});
 		}
 	} catch {
-		return { study: null, briefs: [] };
+		return [];
 	}
-	const study = pickActiveStudy(entries);
-	if (!study) return { study: null, briefs: [] };
-	return { study, briefs: readBriefNames(join(studiesRoot, study.folder, "briefs")) };
+	return rows;
 }

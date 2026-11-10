@@ -199,32 +199,42 @@ test("the LOG panel keeps its five lines at the foot of the column", () => {
 test("a short column shrinks TODOS first, then drops LOG before MCP", () => {
 	const at = (height: number): string[] => content(renderSidebarPanel(makeBudgetSnapshot(), 80, height, theme, 0));
 	const tall = at(40);
-	const oneTodoLine = at(37);
-	const noTodos = at(36);
-	const noLog = at(35);
-	const short = at(29);
+	const twoTodoLines = at(37);
+	const oneTodoLine = at(36);
+	const joined = at(35);
+	const noTodos = at(34);
+	const noLog = at(33);
+	const short = at(27);
 
-	// At 40 TODOS still gets three lines and the log keeps five at the foot.
+	// At 40 TODOS still gets five lines and the log keeps five at the foot.
 	assert.equal(tall.length, 40, "the column uses the whole height");
 	assert.ok(tall.some((line) => line === " TODOS"), "TODOS paints at height 40");
 	assert.equal(logBlock(tall), 5, "LOG paints five lines at height 40");
 
-	// At 37 the freed rule line carries a one-line TODOS header, and the log
-	// still paints below it.
-	assert.equal(oneTodoLine.length, 37, "the column fills height 37");
-	assert.equal(oneTodoLine.filter((line) => line === " TODOS").length, 1, "TODOS takes one line at height 37");
-	assert.equal(logBlock(oneTodoLine), 5, "LOG paints five lines at height 37");
+	// At 37 TODOS has two budget lines and the log still paints below it.
+	assert.equal(twoTodoLines.length, 37, "the column fills height 37");
+	assert.equal(twoTodoLines.filter((line) => line === " TODOS").length, 1, "TODOS paints one header");
+	assert.equal(logBlock(twoTodoLines), 5, "LOG paints five lines at height 37");
 
-	// At 36 TODOS has no line left, and the log still paints below MCP.
-	assert.ok(!noTodos.some((line) => line === " TODOS"), "TODOS shrinks away at height 36");
-	assert.equal(logBlock(noTodos), 5, "LOG still paints its five lines at height 36");
+	// At 36 the one line TODOS has is its own budget row, with a rule above it.
+	assert.equal(oneTodoLine.length, 36, "the column fills height 36");
+	assert.equal(oneTodoLine.filter((line) => line === " TODOS").length, 1, "TODOS takes one line at height 36");
 
-	// At 35 the log is the first whole panel to leave, and MCP stays.
-	assert.ok(!noLog.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG drops at height 35");
-	assert.ok(noLog.some((line) => line === " MCP"), "MCP still paints at height 35");
+	// At 35 TODOS takes the freed rule line as its header, and the log still fits.
+	assert.equal(joined.length, 35, "the column fills height 35");
+	assert.equal(joined.filter((line) => line === " TODOS").length, 1, "TODOS takes the freed line at height 35");
+	assert.equal(logBlock(joined), 5, "LOG paints five lines at height 35");
 
-	// At 29 the log and MCP are gone, and the panels above them stay in order.
-	assert.ok(!short.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG stays dropped at height 29");
-	assert.ok(!short.some((line) => line === " MCP"), "MCP drops at height 29");
-	assert.ok(short.some((line) => line === " WORKSPACE"), "WORKSPACE still paints at height 29");
+	// At 34 TODOS has no line left, and the log still paints below MCP.
+	assert.ok(!noTodos.some((line) => line === " TODOS"), "TODOS shrinks away at height 34");
+	assert.equal(logBlock(noTodos), 5, "LOG still paints its five lines at height 34");
+
+	// At 33 the log is the first whole panel to leave, and MCP stays.
+	assert.ok(!noLog.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG drops at height 33");
+	assert.ok(noLog.some((line) => line === " MCP"), "MCP still paints at height 33");
+
+	// At 27 the log and MCP are gone, and the panels above them stay in order.
+	assert.ok(!short.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG stays dropped at height 27");
+	assert.ok(!short.some((line) => line === " MCP"), "MCP drops at height 27");
+	assert.ok(short.some((line) => line === " WORKSPACE"), "WORKSPACE still paints at height 27");
 });

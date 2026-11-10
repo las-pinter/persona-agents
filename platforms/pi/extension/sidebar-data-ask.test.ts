@@ -1,5 +1,5 @@
 /**
- * Sidebar fold tests for the ask record: the STATUS row, the repeat poll, the
+ * Sidebar fold tests for the ask record: the ring order, the repeat poll, the
  * clear, and a reload.
  *
  * Every case points `PI_AGENT_TREE_LOG` at its own temp file, so a record from
@@ -17,9 +17,6 @@ import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works
 import { flushPendingLogEvents, recordAsk, recordLogLine } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
-import { renderStatusPanel } from "./sidebar-render.ts";
-import { theme } from "./sidebar-render-fixtures.ts";
-import { appendEvent } from "./tree-log.ts";
 
 /** A fake pi: no git output, no MCP server, no tool list. */
 function fakePi(): ExtensionAPI {
@@ -67,73 +64,6 @@ function useLog(logPath: string): () => void {
 		else process.env[ENV_TREE_LOG] = previous;
 	};
 }
-
-/** One `clear` record, stamped after the ask record. */
-function appendClear(logPath: string): void {
-	appendEvent(logPath, {
-		v: 1,
-		type: "clear",
-		runId: "root",
-		parentRunId: null,
-		depth: 0,
-		agent: "orchestrator",
-		persona: null,
-		status: "running",
-		at: new Date(Date.now() + 1000).toISOString(),
-	});
-}
-
-test("the STATUS row prints the ask tool, count, and a fresh age", async () => {
-	const { dir, logPath } = tempLog();
-	const restore = useLog(logPath);
-	recordAsk({ tool: "bash", role: "implementer", verdict: "allow", runId: "child-a", depth: 1 });
-	const data = createSidebarData(fakePi());
-	try {
-		data.subscribe(fakeCtx());
-		await flush();
-		const status = data.snapshot().status;
-		assert.equal(status?.askTool, "bash");
-		assert.deepEqual(status?.askCounts, { bash: 1 });
-		assert.ok((status?.askAgeMs ?? -1) >= 0, "the age is measured");
-		assert.ok((status?.askAgeMs ?? 60_000) < 60_000, "the age is under one minute");
-		const lines = renderStatusPanel(status, 80, theme).map((line) => line.trimEnd());
-		assert.match(lines[3], /^- · ask bash x1 \d+s$/);
-		assert.deepEqual(data.snapshot().tree, [], "an ask record paints no tree node");
-	} finally {
-		data.dispose();
-		restore();
-		rmSync(dir, { recursive: true, force: true });
-	}
-});
-
-test("two polls raise the count to x2 and a clear does not lower it", (t) => {
-	const { dir, logPath } = tempLog();
-	const restore = useLog(logPath);
-	recordAsk({ tool: "bash", role: "implementer", verdict: "allow", runId: "child-a", depth: 1 });
-	const data = createSidebarData(fakePi());
-	t.mock.timers.enable({ apis: ["setInterval"] });
-	try {
-		data.subscribe(fakeCtx());
-		assert.deepEqual(data.snapshot().status?.askCounts, { bash: 1 }, "the first read counts once");
-		// A second record lands after the first read, so a tally rebuilt on every
-		// poll from scratch reads x1 here and only a folded tally reads x2.
-		recordAsk({ tool: "bash", role: "implementer", verdict: "deny", runId: "child-b", depth: 1 });
-		t.mock.timers.tick(TREE_POLL_MS);
-		assert.deepEqual(data.snapshot().status?.askCounts, { bash: 2 }, "the second poll folds the new record");
-		t.mock.timers.tick(TREE_POLL_MS);
-		assert.deepEqual(data.snapshot().status?.askCounts, { bash: 2 }, "a further poll keeps x2");
-		appendClear(logPath);
-		t.mock.timers.tick(TREE_POLL_MS);
-		assert.deepEqual(data.snapshot().status?.askCounts, { bash: 2 }, "a clear keeps the count");
-		assert.equal(data.snapshot().status?.askTool, "bash", "a clear keeps the newest tool");
-		assert.deepEqual(data.snapshot().tree, [], "the clear leaves no node");
-	} finally {
-		data.dispose();
-		t.mock.timers.reset();
-		restore();
-		rmSync(dir, { recursive: true, force: true });
-	}
-});
 
 /** One arrival and one expiry of the same ask, stamped one second apart. */
 function appendAskPair(): void {
@@ -184,7 +114,6 @@ test("the snapshot askLog is newest first and an expiry text names its place", a
 			/^00:00:00 implementer\/bash queued=1 /,
 			"the arrival row leads with its clock",
 		);
-		assert.deepEqual(data.snapshot().status?.askCounts, { bash: 1 }, "the pair counts once");
 		// The ring is rebuilt from the whole kept tail, so a poll must not append.
 		t.mock.timers.tick(TREE_POLL_MS);
 		t.mock.timers.tick(TREE_POLL_MS);
@@ -228,29 +157,6 @@ test("a reload rebuilds the ring from the log", async () => {
 		await flush();
 		assert.equal(second.snapshot().askLog?.length, 2, "the new handle reads both rows again");
 		assert.equal(second.snapshot().askLog?.[0].phase, "expiry", "the order survives the reload");
-	} finally {
-		first.dispose();
-		second.dispose();
-		restore();
-		rmSync(dir, { recursive: true, force: true });
-	}
-});
-
-test("a reload keeps the count from the log", async () => {
-	const { dir, logPath } = tempLog();
-	const restore = useLog(logPath);
-	recordAsk({ tool: "bash", role: "implementer", verdict: "allow", runId: "child-a", depth: 1 });
-	const first = createSidebarData(fakePi());
-	const second = createSidebarData(fakePi());
-	try {
-		first.subscribe(fakeCtx());
-		await flush();
-		assert.deepEqual(first.snapshot().status?.askCounts, { bash: 1 }, "the first handle counts");
-		first.dispose();
-		second.subscribe(fakeCtx());
-		await flush();
-		assert.deepEqual(second.snapshot().status?.askCounts, { bash: 1 }, "the new handle reads the log");
-		assert.equal(second.snapshot().status?.askTool, "bash");
 	} finally {
 		first.dispose();
 		second.dispose();

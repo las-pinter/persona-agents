@@ -1,7 +1,7 @@
 /**
  * Sidebar panel renderers — pure.
  *
- * Composes the seven right-column panels: AGENTS (tree), STATUS, SESSION,
+ * Composes the seven right-column panels: AGENTS (tree), STUDY STATUS, SESSION,
  * WORKSPACE, MCP, TODOS, LOG. Every function is pure: no fs, no timers, no pi
  * runtime import.
  * The only external imports are `truncateToWidth`/`visibleWidth` and
@@ -29,6 +29,12 @@ export const DETAIL_PREVIEW_LINES = 20;
 export const CONTEXT_BAR_CELLS = 10;
 /** Width of the SESSION stats label column. Fits sidebar width 45. */
 export const SESSION_LABEL_WIDTH = 11;
+/** Study rows shown in STUDY STATUS before the `… +N more` marker. */
+export const STUDY_STATUS_SHOWN = 4;
+/** Separator between the parts of one panel row. */
+const ROW_SEPARATOR = " · ";
+/** The one word for a missing value in a panel row. */
+const ROW_FALLBACK = "-";
 /** Glyph of the dim, full-width rule drawn between two panels. */
 export const SECTION_RULE_CHAR = "─";
 /**
@@ -36,8 +42,6 @@ export const SECTION_RULE_CHAR = "─";
  * lines so the panels below stay put. Clamped to the height budget.
  */
 export const AGENTS_PAD_MIN = 4; // blank lines buy a stable footprint, so lower panels do not jump
-/** Fixed STATUS panel lines, header included. The shape is constant. */
-export const STATUS_PAD_MIN = 4;
 /**
  * Fixed LOG panel lines, header included: one header and 4 text lines. The
  * newest rows wrap at the panel width and the panel stops at the budget.
@@ -128,24 +132,25 @@ export interface WorkspaceSnapshot {
 	files: WorkspaceFileSnapshot[];
 }
 
-/** STATUS panel data. A missing value prints `-`; no study prints a word. */
-export interface StatusSnapshot {
-	/** Active study slug, with its `YYYY-MM-DD-` prefix dropped. */
-	study: string | null;
-	/** Study stage word. */
+/** One study row in the STUDY STATUS panel. */
+export interface StudyRowSnapshot {
+	/** Folder name with its `YYYY-MM-DD-` prefix dropped. */
+	name: string;
+	/** Study stage word, or `null` when the `Stage` line is absent. */
 	stage: string | null;
-	/** Brief file names under the study's `briefs/` folder, sorted by name. */
-	briefs: string[];
-	/** The study's next-action line. */
-	nextAction: string | null;
-	/** Short git HEAD. */
-	head: string | null;
-	/** Ask count per tool, folded from the ask records. */
-	askCounts: Record<string, number>;
-	/** Tool of the newest ask record, or null when no record exists. */
-	askTool: string | null;
-	/** Age of the newest ask record in ms. */
-	askAgeMs: number | null;
+	/** Number of brief files under the study's `briefs/` folder. */
+	briefs: number;
+	/** The `Updated` field, an ISO date, or `null` when it is absent. */
+	updated: string | null;
+}
+
+/**
+ * STUDY STATUS panel data: the studies of the current project, newest first.
+ * A missing value prints `-`; an empty list prints one dim line.
+ */
+export interface StatusSnapshot {
+	/** Studies to paint. The panel caps the list and marks the overflow. */
+	studies: StudyRowSnapshot[];
 }
 
 /**
@@ -158,7 +163,7 @@ export type AskLogRow = AskLogEvent;
 export interface SidebarSnapshot {
 	cwd: string;
 	tree: TreeNode[];
-	/** STATUS panel data. Absent means nothing was probed yet. */
+	/** STUDY STATUS panel data. Absent means nothing was probed yet. */
 	status?: StatusSnapshot;
 	/** The newest ring entries, newest first. Absent means no log read yet. */
 	askLog?: AskLogRow[];
@@ -243,6 +248,27 @@ export function clipLine(line: string, width: number): string {
 	const clipped = truncateToWidth(line, w, "…", true);
 	// A wide char at the boundary can still overflow. Drop it if so.
 	return visibleWidth(clipped) > w ? truncateToWidth(clipped, w, "", true) : clipped;
+}
+
+/** Collapse one row value to one line; a blank value is the fallback word. */
+function partText(value: string | null | undefined): string {
+	const text = value === null || value === undefined ? "" : oneLine(value);
+	return text.length > 0 ? text : ROW_FALLBACK;
+}
+
+/**
+ * One row of a label and its parts, joined by one separator. A missing part
+ * prints the fallback word, and the row is clipped to `width`. Only the STUDY
+ * STATUS panel calls it; the other panels keep their own row shapes, and
+ * converting them is follow-up work.
+ */
+export function formatRow(
+	label: string | null | undefined,
+	parts: Array<string | null | undefined>,
+	width: number,
+): string {
+	const cells = [label, ...parts].map((value) => partText(value));
+	return clipLine(cells.join(ROW_SEPARATOR), width);
 }
 
 /** The spinner glyph for a running node at `frame`, or the status glyph. */
@@ -446,37 +472,61 @@ export function renderAgentTreePanel(
 	return lines.map((line) => clipLine(line, width));
 }
 
+/** The glyph and theme token for one study stage. An unknown stage is a `?`. */
+function stageMark(stage: string | null): { glyph: string; token: string } {
+	switch ((stage ?? "").toLowerCase()) {
+		case "active":
+			return { glyph: "●", token: "accent" };
+		case "blocked":
+			return { glyph: "⚠", token: "warning" };
+		case "done":
+			return { glyph: "✓", token: "success" };
+		case "abandoned":
+			return { glyph: "✗", token: "dim" };
+		default:
+			return { glyph: "?", token: "dim" };
+	}
+}
+
+/** One study row: stage glyph, study name, brief count, and age. */
+function studyRow(
+	row: StudyRowSnapshot,
+	width: number,
+	theme: SidebarTheme,
+	now: number,
+): string {
+	const { glyph, token } = stageMark(row.stage);
+	const age = row.updated === null ? null : formatElapsed(now - Date.parse(row.updated));
+	return formatRow(
+		`${color(theme, token, glyph)} ${oneLine(row.name)}`,
+		[String(row.briefs), age],
+		width,
+	);
+}
+
 /**
- * The STATUS panel: the active study, its next action, and the newest ask.
- * The shape is fixed at `STATUS_PAD_MIN` lines, so the panels below do not
- * jump. A missing value prints `-`; no active study prints a word.
+ * The STUDY STATUS panel: one dense row per study of the current project,
+ * newest first. The stage shows as a coloured glyph; the row carries the study
+ * name, the brief count, and the age. The list stops at `STUDY_STATUS_SHOWN`
+ * and marks the rest. An empty list paints one dim line.
  */
 export function renderStatusPanel(
 	status: StatusSnapshot | null | undefined,
 	width: number,
 	theme: SidebarTheme,
+	now: number = Date.now(),
 ): string[] {
-	const lines: string[] = [header(theme, " STATUS ")];
-	const data = status ?? null;
+	const lines: string[] = [header(theme, " STUDY STATUS ")];
+	const rows = status?.studies ?? [];
 
-	if (!data || !data.study) {
-		lines.push("no active study");
+	if (rows.length === 0) {
+		lines.push(styleDim(theme, "no study tracked"));
 	} else {
-		const stage = data.stage ? oneLine(data.stage) : "-";
-		const count = data.briefs?.length ?? 0;
-		lines.push(`${stage} · ${count} briefs · ${oneLine(data.study)}`);
-	}
-
-	lines.push(`next ${data?.nextAction ? oneLine(data.nextAction) : "-"}`);
-
-	const head = data?.head ? oneLine(data.head) : "-";
-	const tool = data?.askTool ? oneLine(data.askTool) : null;
-	if (!tool) {
-		lines.push(`${head} · ask -`);
-	} else {
-		const count = data?.askCounts?.[tool] ?? 0;
-		const age = formatElapsed(data?.askAgeMs ?? null);
-		lines.push(`${head} · ask ${tool} x${count} ${age}`);
+		const shown = rows.slice(0, STUDY_STATUS_SHOWN);
+		for (const row of shown) lines.push(studyRow(row, width, theme, now));
+		if (rows.length > shown.length) {
+			lines.push(styleDim(theme, `… +${rows.length - shown.length} more`));
+		}
 	}
 
 	return lines.map((line) => clipLine(line, width));
@@ -838,7 +888,7 @@ export function renderSidebarPanel(
 
 	const now = Date.now();
 	const treePanel = renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now);
-	const statusPanel = renderStatusPanel(snapshot.status, width, theme);
+	const statusPanel = renderStatusPanel(snapshot.status, width, theme, now);
 	const logPanel = renderAskLogPanel(snapshot.askLog, width, theme);
 	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
 	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);

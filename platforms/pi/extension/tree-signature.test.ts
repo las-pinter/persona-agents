@@ -27,16 +27,13 @@ test("treeSignature changes for every field the panels paint", () => {
 	const status = (overrides: Partial<StatusSnapshot> = {}) =>
 		makeSnapshot({
 			status: {
-				study: "study-a",
-				stage: "full",
-				briefs: ["01-a.md"],
-				nextAction: "brief 01",
-				head: "abc1234",
-				askCounts: { bash: 1 },
-				askTool: "bash",
-				askAgeMs: 1000,
+				studies: [{ name: "study-a", stage: "active", briefs: 1, updated: "2026-01-05" }],
 				...overrides,
 			},
+		});
+	const study = (overrides: Partial<StatusSnapshot["studies"][number]>) =>
+		status({
+			studies: [{ name: "study-a", stage: "active", briefs: 1, updated: "2026-01-05", ...overrides }],
 		});
 	const askLog = (text: string) =>
 		makeSnapshot({
@@ -81,14 +78,11 @@ test("treeSignature changes for every field the panels paint", () => {
 			makeSnapshot({ todos: [{ id: "1", text: "second", done: false }] }),
 		],
 		["todos turn marker", makeSnapshot({ todosTurnMarker: false }), makeSnapshot({ todosTurnMarker: true })],
-		["status study", status(), status({ study: "study-b" })],
-		["status stage", status(), status({ stage: "draft" })],
-		["status briefs", status(), status({ briefs: ["01-a.md", "02-b.md"] })],
-		["status next action", status(), status({ nextAction: "brief 02" })],
-		["status head", status(), status({ head: "def5678" })],
-		["status ask count", status(), status({ askCounts: { bash: 2 } })],
-		["status ask tool", status(), status({ askTool: "edit" })],
-		["status ask age", status(), status({ askAgeMs: 2000 })],
+		["status study name", study({}), study({ name: "study-b" })],
+		["status study stage", study({}), study({ stage: "blocked" })],
+		["status study briefs", study({}), study({ briefs: 2 })],
+		["status study updated", study({}), study({ updated: "2026-01-06" })],
+		["status study list", status(), status({ studies: [] })],
 		["askLog row text", askLog("a"), askLog("b")],
 		[
 			"askLog row stamp",

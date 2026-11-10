@@ -17,7 +17,7 @@ import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { STUDY_POLL_MS, TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
+import { STUDY_POLL_MS, TREE_POLL_MS, createSidebarData, type SidebarData } from "./sidebar-data.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, createRootLogPath, MAX_EVENTS_READ } from "./tree-log.ts";
 import { findNode } from "./tree-model.ts";
@@ -32,11 +32,10 @@ import {
 import { theme } from "./sidebar-render-fixtures.ts";
 import { TODOS_EVENT_CHANNEL, TODOS_TURN_ENTRY } from "./todo-tool.ts";
 
-/** A scripted response for the three git calls the collector makes. */
+/** A scripted response for the two git calls the collector makes. */
 interface GitScript {
 	status?: { code?: number; stdout?: string };
 	numstat?: { code?: number; stdout?: string };
-	head?: { code?: number; stdout?: string };
 	/** Configured MCP server names reported by `getMcpServers`. */
 	mcpServers?: string[];
 	/** MCP tool names reported by `getAllTools`. */
@@ -62,7 +61,6 @@ function makeFakePi(script: GitScript): ExtensionAPI {
 		exec: async (_command: string, args: string[]): Promise<ExecResult> => {
 			if (args[0] === "status") return execResult(script.status?.code ?? 0, script.status?.stdout ?? "");
 			if (args[0] === "diff") return execResult(script.numstat?.code ?? 0, script.numstat?.stdout ?? "");
-			if (args[0] === "rev-parse") return execResult(script.head?.code ?? 0, script.head?.stdout ?? "");
 			return execResult(0, "");
 		},
 		on: noopUnsub,
@@ -707,7 +705,7 @@ test("a session start stays at zero through a later tree refresh", (t) => {
 const NOTES_STUDIES = "agent-notes/project-notes/repo/studies";
 
 /** A `status.md` body in the documented shape. */
-function studyStatusFile(stage: string, updated: string, nextAction: string | null): string {
+function studyStatusFile(stage: string, updated: string): string {
 	const lines = [
 		"# Study — Status",
 		"",
@@ -715,7 +713,6 @@ function studyStatusFile(stage: string, updated: string, nextAction: string | nu
 		`- **Updated:** ${updated}`,
 		"- **Owner:** planner",
 	];
-	if (nextAction !== null) lines.push(`- **Next action:** ${nextAction}`);
 	return `${lines.join("\n")}\n`;
 }
 
@@ -742,9 +739,14 @@ function withHome<T>(home: string, fn: () => T): T {
 	}
 }
 
-/** Subscribe against a home tree and return the rendered STATUS lines. */
-async function readStatusPanel(script: GitScript, home: string, cwd = "/repo"): Promise<string[]> {
-	// An empty log, so an ask record from another test cannot paint row 4.
+/** Subscribe against a home tree and return the rendered STUDY STATUS lines. */
+async function readStatusPanel(
+	script: GitScript,
+	home: string,
+	cwd = "/repo",
+	now = Date.now(),
+): Promise<string[]> {
+	// An empty log, so an ask record from another test cannot paint a LOG row.
 	const previous = process.env[ENV_TREE_LOG];
 	const logDir = mkdtempSync(join(tmpdir(), "status-log-"));
 	process.env[ENV_TREE_LOG] = join(logDir, "tree.ndjson");
@@ -752,7 +754,7 @@ async function readStatusPanel(script: GitScript, home: string, cwd = "/repo"): 
 	try {
 		withHome(home, () => data.subscribe(makeFakeCtx([], cwd)));
 		await flush();
-		return renderStatusPanel(data.snapshot().status, 80, theme).map((line) => line.trimEnd());
+		return renderStatusPanel(data.snapshot().status, 80, theme, now).map((line) => line.trimEnd());
 	} finally {
 		data.dispose();
 		restoreTreeLogEnv(previous);
@@ -760,9 +762,14 @@ async function readStatusPanel(script: GitScript, home: string, cwd = "/repo"): 
 	}
 }
 
-test("a full study paints its stage, brief count, slug, and next action", async () => {
+/** The study names the snapshot lists, in panel order. */
+function studyNames(data: SidebarData): string[] {
+	return (data.snapshot().status?.studies ?? []).map((row) => row.name);
+}
+
+test("an active study paints one row with its brief count and age", async () => {
 	const files: Record<string, string> = {
-		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("full", "2026-01-05", "Write brief 03"),
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("active", "2026-01-05"),
 		[`${NOTES_STUDIES}/2026-01-05-alpha/briefs/notes.txt`]: "not a brief",
 	};
 	for (const name of ["01-one.md", "02-two.md", "03-three.md", "04-four.md"]) {
@@ -770,86 +777,66 @@ test("a full study paints its stage, brief count, slug, and next action", async 
 	}
 	const home = makeNotesHome(files);
 	try {
-		const lines = await readStatusPanel({ head: { stdout: "abc1234\n" } }, home);
-		assert.equal(lines[1], "full · 4 briefs · alpha");
-		assert.equal(lines[2], "next Write brief 03");
-		assert.equal(lines[3], "abc1234 · ask -");
+		const now = Date.parse("2026-01-05T00:00:00.000Z");
+		const lines = await readStatusPanel({}, home, "/repo", now);
+		assert.equal(lines[0], " STUDY STATUS");
+		assert.equal(lines[1], "● alpha · 4 · 0s");
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("an open study with an older update beats a newer done study", async () => {
+test("the panel lists every open study, newest updated first", async () => {
 	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-01-alpha/status.md`]: studyStatusFile("full", "2026-01-01", "Go"),
-		[`${NOTES_STUDIES}/2026-02-01-beta/status.md`]: studyStatusFile("done", "2026-02-01", "None"),
+		[`${NOTES_STUDIES}/2026-01-01-alpha/status.md`]: studyStatusFile("active", "2026-01-01"),
+		[`${NOTES_STUDIES}/2026-02-01-beta/status.md`]: studyStatusFile("done", "2026-02-01"),
+		[`${NOTES_STUDIES}/2026-03-01-gamma/status.md`]: studyStatusFile("active", "2026-03-01"),
 	});
 	try {
-		const lines = await readStatusPanel({}, home);
-		assert.equal(lines[1], "full · 0 briefs · alpha");
+		const lines = await readStatusPanel({}, home, "/repo", Date.parse("2026-03-01T00:00:00.000Z"));
+		assert.equal(lines[1], "● gamma · 0 · 0s");
+		assert.equal(lines[2], "● alpha · 0 · 1416h00m");
+		assert.equal(lines.length, 3, "the closed study paints no row");
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("two done studies paint the newest by update", async () => {
+test("two blocked studies keep the updated order and the warning glyph", async () => {
 	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-01-alpha/status.md`]: studyStatusFile("done", "2026-01-01", "None"),
-		[`${NOTES_STUDIES}/2026-02-01-beta/status.md`]: studyStatusFile("done", "2026-02-01", "None"),
+		[`${NOTES_STUDIES}/2026-01-01-alpha/status.md`]: studyStatusFile("blocked", "2026-01-01"),
+		[`${NOTES_STUDIES}/2026-03-01-gamma/status.md`]: studyStatusFile("blocked", "2026-03-01"),
 	});
 	try {
-		const lines = await readStatusPanel({}, home);
-		assert.equal(lines[1], "done · 0 briefs · beta");
+		const lines = await readStatusPanel({}, home, "/repo", Date.parse("2026-03-01T00:00:00.000Z"));
+		assert.equal(lines[1], "⚠ gamma · 0 · 0s");
+		assert.equal(lines[2], "⚠ alpha · 0 · 1416h00m");
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("a status-less folder does not hide a done study", async () => {
+test("the archived studies folder is not listed", async () => {
 	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-01-alpha/status.md`]: studyStatusFile("done", "2026-01-01", "None"),
-		[`${NOTES_STUDIES}/legacy_studies/old.md`]: "archived note",
+		[`${NOTES_STUDIES}/2026-01-01-alpha/status.md`]: studyStatusFile("active", "2026-01-01"),
+		[`${NOTES_STUDIES}/legacy_studies/2026-01-05-old/status.md`]: studyStatusFile("active", "2026-01-05"),
 	});
 	try {
-		const lines = await readStatusPanel({ head: { stdout: "abc1234\n" } }, home);
-		assert.equal(lines[1], "done · 0 briefs · alpha");
+		const lines = await readStatusPanel({}, home, "/repo", Date.parse("2026-01-01T00:00:00.000Z"));
+		assert.deepEqual(lines.slice(1), ["● alpha · 0 · 0s"]);
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("the brief list is sorted by file name", () => {
+test("a pi without exec keeps the study row and marks git", () => {
 	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("full", "2026-01-05", "Go"),
-		[`${NOTES_STUDIES}/2026-01-05-alpha/briefs/04-four.md`]: "brief",
-		[`${NOTES_STUDIES}/2026-01-05-alpha/briefs/02-two.md`]: "brief",
-		[`${NOTES_STUDIES}/2026-01-05-alpha/briefs/03-three.md`]: "brief",
-		[`${NOTES_STUDIES}/2026-01-05-alpha/briefs/01-one.md`]: "brief",
-	});
-	const data = createSidebarData(makeFakePi({}));
-	try {
-		withHome(home, () => data.subscribe(makeFakeCtx()));
-		assert.deepEqual(data.snapshot().status?.briefs, [
-			"01-one.md",
-			"02-two.md",
-			"03-three.md",
-			"04-four.md",
-		]);
-	} finally {
-		data.dispose();
-		rmSync(home, { recursive: true, force: true });
-	}
-});
-
-test("a pi without exec paints a dash head and the git marker", () => {
-	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("full", "2026-01-05", "Go"),
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("active", "2026-01-05"),
 	});
 	const data = createSidebarData(makeFakePi({ noExec: true }));
 	try {
 		withHome(home, () => data.subscribe(makeFakeCtx()));
-		assert.equal(data.snapshot().status?.head, null);
-		assert.equal(data.snapshot().status?.study, "alpha");
+		assert.deepEqual(studyNames(data), ["alpha"]);
 		assert.deepEqual(data.snapshot().workspace.changed, ["(git unavailable)"]);
 	} finally {
 		data.dispose();
@@ -857,49 +844,59 @@ test("a pi without exec paints a dash head and the git marker", () => {
 	}
 });
 
-test("an empty notes tree paints no active study and keeps the HEAD", async () => {
+test("an empty notes tree paints the empty line", async () => {
 	const home = makeNotesHome({ "agent-notes/.keep": "" });
 	try {
-		const lines = await readStatusPanel({ head: { stdout: "abc1234\n" } }, home);
-		assert.equal(lines[1], "no active study");
-		assert.equal(lines[2], "next -");
-		assert.equal(lines[3], "abc1234 · ask -");
+		const lines = await readStatusPanel({}, home);
+		assert.deepEqual(lines, [" STUDY STATUS", "no study tracked"]);
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("a status file without a next action paints next -", async () => {
+test("a status file without a stage paints the unknown glyph", async () => {
 	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("full", "2026-01-05", null),
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]:
+			"# Alpha — Status\n\n- **Updated:** 2026-01-05\n- **Owner:** planner\n",
 	});
 	try {
-		const lines = await readStatusPanel({}, home);
-		assert.equal(lines[1], "full · 0 briefs · alpha");
-		assert.equal(lines[2], "next -");
+		const lines = await readStatusPanel({}, home, "/repo", Date.parse("2026-01-05T00:00:00.000Z"));
+		assert.deepEqual(lines, [" STUDY STATUS", "? alpha · 0 · 0s"]);
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("a study folder with no status file paints no active study", async () => {
+test("a status file without an updated date prints the fallback age", async () => {
+	const home = makeNotesHome({
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]:
+			"# Alpha — Status\n\n- **Stage:** active\n- **Owner:** planner\n",
+	});
+	try {
+		const lines = await readStatusPanel({}, home, "/repo", Date.parse("2026-01-05T00:00:00.000Z"));
+		assert.deepEqual(lines, [" STUDY STATUS", "● alpha · 0 · -"]);
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("a study folder with no status file paints no row", async () => {
 	const home = makeNotesHome({ [`${NOTES_STUDIES}/2026-01-05-alpha/briefs/01-one.md`]: "brief" });
 	try {
 		const lines = await readStatusPanel({}, home);
-		assert.equal(lines[1], "no active study");
+		assert.deepEqual(lines, [" STUDY STATUS", "no study tracked"]);
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
 });
 
-test("a failed HEAD read paints a dash and keeps the study", async () => {
+test("a failed git read keeps the study rows", async () => {
 	const home = makeNotesHome({
-		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("full", "2026-01-05", "Go"),
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("active", "2026-01-05"),
 	});
 	try {
-		const lines = await readStatusPanel({ head: { code: 1, stdout: "" } }, home);
-		assert.equal(lines[1], "full · 0 briefs · alpha");
-		assert.equal(lines[3], "- · ask -");
+		const lines = await readStatusPanel({ status: { code: 1, stdout: "" } }, home);
+		assert.equal(lines[1]?.startsWith("● alpha · 0 · "), true);
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}
@@ -908,45 +905,82 @@ test("a failed HEAD read paints a dash and keeps the study", async () => {
 test("the study reader reads only the home notes tree, not the cwd", async () => {
 	const home = makeNotesHome({
 		["agent-notes/project-notes/myrepo/studies/2026-01-05-alpha/status.md"]: studyStatusFile(
-			"full",
+			"active",
 			"2026-01-05",
-			"Go",
 		),
 	});
 	const cwdRoot = makeNotesHome({
 		["myrepo/agent-notes/project-notes/myrepo/studies/2026-02-01-decoy/status.md"]: studyStatusFile(
-			"full",
+			"active",
 			"2026-02-01",
-			"Decoy",
 		),
 	});
 	try {
 		const lines = await readStatusPanel({}, home, join(cwdRoot, "myrepo"));
-		assert.equal(lines[1], "full · 0 briefs · alpha");
+		assert.equal(lines[1]?.startsWith("● alpha · 0 · "), true);
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 		rmSync(cwdRoot, { recursive: true, force: true });
 	}
 });
 
-test("the study poll picks up a new status file", (t) => {
+test("the study poll picks up a new study", (t) => {
 	const home = makeNotesHome({});
 	const data = createSidebarData(makeFakePi({}));
 	t.mock.timers.enable({ apis: ["setInterval"] });
 	try {
 		withHome(home, () => {
 			data.subscribe(makeFakeCtx());
-			assert.equal(data.snapshot().status?.study, null);
+			assert.deepEqual(studyNames(data), []);
 			const studyDir = join(home, NOTES_STUDIES, "2026-03-01-beta");
 			mkdirSync(studyDir, { recursive: true });
-			writeFileSync(join(studyDir, "status.md"), studyStatusFile("blocked", "2026-03-01", "Wait"));
+			writeFileSync(join(studyDir, "status.md"), studyStatusFile("blocked", "2026-03-01"));
 			t.mock.timers.tick(STUDY_POLL_MS);
-			assert.equal(data.snapshot().status?.study, "beta");
-			assert.equal(data.snapshot().status?.stage, "blocked");
+			assert.deepEqual(studyNames(data), ["beta"]);
+			assert.equal(data.snapshot().status?.studies?.[0].stage, "blocked");
 		});
 	} finally {
 		data.dispose();
 		t.mock.timers.reset();
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("a study that turns done mid-session keeps its row", (t) => {
+	const home = makeNotesHome({
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("active", "2026-01-05"),
+	});
+	const data = createSidebarData(makeFakePi({}));
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	try {
+		withHome(home, () => {
+			data.subscribe(makeFakeCtx());
+			assert.deepEqual(studyNames(data), ["alpha"]);
+			writeFileSync(
+				join(home, NOTES_STUDIES, "2026-01-05-alpha", "status.md"),
+				studyStatusFile("done", "2026-01-06"),
+			);
+			t.mock.timers.tick(STUDY_POLL_MS);
+			assert.deepEqual(studyNames(data), ["alpha"], "the closed study keeps its row");
+			assert.equal(data.snapshot().status?.studies?.[0].stage, "done");
+		});
+	} finally {
+		data.dispose();
+		t.mock.timers.reset();
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("a restart drops a study that is already done", () => {
+	const home = makeNotesHome({
+		[`${NOTES_STUDIES}/2026-01-05-alpha/status.md`]: studyStatusFile("done", "2026-01-06"),
+	});
+	const data = createSidebarData(makeFakePi({}));
+	try {
+		withHome(home, () => data.subscribe(makeFakeCtx()));
+		assert.deepEqual(studyNames(data), [], "a fresh process state starts empty");
+	} finally {
+		data.dispose();
 		rmSync(home, { recursive: true, force: true });
 	}
 });
