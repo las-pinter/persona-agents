@@ -167,8 +167,9 @@ export async function settle(ms: number): Promise<void> {
 /**
  * A `date` shim folder that goes first on PATH. The epoch-second read touches
  * the mark, then waits for a release file the case touches after the other
- * process returns, so a race window never depends on a sleep width. The wait
- * is bounded, so a case that never releases fails instead of hanging.
+ * process returns. A race window never depends on a sleep width. The wait is
+ * bounded, so a case that never releases fails instead of hanging. An unset
+ * release variable means no wait at all.
  */
 export function makeDateShim(): string {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "journal-date-"));
@@ -180,12 +181,14 @@ export function makeDateShim(): string {
 		'for arg in "$@"; do',
 		'  if [ "$arg" = "+%s" ]; then',
 		'    if [ -n "${JOURNAL_GATE_MARK:-}" ]; then : >"$JOURNAL_GATE_MARK"; fi',
-		"    waited=0",
-		'    while [ ! -e "${JOURNAL_GATE_RELEASE:-}" ]; do',
-		"      sleep 0.01",
-		"      waited=$((waited + 1))",
-		'      if [ "$waited" -ge 2000 ]; then break; fi',
-		"    done",
+		'    if [ -n "${JOURNAL_GATE_RELEASE:-}" ]; then',
+		"      waited=0",
+		'      while [ ! -e "$JOURNAL_GATE_RELEASE" ]; do',
+		"        sleep 0.01",
+		"        waited=$((waited + 1))",
+		'        if [ "$waited" -ge 2000 ]; then break; fi',
+		"      done",
+		"    fi",
 		"    break",
 		"  fi",
 		"done",

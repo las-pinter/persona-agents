@@ -53,7 +53,8 @@ function tempNames(home: string): string[] {
 
 /**
  * Wait for one signalled run, so a run that hangs fails with the case name. The
- * cap kills the child first, so a failed case leaves no process behind.
+ * cap kills only the direct child, so a failed case leaves no direct child
+ * behind.
  */
 async function settled(what: string, held: SpawnedRun, capMs: number = RUN_TIMEOUT_MS): Promise<RunResult> {
 	let timer: NodeJS.Timeout | undefined;
@@ -135,7 +136,7 @@ describe("G — a caught signal cleans up", () => {
 		assert.equal(recordOf(home).session, SESSION);
 	});
 
-	test("a run past the cap is killed, so no child process is left", async () => {
+	test("a run past the cap is killed, so no direct child is left", async () => {
 		const home = makeHome();
 		const mark = path.join(home, "cap-marked");
 		const release = path.join(home, "cap-go");
@@ -161,10 +162,13 @@ describe("G — a caught signal cleans up", () => {
 		});
 		await waitForMark(mark);
 
-		await assert.rejects(settled("capped", held, 200), /the capped run passed 200 ms/);
-		// The shim holds the child's pipes, so the release comes before the await:
-		// a close event waits for every writer of the captured streams.
-		fs.writeFileSync(release, "");
+		try {
+			await assert.rejects(settled("capped", held, 200), /the capped run passed 200 ms/);
+		} finally {
+			// The shim holds the child's pipes, so the release comes before the await:
+			// a close event waits for every writer of the captured streams.
+			fs.writeFileSync(release, "");
+		}
 		const killed = await held.done;
 		assert.equal(killed.status, -1, "the child ends by signal, not by its own exit");
 	});

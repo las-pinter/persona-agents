@@ -14,6 +14,8 @@
  * Fixtures are written to a temp dir at run time and removed after. The tests
  * are hermetic: they never read or write the operator's agent-notes tree.
  *
+ * This file pins one factory's skill injection and compaction call site.
+ *
  * Run: npm test
  */
 

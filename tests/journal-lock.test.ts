@@ -353,8 +353,8 @@ describe("C — a dead holder is broken", () => {
 		const release = path.join(home, "slow-breaker-go");
 		plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
 
-		// The slow breaker probes at once, then waits inside its epoch read until
-		// this case releases it, so the fast breaker breaks and creates first.
+		// The slow breaker waits at its first epoch read before any probe.
+		// This case releases it, so the fast breaker breaks and creates first.
 		const slow = startAsync(
 			home,
 			["hold", "--agent", AGENT, "--session", "slow", "--timeout", "1"],
@@ -363,17 +363,31 @@ describe("C — a dead holder is broken", () => {
 		await waitForMark(mark);
 
 		const fast = run(home, ["hold", "--agent", AGENT, "--session", "fast", "--timeout", "1"]);
-		assert.equal(fast.status, 0, fast.stderr);
-		assert.ok(staleAgeOf(fast.stdout) >= STALE_AGE, `the age is at least ${STALE_AGE}: ${fast.stdout}`);
-		assert.equal(recordOf(home).session, "fast");
-
-		fs.writeFileSync(release, "");
+		try {
+			assert.equal(fast.status, 0, fast.stderr);
+			assert.ok(staleAgeOf(fast.stdout) >= STALE_AGE, `the age is at least ${STALE_AGE}: ${fast.stdout}`);
+			assert.equal(recordOf(home).session, "fast");
+		} finally {
+			// A red assertion must not leave the slow breaker waiting for the gate.
+			fs.writeFileSync(release, "");
+		}
 		const slowResult = await slow;
 		assert.equal(slowResult.status, 4, slowResult.stderr);
 		assert.match(slowResult.stderr, /^held .* by fast since /m);
 		assert.equal(recordOf(home).session, "fast");
 		assert.equal(recordOf(home).token, rowOf(fast.stdout, "token"));
 		assert.match(fs.readFileSync(prevPath(home), "utf8"), /^session dead-session$/m);
+	});
+
+	test("a date shim with no release variable never waits", () => {
+		const home = makeHome();
+		const shim = makeDateShim();
+		const start = Date.now();
+		const result = run(home, ["hold", "--agent", AGENT, "--session", SESSION], shimPath(shim));
+		const elapsed = Date.now() - start;
+
+		assert.equal(result.status, 0, result.stderr);
+		assert.ok(elapsed < 8000, `an unset release means no wait, took ${elapsed} ms`);
 	});
 });
 
@@ -532,10 +546,13 @@ describe("E — refresh", () => {
 		await waitForMark(mark);
 
 		const breaker = run(home, ["hold", "--agent", AGENT, "--session", "bb"]);
-		assert.equal(breaker.status, 0, breaker.stderr);
-		assert.ok(staleAgeOf(breaker.stdout) >= STALE_AGE, `the age is at least ${STALE_AGE}: ${breaker.stdout}`);
-
-		fs.writeFileSync(release, "");
+		try {
+			assert.equal(breaker.status, 0, breaker.stderr);
+			assert.ok(staleAgeOf(breaker.stdout) >= STALE_AGE, `the age is at least ${STALE_AGE}: ${breaker.stdout}`);
+		} finally {
+			// A red assertion must not leave the refresh waiting for the gate.
+			fs.writeFileSync(release, "");
+		}
 		const refreshResult = await refresh;
 		assert.equal(refreshResult.status, 4, refreshResult.stderr);
 		assert.match(refreshResult.stderr, /^held .* by bb since /m);

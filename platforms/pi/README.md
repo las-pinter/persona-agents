@@ -33,7 +33,8 @@ module below lives in `extension/`, except the shipped table data file):
 | `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
-| `sidebar.ts` | Right-column compositor (clean-room) and the `/sidebar` toggle config |
+| `sidebar-config.ts` | The `/sidebar` toggle config: atomic write, width clamp, pure toggle and width plans |
+| `sidebar.ts` | Right-column compositor (clean-room), re-exporting the toggle config |
 | `tree-ui.ts` | Sidebar glue: binds compositor, data, commands, and lifecycle; reads the git branch; mounts the overlays |
 | `overlays.ts` | Full-screen overlay components (`/agents-tree`, `/agent-inspect`, `/ask-log`) and the pure ask-log frame builder |
 | `todo-tool.ts` | `todo` tool: session-entry state, registration, and the `persona-agents/todos/v1` event |
@@ -219,10 +220,10 @@ again.
 ### Table doctrine
 
 - **Row groups.** The shipped file holds 86 rows: 22 global, 15 reader, 22
-  worker, and 27 orchestrator. A class resolves to 36 reader, 44 worker, or 49
-  orchestrator rows. A class compile drops a `roles` row unless the row sets
-  `unnamed`. The drop leaves 51 reader, 61 worker, or 66 orchestrator rules, one
-  per tool name the row lists.
+  worker, and 27 orchestrator. A class compile drops a `roles` row unless the
+  row sets `unnamed`, so only the reader class drops a row. The compile yields
+  51 reader, 61 worker, or 66 orchestrator rules, one rule per tool name a kept
+  row lists.
 - **Unnamed agents.** A row that sets `unnamed` joins its class compile, so an
   agent with a non-shipped name and that class gets the row. A false value is
   refused, so the field is set or absent. The three ask rows for `cp`, `mv`,
