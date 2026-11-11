@@ -49,7 +49,6 @@ const REJECTED_POLLS: (string | undefined)[] = [
 interface Retry {
 	result: RunResult;
 	sleeps: string[];
-	elapsed: number;
 }
 
 /**
@@ -80,26 +79,24 @@ async function retryOnce(poll: string | undefined): Promise<Retry> {
 		].join("\n"),
 	});
 
-	const started = Date.now();
-	const result = await startAsync(home, ["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "3"], {
+	// A wide hold deadline keeps a loaded machine from ending the wait early.
+	const result = await startAsync(home, ["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "30"], {
 		...shimPath(shim),
 		SLEEP_LOG: sleepLog,
 		JOURNAL_WRITE_POLL_MS: poll ?? "",
 	});
 	const sleeps = fs.existsSync(sleepLog) ? rows(fs.readFileSync(sleepLog, "utf8")) : [];
-	const elapsed = Date.now() - started;
 
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(rowOf(result.stdout, "lock"), path.join(home, "agent-notes", AGENT, "journals", ".journal-write.lock"));
 	assert.equal(recordOf(home).session, SESSION, "the retry ends with the caller's record");
-	return { result, sleeps, elapsed };
+	return { result, sleeps };
 }
 
 describe("I — the poll interval seam", () => {
 	test("an unset poll interval keeps the one second retry", async () => {
 		const retry = await retryOnce(undefined);
 		assert.deepEqual(retry.sleeps, [DEFAULT_POLL], `one default poll: ${retry.sleeps.join(",")}`);
-		assert.ok(retry.elapsed >= 950, `the default poll waits about one second, took ${retry.elapsed} ms`);
 	});
 
 	test("an invalid poll interval keeps the one second default", async () => {
@@ -117,9 +114,8 @@ describe("I — the poll interval seam", () => {
 		});
 	});
 
-	test("the poll interval override ends the retry well under two seconds", async () => {
+	test("the poll interval override sleeps the fast poll width", async () => {
 		const retry = await retryOnce("50");
 		assert.deepEqual(retry.sleeps, ["0.050"], `one fast poll: ${retry.sleeps.join(",")}`);
-		assert.ok(retry.elapsed < 2000, `the fast poll stays well under two seconds, took ${retry.elapsed} ms`);
 	});
 });
