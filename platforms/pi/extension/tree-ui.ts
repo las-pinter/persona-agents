@@ -18,10 +18,9 @@
  * the widget factory, so the compositor can wrap `tui.doRender`. The built-in
  * footer is never replaced.
  *
- * The git branch is read with `pi.exec("git", ["branch", "--show-current"])`,
- * not from a `setFooter` factory. Replacing the footer risks breaking the
- * built-in footer, so the glue runs git itself on the git cadence and pushes
- * the branch into `setBranch`.
+ * The data module owns every git read, including the branch. It publishes the
+ * branch in the workspace snapshot, and the glue repaints when the signature
+ * changes.
  *
  * Every timer body, render call, and command handler is wrapped so the TUI
  * never crashes in any mode.
@@ -31,7 +30,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Key, type Component, type KeyId, type TUI } from "@earendil-works/pi-tui";
 import { AskLogOverlayComponent, NodeDetailComponent, TreeOverlayComponent } from "./overlays.ts";
 import {
-	GIT_POLL_MS,
 	TREE_POLL_MS,
 	createSidebarData,
 	type SidebarData,
@@ -60,8 +58,6 @@ import { treeSignature } from "./tree-signature.ts";
 
 /** Spinner tick cadence while a node runs. */
 export const SPINNER_MS = 90;
-/** Git branch command timeout. */
-const GIT_TIMEOUT_MS = 2000;
 /** Bounded RPC summary height: RPC mode gets a string list, never a full column. */
 export const RPC_MAX_LINES = 10;
 /** RPC summary render width. */
@@ -107,9 +103,6 @@ let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 let lastSignature: string | null = null;
 /** Last spinner-rendered lines; a spinner render happens only on change. */
 let lastSpinnerLines = "";
-/** Git branch cadence bookkeeping. */
-let lastBranchFetch = 0;
-let branchInFlight = false;
 
 /** The theme duck type for the renderers, or the identity fallback. */
 function themeDuck(): SidebarTheme {
@@ -257,37 +250,9 @@ function spinnerTick(): void {
 }
 
 /**
- * Read the git branch without replacing the built-in footer. Throttled to the
- * git cadence and pushed into the data module.
- */
-async function refreshBranch(): Promise<void> {
-	const now = Date.now();
-	if (branchInFlight || now - lastBranchFetch < GIT_POLL_MS) return;
-	const cwd = boundCtx?.cwd;
-	if (!piRef || !cwd || !data) return;
-	lastBranchFetch = now;
-	branchInFlight = true;
-	try {
-		const result = await piRef.exec("git", ["branch", "--show-current"], {
-			cwd,
-			timeout: GIT_TIMEOUT_MS,
-		});
-		const branch = result && result.code === 0 ? String(result.stdout ?? "").trim() : "";
-		data.setBranch(branch.length > 0 ? branch : null);
-	} catch {
-		try {
-			data?.setBranch(null);
-		} catch {
-			/* never throw from a timer */
-		}
-	} finally {
-		branchInFlight = false;
-	}
-}
-
-/**
- * The 500 ms pull: repaint only when the content signature changes, keep the
- * spinner state in step, and refresh the git branch.
+ * The 500 ms pull: repaint only when the content signature changes and keep
+ * the spinner state in step. The signature carries the branch, so a checkout
+ * repaints here.
  */
 // Two 500 ms polls are intentional: the data module reads the log; this glue compares the signature.
 function pull(): void {
@@ -304,7 +269,6 @@ function pull(): void {
 			if (hasRunningNode(snapshot.tree ?? [])) ensureSpinner();
 			else stopSpinner();
 		}
-		void refreshBranch();
 	} catch {
 		/* a timer body must never throw */
 	}

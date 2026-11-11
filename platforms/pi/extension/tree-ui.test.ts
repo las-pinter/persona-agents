@@ -21,8 +21,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import { SIDEBAR_DEFAULT_WIDTH, getSidebarCompositor } from "./sidebar.ts";
+import { GIT_POLL_MS, GIT_TIMEOUT_MS, TREE_POLL_MS } from "./sidebar-data.ts";
 import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS, TreeOverlayComponent } from "./overlays.ts";
-import { RPC_MAX_LINES, bindTreeSidebar, disposeTreeSidebar, scrollKeyReport } from "./tree-ui.ts";
+import {
+	RPC_MAX_LINES,
+	bindTreeSidebar,
+	disposeTreeSidebar,
+	getSidebarData,
+	scrollKeyReport,
+} from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent } from "./tree-log.ts";
 import { makeNode, makeSnapshot, theme as fixtureTheme } from "./sidebar-render-fixtures.ts";
@@ -211,6 +218,12 @@ function paintedColumn(harness: Harness): string[] {
 		if (row >= 1 && row <= harness.terminal.rows) rows[row - 1] = text;
 	}
 	return rows;
+}
+
+/** Let the fire-and-forget git read settle. */
+async function flushGit(): Promise<void> {
+	await Promise.resolve();
+	await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
 /** Press one scroll key by its name and let its handler settle. */
@@ -451,6 +464,117 @@ describe("column scroll keys", () => {
 		assert.ok(Array.isArray(next), "the scroll rewrote the summary widget");
 		assert.equal(next[0].trimEnd(), "… +1 above", "the RPC window carries the top mark too");
 		assert.equal(next.length, RPC_MAX_LINES, "the RPC window keeps its row cap");
+	});
+});
+
+// --- git poll ownership ------------------------------------------------------
+
+describe("one git poll owner", () => {
+	test("a checkout shows on the next git poll and no earlier", async (t) => {
+		t.mock.timers.enable({ apis: ["setInterval"] });
+		const harness = setup({ enabled: true, branch: "main" });
+		try {
+			await flushGit();
+			assert.equal(getSidebarData()?.snapshot().workspace.branch, "main", "the bind read no branch");
+			harness.git.branch = "feature";
+			t.mock.timers.tick(GIT_POLL_MS - 1);
+			await flushGit();
+			assert.equal(
+				getSidebarData()?.snapshot().workspace.branch,
+				"main",
+				"a read ran before the poll was due",
+			);
+			resetPaints(harness.tui);
+			harness.terminal.writes.length = 0;
+			t.mock.timers.tick(1);
+			await flushGit();
+			assert.equal(
+				getSidebarData()?.snapshot().workspace.branch,
+				"feature",
+				"the poll did not read the checkout",
+			);
+			// The git read and the pull share this tick, so this pull still sees the
+			// old signature; the next pull is the first one that repaints.
+			assert.equal(paintCalls(harness.tui), 0, "a pull repainted before the read landed");
+			t.mock.timers.tick(TREE_POLL_MS);
+			assert.ok(paintCalls(harness.tui) > 0, "the glue did not request a repaint after the checkout");
+			harness.tui.doRender();
+			assert.ok(
+				paintedColumn(harness).some((row) => row.includes("⎇ feature")),
+				"the glue paint did not show the new branch",
+			);
+		} finally {
+			t.mock.timers.reset();
+		}
+	});
+
+	test("one interval drives every git read with one timeout", async (t) => {
+		t.mock.timers.enable({ apis: ["setInterval"] });
+		const harness = setup({ enabled: true, branch: "main" });
+		try {
+			await flushGit();
+			assert.deepEqual(
+				harness.git.calls.map((call) => call.verb),
+				["status", "diff", "branch"],
+				"the initial read did not cover every git field",
+			);
+			assert.ok(
+				harness.git.calls.every((call) => call.timeout === GIT_TIMEOUT_MS),
+				"a git read used another timeout",
+			);
+			harness.git.calls.length = 0;
+			t.mock.timers.tick(GIT_POLL_MS);
+			await flushGit();
+			assert.deepEqual(
+				harness.git.calls.map((call) => call.verb),
+				["status", "diff", "branch"],
+				"the poll did not read every git field exactly once",
+			);
+		} finally {
+			t.mock.timers.reset();
+		}
+	});
+
+	test("a dispose then a rebind reads the branch on the first tick", async (t) => {
+		t.mock.timers.enable({ apis: ["setInterval"] });
+		const harness = setup({ enabled: true, branch: "main" });
+		try {
+			await flushGit();
+			assert.equal(getSidebarData()?.snapshot().workspace.branch, "main", "the first bind read no branch");
+			disposeTreeSidebar();
+			harness.git.branch = "next";
+			harness.git.calls.length = 0;
+			bindTreeSidebar(harness.ctx);
+			t.mock.timers.tick(TREE_POLL_MS);
+			await flushGit();
+			assert.equal(
+				getSidebarData()?.snapshot().workspace.branch,
+				"next",
+				"the rebind kept a throttle from the old bind",
+			);
+			assert.equal(
+				harness.git.calls.filter((call) => call.verb === "branch").length,
+				1,
+				"the rebind read the branch once",
+			);
+		} finally {
+			t.mock.timers.reset();
+		}
+	});
+
+	test("no git read runs after a dispose", async (t) => {
+		t.mock.timers.enable({ apis: ["setInterval"] });
+		const harness = setup({ enabled: true, branch: "main" });
+		try {
+			await flushGit();
+			disposeTreeSidebar();
+			harness.git.calls.length = 0;
+			t.mock.timers.tick(GIT_POLL_MS * 3);
+			await flushGit();
+			assert.deepEqual(harness.git.calls, [], "a git read ran after dispose");
+		} finally {
+			t.mock.timers.reset();
+		}
 	});
 });
 

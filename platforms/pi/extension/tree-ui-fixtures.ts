@@ -87,11 +87,29 @@ interface WidgetCall {
 	content: unknown;
 }
 
+/** One recorded git read: the subcommand and the timeout it carried. */
+export interface GitCall {
+	verb: string;
+	timeout: number | undefined;
+}
+
+/**
+ * The fake git surface. A test mutates `branch` to simulate a checkout, and
+ * reads `calls` to prove the read count and the timeout.
+ */
+export interface FakeGit {
+	/** The branch `git branch --show-current` answers. */
+	branch: string | null;
+	/** Every git read the data layer ran, in call order. */
+	calls: GitCall[];
+}
+
 /** A bound glue instance and the fakes it was bound to. */
 export interface Harness {
 	configPath: string;
 	terminal: FakeTerminal;
 	tui: FakeTui;
+	git: FakeGit;
 	notifications: Notification[];
 	/** Every registered command, by name. Empty on an inactive API. */
 	commands: Map<string, SidebarHandler>;
@@ -167,6 +185,8 @@ export function setup(config: {
 	skipShortcuts?: boolean;
 	/** Refuse this one key, so the API stays active and only the key fails. */
 	refuseShortcut?: string;
+	/** The branch the fake git reports. Defaults to none, as an empty repo does. */
+	branch?: string;
 }): Harness {
 	const dir = mkdtempSync(join(tmpdir(), "pa-tree-ui-"));
 	currentDir = dir;
@@ -201,6 +221,7 @@ export function setup(config: {
 
 	const terminal = makeTerminal(RAW_COLUMNS, RAW_ROWS);
 	const tui = makeTui(terminal);
+	const git: FakeGit = { branch: config.branch ?? null, calls: [] };
 
 	const notifications: Notification[] = [];
 	const commands = new Map<string, SidebarHandler>();
@@ -272,7 +293,16 @@ export function setup(config: {
 			if (config.inactive === true) throw new Error(INACTIVE_EXTENSION_ERROR);
 			return () => {};
 		},
-		exec: async (): Promise<{ code: number; stdout: string }> => ({ code: 0, stdout: "" }),
+		exec: async (
+			_command: string,
+			args: string[],
+			options?: { timeout?: number },
+		): Promise<{ code: number; stdout: string }> => {
+			const verb = args[0] ?? "";
+			git.calls.push({ verb, timeout: options?.timeout });
+			if (verb === "branch") return { code: 0, stdout: git.branch ?? "" };
+			return { code: 0, stdout: "" };
+		},
 		events: { on: (_channel: string, _handler: unknown): (() => void) => () => {} },
 	} as unknown as ExtensionAPI;
 
@@ -297,6 +327,7 @@ export function setup(config: {
 		configPath,
 		terminal,
 		tui,
+		git,
 		notifications,
 		commands,
 		handler: handler ?? ABSENT_COMMAND,

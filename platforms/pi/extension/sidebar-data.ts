@@ -40,7 +40,7 @@ import type {
 
 /** Tree-log poll cadence. */
 export const TREE_POLL_MS = 500;
-/** Git changed-file poll cadence. */
+/** Git poll cadence. One interval drives every git read. */
 export const GIT_POLL_MS = 2000;
 /** MCP poll cadence. */
 export const MCP_POLL_MS = 5000;
@@ -50,8 +50,8 @@ export const STUDY_POLL_MS = 5000;
 export const TPS_WINDOW_MS = 2000;
 /** A running node with no log record for this long is stale. */
 export const STALE_MS = 5 * 60 * 1000;
-/** Git command timeout. */
-const GIT_TIMEOUT_MS = 2000;
+/** Git command timeout. Every git read uses this one value. */
+export const GIT_TIMEOUT_MS = 2000;
 /** Changed names kept in the snapshot; the renderer shows this many. */
 const CHANGED_SHOWN = 4;
 /** Per-file diff rows kept in the snapshot. Bounds the cross-timer payload. */
@@ -68,11 +68,6 @@ export interface SidebarData {
 	subscribe(ctx: ExtensionContext): () => void;
 	/** Clear every timer and unsubscribe every listener. Idempotent. */
 	dispose(): void;
-	/**
-	 * Set the git branch. The glue supplies it from the footer factory's
-	 * `getGitBranch()`; this module never wires the footer.
-	 */
-	setBranch(branch: string | null): void;
 }
 
 /** One TPS window sample: tokens observed at a time. */
@@ -403,6 +398,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 
 		state.snapshot.session = session;
 		const cwd = typeof ctx.cwd === "string" ? ctx.cwd : "";
+		// A new directory invalidates the old branch name; the next poll reads it.
+		if (cwd !== state.snapshot.workspace.cwd) state.branch = null;
 		state.snapshot.cwd = cwd;
 		state.snapshot.workspace.cwd = cwd;
 		updateTps(Date.now());
@@ -475,7 +472,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		};
 	}
 
-	/** Poll git status and diff for changed files and per-file line stats. */
+	/** Poll git status, diff, and branch for the workspace panel. */
 	async function refreshGit(): Promise<void> {
 		const myGeneration = generation;
 		const cwd = state.snapshot.workspace.cwd || state.snapshot.cwd;
@@ -486,12 +483,18 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			return;
 		}
 		try {
-			const [status, numstat] = await Promise.all([
+			const [status, numstat, branch] = await Promise.all([
 				pi.exec("git", ["status", "--porcelain"], { cwd, timeout: GIT_TIMEOUT_MS }),
 				pi.exec("git", ["diff", "--numstat", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
+				pi.exec("git", ["branch", "--show-current"], { cwd, timeout: GIT_TIMEOUT_MS }),
 			]);
 			// dispose() bumps the generation; drop a stale write after the await.
 			if (myGeneration !== generation) return;
+			// A failed branch read keeps the last name, so the panel does not flicker.
+			if (branch && branch.code === 0) {
+				const name = String(branch.stdout ?? "").trim();
+				state.branch = name.length > 0 ? name : null;
+			}
 			if (!status || status.code !== 0) {
 				markGitUnavailable();
 				applyWorkspace();
@@ -769,10 +772,6 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		dispose: () => {
 			generation += 1;
 			teardown();
-		},
-		setBranch: (branch: string | null) => {
-			state.branch = branch;
-			applyWorkspace();
 		},
 	};
 }

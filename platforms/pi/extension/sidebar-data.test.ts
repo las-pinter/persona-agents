@@ -36,6 +36,8 @@ import { TODOS_EVENT_CHANNEL, TODOS_TURN_ENTRY } from "./todo-tool.ts";
 interface GitScript {
 	status?: { code?: number; stdout?: string };
 	numstat?: { code?: number; stdout?: string };
+	/** The branch `git branch --show-current` reports. */
+	branch?: string;
 	/** Configured MCP server names reported by `getMcpServers`. */
 	mcpServers?: string[];
 	/** MCP tool names reported by `getAllTools`. */
@@ -61,6 +63,7 @@ function makeFakePi(script: GitScript): ExtensionAPI {
 		exec: async (_command: string, args: string[]): Promise<ExecResult> => {
 			if (args[0] === "status") return execResult(script.status?.code ?? 0, script.status?.stdout ?? "");
 			if (args[0] === "diff") return execResult(script.numstat?.code ?? 0, script.numstat?.stdout ?? "");
+			if (args[0] === "branch") return execResult(0, script.branch ?? "");
 			return execResult(0, "");
 		},
 		on: noopUnsub,
@@ -275,6 +278,32 @@ test("an empty numstat keeps the status entries with zero line stats", async () 
 	assert.deepEqual(files, [{ path: "scratch.ts", added: 0, removed: 0, untracked: true }]);
 });
 
+// --- workspace branch --------------------------------------------------------
+
+test("a changed workspace cwd clears the old branch name", async () => {
+	const { pi, piHandlers } = makeCapturingPi({ branch: "main" });
+	const data = createSidebarData(pi);
+	try {
+		data.subscribe(makeFakeCtx([], "/repo"));
+		await flush();
+		assert.equal(data.snapshot().workspace.branch, "main", "the first read kept no branch");
+		piHandlers.get("session_start")?.({}, makeFakeCtx([], "/repo"));
+		assert.equal(
+			data.snapshot().workspace.branch,
+			"main",
+			"a session start in the unchanged cwd dropped the branch name",
+		);
+		piHandlers.get("session_start")?.({}, makeFakeCtx([], "/elsewhere"));
+		assert.equal(
+			data.snapshot().workspace.branch,
+			null,
+			"the old branch name outlived its repository",
+		);
+	} finally {
+		data.dispose();
+	}
+});
+
 // --- MCP status derivation ---------------------------------------------------
 
 test("an mcp__<server>__ tool marks the server connected", () => {
@@ -425,12 +454,12 @@ test("refreshTodosFromEntries carries the reconstructed turn marker", () => {
 });
 
 /** A fake pi that captures the `pi.on` handlers, so tests can fire session events. */
-function makeCapturingPi(): {
+function makeCapturingPi(script: GitScript = {}): {
 	pi: ExtensionAPI;
 	piHandlers: Map<string, (event: unknown, ctx: unknown) => void>;
 } {
 	const piHandlers = new Map<string, (event: unknown, ctx: unknown) => void>();
-	const base = makeFakePi({}) as unknown as Record<string, unknown>;
+	const base = makeFakePi(script) as unknown as Record<string, unknown>;
 	base.on = (event: string, handler: (event: unknown, ctx: unknown) => void) => {
 		piHandlers.set(event, handler);
 		return () => {};
