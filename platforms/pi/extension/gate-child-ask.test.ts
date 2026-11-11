@@ -21,6 +21,7 @@ import {
 import {
 	CHILD_A,
 	CHILD_B,
+	CHILD_E,
 	ROOT,
 	RootPrompter,
 	THREE_LABELS,
@@ -125,6 +126,17 @@ test("bind order: the gate install binds the registry, so no separate bind is ne
 	assert.equal(result, undefined, "the child ask was answered");
 	assert.equal(s.prompter.titles.length, 1, "the child ask reached the root prompt");
 	assert.match(s.prompter.titles[0], /implementer/, "the prompt names the child role");
+});
+
+// --- depth read --------------------------------------------------------------
+
+test("depth: the queue reads the walked depth and null when no root is reachable", { timeout: 2000 }, async () => {
+	const s = setup();
+	await captureRoot(s);
+
+	assert.equal(childAskQueue()?.depth(CHILD_A), 1, "the queue reads the walked depth");
+	assert.equal(childAskQueue()?.depth("no-such-session"), null, "an unknown id has no depth");
+	assert.equal(childAskQueue()?.depth(CHILD_E), null, "a broken chain has no depth");
 });
 
 // --- three answers -----------------------------------------------------------

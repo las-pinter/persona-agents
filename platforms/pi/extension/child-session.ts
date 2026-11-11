@@ -36,7 +36,7 @@ import {
 } from "./run-registry.ts";
 import { wildcardChildTools, wildcardLoadoutReason } from "./child-tools.ts";
 import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
-import { DEPTH_CAP_REASON, MAX_AGENT_DEPTH, canSpawn, stripSpawnTool } from "./depth.ts";
+import { DEPTH_CAP_REASON, canSpawn, resolvedDepth, stripSpawnTool } from "./depth.ts";
 
 /** The reason a build raises when the parent aborted before the child ran. */
 export const CHILD_ABORTED_REASON = "Child session aborted: the parent signal fired before the run started";
@@ -195,8 +195,9 @@ export async function buildChildSession(input: BuildChildInput): Promise<BuiltCh
 	if (callerWalk?.ok && !canSpawn(callerWalk.depth)) {
 		throw childDepthCapError();
 	}
-	// This falls back to the cap, not the process depth, so a broken chain still strips.
-	const callerDepth = callerWalk?.ok ? callerWalk.depth : MAX_AGENT_DEPTH;
+	// The walk above refuses a caller at the cap. A broken chain answers the cap
+	// here too, so the child keeps no spawn tool, but the build still stands.
+	const callerDepth = resolvedDepth(registry, parentId);
 
 	// A direct caller exists, so the wildcard fence sits here too.
 	const wildcards = wildcardChildTools(loadout.tools);

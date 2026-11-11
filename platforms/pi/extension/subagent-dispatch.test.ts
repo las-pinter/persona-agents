@@ -107,6 +107,21 @@ function harness(options: HarnessOptions = {}): Harness {
 	const agent = options.agent ?? AGENT;
 	const children: Child[] = [];
 	const registry = new RunRegistry();
+	// A live process holds its caller record, so the harness registers the root.
+	registry.register(
+		newRunRecord({
+			sessionId: "root-session",
+			role: "orchestrator",
+			class: "orchestrator",
+			source: "package",
+			skills: [],
+			alwaysLoad: [],
+			depth: 0,
+			parentSessionId: null,
+			sessionFile: null,
+			startedAt: 0,
+		}),
+	);
 	let nextId = 0;
 	let builds = 0;
 	const makeDetails =
@@ -404,11 +419,12 @@ test("guard: the loader preparation runs inside the child guard", async () => {
 
 test("single: a non-spawnable agent never builds a session", async () => {
 	const h = harness({ agent: { ...AGENT, spawnable: false } as unknown as AgentConfig });
+	const before = h.registry.size;
 	const out = await runSingleMode("tester", "do it", undefined, h.mode);
 
 	assert.equal(h.children.length, 0, "no child is built");
 	assert.equal(out.isError, true);
-	assert.equal(h.registry.size, 0, "no record is written");
+	assert.equal(h.registry.size, before, "no record is written");
 });
 
 test("single: an early refusal carries the run field set", async () => {
@@ -441,6 +457,7 @@ test("dispatch: every active child tool carries a wrapper", async () => {
 
 test("dispatch: a wildcard loadout is refused and names the entry", async () => {
 	const h = harness({ agent: { ...AGENT, tools: ["read", "*", "read?"] } as unknown as AgentConfig });
+	const before = h.registry.size;
 	const out = await runSingleMode("tester", "do it", undefined, h.mode);
 	const text = out.content[0]?.type === "text" ? out.content[0].text : "";
 
@@ -448,17 +465,18 @@ test("dispatch: a wildcard loadout is refused and names the entry", async () => 
 	assert.match(text, /"\*"/, "the refusal names the star entry");
 	assert.match(text, /"read\?"/, "the refusal names the question-mark entry");
 	assert.equal(h.children.length, 0, "no session is built for a wildcard loadout");
-	assert.equal(h.registry.size, 0, "no record is written, so no wildcard tool can be gated as a child");
+	assert.equal(h.registry.size, before, "no record is written, so no wildcard tool can be gated as a child");
 });
 
 test("dispatch: a null parent session id never builds a session and never takes the root role", async () => {
 	const h = harness({ parentSessionId: null });
+	const before = h.registry.size;
 	const out = await runSingleMode("tester", "do it", undefined, h.mode);
 
 	assert.equal(out.isError, true, "a dispatch with no parent id is a failed result");
 	assert.match(out.details?.results[0]?.stderr ?? "", /parent session id/, "the refusal names the cause");
 	assert.equal(h.children.length, 0, "no session is built");
-	assert.equal(h.registry.size, 0, "no record is written, so the walk cannot report depth 0");
+	assert.equal(h.registry.size, before, "no record is written, so the walk cannot report depth 0");
 });
 
 test("dispatch: a named in-process tool is wrapped and runs after the gate allows", async () => {

@@ -24,9 +24,9 @@ import type {
 import type { Message } from "@earendil-works/pi-ai";
 import type { ChildModel } from "./child-session.ts";
 import { bindParentGate, clearChildToolImplementations } from "./child-tools.ts";
-import { ENV_TREE_LOG } from "./depth.ts";
+import { DEPTH_CAP_REASON, ENV_TREE_LOG, MAX_AGENT_DEPTH, resolvedDepth } from "./depth.ts";
 import type { AgentConfig } from "./resolver.ts";
-import { RunRegistry } from "./run-registry.ts";
+import { RunRegistry, newRunRecord } from "./run-registry.ts";
 import { foldEvent } from "./subagent-fold.ts";
 import type { SingleResult, SubagentDetails } from "./subagent-result.ts";
 import { type DispatchDeps, type PreparedChildRuntime } from "./subagent-run.ts";
@@ -95,6 +95,21 @@ function fakeSettings(): SettingsManager {
 function harness(options: HarnessOptions = {}): Harness {
 	const children: Child[] = [];
 	const registry = new RunRegistry();
+	// A live process holds its caller record, so the harness registers the root.
+	registry.register(
+		newRunRecord({
+			sessionId: "root-session",
+			role: "orchestrator",
+			class: "orchestrator",
+			source: "package",
+			skills: [],
+			alwaysLoad: [],
+			depth: 0,
+			parentSessionId: null,
+			sessionFile: null,
+			startedAt: 0,
+		}),
+	);
 	const makeDetails =
 		(mode: "single" | "parallel" | "chain") =>
 		(results: SingleResult[]): SubagentDetails => ({
@@ -256,6 +271,16 @@ test("run: a child runs to its own end, and the turn count equals the registry r
 	assert.equal(result.messages.at(-1)?.role, "assistant", "the final message is kept");
 	assert.equal(result.exitCode, 0, "the run exits clean");
 	assert.equal(child.disposed, 1, "the child is disposed once");
+});
+
+test("run: a parent id no record holds refuses the spawn at the cap", async () => {
+	const h = harness();
+	h.deps.runtime.parentSessionId = "ghost-parent";
+	const result = await run(h);
+
+	assert.equal(result.stderr, DEPTH_CAP_REASON, "a broken chain reads as the cap");
+	assert.equal(resolvedDepth(h.registry, "ghost-parent"), MAX_AGENT_DEPTH, "one depth serves the runner and the build");
+	assert.equal(h.children.length, 0, "no child session is built");
 });
 
 test("run: a parent abort keeps its error text on the tool result and the tree end event", async () => {

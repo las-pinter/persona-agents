@@ -31,7 +31,7 @@ import {
 	withChildBuild,
 } from "./child-session.ts";
 import extension from "./extension.ts";
-import { DEPTH_CAP_REASON, ENV_PARENT_RUN_ID } from "./depth.ts";
+import { DEPTH_CAP_REASON, ENV_PARENT_RUN_ID, MAX_AGENT_DEPTH, resolvedDepth } from "./depth.ts";
 import type { AgentConfig } from "./resolver.ts";
 import { RunRegistry, type RunStart, newRunRecord } from "./run-registry.ts";
 import { getActiveAgent, setActiveAgent, setActivePersona } from "./state.ts";
@@ -365,6 +365,11 @@ test("depth: a walk that cannot resolve the parent strips the spawn tool", async
 
 	const built = await buildChildSession(input);
 
+	assert.equal(
+		resolvedDepth(s.registry, "root-session"),
+		MAX_AGENT_DEPTH,
+		"one depth serves both sites for this id",
+	);
 	assert.deepEqual(s.seen[0]?.tools, ["read"], "a broken chain still strips the spawn tool");
 	built.dispose("done");
 });

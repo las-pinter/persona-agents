@@ -57,6 +57,23 @@ export function childDepth(depth: number): number {
 	return depth + 1;
 }
 
+/** The one registry call a depth read needs: walk one session id to its root. */
+export interface DepthWalkSource {
+	walk(sessionId: string): { ok: true; depth: number } | { ok: false };
+}
+
+/**
+ * The walked depth of `parentSessionId`, or the cap when the walk fails.
+ *
+ * A broken chain must not read as a shallow one, so an absent id and a failed
+ * walk both answer the cap. A caller then refuses the spawn or strips the tool.
+ */
+export function resolvedDepth(registry: DepthWalkSource, parentSessionId: string | null): number {
+	if (parentSessionId === null) return MAX_AGENT_DEPTH;
+	const walk = registry.walk(parentSessionId);
+	return walk.ok ? walk.depth : MAX_AGENT_DEPTH;
+}
+
 /**
  * Remove the spawn tool when the child would sit at or above the cap.
  * Returns a new array; never mutates the input.

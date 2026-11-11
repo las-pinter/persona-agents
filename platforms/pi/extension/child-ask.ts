@@ -96,8 +96,7 @@ export class ChildAskQueue {
 	 * walk counts hops, so a record cannot under-report its own depth.
 	 */
 	depth(sessionId: string): number | null {
-		const walk = boundRunRegistry()?.walk(sessionId);
-		return walk !== undefined && walk.ok ? walk.depth : null;
+		return sessionDepthOf(sessionId);
 	}
 
 	/**

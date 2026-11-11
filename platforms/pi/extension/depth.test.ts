@@ -19,7 +19,9 @@ import {
 	isRootProcessEnv,
 	parseDepth,
 	planSpawn,
+	resolvedDepth,
 	stripSpawnTool,
+	type DepthWalkSource,
 } from "./depth.ts";
 
 // --- env parsing -------------------------------------------------------------
@@ -98,6 +100,31 @@ test("planSpawn permits at depth 1 and strips subagent for the child", () => {
 	assert.equal(plan.allowed, true);
 	assert.equal(plan.childDepth, 2);
 	assert.deepEqual(plan.tools, ["read"]);
+});
+
+// --- depth from the record walk ----------------------------------------------
+
+/** A walk source that answers one fixed result for every id. */
+function fixedWalk(result: { ok: true; depth: number } | { ok: false }): DepthWalkSource {
+	return { walk: () => result };
+}
+
+test("resolvedDepth returns the walk depth when the walk succeeds", () => {
+	assert.equal(resolvedDepth(fixedWalk({ ok: true, depth: 1 }), "child-a"), 1);
+});
+
+test("resolvedDepth answers the cap when the walk fails", () => {
+	assert.equal(resolvedDepth(fixedWalk({ ok: false }), "ghost"), MAX_AGENT_DEPTH, "a broken chain reads as the cap");
+});
+
+test("resolvedDepth answers the cap for an absent parent id", () => {
+	// The walk succeeds here, so only the absent id can explain the answer.
+	assert.equal(resolvedDepth(fixedWalk({ ok: true, depth: 0 }), null), MAX_AGENT_DEPTH);
+});
+
+test("a failed walk strips the spawn tool", () => {
+	const depth = resolvedDepth(fixedWalk({ ok: false }), "ghost");
+	assert.deepEqual(stripSpawnTool(["read", "subagent"], depth), ["read"], "the cap keeps no spawn tool");
 });
 
 // --- root vs child detection -------------------------------------------------

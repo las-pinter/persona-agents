@@ -28,7 +28,7 @@ import type { Message } from "@earendil-works/pi-ai";
 import type { ChildModel } from "./child-session.ts";
 import { bindParentGate, clearChildToolImplementations } from "./child-tools.ts";
 import type { AgentConfig } from "./resolver.ts";
-import { RUN_RETENTION_MS, RunRegistry } from "./run-registry.ts";
+import { RUN_RETENTION_MS, RunRegistry, newRunRecord } from "./run-registry.ts";
 import {
 	type SidecarRecord,
 	ROUND_CAP_REASON,
@@ -120,6 +120,21 @@ interface Harness {
 function harness(options: HarnessOptions): Harness {
 	const children: Child[] = [];
 	const registry = new RunRegistry();
+	// A live process holds its caller record, so the harness registers the root.
+	registry.register(
+		newRunRecord({
+			sessionId: PARENT,
+			role: "orchestrator",
+			class: "orchestrator",
+			source: "package",
+			skills: [],
+			alwaysLoad: [],
+			depth: 0,
+			parentSessionId: null,
+			sessionFile: null,
+			startedAt: 0,
+		}),
+	);
 	const makeDetails =
 		(mode: "single" | "parallel" | "chain") =>
 		(results: SingleResult[]): SubagentDetails => ({

@@ -34,7 +34,7 @@ import {
 	wrapChildTools,
 } from "./child-tools.ts";
 import { childRoleText, childTaskPrompt } from "./child-prompt.ts";
-import { DEPTH_CAP_REASON, ENV_AGENT_DEPTH, canSpawn, newRunId, parseDepth, planSpawn } from "./depth.ts";
+import { DEPTH_CAP_REASON, canSpawn, newRunId, planSpawn, resolvedDepth } from "./depth.ts";
 import { createSubagentMcpCounter } from "./mcp-usage.ts";
 import { RunRegistry, UNKNOWN_RUN_ROLE, newRunRecord, type RunRegistry as RegistryType } from "./run-registry.ts";
 import { type AgentConfig, type PersonaConfig, discoverSkills, formatPersonaId, matchSkills } from "./resolver.ts";
@@ -68,8 +68,6 @@ import type { RunEvent } from "./tree-log.ts";
 /** Live repaint period during a run. Short enough to look live, long enough to stay cheap. */
 const RUN_TICK_MS = 250;
 
-/** This process's nesting depth, read once at module load. Absent env means level 0. */
-const myDepth = parseDepth(process.env[ENV_AGENT_DEPTH]);
 /** The class a record carries when the agent names none. Matches the gate rule. */
 const FALLBACK_CLASS = "reader";
 
@@ -136,13 +134,10 @@ export function getRunRegistry(): RegistryType {
 /**
  * The depth of the session that spawns this run. A registry walk carries it, so
  * an in-process child plans from its own depth, not the root depth. A walk that
- * finds no record falls back to the depth this process started at.
+ * finds no record answers the cap, so a broken chain cannot spawn.
  */
 function callerDepthOf(runtime: ChildRuntime): number {
-	const callerId = runtime.parentSessionId;
-	if (!callerId) return myDepth;
-	const walk = runtime.registry.walk(callerId);
-	return walk.ok ? walk.depth : myDepth;
+	return resolvedDepth(runtime.registry, runtime.parentSessionId);
 }
 
 /** The loader factory a test may replace, so no real extension file is read. */
