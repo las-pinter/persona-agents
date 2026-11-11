@@ -66,7 +66,7 @@ export interface RecordAskInput {
 	depth?: number;
 	/** Defaults to the current time. */
 	at?: string;
-	/** Defaults to `<runId>#<at>`. */
+	/** Defaults to an id minted from the run id. */
 	askId?: string;
 	/** Defaults to `settle`. */
 	phase?: AskPhase;
@@ -76,6 +76,25 @@ export interface RecordAskInput {
 
 /** The run id a write with no session carries. */
 export const ASK_ROOT_RUN_ID = "root";
+
+/**
+ * The ask counter per scope. Two asks in the same millisecond share one stamp.
+ * The counter keeps their ids apart, so the log folds them as two asks. The map
+ * is never pruned: it keeps one small entry per distinct scope for the life of
+ * the process.
+ */
+const askSeqByScope = new Map<string, number>();
+
+/**
+ * One ask id: the scope, the stamp, and the scope counter. A session id scopes
+ * an arrival, and a run id scopes a settle with no session. One mint for both
+ * gives a fold one shape to join.
+ */
+export function mintAskId(scope: string, at: string): string {
+	const seq = (askSeqByScope.get(scope) ?? 0) + 1;
+	askSeqByScope.set(scope, seq);
+	return `${scope}#${at}#${seq}`;
+}
 
 /**
  * Build one `ask` event. Pure: the caller supplies every field.
@@ -123,8 +142,8 @@ export function recordAsk(input: RecordAskInput): void {
 				runId,
 				depth: input.depth ?? 0,
 				at,
-				// A caller with no id gets one from the run and the stamp.
-				askId: input.askId ?? `${runId}#${at}`,
+				// A caller with no id gets one from the one mint, not a second shape.
+				askId: input.askId ?? mintAskId(runId, at),
 				phase: input.phase ?? "settle",
 				flags: input.flags ?? "",
 			}),

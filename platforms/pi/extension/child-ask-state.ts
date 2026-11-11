@@ -8,6 +8,7 @@
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { mintAskId } from "./ask-record.ts";
 import type { PermissionChoice, PromptModel } from "./permission-prompt.ts";
 import type { RunRegistry } from "./run-registry.ts";
 
@@ -146,21 +147,10 @@ export function clearAllSurfaces(
 }
 
 /**
- * The ask counter per session. Two asks in the same millisecond share a stamp,
- * so the counter keeps their ids apart and the log folds them as two asks.
- * The map is never pruned: it keeps one small entry per distinct session for
- * the life of the process.
+ * Build one request, with the fields the gate supplied and a fresh cancel. The
+ * ask id comes from the record module's one mint, so an arrival and a settle
+ * share one shape and a fold joins them.
  */
-const askSeqBySession = new Map<string, number>();
-
-/** One ask id: the session, the millisecond stamp, and the session counter. */
-function mintAskId(sessionId: string): string {
-	const seq = (askSeqBySession.get(sessionId) ?? 0) + 1;
-	askSeqBySession.set(sessionId, seq);
-	return `${sessionId}#${new Date().toISOString()}#${seq}`;
-}
-
-/** Build one request, with the fields the gate supplied and a fresh cancel. */
 export function newRequest(
 	input: ChildAskInput,
 	resolve: (outcome: ChildAskOutcome) => void,
@@ -170,7 +160,7 @@ export function newRequest(
 		role: input.role,
 		toolName: input.toolName,
 		// One id per request, so its arrival and its verdict share a key.
-		askId: mintAskId(input.sessionId),
+		askId: mintAskId(input.sessionId, new Date().toISOString()),
 		key: input.key,
 		model: input.model,
 		remember: input.remember,

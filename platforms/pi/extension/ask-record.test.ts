@@ -20,14 +20,17 @@ import {
 	flushPendingLogEvents,
 	logLineEvent,
 	logRowOf,
+	mintAskId,
 	recordAsk,
 	recordAskLine,
 	recordLogLine,
 	type AskLogEvent,
 } from "./ask-record.ts";
 import { unbindChildAsk } from "./child-ask.ts";
+import { newRequest } from "./child-ask-state.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { CHILD_A, ROOT, captureRoot, childAsk, rootAsk, setup } from "./gate-child-ask-fixture.ts";
+import type { PromptModel } from "./permission-prompt.ts";
 import { appendEvent, readAllEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 
@@ -60,6 +63,18 @@ const AT = "2026-01-01T00:00:00.000Z";
 
 /** The flags one arrival and one expiry line carry in these cases. */
 const FLAGS = "queued=1 shown=none parked=0 surface=yes";
+
+/** The prompt model of the one request the counter case mints. Plain data only. */
+const ASK_MODEL: PromptModel = {
+	title: "Child ask",
+	toolName: "bash",
+	kind: "shell-segment",
+	target: "ls",
+	lines: [],
+	highlight: null,
+	remember: "a test rule",
+	options: [],
+};
 
 test("recordAskLine builds one ask event with the documented fields", () => {
 	const event = recordAskLine({
@@ -103,14 +118,97 @@ test("recordAsk appends one line and fills the defaults", () => {
 		assert.equal(event.type, "ask");
 		assert.equal(event.runId, ASK_ROOT_RUN_ID);
 		assert.equal(event.depth, 0);
+		const askId = event.ask?.askId ?? "";
+		assert.match(
+			askId,
+			new RegExp(`^${ASK_ROOT_RUN_ID}#[^#]+#\\d+$`),
+			"the default id carries the scope, the stamp, and the counter",
+		);
 		assert.deepEqual(event.ask, {
 			tool: "bash",
 			role: "orchestrator",
 			verdict: "deny",
-			askId: `${ASK_ROOT_RUN_ID}#${event.at}`,
+			askId,
 			phase: "settle",
 			flags: "",
 		});
+	} finally {
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("one mint gives an arrival and a default settle one shape and one fold", () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	try {
+		// The arrival id the child queue mints.
+		const arrivalId = mintAskId(CHILD_A, AT);
+		recordAsk({
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			runId: CHILD_A,
+			at: AT,
+			askId: arrivalId,
+			phase: "arrival",
+			flags: FLAGS,
+		});
+		// The settle that carries the arrival id is the pair a fold joins.
+		recordAsk({ tool: "bash", role: "implementer", verdict: "allow", runId: CHILD_A, at: AT, askId: arrivalId });
+		// No id: the writer mints one from the same scope, in the same shape.
+		recordAsk({ tool: "bash", role: "implementer", verdict: "allow", runId: CHILD_A, at: AT });
+
+		const [arrival, joined, minted] = askEvents(logPath);
+		const arrivalFields = (arrival?.ask?.askId ?? "").split("#");
+		const settleFields = (minted?.ask?.askId ?? "").split("#");
+		assert.equal(arrivalFields.length, 3, "the queue mint carries three fields");
+		assert.equal(settleFields.length, 3, "the default mint carries the same three fields");
+		assert.equal(arrivalFields[0], CHILD_A, "the queue mint leads with the session");
+		assert.equal(settleFields[0], CHILD_A, "an arrival and a default settle carry one scope word");
+		assert.equal(settleFields[1], arrivalFields[1], "two mints at one stamp share the stamp field");
+		assert.notEqual(settleFields[2], arrivalFields[2], "the counter field tells the two mints apart");
+		assert.equal(joined?.ask?.askId, arrivalId, "a settle keeps the id its arrival carried");
+
+		// The fold: one row per ask id.
+		const rows = new Map<string, RunEvent[]>();
+		for (const event of askEvents(logPath)) {
+			const id = event.ask?.askId ?? "";
+			rows.set(id, [...(rows.get(id) ?? []), event]);
+		}
+		assert.deepEqual(
+			rows.get(arrivalId)?.map((event) => event.ask?.phase),
+			["arrival", "settle"],
+			"the arrival and its settle fold to one ask",
+		);
+	} finally {
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a recordAsk mint and a request mint share one counter", () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	try {
+		// The record mint runs first, so its counter value is the one to match.
+		recordAsk({ tool: "bash", role: "implementer", verdict: "allow", runId: CHILD_A });
+		const recorded = askEvents(logPath)[0]?.ask?.askId ?? "";
+		const recordedSeq = Number(recorded.split("#")[2]);
+		const request = newRequest(
+			{
+				sessionId: CHILD_A,
+				role: "implementer",
+				toolName: "bash",
+				key: "bash:ls",
+				model: ASK_MODEL,
+				remember: () => {},
+			},
+			() => {},
+		);
+		const nextSeq = Number((request.askId ?? "").split("#")[2]);
+		assert.ok(recordedSeq >= 1, "the record mint counts from one");
+		assert.equal(nextSeq, recordedSeq + 1, "one counter map owns both mints");
 	} finally {
 		restore();
 		rmSync(dir, { recursive: true, force: true });
