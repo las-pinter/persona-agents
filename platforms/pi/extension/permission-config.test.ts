@@ -20,6 +20,7 @@ import * as path from "node:path";
 import {
   DEFAULT_TABLE_FILE,
   FENCE_REASON,
+  loadGlobalRules,
   loadPermissionConfig,
   loadTableFile,
   type ConfigPaths,
@@ -304,6 +305,144 @@ test("the global overlay loads after the rows and is stamped as overlay", () => 
 	const sets = compileRole(config.rows, "implementer");
 	sets.globalDeny = [...sets.globalDeny, ...config.overlay.deny];
 	assert.equal(verdict(sets, "bash", "true"), "deny");
+});
+
+// --- the overlay schema -----------------------------------------------------
+
+/** The fence a broken overlay returns: one deny-all row, no ask row. */
+function assertOverlayFence(rules: ReturnType<typeof loadGlobalRules>): void {
+	assert.equal(rules.deny.length, 1);
+	assert.equal(rules.deny[0].match, ".*");
+	assert.equal(rules.deny[0].layer, "overlay");
+	assert.deepEqual(rules.ask, []);
+}
+
+/** Run the overlay loader and capture the log lines it writes. */
+function loadOverlay(file: string): { rules: ReturnType<typeof loadGlobalRules>; lines: string[] } {
+	const previous = process.env[ENV_TREE_LOG];
+	const logPath = caseLogPath();
+	process.env[ENV_TREE_LOG] = logPath;
+	try {
+		const rules = loadGlobalRules(file);
+		const lines = readAllEvents(logPath)
+			.filter((event) => event.type === "log" && typeof event.text === "string")
+			.map((event) => event.text ?? "");
+		return { rules, lines };
+	} finally {
+		if (previous === undefined) delete process.env[ENV_TREE_LOG];
+		else process.env[ENV_TREE_LOG] = previous;
+	}
+}
+
+test("an overlay deny row with no match closes the fence", () => {
+	const file = write("overlay-no-match.json", { deny: [{ reason: "x" }], ask: [] });
+	const { rules } = loadOverlay(file);
+	assertOverlayFence(rules);
+});
+
+test("an overlay fault writes one line that names the file and the fault", () => {
+	const file = write("overlay-fault-line.json", { deny: [{ reason: "x" }], ask: [] });
+	const { lines } = loadOverlay(file);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes(file), lines[0]);
+	assert.ok(lines[0].includes("match"), lines[0]);
+});
+
+test("an overlay row with an empty match closes the fence", () => {
+	const file = write("overlay-empty-match.json", { deny: [{ match: "" }], ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('non-empty string "match"'), lines[0]);
+});
+
+test("an overlay row with a non-string reason closes the fence", () => {
+	const file = write("overlay-bad-reason.json", { deny: [{ match: "\\btrue\\b", reason: 3 }], ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('string "reason"'), lines[0]);
+});
+
+test("an overlay row that is not an object closes the fence", () => {
+	const file = write("overlay-row-not-object.json", { deny: ["\\btrue\\b"], ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes("deny[0] must be a JSON object"), lines[0]);
+});
+
+test("an overlay row with a match that does not compile closes the fence", () => {
+	const file = write("overlay-bad-regex.json", { deny: [{ match: "[unclosed" }], ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('valid "match" regex'), lines[0]);
+});
+
+test("an overlay with an absent section returns no rules and logs nothing", () => {
+	const file = write("overlay-absent-section.json", {});
+	const { rules, lines } = loadOverlay(file);
+	assert.deepEqual(lines, []);
+	assert.deepEqual(rules.deny, []);
+	assert.deepEqual(rules.ask, []);
+});
+
+test("an overlay section that is not a list names the fault", () => {
+	const file = write("overlay-not-a-list.json", { deny: "all", ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('"deny" must be a list'), lines[0]);
+});
+
+test("an overlay row with an unknown field closes the fence", () => {
+	const file = write("overlay-unknown-key.json", {
+		deny: [{ match: "\\btrue\\b", matches: "\\btrue\\b" }],
+		ask: [],
+	});
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('unknown field "matches"'), lines[0]);
+});
+
+test("an overlay row with a non-string tool closes the fence", () => {
+	const file = write("overlay-bad-tool.json", { deny: [{ tool: 3, match: "\\btrue\\b" }], ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('string "tool"'), lines[0]);
+});
+
+test("an overlay row with an empty tool closes the fence", () => {
+	const file = write("overlay-empty-tool.json", { deny: [{ tool: "", match: "\\btrue\\b" }], ask: [] });
+	const { rules, lines } = loadOverlay(file);
+	assertOverlayFence(rules);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('non-empty string "tool"'), lines[0]);
+});
+
+test("a well-formed overlay keeps its rules in order and their layer", () => {
+	const file = write("overlay-good.json", {
+		deny: [
+			{ tool: "bash", match: "\\btrue\\b", reason: "first" },
+			{ match: "\\bfalse\\b", reason: "second" },
+		],
+		ask: [{ tool: "read", match: "^/fixture", reason: "third" }],
+	});
+	const rules = loadGlobalRules(file);
+	assert.deepEqual(
+		rules.deny.map((rule) => [rule.tool, rule.match, rule.reason, rule.layer]),
+		[
+			["bash", "\\btrue\\b", "first", "overlay"],
+			[undefined, "\\bfalse\\b", "second", "overlay"],
+		],
+	);
+	assert.deepEqual(
+		rules.ask.map((rule) => [rule.tool, rule.match, rule.reason, rule.layer]),
+		[["read", "^/fixture", "third", "overlay"]],
+	);
 });
 
 // --- fail closed ------------------------------------------------------------

@@ -10,8 +10,9 @@
  * The first two layers are row tables, and the same validator (`validateRows` in
  * `permission-table.ts`) runs on the default and on every row the override
  * supplies. The overlay keeps its own shape (`deny` and `ask` regex rows), so an
- * existing file keeps working. Every loaded rule records the layer that produced
- * it.
+ * existing file keeps working. A row without a usable `match` fails the layer
+ * here, so the compiler never drops it in silence. Every loaded rule records the
+ * layer that produced it.
  *
  * A broken table layer fails closed. One line names the file and, when a row is
  * at fault, the row id. The returned overlay then carries a deny-all fence, so
@@ -262,6 +263,51 @@ export function applyOverrideFile(rows: readonly RuleRow[], file: string): RuleR
 	return next;
 }
 
+const OVERLAY_KEYS = new Set(["tool", "match", "reason"]);
+
+/** The flag the compiler adds to every overlay pattern, so a check matches it. */
+const MATCH_FLAGS = "i";
+
+/** Throw when the pattern does not compile, so a bad regex fences at load time. */
+function assertRegex(match: string, where: string): void {
+	try {
+		new RegExp(match, MATCH_FLAGS);
+	} catch (error) {
+		throw new Error(`${where} needs a valid "match" regex (${fault(error)})`);
+	}
+}
+
+/**
+ * One overlay row. The compiler drops a rule with no usable `match`, so a bad row
+ * must throw here and close the gate instead.
+ */
+function validateOverlayRule(entry: unknown, where: string): RawRule {
+	const row = asRecord(entry, where);
+	rejectUnknownKeys(row, OVERLAY_KEYS, where);
+	const { match, tool, reason } = row;
+	if (typeof match !== "string" || match.length === 0) {
+		throw new Error(`${where} needs a non-empty string "match"`);
+	}
+	assertRegex(match, where);
+	if (tool !== undefined && (typeof tool !== "string" || tool.length === 0)) {
+		throw new Error(`${where} needs a non-empty string "tool" when present`);
+	}
+	if (reason !== undefined && typeof reason !== "string") {
+		throw new Error(`${where} needs a string "reason" when present`);
+	}
+	const rule: RawRule = { match };
+	if (tool !== undefined) rule.tool = tool;
+	if (reason !== undefined) rule.reason = reason;
+	return rule;
+}
+
+/** One overlay section. An absent section is empty; a present one must be valid. */
+function overlaySection(value: unknown, field: string): RawRule[] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value)) throw new Error(`"${field}" must be a list`);
+	return value.map((entry, index) => validateOverlayRule(entry, `${field}[${index}]`));
+}
+
 /**
  * Read the live global permission file.
  *
@@ -274,12 +320,12 @@ export function applyOverrideFile(rows: readonly RuleRow[], file: string): RuleR
 export function loadGlobalRules(file: string = overlayFile()): OverlayRules {
 	try {
 		const cfg = asRecord(JSON.parse(fs.readFileSync(file, "utf-8")), "the global file");
-		if (!Array.isArray(cfg.deny ?? []) || !Array.isArray(cfg.ask ?? [])) {
-			throw new Error("deny and ask must be lists");
-		}
-		const stamp = (rules: unknown): RawRule[] =>
-			(rules as RawRule[]).map((rule) => ({ ...rule, layer: "overlay" as const }));
-		return { deny: stamp(cfg.deny ?? []), ask: stamp(cfg.ask ?? []) };
+		const stamp = (rules: RawRule[]): RawRule[] =>
+			rules.map((rule) => ({ ...rule, layer: "overlay" as const }));
+		return {
+			deny: stamp(overlaySection(cfg.deny, "deny")),
+			ask: stamp(overlaySection(cfg.ask, "ask")),
+		};
 	} catch (error) {
 		const problem = fault(error);
 		recordLogLine({
