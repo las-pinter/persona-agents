@@ -64,7 +64,6 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 	const mcp = (snapshot.mcp ?? []).map((server) => ({
 		name: server.name,
 		configured: server.configured,
-		connected: server.connected,
 		status: server.status,
 	}));
 

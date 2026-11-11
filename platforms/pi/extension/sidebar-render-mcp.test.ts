@@ -9,11 +9,14 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
+	type McpServerSnapshot,
+	type McpServerStatus,
 	type McpSnapshot,
 	type SidebarSnapshot,
 	type SidebarTheme,
 	renderMcpPanel,
 } from "./sidebar-render.ts";
+import { normalizeMcpStatus } from "./sidebar-data.ts";
 import {
 	countMcpTool,
 	createMcpTally,
@@ -161,6 +164,39 @@ test("the subagent counter keeps a count after a failed tool end", () => {
 	counter.count({ type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__exa__search" });
 	counter.count({ type: "tool_execution_end", toolCallId: "call-1", toolName: "mcp__exa__search", error: "boom" });
 	assert.deepEqual(counter.usage(), { exa: 1 });
+});
+
+// --- one truth for the connection state ------------------------------------
+
+test("a record with only the legacy flag normalizes to one green dot and a count of one", () => {
+	const mcp: McpSnapshot = [normalizeMcpStatus({ name: "context7", configured: true, connected: true })];
+	const lines = renderMcpPanel(mcp, 60, theme);
+	assert.ok(lines.includes("configured: 1, connected: 1"));
+	assert.ok(lines.some((line) => line.includes("● context7")));
+});
+
+test("the dot ignores a legacy flag that carries no status", () => {
+	// Models a raw pre-normalizer record: the legacy flag only, with no status.
+	const legacyOnly = { name: "a", configured: true, connected: true } as unknown as McpServerSnapshot;
+	const lines = renderMcpPanel([legacyOnly], 60, theme);
+	assert.ok(lines.includes("configured: 1, connected: 0"));
+	assert.ok(!lines.some((line) => line.includes("● a")), "the flag alone paints no green dot");
+});
+
+test("the dot ignores a legacy flag that disagrees with a status", () => {
+	const mcp: McpSnapshot = [{ name: "b", configured: true, connected: true, status: "disconnected" }];
+	const lines = renderMcpPanel(mcp, 60, theme);
+	assert.ok(lines.includes("configured: 1, connected: 0"));
+	assert.ok(lines.some((line) => line.includes("○ b")), "the flag cannot overrule a status");
+});
+
+test("an unrecognized status paints the unknown mark and is not counted", () => {
+	const mcp: McpSnapshot = [
+		{ name: "a", configured: true, connected: false, status: "failed" as McpServerStatus },
+	];
+	const lines = renderMcpPanel(mcp, 60, theme);
+	assert.ok(lines.includes("configured: 1, connected: 0"));
+	assert.ok(lines.some((line) => line.includes("◐ a")));
 });
 
 // --- MCP badge and total ----------------------------------------------------

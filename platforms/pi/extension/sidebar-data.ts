@@ -30,6 +30,7 @@ import {
 	resolveMcpJsonPath,
 } from "./sidebar-sources.ts";
 import type {
+	McpServerSnapshot,
 	McpServerStatus,
 	SessionSnapshot,
 	SidebarSnapshot,
@@ -144,6 +145,28 @@ function emptySnapshot(): SidebarSnapshot {
 		tps: 0,
 		status: emptyStatus(),
 		askLog: [],
+	};
+}
+
+/** A raw MCP record. `status` may be absent when only the legacy flag is set. */
+interface McpServerInput {
+	name: string;
+	configured?: boolean;
+	connected?: boolean;
+	status?: McpServerStatus;
+}
+
+/**
+ * Resolve one MCP record to one truth: `status`. The legacy `connected` flag is
+ * read here only, so a record that carries it alone still gets a status.
+ */
+export function normalizeMcpStatus(server: McpServerInput): McpServerSnapshot {
+	const status: McpServerStatus = server.status ?? (server.connected === true ? "connected" : "disconnected");
+	return {
+		name: server.name,
+		configured: server.configured === true,
+		connected: status === "connected",
+		status,
 	};
 }
 
@@ -557,14 +580,14 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			// pi sanitizes non `[A-Za-z0-9_]` characters in a tool name to `_`, so
 			// `my-server` appears as `my_server`. Match the raw name first, then the
 			// sanitized name, so a connected server is not painted red.
-			const normalized = name.replace(/[^A-Za-z0-9_]/g, "_");
-			const isConnected = toolsReadable && (connected.has(name) || connected.has(normalized));
+			const sanitized = name.replace(/[^A-Za-z0-9_]/g, "_");
+			const isConnected = toolsReadable && (connected.has(name) || connected.has(sanitized));
 			const status: McpServerStatus = !toolsReadable
 				? "unknown"
 				: isConnected
 					? "connected"
 					: "disconnected";
-			return { name, configured: true, connected: isConnected, status };
+			return normalizeMcpStatus({ name, configured: true, status });
 		});
 	}
 

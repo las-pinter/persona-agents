@@ -90,9 +90,12 @@ export type McpServerStatus = "connected" | "disconnected" | "unknown";
 export interface McpServerSnapshot {
 	name: string;
 	configured: boolean;
-	/** True only when `status` is `connected`. Kept for the summary count. */
+	/**
+	 * @deprecated Legacy flag. The producer derives it from `status` and no
+	 * renderer reads it. Read `status` instead.
+	 */
 	connected: boolean;
-	/** Tri-state connection status. */
+	/** Tri-state connection status. The one truth for the dot and the count. */
 	status: McpServerStatus;
 }
 
@@ -688,16 +691,9 @@ export function renderWorkspacePanel(
  * The dot glyph and theme token for one MCP status. A missing or unrecognized
  * status falls back to `unknown`, so a stale snapshot never throws.
  */
-function mcpStatusDot(
-	status: McpServerStatus | undefined,
-	connected: boolean | undefined,
-): { glyph: string; token: string } {
+function mcpStatusDot(status: McpServerStatus | undefined): { glyph: string; token: string } {
 	const resolved: McpServerStatus =
-		status === "connected" || status === "disconnected" || status === "unknown"
-			? status
-			: connected === true
-				? "connected"
-				: "disconnected";
+		status === "connected" || status === "disconnected" || status === "unknown" ? status : "unknown";
 	if (resolved === "connected") return { glyph: "●", token: "success" };
 	if (resolved === "disconnected") return { glyph: "○", token: "error" };
 	return { glyph: "◐", token: "warning" };
@@ -711,10 +707,10 @@ export function renderMcpPanel(
 	usage?: Record<string, number>,
 ): string[] {
 	const lines: string[] = [header(theme, " MCP ")];
-	// The built-in API has no live connection state; `connected` is inferred.
+	// The built-in API has no live connection state; `status` is inferred.
 	const servers = mcp ?? [];
 	const configured = servers.filter((server) => server.configured).length;
-	// Derive the count from the dot's source of truth so the two cannot drift.
+	// The dot and the count read the same field, so the two cannot drift.
 	const connected = servers.filter((server) => server.status === "connected").length;
 	lines.push(`configured: ${configured}, connected: ${connected}`);
 
@@ -723,7 +719,7 @@ export function renderMcpPanel(
 	} else {
 		const shown = servers.slice(0, MCP_SERVERS_SHOWN);
 		for (const server of shown) {
-			const { glyph, token } = mcpStatusDot(server.status, server.connected);
+			const { glyph, token } = mcpStatusDot(server.status);
 			// An absent usage map means the caller does not track usage at all.
 			const badge = usage !== undefined ? ` ${styleDim(theme, `x${lookupMcpCount(usage, server.name)}`)}` : "";
 			lines.push(`${color(theme, token, glyph)} ${server.name}${badge}`);
