@@ -23,6 +23,33 @@ const MARK_PREFIX = "… +";
  */
 export const MIN_WINDOW_ROWS = 2;
 
+/** Whether a window can hold a mark and a body row. */
+export function windowFits(rawRows: number): boolean {
+	return Math.floor(rawRows) >= MIN_WINDOW_ROWS;
+}
+
+/**
+ * The separator column and the first column of the sidebar text, or null when
+ * the terminal cannot hold a one-cell main area beside the column.
+ */
+export function columnGeometry(
+	rawCols: number,
+	width: number,
+): { sepCol: number; sidebarCol: number } | null {
+	if (rawCols <= width + 1) return null;
+	const sepCol = rawCols - width;
+	return { sepCol, sidebarCol: sepCol + 1 };
+}
+
+/**
+ * The main area width beside the column. The separator takes one cell of the
+ * main area. A terminal too narrow for the column keeps one main cell.
+ */
+export function mainColumns(rawCols: number, width: number): number {
+	const geometry = columnGeometry(rawCols, width);
+	return geometry ? geometry.sepCol - 1 : 1;
+}
+
 /** The mark for the lines hidden above the window. */
 export function aboveMark(count: number): string {
 	return `${MARK_PREFIX}${Math.max(0, Math.floor(count))} above`;
@@ -65,7 +92,7 @@ export function windowLines(
 	dim: (text: string) => string = (text) => text,
 ): string[] {
 	const rows = Math.max(0, Math.floor(visible));
-	if (rows < MIN_WINDOW_ROWS) return [];
+	if (!windowFits(rows)) return [];
 	const total = lines.length;
 	const start = clampScrollOffset(offset, total, rows);
 	const above = start > 0 ? 1 : 0;

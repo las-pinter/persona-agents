@@ -310,6 +310,20 @@ test("a one-row terminal paints no column, below the window floor", () => {
 	compositor.dispose();
 });
 
+test("a terminal with no main cell paints no column", () => {
+	const terminal = makeTerminal(31, 10);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => ["panel"], 30);
+
+	compositor.install();
+	assert.equal(terminal.columns, 1, "the main area keeps one cell");
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	assert.equal(terminal.writes.length, 0, "a 31-column terminal has no cell for a separator");
+	compositor.dispose();
+});
+
 test("a column that fits the terminal paints whole with no mark", () => {
 	const terminal = makeTerminal(100, 6);
 	const tui = makeTui(terminal);

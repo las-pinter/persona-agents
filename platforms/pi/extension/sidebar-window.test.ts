@@ -15,7 +15,10 @@ import {
 	aboveMark,
 	belowMark,
 	clampScrollOffset,
+	columnGeometry,
+	mainColumns,
 	scrollLimit,
+	windowFits,
 	windowLines,
 } from "./sidebar-window.ts";
 
@@ -185,4 +188,30 @@ test("the marks name the hidden counts on each side", () => {
 	assert.equal(aboveMark(3), "… +3 above");
 	assert.equal(belowMark(9), "… +9 below");
 	assert.equal(aboveMark(-2), "… +0 above", "a negative count floors at zero");
+});
+
+// --- column geometry --------------------------------------------------------
+
+test("the column geometry puts the separator one cell left of the column", () => {
+	assert.deepEqual(columnGeometry(80, 30), { sepCol: 50, sidebarCol: 51 });
+	assert.deepEqual(columnGeometry(250, 120), { sepCol: 130, sidebarCol: 131 });
+});
+
+test("a terminal with no main cell has no column geometry", () => {
+	assert.equal(columnGeometry(31, 30), null, "no main cell is too narrow to paint");
+	assert.equal(columnGeometry(30, 30), null, "a terminal narrower than the column is too narrow");
+	assert.deepEqual(columnGeometry(32, 30), { sepCol: 2, sidebarCol: 3 }, "one main cell is enough");
+});
+
+test("the main width keeps one cell beside the column", () => {
+	assert.equal(mainColumns(80, 30), 49, "the separator takes one cell of the main area");
+	assert.equal(mainColumns(31, 30), 1, "a narrow terminal keeps one main cell");
+	assert.equal(mainColumns(10, 30), 1);
+});
+
+test("the row floor decides a fitting window", () => {
+	assert.equal(windowFits(MIN_WINDOW_ROWS), true, "the floor itself fits");
+	assert.equal(windowFits(MIN_WINDOW_ROWS - 1), false, "one row short does not fit");
+	assert.equal(windowFits(0), false);
+	assert.equal(windowFits(24), true);
 });

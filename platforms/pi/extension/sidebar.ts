@@ -17,7 +17,7 @@
 
 import { SIDEBAR_DEFAULT_WIDTH, clampWidth } from "./sidebar-config.ts";
 import { padLine } from "./sidebar-line.ts";
-import { MIN_WINDOW_ROWS, windowLines } from "./sidebar-window.ts";
+import { columnGeometry, mainColumns, windowFits, windowLines } from "./sidebar-window.ts";
 
 export {
 	SIDEBAR_CONFIG_ENV,
@@ -167,7 +167,7 @@ export class SidebarCompositor {
 				Object.defineProperty(terminal, "columns", {
 					configurable: true,
 					enumerable: this.ownColumnsDescriptor?.enumerable ?? true,
-					get: () => Math.max(1, this.rawColumns() - this.width - 1),
+					get: () => mainColumns(this.rawColumns(), this.width),
 				});
 			} catch {
 				// A non-configurable terminal is left alone.
@@ -265,7 +265,7 @@ export class SidebarCompositor {
 	private replaceErase(terminal: SidebarTerminal): void {
 		const original = this.originalWrite;
 		if (!original) return;
-		const mainWidth = Math.max(1, this.rawColumns() - this.width - 1);
+		const mainWidth = mainColumns(this.rawColumns(), this.width);
 		try {
 			terminal.write = (data: string): void => {
 				const safe = typeof data === "string" ? data : String(data ?? "");
@@ -359,11 +359,10 @@ export class SidebarCompositor {
 			const rawRows = this.rawRows();
 			// Below the window floor one mark and one line cannot both fit, so no
 			// column paints and none is lost in silence.
-			if (rawCols <= this.width + 1 || rawRows < MIN_WINDOW_ROWS) return;
+			const geometry = columnGeometry(rawCols, this.width);
+			if (!geometry || !windowFits(rawRows)) return;
 
-			const sepCol = rawCols - this.width;
-			const sidebarCol = sepCol + 1;
-			if (sepCol < 1 || sidebarCol > rawCols) return;
+			const { sepCol, sidebarCol } = geometry;
 
 			if (this.forceFullPaint) {
 				this.rowCache.length = 0;
