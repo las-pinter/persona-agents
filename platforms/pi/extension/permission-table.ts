@@ -9,9 +9,9 @@
  * (`RuleSets` in `command-segments.ts`). The engine is not changed here: the
  * shapes below are the shapes it reads today.
  *
- * The file stays whole because validation, pattern construction, and grouping
- * share one closed vocabulary of row fields, flag classes, and shared pattern
- * pieces; a split would copy that vocabulary into every part.
+ * The file has one duty: the table compiler. Validation, pattern construction,
+ * and grouping share one closed vocabulary of row fields, flag classes, and
+ * pattern pieces, so a split would copy that vocabulary into every part.
  *
  * A row carries no pattern. Every pattern piece comes from this module:
  *
@@ -54,12 +54,18 @@
  */
 
 import type { Layer, RawRule, RuleSets } from "./command-segments.ts";
+import {
+	PERMISSION_CLASSES,
+	ROLE_CLASS,
+	isPermissionClass,
+	isRole,
+	type PermissionClass,
+	type Role,
+} from "./permission-class.ts";
 
 export type { Layer };
 
 export type Verdict = "allow" | "ask" | "deny";
-
-export type RoleClass = "reader" | "worker" | "orchestrator";
 
 /**
  * A headless token shape. The row names the construct, not a verb: a stream
@@ -116,7 +122,7 @@ export interface RuleRow {
 	tool: string;
 	verdict: Verdict;
 	/** The classes that get this row. All three means a global row. */
-	classes: RoleClass[];
+	classes: PermissionClass[];
 	/**
 	 * Professions that narrow a class-scoped row. A named profession must belong
 	 * to one of `classes`. Only a named profession gets the row in
@@ -158,28 +164,6 @@ export interface RuleRow {
 	layer?: Layer;
 }
 
-export type Role =
-	| "orchestrator"
-	| "planner"
-	| "implementer"
-	| "tester"
-	| "reviewer"
-	| "researcher"
-	| "mascot";
-
-export const CLASS_ORDER: readonly RoleClass[] = ["reader", "worker", "orchestrator"];
-
-/** The class of each role. A new profession must add a line here. */
-export const ROLE_CLASS: Record<Role, RoleClass> = {
-	orchestrator: "orchestrator",
-	planner: "reader",
-	reviewer: "reader",
-	researcher: "reader",
-	mascot: "reader",
-	implementer: "worker",
-	tester: "worker",
-};
-
 /**
  * The agent-notes segment of each role's write zone. `null` means the role has
  * no notes zone: the orchestrator writes the whole tree through `notes:all`,
@@ -215,7 +199,6 @@ const ROW_FIELDS = new Set<string>([
 ]);
 
 const VERDICTS = new Set<string>(["allow", "ask", "deny"]);
-const CLASSES = new Set<string>(CLASS_ORDER);
 const ARGS = new Set<string>(["none", "path", "any"]);
 const ZONES = new Set<string>([
 	"cwd",
@@ -543,7 +526,7 @@ export function validateRow(row: RuleRow): void {
 		fail(row.id, "classes must name at least one class");
 	}
 	for (const cls of row.classes) {
-		if (!CLASSES.has(cls)) fail(row.id, `unknown class "${String(cls)}"`);
+		if (!isPermissionClass(cls)) fail(row.id, `unknown class "${String(cls)}"`);
 	}
 	if (row.roles !== undefined) {
 		if (!Array.isArray(row.roles) || row.roles.length === 0) {
@@ -551,7 +534,7 @@ export function validateRow(row: RuleRow): void {
 		}
 		const named = new Set<string>();
 		for (const role of row.roles) {
-			if (!(role in ROLE_CLASS)) fail(row.id, `unknown profession "${String(role)}"`);
+			if (!isRole(role)) fail(row.id, `unknown profession "${String(role)}"`);
 			if (!row.classes.includes(ROLE_CLASS[role])) {
 				fail(row.id, `profession "${role}" is outside the row's classes`);
 			}
@@ -564,7 +547,7 @@ export function validateRow(row: RuleRow): void {
 		if (row.unnamed === false) fail(row.id, "unnamed widens a row only, so omit a false value");
 		if (row.roles === undefined) fail(row.id, "unnamed widens a roles row, so the row must name roles");
 	}
-	if (CLASS_ORDER.every((cls) => row.classes.includes(cls)) && row.verdict === "allow" && !isToolAllow(row)) {
+	if (PERMISSION_CLASSES.every((cls) => row.classes.includes(cls)) && row.verdict === "allow" && !isToolAllow(row)) {
 		fail(row.id, "a global allow row must name tools only and carry no command geometry");
 	}
 	if (!ARGS.has(row.arg)) fail(row.id, `unknown arg "${String(row.arg)}"`);
@@ -705,7 +688,7 @@ export interface NotesZone {
 
 /** The zone of one role. An unknown role fails the load. */
 export function roleZone(role: Role): NotesZone {
-	if (!(role in ROLE_NOTES)) fail("<role>", `unknown role "${String(role)}"`);
+	if (!isRole(role)) fail("<role>", `unknown role "${String(role)}"`);
 	return { role };
 }
 
@@ -865,7 +848,7 @@ export function rulesForRow(row: RuleRow, zone: NotesZone | null = null): RawRul
 // --- grouping ---------------------------------------------------------------
 
 function isGlobal(row: RuleRow): boolean {
-	return CLASS_ORDER.every((cls) => row.classes.includes(cls));
+	return PERMISSION_CLASSES.every((cls) => row.classes.includes(cls));
 }
 
 /**
@@ -909,7 +892,7 @@ function failUnknownClass(): never {
  * and an unnamed agent falls to the mode default. A `roles` row that sets
  * `unnamed` joins the set, so an unnamed agent of that class gets the row.
  */
-export function rowsForClass(rows: readonly RuleRow[], cls: RoleClass): RuleRow[] {
+export function rowsForClass(rows: readonly RuleRow[], cls: PermissionClass): RuleRow[] {
 	return rows.filter(
 		(row) =>
 			(row.roles === undefined || row.unnamed === true) &&
@@ -922,7 +905,7 @@ export function rowsForClass(rows: readonly RuleRow[], cls: RoleClass): RuleRow[
  * named in. A row with `roles` applies only to the professions it names.
  */
 export function rowsForRole(rows: readonly RuleRow[], role: Role): RuleRow[] {
-	if (!(role in ROLE_CLASS)) fail("<role>", `unknown role "${String(role)}"`);
+	if (!isRole(role)) fail("<role>", `unknown role "${String(role)}"`);
 	const cls = ROLE_CLASS[role];
 	return rows.filter(
 		(row) =>
@@ -937,9 +920,9 @@ export function rowsForRole(rows: readonly RuleRow[], role: Role): RuleRow[] {
  * The row set comes from `rowsForClass`, so one filter decides which rows a
  * class holds.
  */
-export function compileClass(rows: readonly RuleRow[], cls: RoleClass): RuleSets {
+export function compileClass(rows: readonly RuleRow[], cls: PermissionClass): RuleSets {
 	validateRows(rows);
-	if (!CLASSES.has(cls)) return failUnknownClass();
+	if (!isPermissionClass(cls)) return failUnknownClass();
 	const sets = emptyRuleSets();
 	for (const row of rowsForClass(rows, cls)) {
 		targetSet(sets, row, !isGlobal(row)).push(...rulesForRow(row, null));
@@ -949,7 +932,7 @@ export function compileClass(rows: readonly RuleRow[], cls: RoleClass): RuleSets
 
 /** The five rule sets for one role: its class rows with its own notes zone. */
 export function compileRole(rows: readonly RuleRow[], role: Role): RuleSets {
-	if (!(role in ROLE_CLASS)) fail("<role>", `unknown role "${String(role)}"`);
+	if (!isRole(role)) fail("<role>", `unknown role "${String(role)}"`);
 	const zone = roleZone(role);
 	validateRows(rows);
 	const sets = emptyRuleSets();
@@ -959,18 +942,18 @@ export function compileRole(rows: readonly RuleRow[], role: Role): RuleSets {
 	return sets;
 }
 
-export type RowGroup = "global" | RoleClass;
+export type RowGroup = "global" | PermissionClass;
 
 export interface TableCounts {
 	total: number;
 	uniqueIds: number;
 	byGroup: Record<RowGroup, number>;
-	byClass: Record<RoleClass, number>;
+	byClass: Record<PermissionClass, number>;
 }
 
 export interface CompiledTable {
 	counts: TableCounts;
-	classes: Record<RoleClass, RuleSets>;
+	classes: Record<PermissionClass, RuleSets>;
 }
 
 export function rowsForGroup(rows: readonly RuleRow[], group: RowGroup): RuleRow[] {

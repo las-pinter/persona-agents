@@ -19,17 +19,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { recordLogLine } from "./ask-record.ts";
+import { isPermissionClass, type PermissionClass } from "./permission-class.ts";
 
 export type AgentScope = "user" | "project" | "both";
 export type AgentSource = "user" | "project" | "package";
-
-/**
- * The permission class a role belongs to. The gate maps one class to one rule
- * set, so a wrong class grants the wrong fence.
- */
-export type PermissionClass = "reader" | "worker" | "orchestrator";
-
-export const PERMISSION_CLASSES: readonly PermissionClass[] = ["reader", "worker", "orchestrator"];
 
 export interface PermissionRule {
 	tool?: string;
@@ -168,8 +161,8 @@ function parsePermissionClass(value: unknown, filePath: string, source: AgentSou
 	// A blank `permissionClass:` line parses to null, which means no class. An
 	// empty string is blank too.
 	const absent = value === undefined || value === null || (typeof value === "string" && value.trim() === "");
-	if (!absent && typeof value === "string" && (PERMISSION_CLASSES as readonly string[]).includes(value)) {
-		const named = value as PermissionClass;
+	if (!absent && typeof value === "string" && isPermissionClass(value)) {
+		const named = value;
 		if (source !== "package" && CLASSES_ABOVE_READER.includes(named)) {
 			warnOnce(
 				warnedClampedClass,

@@ -74,14 +74,17 @@ import {
 	type RuleSets,
 } from "./command-segments.ts";
 import {
-	CLASS_ORDER,
 	compileClass,
 	compileRole,
-	ROLE_CLASS,
-	type Role,
-	type RoleClass,
 	type RuleRow,
 } from "./permission-table.ts";
+import {
+	PERMISSION_CLASSES,
+	ROLE_CLASS,
+	isRole,
+	type PermissionClass,
+	type Role,
+} from "./permission-class.ts";
 import { loadDefaultRows, loadGlobalRules, loadPermissionConfig, type OverlayRules } from "./permission-config.ts";
 import {
 	buildPromptModel,
@@ -287,11 +290,6 @@ function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } }):
 	return ctx.sessionManager?.getSessionId?.() ?? null;
 }
 
-/** True only for one of the seven shipped professions. */
-function isRole(name: string): name is Role {
-	return Object.prototype.hasOwnProperty.call(ROLE_CLASS, name);
-}
-
 /**
  * Compile the rule table once, then pick a set per call.
  *
@@ -306,8 +304,8 @@ function isRole(name: string): name is Role {
 export function compileGateSource(rows: readonly RuleRow[] = loadDefaultRows()): GateRuleSourceFactory {
 	const byRole = new Map<Role, RuleSets>();
 	for (const role of Object.keys(ROLE_CLASS) as Role[]) byRole.set(role, compileRole(rows, role));
-	const byClass = new Map<RoleClass, RuleSets>();
-	for (const cls of CLASS_ORDER) byClass.set(cls, compileClass(rows, cls));
+	const byClass = new Map<PermissionClass, RuleSets>();
+	for (const cls of PERMISSION_CLASSES) byClass.set(cls, compileClass(rows, cls));
 	const reader = byClass.get("reader") as RuleSets;
 	const noAgent: GateRuleSource = {
 		ruleSets: {

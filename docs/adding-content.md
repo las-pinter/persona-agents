@@ -80,7 +80,7 @@ every theme.
    existing one for `name`, `description`, `tools`, `skills`, `alwaysLoad`,
    `permissions`, and `permissionClass`. The `permissionClass` value must match
    the role class map `ROLE_CLASS` in
-   `platforms/pi/extension/permission-table.ts`. A profession without a pi
+   `platforms/pi/extension/permission-class.ts`. A profession without a pi
    frontmatter is not a pi agent.
 5. Create the Claude Code agent file, `platforms/claude/agents/<name>.md`. Use
    frontmatter only: `name`, `description`, and optional `tools` or

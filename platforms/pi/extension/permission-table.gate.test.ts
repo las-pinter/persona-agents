@@ -12,7 +12,6 @@ import { readFileSync } from "node:fs";
 
 import { GIT_DIFF_FAMILY, GIT_READ, RULE_ROWS } from "./permissions.table.ts";
 import {
-	CLASS_ORDER,
 	LADDER,
 	PATH_VALUE,
 	ROLE_NOTES,
@@ -24,9 +23,8 @@ import {
 	roleZone,
 	rowsForRole,
 	rulesForRow,
-	type Role,
-	type RoleClass,
 } from "./permission-table.ts";
+import { PERMISSION_CLASSES, type PermissionClass, type Role } from "./permission-class.ts";
 import { FENCED, NARROWED } from "./permission-table.parity.ts";
 import {
 	ANCHORED_HISTORY, ASK_EXCEPTIONS, ASK_RUNNER, allowMatches, askMatches,
@@ -76,7 +74,7 @@ test("a class compile binds no notes zone, so a reader cannot cross into another
 });
 
 test("no compiled class pattern holds two roles' notes zones", () => {
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		const sets = compileClass(RULE_ROWS, cls);
 		for (const rule of [...sets.agentAllow, ...sets.agentDeny]) {
 			const zones = ROLES.filter((role) => (ROLE_NOTES[role] ?? []).some((zone) => rule.match.includes(zone)));
@@ -208,7 +206,7 @@ test("a -C value shaped like a config key asks instead of riding the path slot",
 });
 
 test("the branch listing forms allow and a branch write form never allows", () => {
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		const sets = compileClass(RULE_ROWS, cls);
 		for (const probe of BRANCH_LIST) {
 			assert.equal(allowMatches(sets, "bash", probe), true, `${cls}: ${probe}`);
@@ -223,7 +221,7 @@ test("the branch listing forms allow and a branch write form never allows", () =
 test("every read verb that accepts a write flag is also fenced", () => {
 	const { classes } = compileTable(RULE_ROWS);
 	for (const verb of GIT_DIFF_FAMILY) {
-		for (const cls of CLASS_ORDER) {
+		for (const cls of PERMISSION_CLASSES) {
 			assert.equal(denyMatches(classes[cls], "bash", `git ${verb} --textconv f`), true, `${cls}: git ${verb} --textconv`);
 			assert.equal(denyMatches(classes[cls], "bash", `git ${verb} --textc f`), true, `${cls}: git ${verb} --textc`);
 		}
@@ -501,7 +499,7 @@ test("the orchestrator keeps mkdir, sort, and uniq, and no other class gains the
 	for (const probe of MKDIR_ALLOW) {
 		assert.equal(allowMatches(orchestrator, "bash", probe), true, probe);
 	}
-	for (const cls of ["reader", "worker"] as RoleClass[]) {
+	for (const cls of ["reader", "worker"] as PermissionClass[]) {
 		for (const probe of MKDIR_ALLOW.filter((item) => !item.startsWith("cd "))) {
 			assert.equal(allowMatches(compileClass(RULE_ROWS, cls), "bash", probe), false, `${cls}: ${probe}`);
 		}
@@ -518,7 +516,7 @@ test("a long-option abbreviation on a history verb asks", () => {
 test("a tag delete denies at every abbreviation", () => {
 	for (const flag of TAG_DELETE_FLAGS) {
 		for (const probe of [`git tag ${flag} v1`, `git -C /x tag ${flag} v1`]) {
-			for (const cls of CLASS_ORDER) {
+			for (const cls of PERMISSION_CLASSES) {
 				const sets = compileClass(RULE_ROWS, cls);
 				assert.equal(denyMatches(sets, "bash", probe), true, `${cls}: ${probe}`);
 				// The plain history allow row also matches the form, and the deny wins by
@@ -566,7 +564,7 @@ test("a named file removal asks for the orchestrator and the implementer, and de
 
 test("a recursive removal denies for every class and never asks", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		for (const probe of REMOVE_RECURSIVE) {
 			assert.equal(denyMatches(classes[cls], "bash", probe), true, `${cls}: ${probe}`);
 			assert.equal(verdictOf(classes[cls], "bash", probe), "deny", `${cls}: ${probe}`);
@@ -629,7 +627,7 @@ test("a row with roles applies only to the professions it names", () => {
 
 test("the mandatory global protections hold for every class", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		const sets = classes[cls];
 		for (const probe of GLOBAL_DENY_BASH) {
 			assert.equal(denyMatches(sets, "bash", probe), true, `${cls}: ${probe}`);
@@ -649,7 +647,7 @@ test("the mandatory global protections hold for every class", () => {
 
 test("find write options deny for every class", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		for (const probe of FIND_WRITE) {
 			assert.equal(denyMatches(classes[cls], "bash", probe), true, `${cls}: ${probe}`);
 		}
@@ -659,7 +657,7 @@ test("find write options deny for every class", () => {
 
 test("a plain dd copy runs and a device write denies", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		assert.equal(denyMatches(classes[cls], "bash", "dd if=a of=/tmp/b"), false, `${cls} denied a plain copy`);
 		assert.equal(denyMatches(classes[cls], "bash", "dd if=/dev/sda of=/dev/sdb"), true);
 		assert.equal(denyMatches(classes[cls], "bash", "dd if=x of=/dev/sda"), true);
@@ -669,7 +667,7 @@ test("a plain dd copy runs and a device write denies", () => {
 
 test("a shell function definition denies for every class", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		for (const probe of FUNCTION_DEF) {
 			assert.equal(denyMatches(classes[cls], "bash", probe), true, `${cls}: ${probe}`);
 		}
@@ -681,7 +679,7 @@ test("a shell function definition denies for every class", () => {
 test("a fenced form never rides an allow", () => {
 	for (const gap of FENCED) {
 		assert.ok(gap.reason.length > 0 && !gap.reason.includes("\n"), `${gap.form} needs a one-line reason`);
-		for (const cls of CLASS_ORDER) {
+		for (const cls of PERMISSION_CLASSES) {
 			const decision = verdictOf(compileClass(RULE_ROWS, cls), "bash", gap.sample);
 			assert.ok(decision !== "allow" && decision !== "none", `${gap.form} rides an allow in ${cls}: ${gap.sample}`);
 		}
@@ -690,7 +688,7 @@ test("a fenced form never rides an allow", () => {
 
 test("a redirect to a file denies for every class", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		assert.equal(verdictOf(classes[cls], "bash", `cat notes.txt > ${FIXTURE_ROOT}/escape.txt`), "deny");
 		assert.equal(verdictOf(classes[cls], "bash", "echo x >> src/main.ts"), "deny");
 		assert.equal(verdictOf(classes[cls], "bash", "cat x | tee out.txt"), "deny");
@@ -702,7 +700,7 @@ test("a redirect to a file denies for every class", () => {
 test("a narrowed form stays blocked until a fence row lands", () => {
 	for (const gap of NARROWED) {
 		assert.ok(gap.reason.length > 0 && !gap.reason.includes("\n"), `${gap.form} needs a one-line reason`);
-		for (const cls of gap.classes ?? CLASS_ORDER) {
+		for (const cls of gap.classes ?? PERMISSION_CLASSES) {
 			const sets = compileClass(RULE_ROWS, cls);
 			assert.equal(allowMatches(sets, "bash", gap.sample), false, `${gap.form} is allowed in ${cls}`);
 		}

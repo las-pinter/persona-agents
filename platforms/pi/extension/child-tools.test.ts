@@ -48,7 +48,8 @@ import { CHILD_A, ROOT, RootPrompter, childContext, repoRoot, rootContext } from
 import { loadDefaultRows } from "./permission-config.ts";
 import { DENIED_BY_USER_REASON } from "./permission-prompt.ts";
 import { compileGateSource, type GateRuleSourceFactory, installToolCallGate } from "./permissions.ts";
-import type { AgentConfig, AgentSource, PermissionClass, PermissionRule } from "./resolver.ts";
+import type { AgentConfig, AgentSource, PermissionRule } from "./resolver.ts";
+import type { PermissionClass } from "./permission-class.ts";
 import { RunRegistry, bindRunRegistry, newRunRecord } from "./run-registry.ts";
 import { getRunRegistry, registerRootSession } from "./subagent-run.ts";
 import registerSubagentTool from "./subagent.ts";

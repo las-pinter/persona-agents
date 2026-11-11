@@ -14,7 +14,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { RUN_RETENTION_MS } from "./run-registry.ts";
-import { PERMISSION_CLASSES } from "./resolver.ts";
+import { PERMISSION_CLASSES } from "./permission-class.ts";
 import {
 	ROUND_CAP_REASON,
 	SESSIONS_SUBDIR,

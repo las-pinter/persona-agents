@@ -11,6 +11,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `../permissions.table.json` | The shipped default rows: data only, one row per rule and per class |
 | `permission-config.ts` | The layer loader: shipped default, user override, global overlay, layer stamp, fail-closed fence |
 | `permissions.table.ts` | A typed test view of the default rows; the gate never imports it |
+| `permission-class.ts` | The permission vocabulary: the class union, the class list, the role-to-class map, and one membership test for each |
 | `permission-table.ts` | The compiler: row to one anchored pattern, then the five rule sets the engine reads |
 | `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
 | `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |

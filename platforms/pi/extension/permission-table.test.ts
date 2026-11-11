@@ -7,15 +7,13 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-	CLASS_ORDER,
 	FLAG_CLASSES,
-	ROLE_CLASS,
 	ROLE_NOTES,
 	TAIL_ONLY_CLASSES,
 	compileClass,
@@ -24,11 +22,17 @@ import {
 	countTable,
 	rowsForClass,
 	rowsForGroup,
+	roleZone,
 	validateRows,
-	type Role,
-	type RoleClass,
 	type RuleRow,
 } from "./permission-table.ts";
+import {
+	PERMISSION_CLASSES,
+	ROLE_CLASS,
+	isPermissionClass,
+	type PermissionClass,
+	type Role,
+} from "./permission-class.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 import { compileGateSource } from "./permissions.ts";
 import type { AgentConfig } from "./resolver.ts";
@@ -141,8 +145,8 @@ test("every row reaches a class set and every flag class is used", () => {
 	const { classes } = compileTable(RULE_ROWS);
 	// One rule per tool name a row lists. These counts are pinned literals, so a
 	// fault in the `rowsForClass` filter cannot agree with itself here.
-	const pinned: Record<RoleClass, number> = { reader: 51, worker: 61, orchestrator: 67 };
-	for (const cls of CLASS_ORDER) {
+	const pinned: Record<PermissionClass, number> = { reader: 51, worker: 61, orchestrator: 67 };
+	for (const cls of PERMISSION_CLASSES) {
 		assert.equal(ruleCount(classes[cls]), pinned[cls], cls);
 	}
 	const used = new Set<string>(RULE_ROWS.map((row) => row.flags ?? "none"));
@@ -155,7 +159,7 @@ test("every row reaches a class set and every flag class is used", () => {
 
 test("the compiler produces the five rule sets the engine consumes", () => {
 	const { classes } = compileTable(RULE_ROWS);
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		const sets = classes[cls];
 		assert.deepEqual(Object.keys(sets).sort(), RULE_SET_KEYS);
 		assert.ok(ruleCount(sets) > 0);
@@ -215,7 +219,7 @@ test("the tree update row names one verb and both flags, and nothing else", () =
 });
 
 test("the ten analysis tools allow for every class and the write tools stay denied", () => {
-	for (const cls of CLASS_ORDER) {
+	for (const cls of PERMISSION_CLASSES) {
 		const sets = compileClass(RULE_ROWS, cls);
 		for (const tool of ANALYSIS_TOOLS) {
 			assert.equal(verdictOf(sets, tool, "{}"), "allow", `${cls}: ${tool}`);
@@ -497,6 +501,17 @@ test("every role maps to a class and to a notes zone decision", () => {
 	}
 });
 
+test("the class list and its membership test accept only the three classes", () => {
+	assert.deepEqual([...PERMISSION_CLASSES], ["reader", "worker", "orchestrator"]);
+	for (const cls of PERMISSION_CLASSES) assert.ok(isPermissionClass(cls), `${cls} is a class`);
+	assert.ok(!isPermissionClass("admin"), "an unknown name is not a class");
+});
+
+test("a role zone accepts a profession and refuses an unknown role", () => {
+	assert.deepEqual(roleZone("planner"), { role: "planner" });
+	assert.throws(() => roleZone("ghost" as Role), /unknown role "ghost"/);
+});
+
 // --- the gate source --------------------------------------------------------
 
 /** A minimal resolved agent for the gate-source cases. */
@@ -626,9 +641,31 @@ test("no pi frontmatter carries a permissions block, and every role names its cl
 		assert.equal(/^permissions:/m.test(text), false, `${role} still carries a permissions block`);
 		const line = /^permissionClass:\s*(\S+)\s*$/m.exec(text);
 		assert.ok(line !== null, `${role} must carry a permissionClass line`);
-		assert.ok(CLASS_ORDER.includes(line[1] as RoleClass), `${role} names an unknown class ${line[1]}`);
+		assert.ok(PERMISSION_CLASSES.includes(line[1] as PermissionClass), `${role} names an unknown class ${line[1]}`);
 		assert.equal(line[1], ROLE_CLASS[role], `${role} names a class that differs from the role table`);
 	}
+});
+
+// --- one home for the class vocabulary --------------------------------------
+
+/**
+ * `permission-class.ts` is the only module that declares the class union and the
+ * class list. A second declaration lets two modules disagree about one class.
+ */
+test("only permission-class.ts declares the class union or the class list", () => {
+	const dir = new URL(".", import.meta.url);
+	const typeAlias = /(?:export\s+)?type\s+\w+\s*=\s*([^;]*);/g;
+	const list = /(?:export\s+)?const\s+PERMISSION_CLASSES\b/;
+	const found: string[] = [];
+	for (const name of readdirSync(dir)) {
+		if (!name.endsWith(".ts") || name === "permission-class.ts") continue;
+		const text = readFileSync(new URL(name, dir), "utf8");
+		const union = [...text.matchAll(typeAlias)].some((match) =>
+			PERMISSION_CLASSES.every((cls) => (match[1] as string).includes(`"${cls}"`)),
+		);
+		if (union || list.test(text)) found.push(name);
+	}
+	assert.deepEqual(found, [], `a second class declaration lives in ${found.join(", ")}`);
 });
 
 // --- the engine files are untouched -----------------------------------------

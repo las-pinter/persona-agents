@@ -23,7 +23,7 @@
  * file. A gap that blocks only some classes names them in `classes`.
  */
 
-import type { RoleClass } from "./permission-table.ts";
+import type { PermissionClass } from "./permission-class.ts";
 
 export interface LegacyRecord {
 	/** `<role>/<section>/<ordinal>` or `global/<section>/<ordinal>`. */
@@ -168,7 +168,7 @@ export interface GapRecord {
 	sample: string;
 	row: string;
 	/** The classes the gap holds for. Absent means every class. */
-	classes?: RoleClass[];
+	classes?: PermissionClass[];
 	reason: string;
 }
 

@@ -17,7 +17,8 @@
  */
 
 import { canSpawn } from "./depth.ts";
-import type { AgentSource, PermissionClass } from "./resolver.ts";
+import type { AgentSource } from "./resolver.ts";
+import type { PermissionClass } from "./permission-class.ts";
 
 /** Retention window for a finished run: 14 days in milliseconds. */
 export const RUN_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;

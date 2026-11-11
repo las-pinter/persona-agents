@@ -22,8 +22,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { RUN_RETENTION_MS } from "./run-registry.ts";
-import { PERMISSION_CLASSES } from "./resolver.ts";
-import type { PermissionClass } from "./resolver.ts";
+import { isPermissionClass, type PermissionClass } from "./permission-class.ts";
 
 /** The store folder under the agent directory. One source for the name. */
 export const SESSIONS_SUBDIR = "sessions-subagents";
@@ -36,9 +35,6 @@ export const ROUND_CAP_REASON = `round cap reached (${SESSION_ROUND_CAP}): start
 
 /** Milliseconds in one day, for the whole-day age in the stale reason. */
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The permission classes a sidecar may name, taken from the resolver list. */
-const PERMISSION_CLASS_NAMES: ReadonlySet<string> = new Set<string>(PERMISSION_CLASSES);
 
 /**
  * The id grammar after the agent prefix: lower-case letters, digits, and hyphens.
@@ -225,7 +221,7 @@ function parseSidecar(value: unknown): SidecarRecord | null {
 	const cwd = raw["cwd"];
 
 	if (typeof agent !== "string" || agent.length === 0) return null;
-	if (typeof permissionClass !== "string" || !PERMISSION_CLASS_NAMES.has(permissionClass)) return null;
+	if (typeof permissionClass !== "string" || !isPermissionClass(permissionClass)) return null;
 	if (!isCount(rounds) || !isCount(turns)) return null;
 	// A round above the cap is corrupt, not capped: the file reads as absent.
 	if (rounds > SESSION_ROUND_CAP) return null;
