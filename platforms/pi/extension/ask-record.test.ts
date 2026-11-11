@@ -1,6 +1,6 @@
 /**
- * Ask record tests: the record line, the best-effort writer, the tally fold,
- * the tree skip, and the three write sites.
+ * Ask record tests: the record line, the best-effort writer, the ring, the
+ * tree skip, and the three write sites.
  *
  * The write-site cases drive the real queue and the real gate through the
  * shared fixture. Every case points `PI_AGENT_TREE_LOG` at its own temp file.
@@ -17,7 +17,6 @@ import {
 	ASK_HISTORY_MAX,
 	ASK_ROOT_RUN_ID,
 	createAskLog,
-	createAskTally,
 	flushPendingLogEvents,
 	logLineEvent,
 	logRowOf,
@@ -128,126 +127,6 @@ test("recordAsk writes nothing with no log path", () => {
 	}
 });
 
-test("the tally counts one record twice as x1 and two records as x2", () => {
-	const first = recordAskLine({
-		tool: "bash",
-		role: "implementer",
-		verdict: "allow",
-		runId: CHILD_A,
-		depth: 1,
-		at: AT,
-		askId: "ask-1",
-		phase: "settle",
-		flags: "",
-	});
-	const second = recordAskLine({
-		tool: "bash",
-		role: "implementer",
-		verdict: "deny",
-		runId: CHILD_A,
-		depth: 1,
-		at: "2026-01-01T00:00:01.000Z",
-		askId: "ask-2",
-		phase: "settle",
-		flags: "",
-	});
-	const tally = createAskTally();
-	assert.equal(tally.latest(), null, "no record before the first observe");
-	tally.observe(first);
-	tally.observe(first);
-	assert.deepEqual(tally.usage(), { bash: 1 }, "one record twice counts once");
-	assert.deepEqual(tally.latest(), { tool: "bash", at: AT });
-	tally.observe(second);
-	assert.deepEqual(tally.usage(), { bash: 2 }, "two records count twice");
-	assert.deepEqual(tally.latest(), { tool: "bash", at: "2026-01-01T00:00:01.000Z" });
-});
-
-test("the tally counts an arrival and an expiry of one ask once", () => {
-	const arrival = recordAskLine({
-		tool: "bash",
-		role: "implementer",
-		verdict: "pending",
-		runId: CHILD_A,
-		depth: 1,
-		at: AT,
-		askId: "ask-1",
-		phase: "arrival",
-		flags: FLAGS,
-	});
-	const expiry = recordAskLine({
-		tool: "bash",
-		role: "implementer",
-		verdict: "expired",
-		runId: CHILD_A,
-		depth: 1,
-		at: "2026-01-01T00:00:02.000Z",
-		askId: "ask-1",
-		phase: "expiry",
-		flags: "waiting=0 shown=none place=queue parked=0 surface=yes",
-	});
-	const tally = createAskTally();
-	tally.observe(arrival);
-	tally.observe(expiry);
-	assert.deepEqual(tally.usage(), { bash: 1 }, "one ask counts once over its two stages");
-	assert.deepEqual(
-		tally.latest(),
-		{ tool: "bash", at: "2026-01-01T00:00:02.000Z" },
-		"the newest stamp is the expiry, not the arrival",
-	);
-	tally.observe({ ...arrival, at: "2026-01-01T00:00:03.000Z", ask: { ...arrival.ask!, askId: "ask-2" } });
-	assert.deepEqual(tally.usage(), { bash: 2 }, "a second ask counts twice");
-});
-
-test("the tally counts a record with no ask id once", () => {
-	// An older log line carries no id, so the fold falls back to its own fields.
-	const legacy = {
-		v: 1,
-		type: "ask",
-		runId: CHILD_A,
-		parentRunId: null,
-		depth: 1,
-		agent: "implementer",
-		persona: null,
-		status: "idle",
-		at: AT,
-		ask: {
-			tool: "bash",
-			role: "implementer",
-			verdict: "allow",
-			phase: "settle",
-			flags: "",
-		},
-	} as unknown as RunEvent;
-	const tally = createAskTally();
-	tally.observe(legacy);
-	tally.observe(legacy);
-	assert.deepEqual(tally.usage(), { bash: 1 }, "one record with no id folds once");
-	assert.deepEqual(tally.latest(), { tool: "bash", at: AT }, "the fallback record stamps the newest");
-});
-
-test("the tally counts two legacy records with no id as two", () => {
-	// Two older log lines carry no id, so a constant fallback key would fold them.
-	const legacyAt = (at: string, tool: string): RunEvent =>
-		({
-			v: 1,
-			type: "ask",
-			runId: CHILD_A,
-			parentRunId: null,
-			depth: 1,
-			agent: "implementer",
-			persona: null,
-			status: "idle",
-			at,
-			ask: { tool, role: "implementer", verdict: "allow", phase: "settle", flags: "" },
-		}) as unknown as RunEvent;
-	const tally = createAskTally();
-	tally.observe(legacyAt(AT, "bash"));
-	tally.observe(legacyAt("2026-01-01T00:00:01.000Z", "read"));
-	assert.deepEqual(tally.usage(), { bash: 1, read: 1 }, "two legacy records count two times");
-	assert.equal(tally.usage().bash + tally.usage().read, 2, "the tally holds two asks");
-	assert.deepEqual(tally.latest(), { tool: "read", at: "2026-01-01T00:00:01.000Z" });
-});
-
 test("the ask log keeps the newest 50 events and ignores a settle", () => {
 	const { dir, logPath } = tempLog();
 	const restore = useLog(logPath);
@@ -288,22 +167,40 @@ test("the ask log keeps the newest 50 events and ignores a settle", () => {
 	}
 });
 
-test("the tally ignores a record of another type", () => {
-	const start: RunEvent = {
-		v: 1,
-		type: "start",
-		runId: ROOT,
-		parentRunId: null,
-		depth: 0,
-		agent: "orchestrator",
-		persona: null,
-		status: "idle",
+test("the ring keeps no row for an event that is not an ask", () => {
+	// The record carries a full ask payload, so only the type check drops it.
+	const ask = recordAskLine({
+		tool: "bash",
+		role: "implementer",
+		verdict: "pending",
+		runId: CHILD_A,
+		depth: 1,
 		at: AT,
-	};
-	const tally = createAskTally();
-	tally.observe(start);
-	assert.deepEqual(tally.usage(), {});
-	assert.equal(tally.latest(), null);
+		askId: "ask-1",
+		phase: "arrival",
+		flags: FLAGS,
+	});
+	const ring = createAskLog();
+	ring.observe({ ...ask, type: "start" } as RunEvent);
+	assert.deepEqual(ring.rows(), [], "a start event is not a ring entry");
+});
+
+test("the ring keeps no row for an ask with an empty id", () => {
+	const ring = createAskLog();
+	ring.observe(
+		recordAskLine({
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			runId: CHILD_A,
+			depth: 1,
+			at: AT,
+			askId: "",
+			phase: "arrival",
+			flags: FLAGS,
+		}),
+	);
+	assert.deepEqual(ring.rows(), [], "an ask with no id is not a ring entry");
 });
 
 test("assembleTree returns the same forest with and without an ask record", () => {
@@ -498,7 +395,7 @@ test("an ask record beside a run record keeps the run node", () => {
 	}
 });
 
-test("a plain line writes one log record and folds into the ring beside an ask", () => {
+test("a plain line writes one log record and lands in the ring beside an ask", () => {
 	const { dir, logPath } = tempLog();
 	const restore = useLog(logPath);
 	try {
@@ -575,7 +472,7 @@ test("a line written before the log path exists lands when the path appears", ()
 		recordLogLine({ text: "agent-stack: agent discovery failed; the gate stays installed", at: AT });
 		assert.equal(readAllEvents(logPath).length, 0, "no path writes no file");
 
-		// The panel folds the held lines, so the first paint shows them. The path
+		// The panel reads the held lines, so the first paint shows them. The path
 		// then lands them in the log, oldest first, exactly once.
 		process.env[ENV_TREE_LOG] = logPath;
 		flushPendingLogEvents();

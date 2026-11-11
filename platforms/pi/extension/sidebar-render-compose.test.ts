@@ -460,8 +460,12 @@ function makeStudySnapshot(count: number): SidebarSnapshot {
 	};
 }
 
-test("a full study list paints every panel at height 40", () => {
-	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, 40, theme, 0));
+test("a full study list fills height 39 and gives the freed rule line to TODOS", () => {
+	// The five panels above take 28 lines with four study rows, and LOG keeps
+	// five. Six rules would need 40 lines, so at 39 TODOS takes the freed rule
+	// line as its header: every panel still paints and the column fills 39.
+	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, 39, theme, 0));
+	const rule = SECTION_RULE_CHAR.repeat(80);
 	assert.deepEqual(visibleHeaders(lines), [
 		"AGENTS",
 		"STUDY STATUS",
@@ -475,17 +479,48 @@ test("a full study list paints every panel at height 40", () => {
 		assert.ok(lines.some((line) => line.includes(`study-${index}`)), `study-${index} paints`);
 	}
 	assert.ok(!lines.some((line) => line.includes("more")), "four studies need no overflow marker");
-	assert.equal(lines.length, 40, "the column uses the whole height");
+	const todosStart = lines.findIndex((line) => line === " TODOS");
+	assert.ok(todosStart > 0, "TODOS paints its header at height 39");
+	assert.notEqual(lines[todosStart - 1], rule, "the freed rule line above TODOS is gone");
+	assert.equal(lines[todosStart + 1], rule, "one rule still separates TODOS from LOG");
+	assert.equal(lines.filter((line) => line === rule).length, 5, "five rules carry the seven panels");
+	assert.equal(lines[lines.length - 5].trim(), "LOG", "LOG keeps its five lines at the foot");
+	assert.equal(lines.length, 39, "the column uses the whole height");
 });
 
-test("a five-study list pushes a lower panel out of a short column", () => {
+test("a full study list fills height 40 with all six rules", () => {
+	// One row above the free-rule height, TODOS has its own budget line, so the
+	// rule above it returns and the seven panels plus six rules fill exactly 40.
+	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, 40, theme, 0));
+	const rule = SECTION_RULE_CHAR.repeat(80);
+	assert.deepEqual(visibleHeaders(lines), [
+		"AGENTS",
+		"STUDY STATUS",
+		"SESSION",
+		"WORKSPACE",
+		"MCP",
+		"TODOS",
+		"LOG",
+	]);
+	assert.equal(lines.length, 40, "the column uses the whole height");
+	assert.equal(lines.filter((line) => line === rule).length, 6, "six rules carry the seven panels");
+	for (let index = 0; index < 4; index++) {
+		assert.ok(lines.some((line) => line.includes(`study-${index}`)), `study-${index} paints`);
+	}
+	assert.ok(!lines.some((line) => line.includes("more")), "four studies need no overflow marker");
+	const todosStart = lines.findIndex((line) => line === " TODOS");
+	assert.ok(todosStart > 0, "TODOS paints its header at height 40");
+	assert.equal(lines[todosStart - 1], rule, "the rule above TODOS is back at height 40");
+});
+
+test("a five-study list at height 32 pushes MCP out of a short column", () => {
 	const lines = content(renderSidebarPanel(makeStudySnapshot(5), 80, 32, theme, 0));
 	assert.ok(lines.some((line) => line.includes("… +1 more")), "the overflow row still paints");
 	assert.ok(!lines.some((line) => line === " MCP"), "MCP drops while STUDY STATUS keeps its rows");
 	assert.ok(lines.some((line) => line === " WORKSPACE"), "WORKSPACE still paints");
 });
 
-test("six studies paint the cap and the overflow marker inside the column", () => {
+test("six studies at height 40 paint the cap and the overflow marker inside the column", () => {
 	const lines = content(renderSidebarPanel(makeStudySnapshot(6), 80, 40, theme, 0));
 	const rows = lines.filter((line) => /study-\d/.test(line));
 	assert.equal(rows.length, STUDY_STATUS_SHOWN, "four study rows paint");

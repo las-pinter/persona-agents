@@ -2,14 +2,14 @@
  * Child ask state tests: the minted ask id is unique within one session.
  *
  * The clock is frozen, so only the per-session counter can tell two asks apart.
- * The tally is the real one, so the record fold is proved too.
+ * The ring is the real one, so the record keeps one row per id.
  *
  * Run: node --experimental-strip-types --test platforms/pi/extension/child-ask-state.test.ts
  */
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { createAskTally, recordAskLine } from "./ask-record.ts";
+import { createAskLog, recordAskLine } from "./ask-record.ts";
 import { newRequest, type GateRequest } from "./child-ask-state.ts";
 import type { PromptModel } from "./permission-prompt.ts";
 
@@ -43,7 +43,7 @@ function request(): GateRequest {
 	);
 }
 
-test("two asks in one frozen millisecond carry two ids and count as two", (t) => {
+test("two asks in one frozen millisecond carry two ids and two ring rows", (t) => {
 	t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-01-01T00:00:00.000Z") });
 
 	const first = request();
@@ -53,11 +53,12 @@ test("two asks in one frozen millisecond carry two ids and count as two", (t) =>
 	assert.notEqual(first.askId, second.askId, "two asks in one millisecond carry two ids");
 	assert.ok(first.askId.startsWith(`${SESSION}#`), "the id still leads with the session");
 
-	// Both ids share one stamp, so a stamp-only id would fold them as one ask.
+	// Both records share one stamp; the case proves their ids stay distinct, so
+	// both rows survive one millisecond.
 	const stamp = new Date().toISOString();
-	const tally = createAskTally();
+	const ring = createAskLog();
 	for (const askId of [first.askId, second.askId]) {
-		tally.observe(
+		ring.observe(
 			recordAskLine({
 				tool: "bash",
 				role: "implementer",
@@ -71,5 +72,9 @@ test("two asks in one frozen millisecond carry two ids and count as two", (t) =>
 			}),
 		);
 	}
-	assert.equal(tally.usage().bash, 2, "both asks count, so the tally holds two");
+	assert.deepEqual(
+		ring.rows().map((row) => row.askId),
+		[first.askId, second.askId],
+		"both asks keep a ring row, so the ids hold them apart at one stamp",
+	);
 });

@@ -4,15 +4,15 @@
  * queue event, and a plain log line.
  *
  * The record is written in the ask plumbing, never in the gate. The writer is
- * best-effort, so a lost record never breaks an ask. The tally and the ring
- * hold no fs handle and no timer.
+ * best-effort, so a lost record never breaks an ask. The ring holds no fs
+ * handle and no timer.
  */
 
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, type RunEvent } from "./tree-log.ts";
 
 /** What one ask settled to. `pending` marks an arrival that no verdict met yet. */
-export type AskVerdict = "allow" | "deny" | "expired" | "pending";
+type AskVerdict = "allow" | "deny" | "expired" | "pending";
 
 /** The stage of one ask that a record reports. */
 export type AskPhase = "arrival" | "expiry" | "settle";
@@ -33,7 +33,12 @@ export interface AskRecord {
 	flags: string;
 }
 
-/** The fully resolved fields of one ask line. */
+/**
+ * The fully resolved fields of one ask line.
+ *
+ * @internal The record-line tests supply every field. Production code calls
+ * `recordAsk`.
+ */
 export interface AskLineInput {
 	tool: string;
 	role: string;
@@ -72,7 +77,11 @@ export interface RecordAskInput {
 /** The run id a write with no session carries. */
 export const ASK_ROOT_RUN_ID = "root";
 
-/** Build one `ask` event. Pure: the caller supplies every field. */
+/**
+ * Build one `ask` event. Pure: the caller supplies every field.
+ *
+ * @internal The record-line tests call this. Production code calls `recordAsk`.
+ */
 export function recordAskLine(input: AskLineInput): RunEvent {
 	return {
 		v: 1,
@@ -114,7 +123,7 @@ export function recordAsk(input: RecordAskInput): void {
 				runId,
 				depth: input.depth ?? 0,
 				at,
-				// A caller with no id gets a stable one, so a pair still folds as one.
+				// A caller with no id gets one from the run and the stamp.
 				askId: input.askId ?? `${runId}#${at}`,
 				phase: input.phase ?? "settle",
 				flags: input.flags ?? "",
@@ -136,7 +145,7 @@ export interface RecordLogInput {
 }
 
 /**
- * Lines written before the log path exists, oldest first. The ring folds them,
+ * Lines written before the log path exists, oldest first. The ring holds them,
  * so a line that arrives before the sidebar still paints with the first frame.
  */
 let pendingLogs: RunEvent[] = [];
@@ -146,7 +155,11 @@ export function pendingLogEvents(): RunEvent[] {
 	return pendingLogs.slice();
 }
 
-/** Build one `log` event. Pure: the caller supplies every field. */
+/**
+ * Build one `log` event. Pure: the caller supplies every field.
+ *
+ * @internal The line tests call this. Production code calls `recordLogLine`.
+ */
 export function logLineEvent(input: { text: string; at: string; runId?: string }): RunEvent {
 	return {
 		v: 1,
@@ -185,7 +198,7 @@ export function flushPendingLogEvents(): void {
  * Append one plain line to the shared tree log. This is the one entry point for
  * an extension message that is not an ask event, so the ring keeps one order.
  * A line written before the log path exists is held, up to the ring cap, and
- * the ring folds it until the flush writes it.
+ * the ring shows it until the flush writes it.
  */
 export function recordLogLine(input: RecordLogInput): void {
 	const text = input.text.replace(/\s+/g, " ").trim();
@@ -202,58 +215,8 @@ export function recordLogLine(input: RecordLogInput): void {
 	}
 }
 
-/** The folded ask counts and the newest record. */
-export interface AskTally {
-	/** Fold one event. One ask counts once, whatever its stages. */
-	observe(event: RunEvent): void;
-	/** The ask count per tool. */
-	usage(): Record<string, number>;
-	/** The newest counted tool and its stamp, or null before the first record. */
-	latest(): { tool: string; at: string } | null;
-}
-
-/**
- * Make one tally. A count never subtracts, so a `clear` that prunes the run
- * from the tree keeps every ask record.
- */
-export function createAskTally(): AskTally {
-	const counts: Record<string, number> = {};
-	const seen = new Set<string>();
-	let latest: { tool: string; at: string } | null = null;
-	let latestMs = Number.NEGATIVE_INFINITY;
-	return {
-		observe(event: RunEvent): void {
-			if (!event || event.type !== "ask") return;
-			const ask = event.ask;
-			if (!ask || typeof ask.tool !== "string" || ask.tool.length === 0) return;
-			// One ask writes an arrival and a settle, so both fold under one id. An
-			// old record carries no id, and falls back to its own stamp and tool.
-			const key =
-				typeof ask.askId === "string" && ask.askId.length > 0
-					? ask.askId
-					: `${event.at}\u0000${event.runId}\u0000${ask.tool}`;
-			// Every stage of an ask advances the newest stamp, so the age follows
-			// the expiry or the settle and not the arrival that queued it.
-			const at = Date.parse(event.at);
-			if (Number.isFinite(at) && at >= latestMs) {
-				latestMs = at;
-				latest = { tool: ask.tool, at: event.at };
-			}
-			if (seen.has(key)) return;
-			seen.add(key);
-			counts[ask.tool] = (counts[ask.tool] ?? 0) + 1;
-		},
-		usage(): Record<string, number> {
-			return { ...counts };
-		},
-		latest(): { tool: string; at: string } | null {
-			return latest ? { ...latest } : null;
-		},
-	};
-}
-
 /** The kind of one ring entry: an ask queue event, or a plain extension line. */
-export type LogKind = "ask" | "log";
+type LogKind = "ask" | "log";
 
 /**
  * One entry kept for the LOG panel and the overlay.
@@ -275,16 +238,20 @@ export interface AskLogEvent {
 	text: string;
 }
 
-/** Ask events kept in the ring. Older events drop first. */
+/**
+ * Ask events kept in the ring. Older events drop first.
+ *
+ * @internal The cap tests read this. Production code never names it.
+ */
 export const ASK_HISTORY_MAX = 50;
 
 /** The ring the LOG panel and the overlay read. */
 export interface AskLog {
-	/** Fold one event: an arrival, an expiry, or one plain line. */
+	/** Keep one event: an arrival, an expiry, or one plain line. */
 	observe(event: RunEvent): void;
 	/** The kept events, oldest first. */
 	rows(): AskLogEvent[];
-	/** Empty the ring, so a fold can start again from the same list. */
+	/** Empty the ring, so a new pass can start from the same list. */
 	reset(): void;
 }
 
