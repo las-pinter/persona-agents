@@ -4,16 +4,18 @@
  * Composes the seven right-column panels: AGENTS (tree), STUDY STATUS, SESSION,
  * WORKSPACE, MCP, TODOS, LOG. Every function is pure: no fs, no timers, no pi
  * runtime import.
- * The only external imports are `truncateToWidth`/`visibleWidth` and
- * `wrapTextWithAnsi`, so every line fits the column width. The ring cap comes
- * in from `ask-record.ts`, because the owner of the ring owns its cap.
+ * The only pi imports are `visibleWidth` and `wrapTextWithAnsi`, and the line
+ * clip comes from `sidebar-line.ts`, so every line fits the column width. The
+ * ring cap comes in from `ask-record.ts`, because the owner of the ring owns
+ * its cap.
  *
  * `sidebar-render.test.ts` runs under plain Node (type stripping).
  */
 
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { AskLogEvent } from "./ask-record.ts";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
+import { clipLine } from "./sidebar-line.ts";
 import { roundMark } from "./subagent-marks.ts";
 import { flattenTreeKeeping, type TreeNode, type TreeNodeStatus } from "./tree-model.ts";
 
@@ -244,15 +246,6 @@ function sectionRule(theme: SidebarTheme, width: number): string {
 /** Collapse all whitespace so a multi-line field stays on one line. */
 function oneLine(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
-}
-
-/** Clip one line to `width`. Never returns a line wider than `width`. */
-export function clipLine(line: string, width: number): string {
-	const w = Math.max(0, Math.floor(width));
-	if (w <= 0) return "";
-	const clipped = truncateToWidth(line, w, "…", true);
-	// A wide char at the boundary can still overflow. Drop it if so.
-	return visibleWidth(clipped) > w ? truncateToWidth(clipped, w, "", true) : clipped;
 }
 
 /** Collapse one row value to one line; a blank value is the fallback word. */
@@ -650,7 +643,7 @@ function workspaceFileLine(
 	const statWidth = visibleWidth(stat);
 	const leftWidth = visibleWidth(left);
 	const pathWidth = Math.max(1, width - leftWidth - statWidth - 1);
-	const path = truncateToWidth(file.path, pathWidth, "…", false);
+	const path = clipLine(file.path, pathWidth);
 	const gap = Math.max(1, width - leftWidth - visibleWidth(path) - statWidth);
 	return `${left}${path}${" ".repeat(gap)}${stat}`;
 }

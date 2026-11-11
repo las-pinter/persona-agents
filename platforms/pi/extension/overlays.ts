@@ -11,8 +11,8 @@
  */
 
 import { Key, matchesKey, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
+import { clipLine } from "./sidebar-line.ts";
 import {
-	clipLine,
 	renderNodeDetail,
 	statusIcon,
 	type AskLogRow,

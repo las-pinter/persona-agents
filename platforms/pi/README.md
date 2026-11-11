@@ -32,6 +32,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `tree-signature.ts` | Pure repaint key: serializes every painted field, so an unchanged key skips the paint |
 | `tree-selection.ts` | Pure keyboard selection over the overlay's node id list: next and previous, with wrap |
 | `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STUDY STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
+| `sidebar-line.ts` | Pure line fit: the clip that renderers use and the pad that the compositor uses |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |
 | `sidebar-config.ts` | The `/sidebar` toggle config: atomic write, width clamp, pure toggle and width plans |

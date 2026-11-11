@@ -33,7 +33,6 @@ import {
 } from "./sidebar-render.ts";
 import {
 	assertFits,
-	content,
 	makeAskLogRows,
 	makeFullSnapshot,
 	makeNode,
@@ -43,10 +42,10 @@ import {
 	theme,
 } from "./sidebar-render-fixtures.ts";
 
-const HEADER_RE = /^ (AGENTS|STUDY STATUS|LOG|SESSION|WORKSPACE|MCP|TODOS)$/;
+const HEADER_RE = /^ (AGENTS|STUDY STATUS|LOG|SESSION|WORKSPACE|MCP|TODOS) $/;
 /** The panel headers a composed column paints, in column order. */
 function visibleHeaders(lines: string[]): string[] {
-	return content(lines)
+	return lines
 		.filter((line) => HEADER_RE.test(line))
 		.map((line) => line.trim());
 }
@@ -55,7 +54,7 @@ function visibleHeaders(lines: string[]): string[] {
 
 test("a theme with no methods still renders a plain header", () => {
 	const plain: SidebarTheme = {};
-	const lines = content(renderAgentTreePanel([], 40, plain, 0));
+	const lines = renderAgentTreePanel([], 40, plain, 0);
 	assert.equal(lines[0]?.trimEnd(), " AGENTS");
 });
 
@@ -70,10 +69,10 @@ test("an empty color map keeps every color token as plain text", () => {
 	};
 	const node = makeNode({ runId: "n1", status: "running", task: "work" });
 
-	const lines = content(renderAgentTreePanel([node], 40, empty, 0));
+	const lines = renderAgentTreePanel([node], 40, empty, 0);
 
 	assert.deepEqual(calls, []);
-	assert.equal(lines[0], " AGENTS");
+	assert.equal(lines[0], " AGENTS ");
 });
 
 test("a token in the color map is colored while a missing token stays plain", () => {
@@ -124,8 +123,8 @@ test("renderSidebarPanel paints the seven panels in the declared order", () => {
 test("renderStatusPanel paints the empty line for a missing status", () => {
 	const lines = renderStatusPanel(undefined, 80, theme);
 	assert.equal(lines.length, 2, "one title and one empty line");
-	assert.equal(content(lines)[0], " STUDY STATUS");
-	assert.deepEqual(content(lines).slice(1), ["no study tracked"]);
+	assert.equal(lines[0], " STUDY STATUS ");
+	assert.deepEqual(lines.slice(1), ["no study tracked"]);
 	assertFits(lines, 80);
 });
 
@@ -134,8 +133,8 @@ test("renderStatusPanel paints one row per study with glyph, name, brief count, 
 		studies: [{ name: "gate-status-surface", stage: "active", briefs: 4, updated: "2026-01-05" }],
 	};
 	const now = Date.parse("2026-01-05T01:00:00.000Z");
-	const lines = content(renderStatusPanel(status, 80, theme, now));
-	assert.equal(lines[0], " STUDY STATUS", "the title paints once");
+	const lines = renderStatusPanel(status, 80, theme, now);
+	assert.equal(lines[0], " STUDY STATUS ", "the title paints once");
 	assert.equal(lines[1], "● gate-status-surface · 4 · 1h00m");
 	assertFits(renderStatusPanel(status, 20, theme, now), 20);
 });
@@ -144,7 +143,7 @@ test("renderStatusPanel tells a blocked study apart with the warning glyph", () 
 	const status: StatusSnapshot = {
 		studies: [{ name: "held-study", stage: "blocked", briefs: 0, updated: null }],
 	};
-	const lines = content(renderStatusPanel(status, 80, theme));
+	const lines = renderStatusPanel(status, 80, theme);
 	assert.equal(lines[1], "⚠ held-study · 0 · -", "a missing value prints the fallback word");
 });
 
@@ -156,13 +155,11 @@ test("renderStatusPanel caps the list at four studies and marks the overflow", (
 		briefs: index,
 		updated: `2026-01-0${index + 1}`,
 	}));
-	const lines = content(
-		renderStatusPanel(
-			{ studies },
-			80,
-			theme,
-			Date.parse("2026-01-01T00:00:00.000Z"),
-		),
+	const lines = renderStatusPanel(
+		{ studies },
+		80,
+		theme,
+		Date.parse("2026-01-01T00:00:00.000Z"),
 	);
 	assert.equal(lines.length, 6, "a title, four rows, and the overflow marker");
 	assert.equal(lines[lines.length - 1], "… +2 more");
@@ -172,7 +169,7 @@ test("renderStatusPanel paints no ask row", () => {
 	const status: StatusSnapshot = {
 		studies: [{ name: "alpha", stage: "active", briefs: 1, updated: "2026-01-05" }],
 	};
-	const lines = content(renderStatusPanel(status, 80, theme, Date.parse("2026-01-05T00:00:00.000Z")));
+	const lines = renderStatusPanel(status, 80, theme, Date.parse("2026-01-05T00:00:00.000Z"));
 	assert.equal(lines.length, 2, "the header and one study row only");
 });
 
@@ -186,7 +183,9 @@ test("formatRow joins a label and an optional second part with one separator", (
 });
 
 test("a full-width dim rule separates panels, never above the first or below the last", () => {
-	const lines = renderSidebarPanel(makeSnapshot(), 80, theme, 0);
+	// Every panel paints content in this column, so a blank line above a rule
+	// is a layout fault and not a panel's own pad row.
+	const lines = renderSidebarPanel(makeFullSnapshot(), 80, theme, 0);
 	const rule = SECTION_RULE_CHAR.repeat(80);
 	const ruleIndexes = lines
 		.map((line, index) => (line === rule ? index : -1))
@@ -198,7 +197,10 @@ test("a full-width dim rule separates panels, never above the first or below the
 	for (const index of ruleIndexes) {
 		assert.notEqual(lines[index - 1], rule, "two rules are adjacent");
 		assert.notEqual(lines[index + 1], rule, "two rules are adjacent");
-		assert.ok((lines[index - 1]?.length ?? 0) > 0, "a rule sits right after a panel line");
+		assert.ok(
+			(lines[index - 1] ?? "").trim().length > 0,
+			"a rule sits right after a painted panel line",
+		);
 	}
 });
 
@@ -218,7 +220,7 @@ test("the section rule is clipped at width 0 and 1 and still fits", () => {
 
 test("a short tree pads AGENTS to the minimum", () => {
 	const root = makeNode({ runId: "root", agent: "orchestrator" });
-	const lines = content(renderAgentTreePanel([root], 80, theme, 0));
+	const lines = renderAgentTreePanel([root], 80, theme, 0);
 	assert.equal(lines.length, AGENTS_PAD_MIN, "a one-node tree pads to the minimum");
 	assert.ok((lines[1] ?? "").includes("orchestrator"), "the node line paints below the header");
 	assert.equal(lines[AGENTS_PAD_MIN - 1], "", "AGENTS pads with a blank line");
@@ -302,18 +304,21 @@ test("renderSidebarPanel paints the turn marker from the snapshot", () => {
 		todos: [{ id: "1", text: "open", done: false }],
 		todosTurnMarker: true,
 	});
-	const withMarker = content(renderSidebarPanel(snapshot, 80, theme, 0));
+	const withMarker = renderSidebarPanel(snapshot, 80, theme, 0);
 	assert.ok(withMarker.some((line) => line.includes("— new turn —")));
 
-	const withoutMarker = content(
-		renderSidebarPanel(makeSnapshot({ tree: [], todos: [{ id: "1", text: "open", done: false }] }), 80, theme, 0),
+	const withoutMarker = renderSidebarPanel(
+		makeSnapshot({ tree: [], todos: [{ id: "1", text: "open", done: false }] }),
+		80,
+		theme,
+		0,
 	);
 	assert.ok(!withoutMarker.some((line) => line.includes("— new turn —")));
 });
 
 test("renderSidebarPanel paints the log panel last, below TODOS", () => {
-	const painted = content(renderSidebarPanel(makeFullSnapshot(), 80, theme, 0));
-	const todos = painted.findIndex((line) => line === " TODOS");
+	const painted = renderSidebarPanel(makeFullSnapshot(), 80, theme, 0);
+	const todos = painted.findIndex((line) => line === " TODOS ");
 	const log = painted.findIndex((line) => line.trim() === "LOG");
 	assert.ok(todos > 0, "TODOS paints above the log panel");
 	assert.ok(log > todos, "the log panel sits below TODOS");
@@ -359,7 +364,7 @@ function makeStudySnapshot(count: number): SidebarSnapshot {
 }
 
 test("a full study list paints four rows and no overflow marker", () => {
-	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, theme, 0));
+	const lines = renderSidebarPanel(makeStudySnapshot(4), 80, theme, 0);
 	assert.deepEqual(visibleHeaders(lines), [
 		"AGENTS",
 		"STUDY STATUS",
@@ -377,11 +382,11 @@ test("a full study list paints four rows and no overflow marker", () => {
 });
 
 test("six studies paint the cap and the overflow marker inside the column", () => {
-	const lines = content(renderSidebarPanel(makeStudySnapshot(6), 80, theme, 0));
+	const lines = renderSidebarPanel(makeStudySnapshot(6), 80, theme, 0);
 	const rows = lines.filter((line) => /study-\d/.test(line));
 	assert.equal(rows.length, STUDY_STATUS_SHOWN, "four study rows paint");
 	assert.equal(lines.filter((line) => line.includes("… +2 more")).length, 1, "one overflow marker paints");
-	assert.ok(lines.some((line) => line === " TODOS"), "TODOS still paints");
+	assert.ok(lines.some((line) => line.trimEnd() === " TODOS"), "TODOS still paints");
 });
 
 // --- detail overlay clipping and placeholders --------------------------------

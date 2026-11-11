@@ -33,11 +33,6 @@ const theme: SidebarTheme = {
 	fg: (_color, text) => text,
 };
 
-/** Lines are right-padded to the column width; trim for content checks. */
-function content(lines: string[]): string[] {
-	return lines.map((line) => line.trimEnd());
-}
-
 /** A minimal valid snapshot, so `treeSignature` accepts it. */
 function snapshot(overrides: Partial<SidebarSnapshot> = {}): SidebarSnapshot {
 	return {
@@ -174,7 +169,7 @@ test("an MCP server row shows an x-prefixed usage badge", () => {
 	const mcp: McpSnapshot = [
 		{ name: "context7", configured: true, connected: true, status: "connected" },
 	];
-	const lines = content(renderMcpPanel(mcp, 60, theme, { context7: 12 }));
+	const lines = renderMcpPanel(mcp, 60, theme, { context7: 12 });
 	assert.ok(lines.some((line) => line.includes("● context7 x12")));
 });
 
@@ -182,7 +177,7 @@ test("an MCP server row shows x0 when it has no usage", () => {
 	const mcp: McpSnapshot = [
 		{ name: "exa", configured: true, connected: false, status: "disconnected" },
 	];
-	const lines = content(renderMcpPanel(mcp, 60, theme, {}));
+	const lines = renderMcpPanel(mcp, 60, theme, {});
 	assert.ok(lines.some((line) => line.includes("○ exa x0")));
 });
 
@@ -195,7 +190,7 @@ test("the MCP total sums every server, including rows beyond the visible cap", (
 	}));
 	const usage = { s0: 1, s1: 2, s2: 3, s3: 4, s4: 5 };
 
-	const lines = content(renderMcpPanel(mcp, 60, theme, usage));
+	const lines = renderMcpPanel(mcp, 60, theme, usage);
 
 	assert.equal(lines.filter((line) => line.includes("● s")).length, 4, "only four server rows show");
 	assert.ok(lines.includes("… +1 more"));
@@ -231,7 +226,7 @@ test("the total counts usage that belongs only to hidden servers", () => {
 		connected: true,
 		status: "connected" as const,
 	}));
-	const lines = content(renderMcpPanel(mcp, 60, theme, { s4: 7, s5: 2 }));
+	const lines = renderMcpPanel(mcp, 60, theme, { s4: 7, s5: 2 });
 
 	assert.equal(lines.filter((line) => line.includes("● s")).length, 4, "only four server rows show");
 	assert.ok(lines.includes("… +2 more"));
@@ -241,12 +236,12 @@ test("the total counts usage that belongs only to hidden servers", () => {
 
 test("the total includes usage for a server with no configured row", () => {
 	const mcp: McpSnapshot = [{ name: "exa", configured: true, connected: true, status: "connected" }];
-	const lines = content(renderMcpPanel(mcp, 60, theme, { exa: 1, orphan: 4 }));
+	const lines = renderMcpPanel(mcp, 60, theme, { exa: 1, orphan: 4 });
 	assert.ok(lines.includes("total x5"));
 });
 
 test("the total shows for an empty server list when a usage map is supplied", () => {
-	const lines = content(renderMcpPanel([], 60, theme, { ghost: 3 }));
+	const lines = renderMcpPanel([], 60, theme, { ghost: 3 });
 	assert.ok(lines.includes("(no servers)"));
 	assert.ok(lines.includes("total x3"));
 });

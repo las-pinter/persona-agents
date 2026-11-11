@@ -14,6 +14,7 @@ import * as assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
 	SIDEBAR_CONFIG_ENV,
 	SIDEBAR_DEFAULT_WIDTH,
@@ -205,16 +206,60 @@ test("paint swallows a thrown getLines error", () => {
 
 // --- column window ----------------------------------------------------------
 
-/** The text the paint layer wrote on one terminal row, right of the separator. */
-function paintedRow(writes: string[], row: number, column: number): string | null {
+/** The text the paint layer wrote on one terminal row, with every pad cell kept. */
+function paintedCells(writes: string[], row: number, column: number): string | null {
 	const output = writes.join("");
 	const marker = `\x1b[${row};${column}H`;
 	const at = output.lastIndexOf(marker);
 	if (at < 0) return null;
 	const rest = output.slice(at + marker.length);
 	const stop = rest.search(/\x1b\[[0-9]+;[0-9]+H|\x1b\[\?7[hl]|\x1b8/);
-	return (stop < 0 ? rest : rest.slice(0, stop)).replace(/ +$/, "");
+	return stop < 0 ? rest : rest.slice(0, stop);
 }
+
+/** The text the paint layer wrote on one terminal row, right of the separator. */
+function paintedRow(writes: string[], row: number, column: number): string | null {
+	return paintedCells(writes, row, column)?.replace(/ +$/, "") ?? null;
+}
+
+test("every painted row is exactly the column width, padded once", () => {
+	const terminal = makeTerminal(100, 6);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => ["panel"], 20);
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	for (let row = 1; row <= 6; row++) {
+		const cells = paintedCells(terminal.writes, row, 81);
+		assert.equal(visibleWidth(cells ?? ""), 20, `row ${row} is not 20 cells wide`);
+	}
+	assert.equal(
+		paintedCells(terminal.writes, 1, 81),
+		`panel${" ".repeat(15)}`,
+		"one pad produced the row: a second pad would add 20 more cells",
+	);
+
+	compositor.dispose();
+});
+
+test("a painted row clips a line wider than the column", () => {
+	const terminal = makeTerminal(100, 4);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => ["x".repeat(40)], 20);
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	const cells = paintedCells(terminal.writes, 1, 81);
+	assert.equal(visibleWidth(cells ?? ""), 20, "the wide line fills the column and stops");
+	assert.ok(cells?.startsWith("x".repeat(19)), "the clip keeps the visible text");
+	assert.ok(cells?.includes("…"), "the clip marks the cut");
+
+	compositor.dispose();
+});
 
 test("visibleRows reports the rows the paint layer owns", () => {
 	const terminal = makeTerminal(100, 12);

@@ -9,6 +9,7 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
 	type McpSnapshot,
 	type SidebarTheme,
@@ -26,6 +27,7 @@ import {
 	renderMcpPanel,
 	renderNodeDetail,
 	renderSessionPanel,
+	renderSidebarPanel,
 	renderTodosPanel,
 	renderTreeLines,
 	renderWorkspacePanel,
@@ -33,7 +35,7 @@ import {
 } from "./sidebar-render.ts";
 import {
 	assertFits,
-	content,
+	makeFullSnapshot,
 	makeNode,
 	makeSession,
 	makeWorkspace,
@@ -184,7 +186,7 @@ test("renderNodeDetail reports a missing usage", () => {
 // --- SESSION -----------------------------------------------------------------
 
 test("a full session renders the model, context bar, and aligned stats", () => {
-	const lines = content(renderSessionPanel(makeSession(), 60, theme));
+	const lines = renderSessionPanel(makeSession(), 60, theme);
 	assert.equal(lines[0]?.trimEnd(), " SESSION");
 	assert.equal(lines[1], "model".padEnd(SESSION_LABEL_WIDTH) + "test-model");
 	assert.equal(lines[2], "thinking".padEnd(SESSION_LABEL_WIDTH) + "medium");
@@ -197,12 +199,10 @@ test("a full session renders the model, context bar, and aligned stats", () => {
 });
 
 test("every SESSION value starts at the same column", () => {
-	const lines = content(
-		renderSessionPanel(
-			makeSession({ tokensIn: 1500, tokensOut: 2300, turns: 7, cost: 0.5, tps: 9.9 }),
-			60,
-			theme,
-		),
+	const lines = renderSessionPanel(
+		makeSession({ tokensIn: 1500, tokensOut: 2300, turns: 7, cost: 0.5, tps: 9.9 }),
+		60,
+		theme,
 	);
 	const rows: Array<[string, string]> = [
 		["model", "test-model"],
@@ -222,24 +222,22 @@ test("every SESSION value starts at the same column", () => {
 });
 
 test("a tiny cost keeps four decimals so it does not read as zero", () => {
-	const lines = content(renderSessionPanel(makeSession({ cost: 0.0012 }), 60, theme));
+	const lines = renderSessionPanel(makeSession({ cost: 0.0012 }), 60, theme);
 	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.0012"));
 	assert.ok(!lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "$0.00"));
 });
 
 test("a null context renders ctx n/a and does not throw", () => {
-	const lines = content(
-		renderSessionPanel(
-			makeSession({ contextTokens: null, contextWindow: null, contextPercent: null }),
-			60,
-			theme,
-		),
+	const lines = renderSessionPanel(
+		makeSession({ contextTokens: null, contextWindow: null, contextPercent: null }),
+		60,
+		theme,
 	);
 	assert.ok(lines.includes("ctx".padEnd(SESSION_LABEL_WIDTH) + "n/a"));
 });
 
 test("an entirely missing session renders n/a and does not throw", () => {
-	const lines = content(renderSessionPanel(null, 60, theme));
+	const lines = renderSessionPanel(null, 60, theme);
 	assert.ok(lines.includes("ctx".padEnd(SESSION_LABEL_WIDTH) + "n/a"));
 	assert.ok(lines.includes("cost".padEnd(SESSION_LABEL_WIDTH) + "-"));
 });
@@ -379,36 +377,34 @@ test("formatElapsed compacts seconds, minutes, and hours", () => {
 // --- WORKSPACE ---------------------------------------------------------------
 
 test("the branch renders with a branch glyph and clean marker", () => {
-	const lines = content(renderWorkspacePanel(makeWorkspace({ branch: "dev" }), 60, theme));
+	const lines = renderWorkspacePanel(makeWorkspace({ branch: "dev" }), 60, theme);
 	assert.equal(lines[0]?.trimEnd(), " WORKSPACE");
 	assert.ok(lines.includes("⎇ dev (clean)"));
 });
 
 test("a null branch renders (not a repo)", () => {
-	const lines = content(renderWorkspacePanel(makeWorkspace({ branch: null }), 60, theme));
+	const lines = renderWorkspacePanel(makeWorkspace({ branch: null }), 60, theme);
 	assert.ok(lines.some((line) => line.includes("(not a repo)")));
 });
 
 test("no changes renders (clean)", () => {
-	const lines = content(renderWorkspacePanel(makeWorkspace(), 60, theme));
+	const lines = renderWorkspacePanel(makeWorkspace(), 60, theme);
 	assert.ok(lines.some((line) => line.includes("(clean)")));
 });
 
 test("workspace file lines show right-aligned diff stats and untracked mark", () => {
-	const lines = content(
-		renderWorkspacePanel(
-			makeWorkspace({
-				cwd: "/home/dev/persona-agents",
-				files: [
-					{ path: "agent-stack/sidebar-render.ts", added: 12, removed: 3, untracked: false },
-					{ path: "new-file.ts", added: 0, removed: 0, untracked: true },
-				],
-				changed: ["agent-stack/sidebar-render.ts", "new-file.ts"],
-				changedCount: 2,
-			}),
-			60,
-			theme,
-		),
+	const lines = renderWorkspacePanel(
+		makeWorkspace({
+			cwd: "/home/dev/persona-agents",
+			files: [
+				{ path: "agent-stack/sidebar-render.ts", added: 12, removed: 3, untracked: false },
+				{ path: "new-file.ts", added: 0, removed: 0, untracked: true },
+			],
+			changed: ["agent-stack/sidebar-render.ts", "new-file.ts"],
+			changedCount: 2,
+		}),
+		60,
+		theme,
 	);
 	assert.ok(lines.some((line) => line.includes("+12 -3")));
 	assert.ok(lines.some((line) => line.includes("? new-file.ts")));
@@ -430,12 +426,10 @@ test("a long changed list clips with a more marker", () => {
 		removed: 0,
 		untracked: false,
 	}));
-	const lines = content(
-		renderWorkspacePanel(
-			makeWorkspace({ files, changed: files.map((file) => file.path), changedCount: 6 }),
-			60,
-			theme,
-		),
+	const lines = renderWorkspacePanel(
+		makeWorkspace({ files, changed: files.map((file) => file.path), changedCount: 6 }),
+		60,
+		theme,
 	);
 	assert.ok(lines.some((line) => line.includes("6 changed")));
 	assert.ok(lines.some((line) => line.includes("… +2 more")));
@@ -448,7 +442,7 @@ test("MCP renders a configured/connected summary and server dots", () => {
 		{ name: "context7", configured: true, connected: true, status: "connected" },
 		{ name: "exa", configured: true, connected: false, status: "disconnected" },
 	];
-	const lines = content(renderMcpPanel(mcp, 60, theme));
+	const lines = renderMcpPanel(mcp, 60, theme);
 	assert.equal(lines[0]?.trimEnd(), " MCP");
 	assert.ok(lines.includes("configured: 2, connected: 1"));
 	assert.ok(lines.some((line) => line.includes("● context7")));
@@ -461,7 +455,7 @@ test("MCP summary counts the status, not the connected flag", () => {
 		{ name: "b", configured: true, connected: false, status: "connected" },
 		{ name: "c", configured: true, connected: true, status: "disconnected" },
 	];
-	const lines = content(renderMcpPanel(mcp, 60, theme));
+	const lines = renderMcpPanel(mcp, 60, theme);
 	// Status-derived count is 2; the flag-derived count is 1.
 	assert.ok(lines.includes("configured: 3, connected: 2"));
 });
@@ -471,13 +465,13 @@ test("MCP dots stay plain text when the theme has no colors", () => {
 		{ name: "a", configured: true, connected: true, status: "connected" },
 		{ name: "b", configured: true, connected: false, status: "unknown" },
 	];
-	const lines = content(renderMcpPanel(mcp, 60, {}));
+	const lines = renderMcpPanel(mcp, 60, {});
 	assert.ok(lines.some((line) => line.includes("● a")));
 	assert.ok(lines.some((line) => line.includes("◐ b")));
 });
 
 test("an empty MCP list renders (no servers)", () => {
-	const lines = content(renderMcpPanel([], 60, theme));
+	const lines = renderMcpPanel([], 60, theme);
 	assert.ok(lines.includes("(no servers)"));
 });
 
@@ -488,7 +482,7 @@ test("TODOS renders a progress line and checkbox lines", () => {
 		{ id: "1", text: "write code", done: true },
 		{ id: "2", text: "write tests", done: false },
 	];
-	const lines = content(renderTodosPanel(todos, 60, theme));
+	const lines = renderTodosPanel(todos, 60, theme);
 	assert.equal(lines[0]?.trimEnd(), " TODOS");
 	assert.ok(lines.includes("1/2"));
 	assert.ok(lines.some((line) => line.includes("✓ write code")));
@@ -496,7 +490,7 @@ test("TODOS renders a progress line and checkbox lines", () => {
 });
 
 test("an empty TODOS list renders (no todos)", () => {
-	const lines = content(renderTodosPanel([], 60, theme));
+	const lines = renderTodosPanel([], 60, theme);
 	assert.ok(lines.includes("(no todos)"));
 });
 
@@ -507,7 +501,7 @@ test("a todo list past the row cap prints a more marker", () => {
 		text: `todo ${index}`,
 		done: false,
 	}));
-	const lines = content(renderTodosPanel(todos, 60, theme));
+	const lines = renderTodosPanel(todos, 60, theme);
 	assert.equal(lines.length, TODOS_ROWS_SHOWN + 3, "the header, the progress line, the rows, and the marker");
 	assert.ok(lines.includes(`… +${extra} more`), "the marker counts the capped rows");
 	assert.ok(!lines.some((line) => line.includes(`todo ${TODOS_ROWS_SHOWN}`)), "a row past the cap never paints");
@@ -519,36 +513,35 @@ test("a todo list under the row cap paints every row without an overflow line", 
 		text: `todo ${index}`,
 		done: false,
 	}));
-	const lines = content(renderTodosPanel(todos, 60, theme));
+	const lines = renderTodosPanel(todos, 60, theme);
 	assert.equal(lines.length, TODOS_ROWS_SHOWN + 2, "header, summary, and one line per row");
 	assert.ok(lines.some((line) => line.includes(`todo ${TODOS_ROWS_SHOWN - 1}`)));
 	assert.ok(!lines.some((line) => line.includes("more")));
 });
 
 test("the turn marker renders when requested", () => {
-	const lines = content(
-		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, theme, true),
+	const lines = renderTodosPanel(
+		[{ id: "1", text: "open", done: false }],
+		60,
+		theme,
+		true,
 	);
 	assert.ok(lines.some((line) => line.includes("— new turn —")));
 });
 
 test("no turn marker renders when it is false", () => {
-	const lines = content(
-		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, theme),
-	);
+	const lines = renderTodosPanel([{ id: "1", text: "open", done: false }], 60, theme);
 	assert.ok(!lines.some((line) => line.includes("— new turn —")));
 });
 
 test("all done todos render the all-done cue", () => {
-	const lines = content(
-		renderTodosPanel(
-			[
-				{ id: "1", text: "a", done: true },
-				{ id: "2", text: "b", done: true },
-			],
-			60,
-			theme,
-		),
+	const lines = renderTodosPanel(
+		[
+			{ id: "1", text: "a", done: true },
+			{ id: "2", text: "b", done: true },
+		],
+		60,
+		theme,
 	);
 	assert.ok(lines.some((line) => line.includes("✓ all done")));
 });
@@ -560,7 +553,7 @@ test("the all-done cue survives an item overflow", () => {
 		text: `todo ${index}`,
 		done: true,
 	}));
-	const lines = content(renderTodosPanel(todos, 60, theme));
+	const lines = renderTodosPanel(todos, 60, theme);
 
 	const cue = lines.indexOf("✓ all done");
 	assert.ok(cue >= 0, "the all-done cue paints");
@@ -569,7 +562,7 @@ test("the all-done cue survives an item overflow", () => {
 });
 
 test("an empty list still shows the turn marker", () => {
-	const lines = content(renderTodosPanel([], 60, theme, true));
+	const lines = renderTodosPanel([], 60, theme, true);
 
 	assert.ok(lines.some((line) => line.includes("(no todos)")));
 	assert.ok(lines.some((line) => line.includes("— new turn —")));
@@ -595,4 +588,63 @@ test("hasRunningNode is true for a running node, including a descendant", () => 
 	const child = makeNode({ runId: "c", status: "running", depth: 1 });
 	const root = makeNode({ runId: "root", status: "idle", children: [child] });
 	assert.equal(hasRunningNode([root]), true);
+});
+
+// --- line width --------------------------------------------------------------
+
+test("a rendered line is at most the column width", () => {
+	const width = 60;
+	const lines = renderWorkspacePanel(
+		makeWorkspace({
+			files: [
+				{
+					path: "a/deep/path/that/clips/in/the/column/and/keeps/going/file.ts",
+					added: 12,
+					removed: 3,
+					untracked: false,
+				},
+			],
+		}),
+		width,
+		theme,
+	);
+	for (const line of lines) {
+		assert.ok(
+			visibleWidth(line) <= width,
+			`the renderer let a line past the width: ${JSON.stringify(line)}`,
+		);
+	}
+	assert.ok(
+		lines.some((line) => visibleWidth(line) === width),
+		"a file line fills the column exactly",
+	);
+});
+
+test("a composed line stays short, so the paint layer owns the pad", () => {
+	const width = 50;
+	const lines = renderSidebarPanel(makeFullSnapshot(), width, theme, 0);
+	assert.ok(lines.length > 0, "the column paints lines");
+	assert.ok(
+		lines.some((line) => visibleWidth(line) < width),
+		"at least one line stays short, so the paint layer owns the pad",
+	);
+});
+
+test("a workspace file line puts the diff stat at the column edge", () => {
+	const width = 40;
+	const lines = renderWorkspacePanel(
+		makeWorkspace({
+			files: [
+				{ path: "a/deep/path/that/clips/in/the/column/file.ts", added: 12, removed: 3, untracked: false },
+			],
+			changed: ["a/deep/path/that/clips/in/the/column/file.ts"],
+			changedCount: 1,
+		}),
+		width,
+		theme,
+	);
+	const fileLine = lines.find((line) => line.includes("+12"));
+	assert.ok(fileLine, "the file line paints its diff stat");
+	assert.equal(visibleWidth(fileLine), width, "the file line fills the column");
+	assert.ok(fileLine.endsWith("-3"), `the stat does not sit at the edge: ${JSON.stringify(fileLine)}`);
 });

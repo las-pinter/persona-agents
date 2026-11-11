@@ -15,8 +15,8 @@
  * `sidebar.test.ts` runs under plain Node with a fake terminal; no real TTY.
  */
 
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { SIDEBAR_DEFAULT_WIDTH, clampWidth } from "./sidebar-config.ts";
+import { padLine } from "./sidebar-line.ts";
 import { MIN_WINDOW_ROWS, windowLines } from "./sidebar-window.ts";
 
 export {
@@ -94,16 +94,6 @@ function findPropertyDescriptor(target: object, key: string): PropertyDescriptor
 		current = Object.getPrototypeOf(current) as object | null;
 	}
 	return undefined;
-}
-
-/** Format one line: clip to `width` with an ellipsis, then right-pad. */
-function formatSidebarLine(line: string, width: number): string {
-	const safe = typeof line === "string" ? line : String(line ?? "");
-	let text = truncateToWidth(safe, width, "…", true);
-	const visible = visibleWidth(text);
-	if (visible < width) return text + " ".repeat(width - visible);
-	if (visible > width) return truncateToWidth(text, width, "", true);
-	return text;
 }
 
 // --- compositor -------------------------------------------------------------
@@ -393,7 +383,7 @@ export class SidebarCompositor {
 			// a row with no panel line is blanked instead of left stale.
 			const formatted: string[] = [];
 			for (let i = 0; i < rawRows; i++) {
-				formatted.push(formatSidebarLine(i < lines.length ? lines[i] : "", this.width));
+				formatted.push(padLine(i < lines.length ? lines[i] : "", this.width));
 			}
 
 			if (
@@ -415,9 +405,8 @@ export class SidebarCompositor {
 				if (this.rowCache[i] === next) continue;
 				this.rowCache[i] = next;
 				changed = true;
-				const text = next.length > 0 ? next : " ".repeat(this.width);
 				const row = i + 1;
-				parts.push(`\x1b[${row};${sepCol}H`, SEPARATOR, `\x1b[${row};${sidebarCol}H`, text);
+				parts.push(`\x1b[${row};${sepCol}H`, SEPARATOR, `\x1b[${row};${sidebarCol}H`, next);
 			}
 			if (this.rowCache.length > total) this.rowCache.length = total;
 

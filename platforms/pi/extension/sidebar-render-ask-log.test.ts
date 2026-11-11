@@ -16,7 +16,6 @@ import {
 } from "./sidebar-render.ts";
 import {
 	assertFits,
-	content,
 	makeAskLogRows,
 	makeFullSnapshot,
 	theme,
@@ -36,25 +35,25 @@ function logBlock(lines: string[]): number {
 // --- the panel shape ---------------------------------------------------------
 
 test("an empty ring paints the header and the placeholder in five lines", () => {
-	const lines = content(renderAskLogPanel([], 80, theme));
+	const lines = renderAskLogPanel([], 80, theme);
 	assert.equal(lines.length, LOG_PANEL_LINES);
-	assert.deepEqual(lines, [" LOG", "(no log events)", "", "", ""]);
+	assert.deepEqual(lines, [" LOG ", "(no log events)", "", "", ""]);
 	assertFits(renderAskLogPanel([], 80, theme), 80);
 });
 
 test("a missing ring paints the same five lines as an empty ring", () => {
 	assert.deepEqual(
-		content(renderAskLogPanel(undefined, 80, theme)),
-		content(renderAskLogPanel([], 80, theme)),
+		renderAskLogPanel(undefined, 80, theme),
+		renderAskLogPanel([], 80, theme),
 	);
 });
 
 test("a ring of four short rows keeps five lines and paints the newest first", () => {
 	const rows = makeAskLogRows().map((row) => ({ ...row, text: `${row.text.slice(0, 8)} implementer/bash` }));
-	const lines = content(renderAskLogPanel(rows, 45, theme));
+	const lines = renderAskLogPanel(rows, 45, theme);
 	assert.equal(lines.length, LOG_PANEL_LINES);
 	assert.deepEqual(lines, [
-		" LOG",
+		" LOG ",
 		"10:00:04 implementer/bash",
 		"10:00:03 implementer/bash",
 		"10:00:02 implementer/bash",
@@ -72,9 +71,9 @@ test("a full ring of 50 rows paints the plain header", () => {
 		at: "2026-11-07T10:00:00.000Z",
 		text: `10:00:00 tester/bash waiting=0 row=${index}`,
 	}));
-	const lines = content(renderAskLogPanel(rows, 80, theme));
+	const lines = renderAskLogPanel(rows, 80, theme);
 	assert.equal(lines.length, LOG_PANEL_LINES, "the full ring keeps the five-line panel");
-	assert.equal(lines[0], " LOG", "a full ring paints the plain header");
+	assert.equal(lines[0], " LOG ", "a full ring paints the plain header");
 	assertFits(renderAskLogPanel(rows, 80, theme), 80);
 });
 
@@ -97,9 +96,9 @@ test("a plain line in the ring paints beside the ask rows", () => {
 			text: "10:00:04 implementer/bash place=slot",
 		},
 	];
-	const lines = content(renderAskLogPanel(rows, 60, theme));
+	const lines = renderAskLogPanel(rows, 60, theme);
 	assert.equal(lines.length, LOG_PANEL_LINES, "the panel keeps its fixed height");
-	assert.equal(lines[0], " LOG", "the header carries no count");
+	assert.equal(lines[0], " LOG ", "the header carries no count");
 	assert.equal(lines[1], "agent-stack: forced paint failed", "the plain line paints whole");
 	assert.equal(lines[2], "10:00:04 implementer/bash place=slot", "the ask row text is unchanged");
 	assert.equal(lines[3], "", "the short ring pads to five lines");
@@ -107,8 +106,8 @@ test("a plain line in the ring paints beside the ask rows", () => {
 });
 
 test("at width 45 the newest expiry row keeps place=slot whole", () => {
-	assert.equal(content(askLogLines(makeAskLogRows(), 45))[0], " LOG");
-	const textLines = content(askLogLines(makeAskLogRows(), 45)).slice(1);
+	assert.equal(askLogLines(makeAskLogRows(), 45)[0], " LOG ");
+	const textLines = askLogLines(makeAskLogRows(), 45).slice(1);
 	// The wrap breaks on whitespace, so the flag token survives in one piece.
 	assert.ok(
 		textLines.some((line) => line.includes("place=slot")),
@@ -133,8 +132,8 @@ test("a ring of five rows wraps the newest row at width 45", () => {
 		},
 	];
 	// The ring holds five rows; the panel paints the four text lines it has.
-	assert.deepEqual(content(renderAskLogPanel(rows, 45, theme)), [
-		" LOG",
+	assert.deepEqual(renderAskLogPanel(rows, 45, theme), [
+		" LOG ",
 		"10:00:04 implementer/bash waiting=0",
 		"shown=none place=slot parked=0 surface=yes",
 		"10:00:03 tester/bash waiting=0 shown=this",
@@ -143,7 +142,7 @@ test("a ring of five rows wraps the newest row at width 45", () => {
 });
 
 test("a ring of four long rows fills the four text lines and stops there", () => {
-	const lines = content(renderAskLogPanel(makeAskLogRows(), 45, theme));
+	const lines = renderAskLogPanel(makeAskLogRows(), 45, theme);
 	assert.equal(lines.length, 5, "the panel keeps its five lines");
 	// At width 45 rows 0 and 1 take two wrapped lines each, so the four fill.
 	assert.ok(lines[3]?.includes("shown=this"), "row 1 paints its first line");
@@ -154,10 +153,10 @@ test("a ring of four long rows fills the four text lines and stops there", () =>
 test("at width 40 the budget cuts row 0 after three lines and row 1 after one", () => {
 	// Row 0 wraps to three lines and row 1 needs three. The four-line budget
 	// keeps row 0 whole, gives row 1 its first line, then stops.
-	const body = content(askLogLines(makeAskLogRows(), 40, theme));
+	const body = askLogLines(makeAskLogRows(), 40, theme);
 	assert.equal(body.length, LOG_PANEL_LINES, "the budget stops the list at five lines");
 	assert.deepEqual(body, [
-		" LOG",
+		" LOG ",
 		"10:00:04 implementer/bash waiting=0",
 		"shown=none place=slot parked=0",
 		"surface=yes",
@@ -171,7 +170,7 @@ test("at width 40 the budget cuts row 0 after three lines and row 1 after one", 
 	assert.ok(!body.some((line) => line.includes("shown=this")), "the second row's second line never paints");
 	assert.ok(!body.some((line) => line.includes("10:00:02")), "the third row never paints");
 	assert.deepEqual(
-		content(renderAskLogPanel(makeAskLogRows(), 40, theme)),
+		renderAskLogPanel(makeAskLogRows(), 40, theme),
 		body,
 		"the panel paints the same five lines as the budget body",
 	);
@@ -188,7 +187,7 @@ for (const width of [0, 1, 10, 20, 45, 120]) {
 // --- the slot and the column -------------------------------------------------
 
 test("the LOG panel keeps its five lines at the foot of the column", () => {
-	const lines = content(renderSidebarPanel(makeFullSnapshot(), 80, theme, 0));
+	const lines = renderSidebarPanel(makeFullSnapshot(), 80, theme, 0);
 	assert.equal(logBlock(lines), 5, "LOG paints five lines");
 	assert.notEqual(lines[lines.length - 1], RULE, "no rule paints below the log panel");
 });

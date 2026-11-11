@@ -147,8 +147,3 @@ export function assertFits(lines: string[], width: number): void {
 		assert.ok(visibleWidth(line) <= width, `line exceeds ${width}: ${JSON.stringify(line)}`);
 	}
 }
-
-/** Lines are right-padded to the column width; trim for content checks. */
-export function content(lines: string[]): string[] {
-	return lines.map((line) => line.trimEnd());
-}
