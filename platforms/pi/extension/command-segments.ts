@@ -83,8 +83,9 @@ export interface EvaluateOptions {
 }
 
 /**
- * Compiled-regex cache for the gate hot path. Semantics are identical to the
- * old gate: unanchored, case-insensitive, non-global (`lastIndex` never moves).
+ * Compiled-regex cache for the gate hot path. Semantics: unanchored,
+ * case-insensitive, non-global, so `lastIndex` never moves. The overlay loader
+ * calls this function, so its load check cannot drift from the build check.
  */
 const regexCache = new Map<string, RegExp>();
 
@@ -823,6 +824,55 @@ function denyReason(rule: RawRule, toolName: string, scope: string): string {
 	return `Denied by ${scope} policy: ${toolName}`;
 }
 
+interface FoldedSegments {
+	parsed: ShellParse;
+	approved: Set<number>;
+	/** Unapproved segments that carry an expansion or match no allow rule. */
+	indices: number[];
+	/** First unapproved index that holds an unresolved expansion, or -1. */
+	expansion: number;
+}
+
+/**
+ * Fold caller approvals and session allows into one approved set, then list the
+ * unapproved segments that can never be allowed: a segment with an unresolved
+ * expansion, or one that matches no agent allow rule. Every caller that needs
+ * this list gets the expansion guard, so no path can skip it.
+ */
+function foldUnapprovedSegments(
+	command: string,
+	isShell: boolean,
+	ruleSets: RuleSets,
+	toolName: string,
+	approvedSegmentIndices: ReadonlySet<number> = new Set(),
+	isSessionAllowed?: (rule: RawRule) => boolean,
+): FoldedSegments {
+	const parsed: ShellParse = isShell
+		? parseShellCommand(command)
+		: { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: null };
+	const approved = new Set<number>(approvedSegmentIndices);
+	if (isSessionAllowed) {
+		const sessionAskRules = [...compile(ruleSets.globalAsk), ...compile(ruleSets.agentAsk)];
+		for (let idx = 0; idx < parsed.segments.length; idx++) {
+			if (approved.has(idx)) continue;
+			if (isSessionApprovedSegment(sessionAskRules, toolName, parsed.segments[idx], isSessionAllowed)) {
+				approved.add(idx);
+			}
+		}
+	}
+	const allowed = compile(ruleSets.agentAllow);
+	const indices: number[] = [];
+	let expansion = -1;
+	for (let idx = 0; idx < parsed.segments.length; idx++) {
+		if (approved.has(idx)) continue;
+		const seg = parsed.segments[idx];
+		const expandable = hasUnresolvedExpansion(seg);
+		if (expandable && expansion < 0) expansion = idx;
+		if (expandable || !firstMatch(allowed, toolName, [seg])) indices.push(idx);
+	}
+	return { parsed, approved, indices, expansion };
+}
+
 /**
  * Pure decision over a command. No prompting: an `ask` result is returned for
  * the caller to resolve. `approvedSegmentIndices` carries the user's segment
@@ -837,9 +887,14 @@ export function evaluateCommandRules(
 	agentName: string | null,
 	options: EvaluateOptions = {},
 ): Decision {
-	const parsed: ShellParse = isShell
-		? parseShellCommand(command)
-		: { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: null };
+	const { parsed, approved, indices, expansion } = foldUnapprovedSegments(
+		command,
+		isShell,
+		ruleSets,
+		toolName,
+		options.approvedSegmentIndices,
+		options.isSessionAllowed,
+	);
 	const segments = parsed.segments;
 	const rawSegments = parsed.rawSegments;
 
@@ -869,18 +924,10 @@ export function evaluateCommandRules(
 	// "Approved" carries both segment "Always allow" choices and session-allowed
 	// segments. A session-allow marks exactly its matching segment, never the
 	// whole command, so every other segment is still checked below.
-	const approved = new Set<number>(options.approvedSegmentIndices ?? []);
 	// First pass = the caller has approved nothing yet. Session allows are folded
-	// into `approved` below, so they must not count as a first pass.
+	// into `approved` above, so they must not count as a first pass.
 	const wholeProbeDone = (options.approvedSegmentIndices?.size ?? 0) > 0;
 	const isSessionAllowed = options.isSessionAllowed;
-	if (isSessionAllowed) {
-		const sessionAskRules = [...compile(ruleSets.globalAsk), ...compile(ruleSets.agentAsk)];
-		for (let idx = 0; idx < segments.length; idx++) {
-			if (approved.has(idx)) continue;
-			if (isSessionApprovedSegment(sessionAskRules, toolName, segments[idx], isSessionAllowed)) approved.add(idx);
-		}
-	}
 
 	// Whole-command ask probe (defense in depth): a rule whose pattern spans a
 	// separator cannot match any single segment. Run it on the FIRST pass, BEFORE
@@ -942,49 +989,42 @@ export function evaluateCommandRules(
 					: "Denied by default: empty command",
 			};
 		}
-		const allowed = compile(ruleSets.agentAllow);
-		for (let idx = 0; idx < segments.length; idx++) {
-			if (approved.has(idx)) continue;
-			const seg = segments[idx];
-			// An unresolved shell expansion can turn a read into a write after the
-			// gate runs, so it can never reach an allow rule. Fail closed.
-			if (hasUnresolvedExpansion(seg)) {
+		if (indices.length > 0) {
+			const idx = indices[0];
+			const seg = segments[idx].slice(0, 120);
+			if (idx === expansion) {
 				return {
 					kind: "default",
 					reason: agentName
-						? `Denied by default (agent "${agentName}" is deny-by-default; unresolved shell expansion in segment: \`${seg.slice(0, 120)}\`)`
-						: `Denied by default: unresolved shell expansion in \`${seg.slice(0, 120)}\``,
+						? `Denied by default (agent "${agentName}" is deny-by-default; unresolved shell expansion in segment: \`${seg}\`)`
+						: `Denied by default: unresolved shell expansion in \`${seg}\``,
 				};
 			}
-			if (!firstMatch(allowed, toolName, [seg])) {
-				return {
-					kind: "default",
-					reason: agentName
-						? `Denied by default (agent "${agentName}" is deny-by-default; segment not allowed: \`${seg.slice(0, 120)}\`)`
-						: `Denied by default: \`${seg.slice(0, 120)}\``,
-				};
-			}
+			return {
+				kind: "default",
+				reason: agentName
+					? `Denied by default (agent "${agentName}" is deny-by-default; segment not allowed: \`${seg}\`)`
+					: `Denied by default: \`${seg}\``,
+			};
 		}
 		return { kind: "allow" };
 	}
 
 	// allow-unless-matched: Pi's default. An unresolved shell expansion is the
 	// one exception; bash resolves it after the gate, so it cannot be allowed.
-	for (let idx = 0; idx < segments.length; idx++) {
-		if (approved.has(idx)) continue;
-		const seg = segments[idx];
-		if (hasUnresolvedExpansion(seg)) {
-			return { kind: "default", reason: `Denied: unresolved shell expansion in \`${seg.slice(0, 120)}\`` };
-		}
+	if (expansion >= 0) {
+		const seg = segments[expansion].slice(0, 120);
+		return { kind: "default", reason: `Denied: unresolved shell expansion in \`${seg}\`` };
 	}
 	return { kind: "allow" };
 }
 
 /**
  * The parsed segments that reach deny-by-default: neither approved by the
- * caller nor matched by an agent allow rule. On a deny-by-default fall-through
- * these are exactly the segments that need the structural skill-script check.
- * `segments` is the cd-folded list, so an index lines up with the indices in
+ * caller nor matched by an agent allow rule, plus every segment that carries an
+ * unresolved expansion. On a deny-by-default fall-through these are exactly the
+ * segments that need the structural skill-script check. `segments` is the
+ * cd-folded list, so an index lines up with the indices in
  * `evaluateCommandRules`.
  */
 export function unallowedSegments(
@@ -995,26 +1035,13 @@ export function unallowedSegments(
 	approvedSegmentIndices: ReadonlySet<number> = new Set(),
 	isSessionAllowed?: (rule: RawRule) => boolean,
 ): { segments: string[]; indices: number[] } {
-	const parsed: ShellParse = isShell
-		? parseShellCommand(command)
-		: { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: null };
-	const allowed = compile(ruleSets.agentAllow);
-	// Session-allowed segments count as approved, exactly as in evaluateCommandRules.
-	const approved = new Set<number>(approvedSegmentIndices);
-	if (isSessionAllowed) {
-		const sessionAskRules = [...compile(ruleSets.globalAsk), ...compile(ruleSets.agentAsk)];
-		for (let idx = 0; idx < parsed.segments.length; idx++) {
-			if (approved.has(idx)) continue;
-			if (isSessionApprovedSegment(sessionAskRules, toolName, parsed.segments[idx], isSessionAllowed)) {
-				approved.add(idx);
-			}
-		}
-	}
-	const indices: number[] = [];
-	for (let idx = 0; idx < parsed.segments.length; idx++) {
-		if (approved.has(idx)) continue;
-		if (firstMatch(allowed, toolName, [parsed.segments[idx]])) continue;
-		indices.push(idx);
-	}
+	const { parsed, indices } = foldUnapprovedSegments(
+		command,
+		isShell,
+		ruleSets,
+		toolName,
+		approvedSegmentIndices,
+		isSessionAllowed,
+	);
 	return { segments: parsed.segments, indices };
 }

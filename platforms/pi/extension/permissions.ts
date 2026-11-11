@@ -225,10 +225,12 @@ export function isAllowedSkillScript(segment: string, skillScriptsDirs: string[]
 
 /**
  * True when every segment that falls through to deny-by-default is a loaded
- * skill's real script. This rescues a deny-by-default fall-through, so deny and
- * ask rules always win; segments the caller approved, a session-allowed
- * segment, or an allow rule already matched are skipped, so a command may mix
- * regex-allowed parts with skill scripts. An empty command returns false.
+ * skill's real script. A segment with an unresolved expansion is in the list,
+ * so the rescue can never launder one. This rescues a deny-by-default
+ * fall-through, so deny and ask rules always win; segments the caller approved,
+ * a session-allowed segment, or an allow rule already matched are skipped, so a
+ * command may mix regex-allowed parts with skill scripts. An empty command
+ * returns false.
  */
 export function allSegmentsAreSkillScripts(
 	command: string,

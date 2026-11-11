@@ -269,6 +269,15 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 		);
 	});
 
+	test("an expansion segment blocks the skill-script rescue when an allow rule matches", () => {
+		const lsAllow: RuleSets = { ...NO_RULES, agentAllow: [{ tool: "bash", match: "^ls\\b" }] };
+		assert.equal(
+			allSegmentsAreSkillScripts("ls $HOME", new Set<number>(), dirs, tmpRoot, lsAllow, "bash"),
+			false,
+		);
+		assert.equal(verdict(lsAllow, "ls $HOME", dirs, tmpRoot), "default");
+	});
+
 	test("a segment with no session allow still blocks the mix", () => {
 		const ruleSets: RuleSets = { ...NO_RULES, agentAsk: [{ tool: "bash", match: "^printf\\b" }] };
 		assert.equal(
@@ -469,6 +478,12 @@ describe("skill scripts: real gate handler", () => {
 	test("a quoted path is blocked", async () => {
 		const handler = installGateHandler([gitAllow, mkdirAllow]);
 		const result = await runHandler(handler, `bash "${realFixtureList}"`);
+		assert.equal(result?.block, true, JSON.stringify(result));
+	});
+
+	test("a variable read is blocked even when a skill scripts dir is loaded", async () => {
+		const handler = installGateHandler([gitAllow, mkdirAllow]);
+		const result = await runHandler(handler, "ls $HOME");
 		assert.equal(result?.block, true, JSON.stringify(result));
 	});
 

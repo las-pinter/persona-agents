@@ -11,10 +11,12 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+	compileRegex,
 	evaluateCommandRules,
 	neutralDequoteProbe,
 	parseShellCommand,
 	splitShellSegments,
+	unallowedSegments,
 	type Decision,
 	type PermissionMode,
 	type RawRule,
@@ -629,6 +631,29 @@ test("the same read verbs still allow without an expansion", () => {
 	]) {
 		assert.equal(evaluateCmd(command, expansionReadRules).kind, "allow", command);
 	}
+});
+
+const expandableReadRules: RuleSets = {
+	...expansionReadRules,
+	agentAllow: [{ tool: "bash", match: "^(?:echo|ls)\\b" }],
+};
+
+test("an expansion segment reaches the unallowed list even when an allow rule matches", () => {
+	const folded = unallowedSegments("ls $HOME", true, expandableReadRules, "bash");
+	assert.deepEqual(folded.indices, [0]);
+});
+
+test("the deny reason names the expansion segment after an allowed segment", () => {
+	const decision = evaluateCmd("echo hi && ls $HOME", expandableReadRules);
+	assert.equal(decision.kind, "default");
+	if (decision.kind === "default") {
+		assert.match(decision.reason, /unresolved shell expansion/);
+		assert.match(decision.reason, /\$HOME/);
+	}
+});
+
+test("the compiler uses the i flag", () => {
+	assert.equal(compileRegex("^Git$").flags, "i");
 });
 
 test("a literal dollar in a read argument is not a false gate", () => {

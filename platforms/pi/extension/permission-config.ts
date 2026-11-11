@@ -37,7 +37,7 @@ import { fileURLToPath } from "node:url";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { validateRow, validateRows, type RuleRow, type Verdict } from "./permission-table.ts";
 import { recordLogLine } from "./ask-record.ts";
-import type { RawRule } from "./command-segments.ts";
+import { compileRegex, type RawRule } from "./command-segments.ts";
 
 /** The environment variable that sets the shipped table path. */
 export const TABLE_ENV = "PI_PERMISSIONS_TABLE";
@@ -265,13 +265,10 @@ export function applyOverrideFile(rows: readonly RuleRow[], file: string): RuleR
 
 const OVERLAY_KEYS = new Set(["tool", "match", "reason"]);
 
-/** The flag the compiler adds to every overlay pattern, so a check matches it. */
-const MATCH_FLAGS = "i";
-
 /** Throw when the pattern does not compile, so a bad regex fences at load time. */
 function assertRegex(match: string, where: string): void {
 	try {
-		new RegExp(match, MATCH_FLAGS);
+		compileRegex(match);
 	} catch (error) {
 		throw new Error(`${where} needs a valid "match" regex (${fault(error)})`);
 	}
