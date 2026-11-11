@@ -39,7 +39,7 @@ let treeLogSaved = false;
 
 /** Raw terminal columns before the compositor narrows them. */
 export const RAW_COLUMNS = 200;
-/** Terminal rows; drives the panel height budget. */
+/** Terminal rows for the fake terminal. The column ignores them. */
 export const RAW_ROWS = 30;
 
 /** One recorded `ctx.ui.notify` call. */
@@ -50,6 +50,9 @@ interface Notification {
 
 /** The real command handler shape the fake pi captures. */
 type SidebarHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
+
+/** The real shortcut handler shape the fake pi captures. */
+type ShortcutHandler = (ctx: ExtensionContext) => Promise<void> | void;
 
 /** The overlay options a tree panel passes to `ctx.ui.custom`. */
 interface CustomOptions {
@@ -90,6 +93,8 @@ export interface Harness {
 	terminal: FakeTerminal;
 	tui: FakeTui;
 	notifications: Notification[];
+	/** Every registered command, by name. Empty on an inactive API. */
+	commands: Map<string, SidebarHandler>;
 	handler: SidebarHandler;
 	/** The `/agent-inspect` handler. */
 	inspect: SidebarHandler;
@@ -101,6 +106,10 @@ export interface Harness {
 	overlay: MountedOverlay;
 	/** Every `ctx.ui.setWidget` call, in order. */
 	widgets: WidgetCall[];
+	/** Every registered shortcut, by key, in registration order. */
+	shortcuts: Map<string, ShortcutHandler>;
+	/** The shared tree log, when `log` is set. */
+	logPath?: string;
 	ctx: ExtensionContext;
 }
 
@@ -134,11 +143,31 @@ function askEvent(index: number, flags = "waiting=0 shown=none place=slot"): Run
 	};
 }
 
+/** The error pi raises when a registration runs after the extension went inactive. */
+const INACTIVE_EXTENSION_ERROR =
+	'Extension "/fake/persona-agents/extension.ts" failed to load and its API is no longer active.';
+
+/** The handler a test gets for a command that never registered. */
+const ABSENT_COMMAND: SidebarHandler = async () => {
+	throw new Error("the command did not register on an inactive extension");
+};
+
 /**
  * Bind the real glue to fakes. Writes the config file first so the resolved
  * width is deterministic, then registers the commands and binds the TUI path.
  */
-export function setup(config: { enabled?: boolean; width?: number; log?: boolean; asks?: number }): Harness {
+export function setup(config: {
+	enabled?: boolean;
+	width?: number;
+	log?: boolean;
+	asks?: number;
+	/** Throw the inactive extension error on every registration. */
+	inactive?: boolean;
+	/** Accept every shortcut registration and store no handler, as a key clash does. */
+	skipShortcuts?: boolean;
+	/** Refuse this one key, so the API stays active and only the key fails. */
+	refuseShortcut?: string;
+}): Harness {
 	const dir = mkdtempSync(join(tmpdir(), "pa-tree-ui-"));
 	currentDir = dir;
 	const configPath = join(dir, "persona-agents-sidebar.json");
@@ -151,8 +180,9 @@ export function setup(config: { enabled?: boolean; width?: number; log?: boolean
 	}
 	// Force an empty tree so the test never reads the live tree log.
 	delete process.env[ENV_TREE_LOG];
+	let logPath: string | undefined;
 	if (config.log) {
-		const logPath = join(dir, "tree.log");
+		logPath = join(dir, "tree.log");
 		appendEvent(logPath, {
 			v: 1,
 			type: "start",
@@ -174,6 +204,7 @@ export function setup(config: { enabled?: boolean; width?: number; log?: boolean
 
 	const notifications: Notification[] = [];
 	const commands = new Map<string, SidebarHandler>();
+	const shortcuts = new Map<string, ShortcutHandler>();
 	const overlay: MountedOverlay = { component: undefined, calls: [] };
 	const widgets: WidgetCall[] = [];
 	const identityTheme = {
@@ -225,27 +256,59 @@ export function setup(config: { enabled?: boolean; width?: number; log?: boolean
 	// the whole extension surface, so the cast states that narrow contract.
 	const pi = {
 		registerCommand(name: string, options: { handler: SidebarHandler }): void {
+			// pi throws on every registration once the API is inactive.
+			if (config.inactive === true) throw new Error(INACTIVE_EXTENSION_ERROR);
 			commands.set(name, options.handler);
 		},
+		registerShortcut(key: string, options: { handler: ShortcutHandler }): void {
+			if (config.inactive === true) throw new Error(INACTIVE_EXTENSION_ERROR);
+			// A key clash settles after registration: the call returns, the key dies.
+			if (config.skipShortcuts === true) return;
+			// One live refusal drives the held notice; the API stays active.
+			if (key === config.refuseShortcut) throw new Error(`Key "${key}" is not available.`);
+			shortcuts.set(key, options.handler);
+		},
 		on(_event: string, _handler: unknown): () => void {
+			if (config.inactive === true) throw new Error(INACTIVE_EXTENSION_ERROR);
 			return () => {};
 		},
 		exec: async (): Promise<{ code: number; stdout: string }> => ({ code: 0, stdout: "" }),
 		events: { on: (_channel: string, _handler: unknown): (() => void) => () => {} },
 	} as unknown as ExtensionAPI;
 
-	registerTreeUi(pi);
+	try {
+		registerTreeUi(pi);
+	} catch {
+		// pi marks the extension failed. The bind below must install nothing.
+	}
 	bindTreeSidebar(ctx);
 
 	const handler = commands.get("sidebar");
-	assert.ok(handler, "the /sidebar command was not registered");
 	const inspect = commands.get("agent-inspect");
-	assert.ok(inspect, "the /agent-inspect command was not registered");
 	const tree = commands.get("agents-tree");
-	assert.ok(tree, "the /agents-tree command was not registered");
 	const askLog = commands.get("ask-log");
-	assert.ok(askLog, "the /ask-log command was not registered");
-	return { configPath, terminal, tui, notifications, handler, inspect, tree, askLog, overlay, widgets, ctx };
+	if (config.inactive !== true) {
+		assert.ok(handler, "the /sidebar command was not registered");
+		assert.ok(inspect, "the /agent-inspect command was not registered");
+		assert.ok(tree, "the /agents-tree command was not registered");
+		assert.ok(askLog, "the /ask-log command was not registered");
+	}
+	return {
+		configPath,
+		terminal,
+		tui,
+		notifications,
+		commands,
+		handler: handler ?? ABSENT_COMMAND,
+		inspect: inspect ?? ABSENT_COMMAND,
+		tree: tree ?? ABSENT_COMMAND,
+		askLog: askLog ?? ABSENT_COMMAND,
+		overlay,
+		widgets,
+		shortcuts,
+		logPath,
+		ctx,
+	};
 }
 
 /** Remove the temp dir, clear the config override, and restore the outer log. */

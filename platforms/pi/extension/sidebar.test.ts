@@ -203,6 +203,119 @@ test("paint swallows a thrown getLines error", () => {
 	compositor.dispose();
 });
 
+// --- column window ----------------------------------------------------------
+
+/** The text the paint layer wrote on one terminal row, right of the separator. */
+function paintedRow(writes: string[], row: number, column: number): string | null {
+	const output = writes.join("");
+	const marker = `\x1b[${row};${column}H`;
+	const at = output.lastIndexOf(marker);
+	if (at < 0) return null;
+	const rest = output.slice(at + marker.length);
+	const stop = rest.search(/\x1b\[[0-9]+;[0-9]+H|\x1b\[\?7[hl]|\x1b8/);
+	return (stop < 0 ? rest : rest.slice(0, stop)).replace(/ +$/, "");
+}
+
+test("visibleRows reports the rows the paint layer owns", () => {
+	const terminal = makeTerminal(100, 12);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => [], 20);
+	assert.equal(compositor.visibleRows(), 12, "the window is the terminal row count");
+	terminal.rows = 7;
+	assert.equal(compositor.visibleRows(), 7, "the window follows a resize");
+	compositor.dispose();
+});
+
+test("a column taller than the terminal paints a window with both marks", () => {
+	const terminal = makeTerminal(100, 6);
+	const tui = makeTui(terminal);
+	const lines = Array.from({ length: 20 }, (_value, index) => `line ${index}`);
+	let offset = 4;
+	const compositor = new SidebarCompositor(tui, () => lines, 20, { getOffset: () => offset });
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	// Width 20 => the separator sits at column 80 and the text starts at 81.
+	assert.equal(paintedRow(terminal.writes, 1, 81), "… +4 above", "the top mark carries the count above");
+	assert.equal(paintedRow(terminal.writes, 2, 81), "line 4", "the window starts at the offset");
+	assert.equal(paintedRow(terminal.writes, 5, 81), "line 7", "the last body row follows the offset");
+	assert.equal(paintedRow(terminal.writes, 6, 81), "… +12 below", "the bottom mark counts the rest");
+
+	offset = 0;
+	terminal.writes.length = 0;
+	compositor.paint();
+	assert.equal(paintedRow(terminal.writes, 1, 81), "line 0", "no top mark at the top");
+	assert.equal(paintedRow(terminal.writes, 6, 81), "… +15 below", "the bottom mark still paints");
+
+	compositor.dispose();
+});
+
+test("a one-row terminal paints no column, below the window floor", () => {
+	const terminal = makeTerminal(100, 1);
+	const tui = makeTui(terminal);
+	const compositor = new SidebarCompositor(tui, () => ["line 0", "line 1"], 20);
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	assert.equal(terminal.writes.length, 0, "a one-row terminal has no room for a mark and a line");
+	compositor.dispose();
+});
+
+test("a column that fits the terminal paints whole with no mark", () => {
+	const terminal = makeTerminal(100, 6);
+	const tui = makeTui(terminal);
+	const lines = ["line 0", "line 1"];
+	const compositor = new SidebarCompositor(tui, () => lines, 20, { getOffset: () => 9 });
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	assert.equal(paintedRow(terminal.writes, 1, 81), "line 0", "a short column sits at the top");
+	assert.equal(paintedRow(terminal.writes, 2, 81), "line 1");
+	assert.ok(!terminal.writes.join("").includes("more"), "no mark on a column that fits");
+	compositor.dispose();
+});
+
+test("a column exactly as tall as the terminal does not move", () => {
+	const terminal = makeTerminal(100, 6);
+	const tui = makeTui(terminal);
+	const lines = Array.from({ length: 6 }, (_value, index) => `line ${index}`);
+	const compositor = new SidebarCompositor(tui, () => lines, 20, { getOffset: () => 3 });
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	assert.equal(paintedRow(terminal.writes, 1, 81), "line 0", "an exact fit keeps line 0");
+	assert.equal(paintedRow(terminal.writes, 6, 81), "line 5", "the last line paints too");
+	assert.ok(!terminal.writes.join("").includes("above"), "no top mark on an exact fit");
+	assert.ok(!terminal.writes.join("").includes("below"), "no bottom mark on an exact fit");
+	compositor.dispose();
+});
+
+test("the marks carry the dim style the glue passes in", () => {
+	const terminal = makeTerminal(100, 4);
+	const tui = makeTui(terminal);
+	const lines = Array.from({ length: 20 }, (_value, index) => `line ${index}`);
+	const compositor = new SidebarCompositor(tui, () => lines, 40, {
+		getOffset: () => 2,
+		dim: (text) => `<dim>${text}</dim>`,
+	});
+
+	compositor.install();
+	terminal.writes.length = 0;
+	compositor.paint();
+
+	assert.ok(terminal.writes.join("").includes("<dim>… +2 above</dim>"), "the top mark is dim");
+	assert.ok(terminal.writes.join("").includes("<dim>… +16 below</dim>"), "the bottom mark is dim");
+	compositor.dispose();
+});
+
 // --- wrapped doRender -------------------------------------------------------
 
 test("the wrapped doRender calls pi, opens a sync frame, and paints", () => {
@@ -354,7 +467,7 @@ test("a live width change keeps the renderer and compositor widths equal", () =>
 	};
 	const theme: SidebarTheme = { bold: (text) => text, dim: (text) => text };
 	let width = 80;
-	const getLines = () => renderSidebarPanel(snapshot, width, 30, theme, 0);
+	const getLines = () => renderSidebarPanel(snapshot, width, theme, 0);
 
 	installSidebarCompositor(tui, getLines, width);
 	assert.equal(getSidebarCompositor()?.width, 80);

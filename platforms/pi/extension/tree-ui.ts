@@ -3,7 +3,8 @@
  * lifecycle.
  *
  * `registerTreeUi(pi)` registers `/sidebar`, `/agents-tree`, `/agent-inspect`,
- * and `/ask-log`. `bindTreeSidebar(ctx)` captures the `tui` and the `theme`,
+ * and `/ask-log`. `/sidebar up [n]` and `/sidebar down [n]` move the column
+ * without a key. `bindTreeSidebar(ctx)` captures the `tui` and the `theme`,
  * creates the data module, and installs the compositor in TUI mode (or a
  * bounded `string[]` summary in RPC mode). `disposeTreeSidebar()` tears it all
  * down and is called from `session_shutdown`.
@@ -27,7 +28,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type Component, type TUI } from "@earendil-works/pi-tui";
+import { Key, type Component, type KeyId, type TUI } from "@earendil-works/pi-tui";
 import { AskLogOverlayComponent, NodeDetailComponent, TreeOverlayComponent } from "./overlays.ts";
 import {
 	GIT_POLL_MS,
@@ -36,6 +37,7 @@ import {
 	type SidebarData,
 } from "./sidebar-data.ts";
 import {
+	SIDEBAR_DEFAULT_ROWS,
 	SIDEBAR_DEFAULT_WIDTH,
 	disposeSidebarCompositor,
 	getSidebarCompositor,
@@ -46,6 +48,7 @@ import {
 	toggleSidebarState,
 	writeSidebarConfig,
 } from "./sidebar.ts";
+import { clampScrollOffset, windowLines } from "./sidebar-window.ts";
 import {
 	hasRunningNode,
 	renderSidebarPanel,
@@ -60,9 +63,9 @@ export const SPINNER_MS = 90;
 /** Git branch command timeout. */
 const GIT_TIMEOUT_MS = 2000;
 /** Bounded RPC summary height: RPC mode gets a string list, never a full column. */
-const RPC_MAX_LINES = 10;
+export const RPC_MAX_LINES = 10;
 /** RPC summary render width. */
-const RPC_WIDTH = 60;
+export const RPC_WIDTH = 60;
 
 /** Widget key. Holds the TUI anchor component or the RPC `string[]` summary. */
 const WIDGET_KEY = "persona-agents-tree";
@@ -81,8 +84,20 @@ let capturedTheme: SidebarTheme | null = null;
 let mode = "";
 let bound = false;
 let disposed = false;
+/**
+ * True once every registration ran. A dead pi API throws on a registration,
+ * and a column that no command can reach must not paint.
+ */
+let registered = false;
 /** The right-column width, kept in step with the compositor and the renderer. */
 let resolvedWidth = SIDEBAR_DEFAULT_WIDTH;
+/**
+ * The shared column scroll offset. One number for the whole column, used by the
+ * paint layer and by the RPC summary.
+ */
+let scrollOffset = 0;
+/** A refusal report held until a context can show it, then cleared. */
+let scrollReport: string | null = null;
 
 /** Spinner animation frame. */
 let frame = 0;
@@ -101,21 +116,48 @@ function themeDuck(): SidebarTheme {
 	return capturedTheme ?? IDENTITY_THEME;
 }
 
-/** The terminal height at paint time, with a `process.stdout` fallback. */
-function terminalHeight(): number {
+/** Dim text for the column marks. Falls back to plain text, never throws. */
+function dimText(text: string): string {
+	const theme = capturedTheme;
+	if (!theme || typeof theme.dim !== "function") return text;
 	try {
-		const rows = capturedTui?.terminal?.rows ?? process.stdout.rows;
-		if (typeof rows === "number" && Number.isFinite(rows) && rows > 0) return Math.floor(rows);
+		return theme.dim(text);
 	} catch {
-		/* fall through to the default */
+		return text;
 	}
-	return 24;
 }
 
-/** Render the full right column for the current terminal size. */
+/** The rows one column window holds: the paint layer's rows, or the RPC cap. */
+function visibleColumnRows(): number {
+	const compositor = getSidebarCompositor();
+	if (compositor) return compositor.visibleRows();
+	if (mode === "rpc") return RPC_MAX_LINES;
+	return SIDEBAR_DEFAULT_ROWS;
+}
+
+/**
+ * Move the column window by `delta` rows and repaint. The tree signature does
+ * not move with the offset, so the paint is asked for here, not by the poll.
+ */
+function scrollColumn(delta: number): void {
+	try {
+		const total = getLines().length;
+		scrollOffset = clampScrollOffset(scrollOffset + delta, total, visibleColumnRows());
+		if (mode === "rpc") {
+			const snapshot = data?.snapshot();
+			if (snapshot) updateRpcWidget(snapshot);
+		} else {
+			requestRender();
+		}
+	} catch {
+		/* a scroll must never break pi */
+	}
+}
+
+/** Render the full right column at the current terminal width. */
 function buildLines(snapshot: SidebarSnapshot): string[] {
 	try {
-		return renderSidebarPanel(snapshot, resolvedWidth, terminalHeight(), themeDuck(), frame);
+		return renderSidebarPanel(snapshot, resolvedWidth, themeDuck(), frame);
 	} catch {
 		return [];
 	}
@@ -144,7 +186,10 @@ function requestRender(): void {
 function installCompositor(): void {
 	try {
 		if (!capturedTui || !data) return;
-		installSidebarCompositor(capturedTui, getLines, resolvedWidth);
+		installSidebarCompositor(capturedTui, getLines, resolvedWidth, {
+			getOffset: () => scrollOffset,
+			dim: dimText,
+		});
 	} catch {
 		/* an install failure must never break the session */
 	}
@@ -155,9 +200,10 @@ function updateRpcWidget(snapshot: SidebarSnapshot): void {
 	try {
 		const ui = boundCtx?.ui;
 		if (!ui?.setWidget) return;
-		const lines = renderSidebarPanel(snapshot, RPC_WIDTH, RPC_MAX_LINES, IDENTITY_THEME, frame);
+		const lines = renderSidebarPanel(snapshot, RPC_WIDTH, IDENTITY_THEME, frame);
 		const summary = lines.length > 0 ? lines : ["(no agents)"];
-		ui.setWidget(WIDGET_KEY, summary.slice(0, RPC_MAX_LINES), { placement: "belowEditor" });
+		const window = windowLines(summary, scrollOffset, RPC_MAX_LINES, dimText);
+		ui.setWidget(WIDGET_KEY, window, { placement: "belowEditor" });
 	} catch {
 		/* degrade to nothing */
 	}
@@ -362,9 +408,10 @@ async function openAskLogOverlay(ctx: ExtensionContext): Promise<void> {
 
 /** Bind the data module and the compositor once. Never throws. */
 export function bindTreeSidebar(ctx: ExtensionContext): void {
-	if (bound) return;
+	if (bound || !registered) return;
 	try {
 		if (!piRef || !ctx?.ui) return;
+		flushScrollReport(ctx);
 
 		// RPC: no compositor and no `tui`. A bounded `string[]` summary only.
 		if (ctx.mode === "rpc") {
@@ -472,6 +519,8 @@ export function disposeTreeSidebar(): void {
 	bound = false;
 	mode = "";
 	resolvedWidth = SIDEBAR_DEFAULT_WIDTH;
+	scrollOffset = 0;
+	scrollReport = null;
 	lastSignature = null;
 	lastSpinnerLines = "";
 	frame = 0;
@@ -479,12 +528,106 @@ export function disposeTreeSidebar(): void {
 
 // --- registration -----------------------------------------------------------
 
+/** The primary scroll keys: down one line, up one line. */
+const PRIMARY_SCROLL_KEYS: Array<[KeyId, string, number]> = [
+	[Key.altShift("j"), "Scroll the sidebar column down one line", 1],
+	[Key.altShift("k"), "Scroll the sidebar column up one line", -1],
+];
+
+/**
+ * The fallback scroll keys. pi settles a key clash after registration and can
+ * skip a binding in silence, so this pair is always bound as a backup.
+ */
+const FALLBACK_SCROLL_KEYS: Array<[KeyId, string, number]> = [
+	[Key.alt("j"), "Scroll the sidebar column down one line (fallback)", 1],
+	[Key.alt("k"), "Scroll the sidebar column up one line (fallback)", -1],
+];
+
+/** The key pair names for the log line. */
+const PRIMARY_PAIR_LABEL = "alt+shift+j/k";
+const FALLBACK_PAIR_LABEL = "alt+j/k";
+
+/**
+ * One report line naming the scroll keys that bound. Empty names both pairs.
+ *
+ * @internal The refusal tests call this.
+ */
+export function scrollKeyReport(bound: KeyId[]): string {
+	if (bound.length === 0) {
+		return `sidebar: no scroll keys bound; ${PRIMARY_PAIR_LABEL} and ${FALLBACK_PAIR_LABEL} are unavailable`;
+	}
+	return `sidebar: scroll keys bound: ${bound.join(", ")}`;
+}
+
+/**
+ * Register one scroll key pair and return the keys that bound. Try every key,
+ * so one refusal does not prevent the other key from binding.
+ */
+function registerKeyPair(pi: ExtensionAPI, keys: Array<[KeyId, string, number]>): KeyId[] {
+	const bound: KeyId[] = [];
+	for (const [key, description, delta] of keys) {
+		try {
+			pi.registerShortcut(key, {
+				description,
+				handler: () => {
+					scrollColumn(delta);
+				},
+			});
+			bound.push(key);
+		} catch {
+			/* a refused key must not stop the rest of the pair */
+		}
+	}
+	return bound;
+}
+
+/**
+ * Register both scroll key pairs and hold one report of the keys that bound.
+ * A half pair cannot come from pi in practice, but the collection is cheap.
+ */
+function registerScrollShortcuts(pi: ExtensionAPI): void {
+	scrollOffset = 0;
+	scrollReport = null;
+	const bound = [
+		...registerKeyPair(pi, PRIMARY_SCROLL_KEYS),
+		...registerKeyPair(pi, FALLBACK_SCROLL_KEYS),
+	];
+	const all = PRIMARY_SCROLL_KEYS.length + FALLBACK_SCROLL_KEYS.length;
+	if (bound.length < all) scrollReport = scrollKeyReport(bound);
+}
+
+/** Show the refusal report once the extension has a context, then clear it. */
+function flushScrollReport(ctx: ExtensionContext): void {
+	if (!scrollReport) return;
+	const text = scrollReport;
+	scrollReport = null;
+	try {
+		ctx.ui?.notify?.(text, "warning");
+	} catch {
+		/* a report must never break a bind */
+	}
+}
+
+/**
+ * The scroll count of a `/sidebar up|down` argument: one when absent, or null
+ * when the argument is not a positive whole number.
+ */
+function parseScrollCount(raw: string | undefined): number | null {
+	if (raw === undefined) return 1;
+	const value = Number(raw);
+	if (!Number.isInteger(value) || value < 1) return null;
+	return value;
+}
+
 /** Register the tree commands and the `session_start` binding. */
 export function registerTreeUi(pi: ExtensionAPI): void {
 	piRef = pi;
+	registered = false;
+	registerScrollShortcuts(pi);
 
 	pi.registerCommand("sidebar", {
-		description: "Show or hide the persona-agents sidebar, or set its width (usage: /sidebar [on|off|width <n>])",
+		description:
+			"Show or hide the persona-agents sidebar, set its width, or scroll it (usage: /sidebar [on|off|width <n>|up [n]|down [n]])",
 		handler: async (args: string, ctx) => {
 			try {
 				const arg = args.trim().toLowerCase();
@@ -514,8 +657,22 @@ export function registerTreeUi(pi: ExtensionAPI): void {
 						ctx.ui?.notify?.(`Sidebar width ${plan.width}${persisted}.`, write.ok ? "info" : "warning");
 						return;
 					}
+					if (parts[0] === "up" || parts[0] === "down") {
+						const count = parseScrollCount(parts[1]);
+						if (count === null) {
+							ctx.ui?.notify?.(
+								`Bad scroll count "${parts[1] ?? ""}". Use /sidebar ${parts[0]} [n] with n a positive whole number.`,
+								"warning",
+							);
+							return;
+						}
+						// No key is involved, so a skipped binding cannot lock the column.
+						ensureBound(ctx);
+						scrollColumn(parts[0] === "down" ? count : -count);
+						return;
+					}
 					ctx.ui?.notify?.(
-						`Unknown option "${arg}". Use /sidebar [on|off] or /sidebar width <n>.`,
+						`Unknown option "${arg}". Use /sidebar [on|off], /sidebar width <n>, or /sidebar up|down [n].`,
 						"warning",
 					);
 					return;
@@ -634,4 +791,5 @@ export function registerTreeUi(pi: ExtensionAPI): void {
 			/* a session start must never break */
 		}
 	});
+	registered = true;
 }

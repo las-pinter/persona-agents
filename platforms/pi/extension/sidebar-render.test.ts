@@ -15,6 +15,8 @@ import {
 	type TodoSnapshot,
 	CONTEXT_BAR_CELLS,
 	SESSION_LABEL_WIDTH,
+	TODOS_ROWS_SHOWN,
+	TREE_ROWS_SHOWN,
 	contextBar,
 	contextBarColor,
 	formatCount,
@@ -86,7 +88,7 @@ function roundLine(events: RunEvent[]): string {
 // --- AGENTS (tree) -----------------------------------------------------------
 
 test("zero nodes renders the AGENTS placeholder", () => {
-	const lines = renderAgentTreePanel([], 40, 5, theme, 0);
+	const lines = renderAgentTreePanel([], 40, theme, 0);
 	assert.ok(lines[0]?.startsWith(" AGENTS "));
 	assert.ok(lines.some((line) => line.includes("(no active agents)")));
 });
@@ -102,12 +104,12 @@ test("each node status renders its own glyph on the first node line", () => {
 	];
 	for (const [label, overrides, glyph] of cases) {
 		const node = makeNode({ runId: "n1", agent: "planner", ...overrides });
-		const lines = renderAgentTreePanel([node], 40, 5, theme, 0);
+		const lines = renderAgentTreePanel([node], 40, theme, 0);
 		assert.ok(lines.length >= 2, label);
 		assert.ok(lines[1]?.includes(glyph), `${label} shows ${glyph}`);
 		assert.ok(lines[1]?.includes("planner"), `${label} shows the agent name`);
 	}
-	const idle = renderAgentTreePanel([makeNode({ runId: "n1", status: "idle" })], 40, 5, theme, 0)[1];
+	const idle = renderAgentTreePanel([makeNode({ runId: "n1", status: "idle" })], 40, theme, 0)[1];
 	assert.ok(!idle?.includes("⠋"), "an idle node does not spin");
 });
 
@@ -150,13 +152,15 @@ test("a top-level orphan with depth draws no connector", () => {
 	assert.ok(!lines[0]?.includes("─"), "no branch glyph is drawn");
 });
 
-test("a tree taller than the budget prints a more marker", () => {
-	const nodes = Array.from({ length: 6 }, (_value, index) =>
+test("a tree past the row cap prints a more marker", () => {
+	const extra = 3;
+	const nodes = Array.from({ length: TREE_ROWS_SHOWN + extra }, (_value, index) =>
 		makeNode({ runId: `n${index}`, agent: `agent${index}` }),
 	);
-	const lines = renderAgentTreePanel(nodes, 40, 3, theme, 0);
-	assert.equal(lines.length, 3);
-	assert.ok(lines[2]?.includes("… +5 more"));
+	const lines = renderAgentTreePanel(nodes, 40, theme, 0);
+	assert.equal(lines.length, TREE_ROWS_SHOWN + 2, "the header, the capped rows, and the marker");
+	assert.ok(lines[lines.length - 1]?.includes(`… +${extra} more`), "the marker counts the capped rows");
+	assert.ok(!lines.some((line) => line.includes(`agent${TREE_ROWS_SHOWN}`)), "a row past the cap never paints");
 });
 
 test("renderNodeDetail maps a node to its output preview", () => {
@@ -344,7 +348,6 @@ test("a rich agent line stays readable and fits width 45", () => {
 	const lines = renderAgentTreePanel(
 		[node],
 		45,
-		6,
 		theme,
 		0,
 		Date.parse("2026-10-07T00:01:05.000Z"),
@@ -485,7 +488,7 @@ test("TODOS renders a progress line and checkbox lines", () => {
 		{ id: "1", text: "write code", done: true },
 		{ id: "2", text: "write tests", done: false },
 	];
-	const lines = content(renderTodosPanel(todos, 60, 8, theme));
+	const lines = content(renderTodosPanel(todos, 60, theme));
 	assert.equal(lines[0]?.trimEnd(), " TODOS");
 	assert.ok(lines.includes("1/2"));
 	assert.ok(lines.some((line) => line.includes("✓ write code")));
@@ -493,42 +496,45 @@ test("TODOS renders a progress line and checkbox lines", () => {
 });
 
 test("an empty TODOS list renders (no todos)", () => {
-	const lines = content(renderTodosPanel([], 60, 8, theme));
+	const lines = content(renderTodosPanel([], 60, theme));
 	assert.ok(lines.includes("(no todos)"));
 });
 
-test("a long todo list clips with a more marker", () => {
-	const todos: TodoSnapshot = Array.from({ length: 6 }, (_value, index) => ({
+test("a todo list past the row cap prints a more marker", () => {
+	const extra = 2;
+	const todos: TodoSnapshot = Array.from({ length: TODOS_ROWS_SHOWN + extra }, (_value, index) => ({
 		id: String(index),
 		text: `todo ${index}`,
 		done: false,
 	}));
-	const lines = renderTodosPanel(todos, 60, 4, theme);
-	assert.ok(lines.some((line) => line.includes("… +5 more")));
+	const lines = content(renderTodosPanel(todos, 60, theme));
+	assert.equal(lines.length, TODOS_ROWS_SHOWN + 3, "the header, the progress line, the rows, and the marker");
+	assert.ok(lines.includes(`… +${extra} more`), "the marker counts the capped rows");
+	assert.ok(!lines.some((line) => line.includes(`todo ${TODOS_ROWS_SHOWN}`)), "a row past the cap never paints");
 });
 
-test("six todos at height 12 show all six without an overflow line", () => {
-	const todos: TodoSnapshot = Array.from({ length: 6 }, (_value, index) => ({
+test("a todo list under the row cap paints every row without an overflow line", () => {
+	const todos: TodoSnapshot = Array.from({ length: TODOS_ROWS_SHOWN }, (_value, index) => ({
 		id: String(index),
 		text: `todo ${index}`,
 		done: false,
 	}));
-	const lines = content(renderTodosPanel(todos, 60, 12, theme));
-	assert.equal(lines.length, 8, "header, summary, and six item lines");
-	assert.ok(lines.some((line) => line.includes("todo 5")));
+	const lines = content(renderTodosPanel(todos, 60, theme));
+	assert.equal(lines.length, TODOS_ROWS_SHOWN + 2, "header, summary, and one line per row");
+	assert.ok(lines.some((line) => line.includes(`todo ${TODOS_ROWS_SHOWN - 1}`)));
 	assert.ok(!lines.some((line) => line.includes("more")));
 });
 
 test("the turn marker renders when requested", () => {
 	const lines = content(
-		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, 8, theme, true),
+		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, theme, true),
 	);
 	assert.ok(lines.some((line) => line.includes("— new turn —")));
 });
 
 test("no turn marker renders when it is false", () => {
 	const lines = content(
-		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, 8, theme),
+		renderTodosPanel([{ id: "1", text: "open", done: false }], 60, theme),
 	);
 	assert.ok(!lines.some((line) => line.includes("— new turn —")));
 });
@@ -541,7 +547,6 @@ test("all done todos render the all-done cue", () => {
 				{ id: "2", text: "b", done: true },
 			],
 			60,
-			8,
 			theme,
 		),
 	);
@@ -549,43 +554,30 @@ test("all done todos render the all-done cue", () => {
 });
 
 test("the all-done cue survives an item overflow", () => {
-	const todos: TodoSnapshot = Array.from({ length: 4 }, (_value, index) => ({
+	const extra = 2;
+	const todos: TodoSnapshot = Array.from({ length: TODOS_ROWS_SHOWN + extra }, (_value, index) => ({
 		id: String(index),
 		text: `todo ${index}`,
 		done: true,
 	}));
-	const lines = content(renderTodosPanel(todos, 60, 4, theme));
+	const lines = content(renderTodosPanel(todos, 60, theme));
 
-	assert.ok(lines.some((line) => line.includes("✓ all done")));
-	assert.ok(lines.some((line) => line.includes("… +4 more")));
+	const cue = lines.indexOf("✓ all done");
+	assert.ok(cue >= 0, "the all-done cue paints");
+	assert.equal(lines.indexOf("✓ todo 0"), cue + 1, "the cue sits above the first item row");
+	assert.equal(lines.at(-1), `… +${extra} more`, "the overflow mark closes the list");
 });
 
 test("an empty list still shows the turn marker", () => {
-	const lines = content(renderTodosPanel([], 60, 8, theme, true));
+	const lines = content(renderTodosPanel([], 60, theme, true));
 
 	assert.ok(lines.some((line) => line.includes("(no todos)")));
 	assert.ok(lines.some((line) => line.includes("— new turn —")));
 });
 
-test("an empty list keeps the turn marker at a tight height", () => {
-	const lines = content(renderTodosPanel([], 60, 2, theme, true));
-
-	assert.equal(lines.length, 2, "header and marker only");
-	assert.ok(lines.some((line) => line.includes("— new turn —")));
-	assert.ok(!lines.some((line) => line.includes("(no todos)")));
-});
-
-test("height 0 renders no lines and height 1 renders only the header", () => {
-	assert.deepEqual(renderTodosPanel([{ id: "1", text: "a", done: false }], 60, 0, theme), []);
-	const headerOnly = content(
-		renderTodosPanel([{ id: "1", text: "a", done: false }], 60, 1, theme),
-	);
-	assert.deepEqual(headerOnly, [" TODOS"]);
-});
-
 test("the turn marker and all-done cue clip to a narrow width", () => {
 	for (const width of [0, 1, 5]) {
-		const lines = renderTodosPanel([{ id: "1", text: "a", done: true }], width, 8, theme, true);
+		const lines = renderTodosPanel([{ id: "1", text: "a", done: true }], width, theme, true);
 		assertFits(lines, width);
 	}
 });

@@ -39,12 +39,24 @@ const ROW_FALLBACK = "-";
 export const SECTION_RULE_CHAR = "─";
 /**
  * Minimum AGENTS panel lines, header included. A short tree pads with blank
- * lines so the panels below stay put. Clamped to the height budget.
+ * lines so the panels below stay put.
  */
 export const AGENTS_PAD_MIN = 4; // blank lines buy a stable footprint, so lower panels do not jump
 /**
+ * Tree node rows painted in AGENTS before the dim `… +N more` mark. One screen
+ * of agent lines: a common terminal has room for about this many tree rows in
+ * the top slot. The cap stops a runaway tree from painting thousands of lines.
+ */
+export const TREE_ROWS_SHOWN = 20;
+/**
+ * Todo rows painted in TODOS before the dim `… +N more` mark. Six rows plus the
+ * header and the progress line is the eight-line TODOS block a tall column
+ * paints today.
+ */
+export const TODOS_ROWS_SHOWN = 6;
+/**
  * Fixed LOG panel lines, header included: one header and 4 text lines. The
- * newest rows wrap at the panel width and the panel stops at the budget.
+ * newest rows wrap at the panel width and the panel stops at four text lines.
  */
 export const LOG_PANEL_LINES = 5;
 
@@ -176,13 +188,6 @@ export interface SidebarSnapshot {
 	/** True when the TODOS panel paints the last turn boundary. */
 	todosTurnMarker?: boolean;
 	tps: number;
-}
-
-/** Size and animation context shared by the compositor helpers. */
-export interface PanelContext {
-	width: number;
-	height: number;
-	frame: number;
 }
 
 /** Apply a theme color when the duck type has `fg`. Falls back to plain text. */
@@ -436,38 +441,34 @@ export function renderTreeLines(
 }
 
 /**
- * The AGENTS panel: header plus one indented line per node, clipped to the
- * panel height. A short tree pads to `AGENTS_PAD_MIN` so the panels below do
- * not jump. Zero nodes gives a single placeholder line.
+ * The AGENTS panel: header plus one indented line per node. The rows stop at
+ * `TREE_ROWS_SHOWN` and the rest show as a dim `… +N more` mark. A short tree
+ * pads to `AGENTS_PAD_MIN` so the panels below do not jump. Zero nodes gives a
+ * single placeholder line.
  */
 export function renderAgentTreePanel(
 	tree: TreeNode[],
 	width: number,
-	height: number,
 	theme: SidebarTheme,
 	frame: number,
 	now: number = Date.now(),
 ): string[] {
 	const lines: string[] = [header(theme, " AGENTS ")];
-	const budget = Math.max(0, Math.floor(height) - 1);
 	const nodes = flattenTreeKeeping(tree ?? []);
 
 	if (nodes.length === 0) {
-		if (budget >= 1) lines.push("(no active agents)");
-	} else if (budget >= 1) {
+		lines.push("(no active agents)");
+	} else {
 		const nodeLines = renderTreeLines(tree, theme, frame, now);
-		if (nodeLines.length <= budget) {
-			lines.push(...nodeLines);
-		} else {
-			const shown = Math.max(0, budget - 1);
-			lines.push(...nodeLines.slice(0, shown));
-			lines.push(styleDim(theme, `… +${nodeLines.length - shown} more`));
+		const shown = nodeLines.slice(0, TREE_ROWS_SHOWN);
+		lines.push(...shown);
+		if (nodeLines.length > shown.length) {
+			lines.push(styleDim(theme, `… +${nodeLines.length - shown.length} more`));
 		}
 	}
 
-	// padToMin: reserve a stable footprint, clamped to the height budget.
-	const min = Math.min(AGENTS_PAD_MIN, Math.max(0, Math.floor(height)));
-	while (lines.length < min) lines.push("");
+	// padToMin: reserve a stable footprint, so lower panels do not jump.
+	while (lines.length < AGENTS_PAD_MIN) lines.push("");
 
 	return lines.map((line) => clipLine(line, width));
 }
@@ -745,37 +746,30 @@ export function renderMcpPanel(
 	return lines.map((line) => clipLine(line, width));
 }
 
-/** The TODOS panel: header, progress, an optional turn marker, and item lines. */
+/**
+ * The TODOS panel: header, progress, an optional turn marker, and item lines.
+ * The item rows stop at `TODOS_ROWS_SHOWN` and the rest show as a dim
+ * `… +N more` mark. Both cues sit above the rows, so a cap never drops them.
+ */
 export function renderTodosPanel(
 	todos: TodoSnapshot | null | undefined,
 	width: number,
-	height: number,
 	theme: SidebarTheme,
 	showTurnMarker: boolean = false,
 ): string[] {
-	const budget = Math.max(0, Math.floor(height));
-	if (budget <= 0) return [];
 	const lines: string[] = [header(theme, " TODOS ")];
 	const items = todos ?? [];
 
 	if (items.length === 0) {
-		// Reserve the marker line first, so an emptied list keeps the boundary cue.
-		const markerReserve = showTurnMarker ? 1 : 0;
-		if (budget >= 2 + markerReserve) lines.push("(no todos)");
-		if (showTurnMarker && lines.length < budget) lines.push(styleDim(theme, "— new turn —"));
+		lines.push("(no todos)");
+		if (showTurnMarker) lines.push(styleDim(theme, "— new turn —"));
 		return lines.map((line) => clipLine(line, width));
 	}
-	if (budget < 2) return lines.map((line) => clipLine(line, width));
 
 	const done = items.filter((item) => item.done).length;
-	const allDone = done === items.length;
 	lines.push(`${done}/${items.length}`);
-	if (showTurnMarker && lines.length < budget) lines.push(styleDim(theme, "— new turn —"));
-	// Reserve the all-done cue before the item lines, so an overflow never drops it.
-	if (allDone && lines.length < budget) lines.push(styleDim(theme, "✓ all done"));
-
-	const itemBudget = budget - lines.length;
-	if (itemBudget <= 0) return lines.map((line) => clipLine(line, width));
+	if (showTurnMarker) lines.push(styleDim(theme, "— new turn —"));
+	if (done === items.length) lines.push(styleDim(theme, "✓ all done"));
 
 	const itemLine = (item: TodoItem): string => {
 		const glyph = color(theme, item.done ? "success" : "dim", item.done ? "✓" : "○");
@@ -783,12 +777,10 @@ export function renderTodosPanel(
 		return `${glyph} ${item.done ? styleDim(theme, text) : text}`;
 	};
 
-	if (itemBudget >= items.length) {
-		for (const item of items) lines.push(itemLine(item));
-	} else {
-		const shown = Math.max(0, itemBudget - 1);
-		for (const item of items.slice(0, shown)) lines.push(itemLine(item));
-		lines.push(styleDim(theme, `… +${items.length - shown} more`));
+	const shown = items.slice(0, TODOS_ROWS_SHOWN);
+	for (const item of shown) lines.push(itemLine(item));
+	if (items.length > shown.length) {
+		lines.push(styleDim(theme, `… +${items.length - shown.length} more`));
 	}
 	return lines.map((line) => clipLine(line, width));
 }
@@ -830,89 +822,39 @@ export function renderNodeDetail(
 }
 
 /**
- * Stack the panels in priority order. When the height is too small, lower
- * panels are dropped first; the tree keeps the top slot. A dim, full-width
- * rule separates adjacent panels. Each rule counts against the height budget.
- * `noRuleBefore` names the index of one panel that paints with no rule above
- * it, so a freed rule line can carry that panel's header instead.
+ * Stack the panels in the declared order. A dim, full-width rule separates
+ * adjacent panels. The stack drops nothing and clips nothing to a viewport:
+ * the column is as tall as the panels it holds, and the paint layer takes one
+ * window of it.
  */
-function composePanels(
-	ctx: PanelContext,
-	panels: string[][],
-	theme: SidebarTheme,
-	noRuleBefore: number = -1,
-): string[] {
-	const limit = Math.max(0, Math.floor(ctx.height));
-	if (limit <= 0) return [];
-
-	// One rule sits between each pair of kept panels, except above the panel at
-	// `noRuleBefore`, which takes a freed rule line as its own first line.
-	const ruleCount = (count: number): number =>
-		Math.max(0, count - 1) - (noRuleBefore > 0 && noRuleBefore < count ? 1 : 0);
-
-	// Height of the first `count` panels plus their rules.
-	const stackedHeight = (count: number): number => {
-		let total = ruleCount(count);
-		for (let index = 0; index < count; index++) total += panels[index].length;
-		return total;
-	};
-
-	let count = panels.length;
-	while (count > 1 && stackedHeight(count) > limit) count -= 1;
-
+function composePanels(width: number, panels: string[][], theme: SidebarTheme): string[] {
 	const lines: string[] = [];
-	for (let index = 0; index < count; index++) {
-		if (index > 0 && index !== noRuleBefore) lines.push(sectionRule(theme, ctx.width));
-		lines.push(...panels[index]);
-	}
-	if (lines.length > limit) lines.length = limit;
-	return lines.map((line) => clipLine(line, ctx.width));
+	panels.forEach((panel, index) => {
+		if (index > 0) lines.push(sectionRule(theme, width));
+		lines.push(...panel);
+	});
+	return lines.map((line) => clipLine(line, width));
 }
 
 /**
- * Compose the full right column.
- *
- * The `height` parameter is a line budget: each panel takes a share of it, so
- * the compositor needs the column height. `frame` drives the running spinner.
+ * Compose the full right column: the seven panels in the declared order, bounded
+ * by their own content. `frame` drives the running spinner.
  */
 export function renderSidebarPanel(
 	snapshot: SidebarSnapshot,
 	width: number,
-	height: number,
 	theme: SidebarTheme,
 	frame: number,
 ): string[] {
-	const limit = Math.max(0, Math.floor(height));
-	if (limit <= 0) return [];
-	const ctx: PanelContext = { width, height: limit, frame };
-
 	const now = Date.now();
-	const treePanel = renderAgentTreePanel(snapshot.tree ?? [], width, limit, theme, frame, now);
-	const statusPanel = renderStatusPanel(snapshot.status, width, theme, now);
-	const logPanel = renderAskLogPanel(snapshot.askLog, width, theme);
-	const sessionPanel = renderSessionPanel(snapshot.session, width, theme, now);
-	const workspacePanel = renderWorkspacePanel(snapshot.workspace, width, theme);
-	const mcpPanel = renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage);
-	const upper = [treePanel, statusPanel, sessionPanel, workspacePanel, mcpPanel];
-	const upperLines = upper.reduce((sum, panel) => sum + panel.length, 0);
-	// Seven panels carry six section rules: four between the five panels above,
-	// one before TODOS, one before LOG. TODOS takes the leftover above LOG, which
-	// keeps its fixed five lines at the foot of the column.
-	const fixedHeight = upperLines + (upper.length + 1) + logPanel.length;
-	const leftover = limit - fixedHeight;
-	// A dropped TODOS frees its own rule line. TODOS then takes that line as a
-	// one-line header with no rule above it, so the column fills the limit.
-	const ruleFreeHeight = upperLines + upper.length + logPanel.length;
-	const todosHeight = leftover > 0 ? leftover : Math.max(0, limit - ruleFreeHeight);
-	const joinedTodos = leftover <= 0 && todosHeight > 0;
-	const todosPanel = renderTodosPanel(
-		snapshot.todos,
-		width,
-		todosHeight,
-		theme,
-		snapshot.todosTurnMarker === true,
-	);
-	const panels = [...upper, todosPanel, logPanel].filter((panel) => panel.length > 0);
-	const todosIndex = joinedTodos ? panels.indexOf(todosPanel) : -1;
-	return composePanels(ctx, panels, theme, todosIndex);
+	const panels = [
+		renderAgentTreePanel(snapshot.tree ?? [], width, theme, frame, now),
+		renderStatusPanel(snapshot.status, width, theme, now),
+		renderSessionPanel(snapshot.session, width, theme, now),
+		renderWorkspacePanel(snapshot.workspace, width, theme),
+		renderMcpPanel(snapshot.mcp, width, theme, snapshot.mcpUsage),
+		renderTodosPanel(snapshot.todos, width, theme, snapshot.todosTurnMarker === true),
+		renderAskLogPanel(snapshot.askLog, width, theme),
+	];
+	return composePanels(width, panels, theme);
 }

@@ -112,11 +112,11 @@ export function makeAskLogRows(): AskLogRow[] {
 }
 
 /**
- * The reference data the height budget names: 3 tree nodes, 2 changed files
- * with stats, 2 MCP servers, 4 todos, and a full LOG ring. The position of every
- * drop point depends on these line counts.
+ * The reference data the panel tests name: 3 tree nodes, 2 changed files with
+ * stats, 2 MCP servers, 4 todos, and a full LOG ring. Every panel row count in
+ * the composition tests follows from these values.
  */
-export function makeBudgetSnapshot(): SidebarSnapshot {
+export function makeFullSnapshot(): SidebarSnapshot {
 	const child = makeNode({ runId: "child", parentRunId: "root", depth: 1, agent: "implementer" });
 	const sibling = makeNode({ runId: "sibling", parentRunId: "root", depth: 1, agent: "tester" });
 	return makeSnapshot({
@@ -147,12 +147,6 @@ export function assertFits(lines: string[], width: number): void {
 		assert.ok(visibleWidth(line) <= width, `line exceeds ${width}: ${JSON.stringify(line)}`);
 	}
 }
-
-/**
- * A LOG panel header line. Matches the trimmed line, so leading padding does
- * not count, and the word must stand alone.
- */
-export const LOG_HEADER_RE = /^LOG(\s|$)/;
 
 /** Lines are right-padded to the column width; trim for content checks. */
 export function content(lines: string[]): string[] {

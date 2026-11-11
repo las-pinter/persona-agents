@@ -445,20 +445,22 @@ The sidebar owns the right column. It paints SEVEN panels:
    numbers: the panel carries generic log events, so a count tells the reader
    nothing.
 
-TODOS takes the height that the fixed panels leave, the five-line LOG panel at
-the foot included. A shrinking column takes TODOS down line by line. The STUDY
-STATUS panel holds 2 to 6 lines: a title, one line per study up to four
-studies, and the overflow marker. Every drop height therefore follows the
-number of studies. With a full ring and two changed files, the fixed panels and
-their six rules fill the column at 36 rows with no study and at 40 rows with
-five studies. At that height only, TODOS takes the freed rule line as a
-one-line header, so no row goes unused. One row above it, TODOS has its own
-budget line and the rule above it returns. Below it, the next row down drops
-TODOS whole, and each further row drops a whole panel from the end of the list,
-LOG first, then MCP, WORKSPACE, SESSION, then STUDY STATUS. A dropped panel
-leaves its rows unpainted. AGENTS never drops. A column of 30 rows paints five
-panels with no study and up to two studies; three or more studies push MCP
-out, so four panels paint.
+The column fits its content, not the terminal height. Every panel paints in
+this order at its own height, and a dim rule sits between two panels. The
+terminal shows one viewport of the column. A shared scroll offset selects the
+window, clamped at the top and at the last line, and one `alt+shift+j` or
+`alt+shift+k` press moves it by one line. The pair `alt+j` / `alt+k` is bound as
+a fallback, because pi can skip a clashing binding after registration. The
+subcommands `/sidebar down [n]` and `/sidebar up [n]` move the window by `n`
+lines, one by default, with no key at all. So a skipped binding never locks the
+column. A line hidden above or below the window is counted in a dim
+`… +N above` or `… +N below` mark, so a line never leaves the column without a
+mark, and an exactly fitting column carries no mark and does not move. Each
+panel bounds itself: AGENTS paints up to twenty node rows and TODOS up to six
+item rows, and each marks the rest with the separate `… +N more` marker. A tree
+of one node pads AGENTS to four lines, so the panels below keep their place. The LOG panel
+keeps its five lines. The STUDY STATUS panel holds a title, one row per study up
+to four studies, and the overflow marker.
 
 The tree and the MCP counts are cross-process. The STUDY STATUS, SESSION,
 WORKSPACE, TODOS, and LOG panels show the root process's data only. The LOG
@@ -506,7 +508,7 @@ researcher, reviewer. Mascot is excluded. Each allowed agent lists
 
 ### Commands
 
-- `/sidebar [on|off|width <n>]` — show or hide the right column, or set its width (10 to 120). A bare `/sidebar` toggles.
+- `/sidebar [on|off|width <n>|up [n]|down [n]]` — show or hide the right column, set its width (10 to 120), or move the viewport by `n` lines (1 by default, clamped at both ends). A bare `/sidebar` toggles. The `up` and `down` subcommands need no key.
 - `/agents-tree` — open the live tree overlay. Up/down selects a node.
 - `/agent-inspect [runId|last]` — open one node's detail.
 - `/ask-log` — open the log ring (ask events and plain lines), newest first. Up/down and PgUp/PgDn scroll by wrapped line, `g`/`G` jump to either end, `q`/Esc close.

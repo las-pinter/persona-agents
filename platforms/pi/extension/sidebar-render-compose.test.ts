@@ -4,9 +4,9 @@
  * Runs under plain Node (type stripping):
  *   npm test -- platforms/pi/extension/sidebar-render-compose.test.ts
  *
- * Covers panel composition, width and height fitting, theme fallback, and the
- * detail overlay. The repaint signature and the selection walk hold their own
- * test files.
+ * Covers panel composition, width fitting, theme fallback, and the detail
+ * overlay. The repaint signature and the selection walk hold their own test
+ * files.
  */
 
 import { test } from "node:test";
@@ -19,6 +19,7 @@ import {
 	AGENTS_PAD_MIN,
 	SECTION_RULE_CHAR,
 	STUDY_STATUS_SHOWN,
+	TODOS_ROWS_SHOWN,
 	formatRow,
 	renderAgentTreePanel,
 	renderMcpPanel,
@@ -31,11 +32,10 @@ import {
 	statusIcon,
 } from "./sidebar-render.ts";
 import {
-	LOG_HEADER_RE,
 	assertFits,
 	content,
 	makeAskLogRows,
-	makeBudgetSnapshot,
+	makeFullSnapshot,
 	makeNode,
 	makeSession,
 	makeSnapshot,
@@ -44,7 +44,6 @@ import {
 } from "./sidebar-render-fixtures.ts";
 
 const HEADER_RE = /^ (AGENTS|STUDY STATUS|LOG|SESSION|WORKSPACE|MCP|TODOS)$/;
-
 /** The panel headers a composed column paints, in column order. */
 function visibleHeaders(lines: string[]): string[] {
 	return content(lines)
@@ -56,7 +55,7 @@ function visibleHeaders(lines: string[]): string[] {
 
 test("a theme with no methods still renders a plain header", () => {
 	const plain: SidebarTheme = {};
-	const lines = content(renderAgentTreePanel([], 40, 5, plain, 0));
+	const lines = content(renderAgentTreePanel([], 40, plain, 0));
 	assert.equal(lines[0]?.trimEnd(), " AGENTS");
 });
 
@@ -71,7 +70,7 @@ test("an empty color map keeps every color token as plain text", () => {
 	};
 	const node = makeNode({ runId: "n1", status: "running", task: "work" });
 
-	const lines = content(renderAgentTreePanel([node], 40, 5, empty, 0));
+	const lines = content(renderAgentTreePanel([node], 40, empty, 0));
 
 	assert.deepEqual(calls, []);
 	assert.equal(lines[0], " AGENTS");
@@ -88,33 +87,38 @@ test("a token in the color map is colored while a missing token stays plain", ()
 	};
 	const node = makeNode({ runId: "n1", status: "running", task: "work" });
 
-	renderAgentTreePanel([node], 40, 5, partial, 0);
+	renderAgentTreePanel([node], 40, partial, 0);
 
 	assert.ok(calls.includes("accent"));
 	assert.ok(!calls.includes("muted"));
 });
 
-// --- composition, width, and height ------------------------------------------
+// --- composition and width ---------------------------------------------------
 
 test("renderSidebarPanel stacks AGENTS first", () => {
 	const child = makeNode({ runId: "c1", parentRunId: "root", depth: 1, agent: "tester" });
 	const root = makeNode({ runId: "root", depth: 0, agent: "orchestrator", children: [child] });
-	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, 30, theme, 0);
+	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, theme, 0);
 	assert.ok(lines[0]?.startsWith(" AGENTS "));
 	assert.ok(lines.some((line) => line.includes(" SESSION ")));
 	assert.ok(lines.some((line) => line.includes(" WORKSPACE ")));
 });
 
-test("renderSidebarPanel drops lower panels when the height is short", () => {
-	const lines = content(renderSidebarPanel(makeSnapshot(), 80, 2, theme, 0));
-	const headers = visibleHeaders(lines);
-	assert.deepEqual(headers, ["AGENTS"], "only AGENTS paints at height 2");
-	assert.equal(lines.length, 2, "the column uses the whole height");
-});
-
-test("renderSidebarPanel puts STUDY STATUS second and SESSION third", () => {
-	const lines = renderSidebarPanel(makeBudgetSnapshot(), 80, 30, theme, 0);
-	assert.deepEqual(visibleHeaders(lines), ["AGENTS", "STUDY STATUS", "SESSION", "WORKSPACE", "MCP"]);
+test("renderSidebarPanel paints the seven panels in the declared order", () => {
+	// Every panel paints now that no height drops one, so TODOS and LOG must
+	// follow MCP and a swap of the last two cannot pass unseen.
+	const lines = renderSidebarPanel(makeFullSnapshot(), 80, theme, 0);
+	assert.deepEqual(visibleHeaders(lines), [
+		"AGENTS",
+		"STUDY STATUS",
+		"SESSION",
+		"WORKSPACE",
+		"MCP",
+		"TODOS",
+		"LOG",
+	]);
+	const rule = SECTION_RULE_CHAR.repeat(80);
+	assert.equal(lines.filter((line) => line === rule).length, 6, "six rules carry the seven panels");
 });
 
 test("renderStatusPanel paints the empty line for a missing status", () => {
@@ -182,7 +186,7 @@ test("formatRow joins a label and an optional second part with one separator", (
 });
 
 test("a full-width dim rule separates panels, never above the first or below the last", () => {
-	const lines = renderSidebarPanel(makeSnapshot(), 80, 40, theme, 0);
+	const lines = renderSidebarPanel(makeSnapshot(), 80, theme, 0);
 	const rule = SECTION_RULE_CHAR.repeat(80);
 	const ruleIndexes = lines
 		.map((line, index) => (line === rule ? index : -1))
@@ -199,7 +203,7 @@ test("a full-width dim rule separates panels, never above the first or below the
 });
 
 test("the section rule is clipped at width 0 and 1 and still fits", () => {
-	const atOne = renderSidebarPanel(makeSnapshot(), 1, 40, theme, 0);
+	const atOne = renderSidebarPanel(makeSnapshot(), 1, theme, 0);
 	assertFits(atOne, 1);
 	assert.equal(
 		atOne.filter((line) => line === SECTION_RULE_CHAR).length,
@@ -207,36 +211,17 @@ test("the section rule is clipped at width 0 and 1 and still fits", () => {
 		"six rules are drawn at width 1",
 	);
 
-	const atZero = renderSidebarPanel(makeSnapshot(), 0, 40, theme, 0);
+	const atZero = renderSidebarPanel(makeSnapshot(), 0, theme, 0);
 	assertFits(atZero, 0);
 	assert.ok(atZero.every((line) => line === ""), "every line is empty at width 0");
 });
 
-test("the section rule counts against the height budget", () => {
-	const rule = SECTION_RULE_CHAR.repeat(80);
-	// AGENTS pads to 4, STUDY STATUS is 2, SESSION is 9, and WORKSPACE is 3.
-	// With three rules, 4 + 1 + 2 + 1 + 9 + 1 + 3 = 21 needs height 21; at 20
-	// WORKSPACE drops.
-	const fits = renderSidebarPanel(makeSnapshot(), 80, 21, theme, 0);
-	assert.ok(fits.some((line) => line.includes(" WORKSPACE ")), "WORKSPACE fits at height 21");
-	assert.equal(fits.filter((line) => line === rule).length, 3, "three rules fit at height 21");
-	assert.ok(fits.length <= 21);
-
-	const short = renderSidebarPanel(makeSnapshot(), 80, 20, theme, 0);
-	assert.ok(!short.some((line) => line.includes(" WORKSPACE ")), "WORKSPACE drops at height 20");
-	assert.equal(short.filter((line) => line === rule).length, 2, "two rules without a fourth panel");
-	assert.ok(short.length <= 20);
-});
-
-test("a short tree at height 13 pads AGENTS to the minimum and drops SESSION", () => {
-	// AGENTS pads to 4 and STUDY STATUS is 2, so one rule makes 4 + 1 + 2 = 7
-	// lines. SESSION would need 17, so at 13 it drops and AGENTS stays minimal.
+test("a short tree pads AGENTS to the minimum", () => {
 	const root = makeNode({ runId: "root", agent: "orchestrator" });
-	const lines = renderSidebarPanel(makeSnapshot({ tree: [root] }), 80, 13, theme, 0);
-	assert.equal(lines.length, AGENTS_PAD_MIN + 1 + 2, "AGENTS pads and STUDY STATUS paints");
-	assert.equal(content(lines)[AGENTS_PAD_MIN - 1], "", "AGENTS pads with a blank line");
-	assert.ok(!lines.some((line) => line.includes(" SESSION ")), "SESSION is dropped at height 13");
-	assert.ok(!lines.some((line) => LOG_HEADER_RE.test(line.trim())), "LOG is dropped at height 13");
+	const lines = content(renderAgentTreePanel([root], 80, theme, 0));
+	assert.equal(lines.length, AGENTS_PAD_MIN, "a one-node tree pads to the minimum");
+	assert.ok((lines[1] ?? "").includes("orchestrator"), "the node line paints below the header");
+	assert.equal(lines[AGENTS_PAD_MIN - 1], "", "AGENTS pads with a blank line");
 });
 
 test("every composed line fits the width", () => {
@@ -254,7 +239,7 @@ test("every composed line fits the width", () => {
 		mcp: [{ name: "a-very-long-server-name", configured: true, connected: false, status: "disconnected" }],
 		todos: [{ id: "1", text: "a very long todo text that overflows", done: false }],
 	});
-	const lines = renderSidebarPanel(snapshot, 18, 40, theme, 0);
+	const lines = renderSidebarPanel(snapshot, 18, theme, 0);
 	assert.ok(lines.length > 0);
 	assertFits(lines, 18);
 });
@@ -265,27 +250,22 @@ test("a long task clips with an ellipsis", () => {
 		agent: "orchestrator",
 		task: "this task preview is much too long to fit in the narrow column",
 	});
-	const lines = renderAgentTreePanel([node], 20, 5, theme, 0);
+	const lines = renderAgentTreePanel([node], 20, theme, 0);
 	assert.ok(lines[1]?.includes("…"));
 	assertFits(lines, 20);
 });
 
-test("AGENTS padding never exceeds the height budget", () => {
-	const lines = renderAgentTreePanel([], 45, 2, theme, 0);
-	assert.ok(lines.length <= 2, `padded to ${lines.length} lines for height 2`);
-});
-
-// --- width and height edge cases ---------------------------------------------
+// --- width edge cases --------------------------------------------------------
 
 for (const width of [0, 1, 10, 20, 45, 120]) {
 	test(`every panel fits width ${width} and does not throw`, () => {
 		const node = makeNode({ runId: "n1", agent: "orchestrator" });
 		const panels = [
-			renderAgentTreePanel([node], width, 5, theme, 0),
+			renderAgentTreePanel([node], width, theme, 0),
 			renderSessionPanel(makeSession(), width, theme),
 			renderWorkspacePanel(makeWorkspace(), width, theme),
 			renderMcpPanel([{ name: "context7", configured: true, connected: true, status: "connected" }], width, theme),
-			renderTodosPanel([{ id: "1", text: "do it", done: false }], width, 8, theme),
+			renderTodosPanel([{ id: "1", text: "do it", done: false }], width, theme),
 			renderSidebarPanel(
 				makeSnapshot({
 					tree: [node],
@@ -294,7 +274,6 @@ for (const width of [0, 1, 10, 20, 45, 120]) {
 					todos: [{ id: "1", text: "do it", done: false }],
 				}),
 				width,
-				20,
 				theme,
 				0,
 			),
@@ -303,70 +282,18 @@ for (const width of [0, 1, 10, 20, 45, 120]) {
 	});
 }
 
-test("renderSidebarPanel gives TODOS the leftover height and shows every item", () => {
+test("renderSidebarPanel paints every todo row up to the cap", () => {
 	const snapshot = makeSnapshot({
 		tree: [],
-		todos: Array.from({ length: 6 }, (_value, index) => ({
+		todos: Array.from({ length: TODOS_ROWS_SHOWN }, (_value, index) => ({
 			id: String(index),
 			text: `todo ${index}`,
 			done: false,
 		})),
 	});
-	const lines = renderSidebarPanel(snapshot, 80, 60, theme, 0);
-	assert.ok(lines.some((line) => line.includes("todo 5")), "the sixth item must render when height allows");
-	assert.ok(!lines.some((line) => line.includes("more")), "no overflow marker when every item fits");
-});
-
-test("renderSidebarPanel gives TODOS the height left after the 32 fixed lines", () => {
-	const height = 40;
-	const todos = Array.from({ length: 8 }, (_value, index) => ({
-		id: String(index),
-		text: `todo ${index}`,
-		done: false,
-	}));
-	const lines = renderSidebarPanel(makeSnapshot({ todos }), 80, height, theme, 0);
-	const painted = content(lines);
-	const todosStart = painted.findIndex((line) => line === " TODOS");
-	assert.ok(todosStart > 0, "TODOS paints at height 40");
-	assert.equal(lines.length, height, "the column uses the whole height");
-	// The six fixed panels take 26 lines and the six rules take six, so TODOS
-	// gets 8 lines. One rule and the five-line log sit below it.
-	const todosEnd = painted.findIndex(
-		(line, index) => index > todosStart && line === SECTION_RULE_CHAR.repeat(80),
-	);
-	assert.equal(todosEnd - todosStart, height - 32, "TODOS gets limit minus the 32 fixed lines");
-	assert.equal(lines.length - todosEnd, 6, "one rule and the five-line log stay below TODOS");
-});
-
-test("renderSidebarPanel fills height 35 and gives the freed rule line to TODOS", () => {
-	// AGENTS to MCP take 24 lines and LOG takes five. Six rules would need 35
-	// lines, so TODOS has no budget row and takes the rule line as its header.
-	const lines = content(renderSidebarPanel(makeBudgetSnapshot(), 80, 35, theme, 0));
-	const rule = SECTION_RULE_CHAR.repeat(80);
-	assert.equal(lines.length, 35, "the column fills the limit");
-	const todosStart = lines.findIndex((line) => line === " TODOS");
-	assert.ok(todosStart > 0, "TODOS paints its header at height 35");
-	assert.notEqual(lines[todosStart - 1], rule, "the freed rule line above TODOS is gone");
-	assert.equal(lines[todosStart + 1], rule, "one rule still separates TODOS from LOG");
-	assert.equal(lines.filter((line) => line === rule).length, 5, "five rules carry the seven panels");
-	assert.equal(lines[lines.length - 5].trim(), "LOG", "LOG keeps its five lines at the foot");
-	assert.equal(
-		renderTodosPanel(makeBudgetSnapshot().todos, 80, 1, theme).length,
-		1,
-		"the one-line TODOS budget paints one line and never a negative height",
-	);
-});
-
-test("renderSidebarPanel restores the TODOS rule at height 36 and fills 36", () => {
-	// One row above the free-rule height, TODOS has its own budget line, so the
-	// rule above it returns and the seven panels plus six rules fill the column.
-	const lines = content(renderSidebarPanel(makeBudgetSnapshot(), 80, 36, theme, 0));
-	const rule = SECTION_RULE_CHAR.repeat(80);
-	assert.equal(lines.length, 36, "the column fills 36");
-	const todosStart = lines.findIndex((line) => line === " TODOS");
-	assert.ok(todosStart > 0, "TODOS paints its header at height 36");
-	assert.equal(lines[todosStart - 1], rule, "the rule above TODOS is back at height 36");
-	assert.equal(lines.filter((line) => line === rule).length, 6, "six rules carry the seven panels");
+	const lines = renderSidebarPanel(snapshot, 80, theme, 0);
+	assert.ok(lines.some((line) => line.includes("todo 5")), "the sixth item must render under the cap");
+	assert.ok(!lines.some((line) => line.includes("more")), "no overflow marker while the list fits the cap");
 });
 
 test("renderSidebarPanel paints the turn marker from the snapshot", () => {
@@ -375,58 +302,28 @@ test("renderSidebarPanel paints the turn marker from the snapshot", () => {
 		todos: [{ id: "1", text: "open", done: false }],
 		todosTurnMarker: true,
 	});
-	const withMarker = content(renderSidebarPanel(snapshot, 80, 60, theme, 0));
+	const withMarker = content(renderSidebarPanel(snapshot, 80, theme, 0));
 	assert.ok(withMarker.some((line) => line.includes("— new turn —")));
 
 	const withoutMarker = content(
-		renderSidebarPanel(makeSnapshot({ tree: [], todos: [{ id: "1", text: "open", done: false }] }), 80, 60, theme, 0),
+		renderSidebarPanel(makeSnapshot({ tree: [], todos: [{ id: "1", text: "open", done: false }] }), 80, theme, 0),
 	);
 	assert.ok(!withoutMarker.some((line) => line.includes("— new turn —")));
 });
 
-test("renderSidebarPanel drops lower panels first", () => {
-	const node = makeNode({ runId: "root", agent: "orchestrator", task: "work" });
-	const snapshot = makeSnapshot({
-		tree: [node],
-		mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
-		todos: [{ id: "1", text: "do it", done: false }],
-	});
-	const headers = [" AGENTS ", " STUDY STATUS ", " SESSION ", " WORKSPACE ", " MCP ", " TODOS ", " LOG"];
-	for (const height of [0, 1, 3, 8, 12, 15, 16, 18, 24, 30]) {
-		const lines = renderSidebarPanel(snapshot, 80, height, theme, 0);
-		assert.ok(lines.length <= height, `height ${height} overflowed`);
-		const present = headers
-			.map((header, index) => (lines.some((line) => line.includes(header)) ? index : -1))
-			.filter((index) => index >= 0);
-		present.forEach((index, position) => {
-			assert.equal(index, position, `height ${height} dropped a higher panel before a lower one`);
-		});
-	}
-});
-
-test("renderSidebarPanel keeps the settled order at heights 30, 24, 16, and 12", () => {
-	const snapshot = makeBudgetSnapshot();
-	const headers = (height: number): string[] =>
-		visibleHeaders(renderSidebarPanel(snapshot, 80, height, theme, 0));
-	assert.deepEqual(headers(30), ["AGENTS", "STUDY STATUS", "SESSION", "WORKSPACE", "MCP"]);
-	assert.deepEqual(headers(24), ["AGENTS", "STUDY STATUS", "SESSION", "WORKSPACE"]);
-	assert.deepEqual(headers(16), ["AGENTS", "STUDY STATUS"]);
-	assert.deepEqual(headers(12), ["AGENTS", "STUDY STATUS"]);
-});
-
 test("renderSidebarPanel paints the log panel last, below TODOS", () => {
-	const painted = content(renderSidebarPanel(makeBudgetSnapshot(), 80, 40, theme, 0));
+	const painted = content(renderSidebarPanel(makeFullSnapshot(), 80, theme, 0));
 	const todos = painted.findIndex((line) => line === " TODOS");
 	const log = painted.findIndex((line) => line.trim() === "LOG");
-	assert.ok(todos > 0, "TODOS paints at height 40");
+	assert.ok(todos > 0, "TODOS paints above the log panel");
 	assert.ok(log > todos, "the log panel sits below TODOS");
 	assert.equal(log, painted.length - 5, "the log panel closes the column with its five lines");
 });
 
-test("renderSidebarPanel paints all seven headers in order at height 40", () => {
-	// Height 40 fits the seven panels and their six rules, so every header paints
-	// here and a swap of two of them cannot pass unseen.
-	const lines = renderSidebarPanel(makeBudgetSnapshot(), 80, 40, theme, 0);
+test("the column paints all seven panels in order with no height", () => {
+	// No height goes in, so every panel paints at its own height and a swap of
+	// two headers cannot pass unseen.
+	const lines = renderSidebarPanel(makeFullSnapshot(), 80, theme, 0);
 	assert.deepEqual(visibleHeaders(lines), [
 		"AGENTS",
 		"STUDY STATUS",
@@ -436,7 +333,8 @@ test("renderSidebarPanel paints all seven headers in order at height 40", () => 
 		"TODOS",
 		"LOG",
 	]);
-	assert.equal(lines.length, 40, "the column uses the whole height");
+	assert.ok(lines.some((line) => line.trimEnd() === " TODOS"), "TODOS paints");
+	assert.ok(lines.some((line) => line.trim() === "LOG"), "LOG paints at the foot");
 });
 
 // --- the study list inside the composed column -------------------------------
@@ -454,18 +352,14 @@ function makeStudies(count: number): StudyRowSnapshot[] {
 /** A budget snapshot plus the given study list and MCP usage totals. */
 function makeStudySnapshot(count: number): SidebarSnapshot {
 	return {
-		...makeBudgetSnapshot(),
+		...makeFullSnapshot(),
 		mcpUsage: { context7: 2, exa: 1 },
 		status: { studies: makeStudies(count) },
 	};
 }
 
-test("a full study list fills height 39 and gives the freed rule line to TODOS", () => {
-	// The five panels above take 28 lines with four study rows, and LOG keeps
-	// five. Six rules would need 40 lines, so at 39 TODOS takes the freed rule
-	// line as its header: every panel still paints and the column fills 39.
-	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, 39, theme, 0));
-	const rule = SECTION_RULE_CHAR.repeat(80);
+test("a full study list paints four rows and no overflow marker", () => {
+	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, theme, 0));
 	assert.deepEqual(visibleHeaders(lines), [
 		"AGENTS",
 		"STUDY STATUS",
@@ -479,54 +373,15 @@ test("a full study list fills height 39 and gives the freed rule line to TODOS",
 		assert.ok(lines.some((line) => line.includes(`study-${index}`)), `study-${index} paints`);
 	}
 	assert.ok(!lines.some((line) => line.includes("more")), "four studies need no overflow marker");
-	const todosStart = lines.findIndex((line) => line === " TODOS");
-	assert.ok(todosStart > 0, "TODOS paints its header at height 39");
-	assert.notEqual(lines[todosStart - 1], rule, "the freed rule line above TODOS is gone");
-	assert.equal(lines[todosStart + 1], rule, "one rule still separates TODOS from LOG");
-	assert.equal(lines.filter((line) => line === rule).length, 5, "five rules carry the seven panels");
 	assert.equal(lines[lines.length - 5].trim(), "LOG", "LOG keeps its five lines at the foot");
-	assert.equal(lines.length, 39, "the column uses the whole height");
 });
 
-test("a full study list fills height 40 with all six rules", () => {
-	// One row above the free-rule height, TODOS has its own budget line, so the
-	// rule above it returns and the seven panels plus six rules fill exactly 40.
-	const lines = content(renderSidebarPanel(makeStudySnapshot(4), 80, 40, theme, 0));
-	const rule = SECTION_RULE_CHAR.repeat(80);
-	assert.deepEqual(visibleHeaders(lines), [
-		"AGENTS",
-		"STUDY STATUS",
-		"SESSION",
-		"WORKSPACE",
-		"MCP",
-		"TODOS",
-		"LOG",
-	]);
-	assert.equal(lines.length, 40, "the column uses the whole height");
-	assert.equal(lines.filter((line) => line === rule).length, 6, "six rules carry the seven panels");
-	for (let index = 0; index < 4; index++) {
-		assert.ok(lines.some((line) => line.includes(`study-${index}`)), `study-${index} paints`);
-	}
-	assert.ok(!lines.some((line) => line.includes("more")), "four studies need no overflow marker");
-	const todosStart = lines.findIndex((line) => line === " TODOS");
-	assert.ok(todosStart > 0, "TODOS paints its header at height 40");
-	assert.equal(lines[todosStart - 1], rule, "the rule above TODOS is back at height 40");
-});
-
-test("a five-study list at height 32 pushes MCP out of a short column", () => {
-	const lines = content(renderSidebarPanel(makeStudySnapshot(5), 80, 32, theme, 0));
-	assert.ok(lines.some((line) => line.includes("… +1 more")), "the overflow row still paints");
-	assert.ok(!lines.some((line) => line === " MCP"), "MCP drops while STUDY STATUS keeps its rows");
-	assert.ok(lines.some((line) => line === " WORKSPACE"), "WORKSPACE still paints");
-});
-
-test("six studies at height 40 paint the cap and the overflow marker inside the column", () => {
-	const lines = content(renderSidebarPanel(makeStudySnapshot(6), 80, 40, theme, 0));
+test("six studies paint the cap and the overflow marker inside the column", () => {
+	const lines = content(renderSidebarPanel(makeStudySnapshot(6), 80, theme, 0));
 	const rows = lines.filter((line) => /study-\d/.test(line));
 	assert.equal(rows.length, STUDY_STATUS_SHOWN, "four study rows paint");
 	assert.equal(lines.filter((line) => line.includes("… +2 more")).length, 1, "one overflow marker paints");
 	assert.ok(lines.some((line) => line === " TODOS"), "TODOS still paints");
-	assert.equal(lines.length, 40, "the column uses the whole height");
 });
 
 // --- detail overlay clipping and placeholders --------------------------------

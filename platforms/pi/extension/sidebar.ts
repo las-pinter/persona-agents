@@ -17,6 +17,7 @@
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { SIDEBAR_DEFAULT_WIDTH, clampWidth } from "./sidebar-config.ts";
+import { MIN_WINDOW_ROWS, windowLines } from "./sidebar-window.ts";
 
 export {
 	SIDEBAR_CONFIG_ENV,
@@ -48,6 +49,9 @@ const WRAP_OFF = "\x1b[?7l";
 const WRAP_ON = "\x1b[?7h";
 const SEPARATOR = "│";
 
+/** Terminal rows assumed when the terminal reports none. */
+export const SIDEBAR_DEFAULT_ROWS = 24;
+
 // --- structural types -------------------------------------------------------
 
 /** Minimal terminal surface the compositor touches. */
@@ -71,6 +75,14 @@ function positiveInt(value: unknown, fallback: number): number {
 	return typeof value === "number" && Number.isFinite(value) && value > 0
 		? Math.floor(value)
 		: fallback;
+}
+
+/** The scroll state the glue hands to the paint layer. */
+export interface SidebarScrollOptions {
+	/** The shared column scroll offset. Read at paint time, never cached. */
+	getOffset?: () => number;
+	/** The dim style of the hide marks. */
+	dim?: (text: string) => string;
 }
 
 /** Find a property descriptor on the object or its prototype chain. */
@@ -105,6 +117,8 @@ function formatSidebarLine(line: string, width: number): string {
 export class SidebarCompositor {
 	private readonly tui: SidebarTui;
 	private readonly getLines: () => string[];
+	private readonly getOffset: () => number;
+	private readonly dim: (text: string) => string;
 	/** The clamped right-column width. */
 	readonly width: number;
 
@@ -128,10 +142,17 @@ export class SidebarCompositor {
 	private ownDoRenderDescriptor: PropertyDescriptor | undefined;
 	private originalDoRender: ((...args: unknown[]) => void) | undefined;
 
-	constructor(tui: SidebarTui, getLines: () => string[], width = SIDEBAR_DEFAULT_WIDTH) {
+	constructor(
+		tui: SidebarTui,
+		getLines: () => string[],
+		width = SIDEBAR_DEFAULT_WIDTH,
+		scroll: SidebarScrollOptions = {},
+	) {
 		this.tui = tui;
 		this.getLines = getLines;
 		this.width = clampWidth(width);
+		this.getOffset = scroll.getOffset ?? (() => 0);
+		this.dim = scroll.dim ?? ((text: string) => text);
 	}
 
 	/** Narrow the terminal and wrap pi's render. Safe to call twice. */
@@ -214,6 +235,11 @@ export class SidebarCompositor {
 		}
 	}
 
+	/** The rows this paint layer owns, which is the height of one column window. */
+	visibleRows(): number {
+		return this.rawRows();
+	}
+
 	// --- internals ----------------------------------------------------------
 
 	/** The true terminal width, before the narrowing getter. */
@@ -232,7 +258,7 @@ export class SidebarCompositor {
 	/** The terminal height, with a `process.stdout` fallback. */
 	private rawRows(): number {
 		const rows = this.tui.terminal?.rows ?? process.stdout.rows;
-		return positiveInt(rows, 24);
+		return positiveInt(rows, SIDEBAR_DEFAULT_ROWS);
 	}
 
 	/** Write raw text to the terminal, if one exists. */
@@ -341,7 +367,9 @@ export class SidebarCompositor {
 		try {
 			const rawCols = this.rawColumns();
 			const rawRows = this.rawRows();
-			if (rawCols <= this.width + 1 || rawRows <= 0) return;
+			// Below the window floor one mark and one line cannot both fit, so no
+			// column paints and none is lost in silence.
+			if (rawCols <= this.width + 1 || rawRows < MIN_WINDOW_ROWS) return;
 
 			const sepCol = rawCols - this.width;
 			const sidebarCol = sepCol + 1;
@@ -355,7 +383,12 @@ export class SidebarCompositor {
 				this.forceFullPaint = false;
 			}
 
-			const lines = this.readLineList();
+			const lines = windowLines(
+				this.readLineList(),
+				this.getOffset(),
+				rawRows,
+				this.dim,
+			);
 			// Pad to every terminal row, so the separator spans the full height and
 			// a row with no panel line is blanked instead of left stale.
 			const formatted: string[] = [];
@@ -414,9 +447,10 @@ export function installSidebarCompositor(
 	tui: SidebarTui,
 	getLines: () => string[],
 	width = SIDEBAR_DEFAULT_WIDTH,
+	scroll: SidebarScrollOptions = {},
 ): SidebarCompositor {
 	disposeSidebarCompositor();
-	const compositor = new SidebarCompositor(tui, getLines, width);
+	const compositor = new SidebarCompositor(tui, getLines, width, scroll);
 	try {
 		compositor.install();
 	} catch {

@@ -22,7 +22,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import { SIDEBAR_DEFAULT_WIDTH, getSidebarCompositor } from "./sidebar.ts";
 import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS, TreeOverlayComponent } from "./overlays.ts";
-import { disposeTreeSidebar } from "./tree-ui.ts";
+import { RPC_MAX_LINES, bindTreeSidebar, disposeTreeSidebar, scrollKeyReport } from "./tree-ui.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent } from "./tree-log.ts";
 import { makeNode, makeSnapshot, theme as fixtureTheme } from "./sidebar-render-fixtures.ts";
@@ -187,6 +187,270 @@ test("a toggle adopts a width changed on disk so the live compositor matches dis
 	assert.deepEqual(JSON.parse(readFileSync(harness.configPath, "utf8")), {
 		enabled: true,
 		width: 30,
+	});
+});
+
+// --- column scroll keys ------------------------------------------------------
+
+/**
+ * The column text of every terminal row, from the last write the paint layer
+ * made to that row. The row diff leaves an unchanged row alone, so the merge
+ * shows what the screen holds, not what the last paint touched.
+ */
+function paintedColumn(harness: Harness): string[] {
+	const width = getSidebarCompositor()?.width ?? SIDEBAR_DEFAULT_WIDTH;
+	const textCol = RAW_COLUMNS - width + 1;
+	const output = harness.terminal.writes.join("");
+	const rows = new Array<string>(harness.terminal.rows).fill("");
+	const marker = new RegExp(`\\x1b\\[(\\d+);${textCol}H`, "g");
+	for (let match = marker.exec(output); match !== null; match = marker.exec(output)) {
+		const row = Number(match[1]);
+		const rest = output.slice(match.index + match[0].length);
+		const stop = rest.indexOf("\x1b[");
+		const text = (stop < 0 ? rest : rest.slice(0, stop)).replace(/ +$/, "");
+		if (row >= 1 && row <= harness.terminal.rows) rows[row - 1] = text;
+	}
+	return rows;
+}
+
+/** Press one scroll key by its name and let its handler settle. */
+async function pressScroll(harness: Harness, key: string): Promise<void> {
+	const handler = harness.shortcuts.get(key);
+	assert.ok(handler, `the scroll key ${key} was not registered`);
+	await handler(harness.ctx);
+}
+
+/** The count in a `… +N above` mark row, or null when the row is content. */
+function aboveCount(row: string | undefined): number | null {
+	const match = /^… \+(\d+) above$/.exec(row ?? "");
+	return match ? Number(match[1]) : null;
+}
+
+/** The count in a `… +N below` mark row, or null when the row is content. */
+function belowCount(row: string | undefined): number | null {
+	const match = /^… \+(\d+) below$/.exec(row ?? "");
+	return match ? Number(match[1]) : null;
+}
+
+describe("column scroll keys", () => {
+	test("both scroll key pairs register, the fallback beside the primary", () => {
+		const harness = setup({ enabled: true });
+		assert.deepEqual([...harness.shortcuts.keys()], ["alt+shift+j", "alt+shift+k", "alt+j", "alt+k"]);
+		assert.ok(
+			!harness.notifications.some((entry) => entry.message.startsWith("sidebar: scroll keys")),
+			"a full registration sends no report",
+		);
+	});
+
+	test("one press moves the column one line and asks for a paint", async () => {
+		const harness = setup({ enabled: true });
+		const compositor = getSidebarCompositor();
+		assert.ok(compositor, "a compositor should be installed in TUI mode");
+		compositor.paint();
+		const before = paintedColumn(harness);
+		assert.equal(before[0], " AGENTS", "the column opens at the top");
+		const secondLine = before[1];
+		assert.ok(secondLine !== undefined && secondLine.length > 0, "a second column line paints");
+		resetPaints(harness.tui);
+
+		await pressScroll(harness, "alt+shift+j");
+		// The fake requestRender counts the ask; the paint itself runs here.
+		assert.equal(harness.tui.requestRenderCalls, 1, "the scroll asked for one paint");
+		compositor.paint();
+
+		const after = paintedColumn(harness);
+		assert.equal(after[0], "… +1 above", "the top row is the mark with the count above");
+		assert.equal(after[1], secondLine, "exactly one column line moved off the top");
+		assert.match(after.at(-1) ?? "", /^… \+\d+ below$/, "the bottom mark counts the rows below");
+	});
+
+	test("the offset clamps at both ends and the marks stay", async () => {
+		const harness = setup({ enabled: true });
+		const compositor = getSidebarCompositor();
+		assert.ok(compositor, "a compositor should be installed in TUI mode");
+
+		for (let press = 0; press < 80; press++) await pressScroll(harness, "alt+shift+j");
+		compositor.paint();
+		const bottom = paintedColumn(harness);
+		assert.match(bottom[0] ?? "", /^… \+\d+ above$/, "the top mark counts the rows above");
+		assert.ok(!/^… \+\d+ below$/.test(bottom.at(-1) ?? ""), "no bottom mark at the end");
+		assert.ok(
+			bottom.some((row) => row.trim() === "LOG"),
+			"the LOG footer is reachable at the bottom",
+		);
+
+		for (let press = 0; press < 3; press++) await pressScroll(harness, "alt+shift+j");
+		compositor.paint();
+		assert.deepEqual(paintedColumn(harness), bottom, "a press at the end moves nothing");
+
+		for (let press = 0; press < 80; press++) await pressScroll(harness, "alt+shift+k");
+		compositor.paint();
+		assert.equal(paintedColumn(harness)[0], " AGENTS", "the column returns to the top");
+	});
+
+	test("a half-bound pair reports the keys that bound", () => {
+		// pi throws on every call once the API is inactive, so a half pair cannot
+		// come from pi. The collector still reports the keys that took.
+		assert.equal(
+			scrollKeyReport(["alt+shift+j"]),
+			"sidebar: scroll keys bound: alt+shift+j",
+			"one bound key is named alone",
+		);
+		assert.equal(
+			scrollKeyReport(["alt+shift+j", "alt+j", "alt+k"]),
+			"sidebar: scroll keys bound: alt+shift+j, alt+j, alt+k",
+			"every bound key is named",
+		);
+		assert.equal(
+			scrollKeyReport([]),
+			"sidebar: no scroll keys bound; alt+shift+j/k and alt+j/k are unavailable",
+			"an empty list names both pairs",
+		);
+	});
+
+	test("one refused key drops that key alone and writes the notice", () => {
+		const harness = setup({ enabled: true, refuseShortcut: "alt+shift+j" });
+		assert.deepEqual(
+			[...harness.shortcuts.keys()],
+			["alt+shift+k", "alt+j", "alt+k"],
+			"one refusal drops one key of four, and the other keys still bind",
+		);
+		assert.equal(harness.commands.size, 4, "the commands still register on a live API");
+		assert.ok(getSidebarCompositor(), "a live API still installs the column");
+
+		const notice = harness.notifications.find((entry) => entry.message.startsWith("sidebar: scroll keys"));
+		assert.ok(notice, "the refusal reaches the user");
+		assert.equal(
+			notice.message,
+			"sidebar: scroll keys bound: alt+shift+k, alt+j, alt+k",
+			"the notice names the three keys that bound",
+		);
+		assert.equal(notice.level, "warning", "the notice is a warning");
+	});
+
+	test("an inactive extension registers nothing, installs no sidebar, and paints nothing", () => {
+		const harness = setup({ enabled: true, inactive: true });
+
+		assert.equal(harness.commands.size, 0, "no command registered on a dead API");
+		assert.equal(harness.shortcuts.size, 0, "no key registered on a dead API");
+		assert.equal(getSidebarCompositor(), null, "the sidebar did not install");
+		assert.deepEqual(harness.widgets, [], "the bind wrote no widget");
+		assert.equal(paintCalls(harness.tui), 0, "the column never painted");
+	});
+
+	test("/sidebar down and up move by the count, default to one, and clamp at both ends", async () => {
+		const harness = setup({ enabled: true });
+		const compositor = getSidebarCompositor();
+		assert.ok(compositor, "a compositor should be installed in TUI mode");
+		compositor.paint();
+		assert.equal(paintedColumn(harness)[0], " AGENTS", "the column opens at the top");
+		resetPaints(harness.tui);
+
+		await harness.handler("down 3", harness.ctx);
+		assert.equal(harness.tui.requestRenderCalls, 1, "down 3 asked for one repaint");
+		compositor.paint();
+		assert.equal(aboveCount(paintedColumn(harness)[0]), 3, "down 3 moved three lines");
+
+		resetPaints(harness.tui);
+		await harness.handler("down", harness.ctx);
+		assert.equal(harness.tui.requestRenderCalls, 1, "a bare down asked for one repaint");
+		compositor.paint();
+		assert.equal(aboveCount(paintedColumn(harness)[0]), 4, "a bare down moved one line");
+
+		await harness.handler("down 999", harness.ctx);
+		compositor.paint();
+		const bottom = paintedColumn(harness);
+		const limit = aboveCount(bottom[0]) ?? -1;
+		assert.ok(limit > 4, "the column carries more than four scrollable lines");
+		assert.equal(belowCount(bottom.at(-1)), null, "down clamps at the last line");
+
+		await harness.handler("up 2", harness.ctx);
+		compositor.paint();
+		assert.equal(aboveCount(paintedColumn(harness)[0]), limit - 2, "up 2 moved back two lines");
+
+		await harness.handler("up 999", harness.ctx);
+		compositor.paint();
+		assert.equal(paintedColumn(harness)[0], " AGENTS", "up clamps at the top");
+	});
+
+	test("/sidebar down refuses a bad count and leaves the column where it was", async () => {
+		const harness = setup({ enabled: true });
+		const compositor = getSidebarCompositor();
+		assert.ok(compositor, "a compositor should be installed in TUI mode");
+		compositor.paint();
+		const before = paintedColumn(harness);
+		resetPaints(harness.tui);
+
+		const args = ["down 0", "down -3", "down half", "up 1.5"];
+		for (const arg of args) await harness.handler(arg, harness.ctx);
+
+		assert.equal(paintCalls(harness.tui), 0, "a bad count asked for no repaint");
+		compositor.paint();
+		assert.deepEqual(paintedColumn(harness), before, "a bad count moved nothing");
+		const warnings = harness.notifications.filter((entry) => entry.message.startsWith("Bad scroll count"));
+		assert.equal(warnings.length, args.length, "each bad count warned");
+		assert.ok(
+			warnings.every((entry) => entry.level === "warning"),
+			"each bad count warned at warning level",
+		);
+	});
+
+	test("with every key silently skipped the command still reaches the tail", async () => {
+		const harness = setup({ enabled: true, skipShortcuts: true });
+		assert.equal(harness.shortcuts.size, 0, "the key clash stored no handler");
+		assert.ok(
+			!harness.notifications.some((entry) => entry.message.startsWith("sidebar: scroll keys")),
+			"a silent skip sends no report",
+		);
+		const compositor = getSidebarCompositor();
+		assert.ok(compositor, "a compositor should be installed in TUI mode");
+		compositor.paint();
+
+		const rows = harness.terminal.rows;
+		const top = paintedColumn(harness);
+		assert.equal(top[0], " AGENTS", "the column opens at the top");
+		const limit = belowCount(top.at(-1)) ?? -1;
+		assert.ok(limit > 0, "the tail starts out of view");
+
+		for (let step = 1; step <= limit; step++) {
+			await harness.handler("down", harness.ctx);
+			compositor.paint();
+			assert.equal(aboveCount(paintedColumn(harness)[0]), step, `press ${step} moved one line`);
+		}
+
+		const tail = paintedColumn(harness);
+		assert.equal(tail.length, rows, "the window keeps the full terminal height");
+		assert.equal(belowCount(tail.at(-1)), null, "the last line is in view with no key");
+		assert.ok(
+			tail.some((row) => row.trim() === "LOG"),
+			"the LOG panel at the foot of the column is reachable",
+		);
+
+		resetPaints(harness.tui);
+		await harness.handler("down 5", harness.ctx);
+		compositor.paint();
+		assert.deepEqual(paintedColumn(harness), tail, "the clamp holds at the last line");
+		assert.equal(harness.tui.requestRenderCalls, 1, "a clamped move still repaints");
+	});
+
+	test("the RPC summary paints a window with the same marks", async () => {
+		const harness = setup({ enabled: true });
+		disposeTreeSidebar();
+		const rpcCtx = { ...harness.ctx, mode: "rpc" } as unknown as ExtensionContext;
+		bindTreeSidebar(rpcCtx);
+
+		const first = harness.widgets.at(-1)?.content as string[] | undefined;
+		assert.ok(Array.isArray(first), "the RPC bind sets a summary widget");
+		assert.equal(first.length, RPC_MAX_LINES, "the summary holds the RPC row cap");
+		assert.equal(first[0].trimEnd(), " AGENTS", "the summary opens at the top");
+		const more = (first.at(-1) ?? "").trimEnd();
+		assert.match(more, /^… \+\d+ below$/, "the cut tail is marked, not dropped");
+
+		await pressScroll(harness, "alt+shift+j");
+		const next = harness.widgets.at(-1)?.content as string[] | undefined;
+		assert.ok(Array.isArray(next), "the scroll rewrote the summary widget");
+		assert.equal(next[0].trimEnd(), "… +1 above", "the RPC window carries the top mark too");
+		assert.equal(next.length, RPC_MAX_LINES, "the RPC window keeps its row cap");
 	});
 });
 
