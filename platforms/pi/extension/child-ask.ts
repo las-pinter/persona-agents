@@ -60,9 +60,15 @@ export type { ChildAskInput, ChildAskOutcome, ChildAskRender } from "./child-ask
  */
 export const CHILD_ASK_DEADLINE_MS = 120_000;
 
-/** The block reason at the child deadline. It names the timeout, not a rule. */
-export const CHILD_ASK_DEADLINE_REASON =
-	"Blocked: the permission ask timed out after 120 seconds with no answer";
+/**
+ * The block reason at the child deadline. It names the timeout that expired, so
+ * a queue bound with another deadline reports its own wait, not the default.
+ * A whole second count reads in seconds, and any other value reads in ms.
+ */
+export function deadlineReason(ms: number): string {
+	const span = ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`;
+	return `Blocked: the permission ask timed out after ${span} with no answer`;
+}
 
 /** The queue options. Both have a production default. */
 export interface ChildAskOptions {
@@ -215,7 +221,7 @@ export class ChildAskQueue {
 			flags,
 		});
 		// The record lands before the settle, so a slow write cannot hide the expiry.
-		settle(state, request, { kind: "block", reason: CHILD_ASK_DEADLINE_REASON });
+		settle(state, request, { kind: "block", reason: deadlineReason(this.timeoutMs) });
 		// Close the visible panel, so the next request is the only one on screen.
 		request.cancel.abort();
 		// A parked mount clears itself in its own finally. This path never clears

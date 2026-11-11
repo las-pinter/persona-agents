@@ -12,10 +12,10 @@ import { afterEach, beforeEach, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
 	CHILD_ASK_DEADLINE_MS,
-	CHILD_ASK_DEADLINE_REASON,
 	CHILD_ASK_NO_SURFACE_REASON,
 	bindChildAsk,
 	childAskQueue,
+	deadlineReason,
 	unbindChildAsk,
 } from "./child-ask.ts";
 import {
@@ -183,7 +183,7 @@ test("timeout: an unanswered request leaves the queue and blocks with the deadli
 	});
 	await captureRoot(s);
 	const result = await childAsk(s, CHILD_A);
-	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(result, { block: true, reason: deadlineReason(25) });
 	assert.equal(s.prompter.titles.length, 1, "the request was shown once");
 	assert.equal(signals.length, 1);
 	assert.equal(signals[0].aborted, true, "the timed-out ask must carry an aborted signal");
@@ -192,10 +192,20 @@ test("timeout: an unanswered request leaves the queue and blocks with the deadli
 	assert.equal(childAskQueue()?.rootCount(), 0, "a drained root is dropped, not retained");
 	assert.equal(CHILD_ASK_DEADLINE_MS, 120_000, "the default deadline is 120 s, not a machine instant");
 	assert.equal(
-		CHILD_ASK_DEADLINE_REASON,
-		"Blocked: the permission ask timed out after 120 seconds with no answer",
+		deadlineReason(CHILD_ASK_DEADLINE_MS),
+		"Blocked: the permission ask timed out after 120 s with no answer",
 	);
-	assert.ok(!CHILD_ASK_DEADLINE_REASON.includes("subagent cannot ask"), "the old denial text is gone");
+	assert.match(String(result && result.reason), /25 ms/, "the reason names the 25 ms timeout");
+	assert.ok(!String(result && result.reason).includes("120"), "the default timeout is not reported");
+	assert.ok(!deadlineReason(CHILD_ASK_DEADLINE_MS).includes("subagent cannot ask"), "the old denial text is gone");
+});
+
+test("deadline reason: a whole second count reads in seconds and a part second reads in ms", () => {
+	assert.match(deadlineReason(CHILD_ASK_DEADLINE_MS), / after 120 s with no answer$/);
+	assert.match(deadlineReason(120_000), / after 120 s with no answer$/);
+	assert.match(deadlineReason(1000), / after 1 s with no answer$/);
+	assert.match(deadlineReason(999), / after 999 ms with no answer$/);
+	assert.match(deadlineReason(1500), / after 1500 ms with no answer$/);
 });
 
 test("fast fail: a render that never settles refuses a child at 120 s, with fake timers", { timeout: 2000 }, async (t) => {
@@ -223,7 +233,13 @@ test("fast fail: a render that never settles refuses a child at 120 s, with fake
 	t.mock.timers.tick(1);
 	await drainMicrotasks();
 	assert.equal(settled, true, "the child is refused at the shipped deadline");
-	assert.deepEqual(outcome, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(outcome, { block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) });
+	// The default case pins the default text by hand, so a format break cannot pass.
+	assert.match(
+		String((outcome as { reason?: string } | null)?.reason),
+		/after 120 s with no answer$/,
+		"the default reason names 120 s in seconds",
+	);
 	assert.equal(childAskQueue()?.waiting(ROOT), 0, "the refused request left the queue");
 	assert.equal(childAskQueue()?.rootCount(), 0, "the drained root is dropped");
 });
@@ -272,7 +288,7 @@ test(
 		t.mock.timers.tick(20);
 		await drainMicrotasks();
 		assert.equal(firstSettled, true, "the head times out at its arrival deadline");
-		assert.deepEqual(firstOutcome, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+		assert.deepEqual(firstOutcome, { block: true, reason: deadlineReason(40) });
 		assert.equal(secondSettled, false, "the queued request is not settled by the head's deadline");
 		assert.equal(s.prompter.titles.length, 2, "the head leaves, then the next request is shown");
 		assert.equal(childAskQueue()?.visible(ROOT), CHILD_B, "the second request is on screen");
@@ -304,7 +320,7 @@ test("timeout: an answer that arrives after the deadline changes nothing", { tim
 	});
 	await captureRoot(s);
 	const timedOut = await childAsk(s, CHILD_A);
-	assert.deepEqual(timedOut, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(timedOut, { block: true, reason: deadlineReason(20) });
 	// The late answer is a stale panel choice, so it must grant nothing.
 	first.resolve("always-allow");
 	await new Promise<void>((resolve) => setTimeout(resolve, 5));
@@ -320,7 +336,7 @@ test("warnings: an arrival line and a deadline line name the ask and its state",
 	await captureRoot(s);
 
 	const result = await childAsk(s, CHILD_A);
-	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(result, { block: true, reason: deadlineReason(20) });
 
 	// Split by stage, so a missing row names itself in its own assertion.
 	const queued = linesWith("arrival");
@@ -395,8 +411,8 @@ test("warnings: a waiter reports the panel of the request ahead, not its own", {
 		"the next row names its own child, tool, count, panel, and place",
 	);
 
-	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
-	assert.deepEqual(await second, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(await first, { block: true, reason: deadlineReason(40) });
+	assert.deepEqual(await second, { block: true, reason: deadlineReason(40) });
 });
 
 // This case pins `place=slot` for a request whose mount never painted. Four
@@ -424,7 +440,7 @@ test("warnings: an expiry at the panel slot says where the request stood", { tim
 		/waiting=0 shown=none place=slot parked=1 surface=yes$/,
 		"the row says the mount began, not that the request stayed queued",
 	);
-	assert.deepEqual(await child, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(await child, { block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) });
 
 	s.prompter.release("Deny");
 	assert.deepEqual(await root, { block: true, reason: DENIED_BY_USER_REASON }, "the root ask denies");
@@ -464,8 +480,8 @@ test("warnings: an expiry still in the queue says where the request stood", { ti
 		/tester\/bash root=\S+ phase=expiry waiting=0 shown=none place=queue parked=1 /,
 		"the waiter never began a mount, so it stayed queued",
 	);
-	assert.deepEqual(await first, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
-	assert.deepEqual(await second, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(await first, { block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) });
+	assert.deepEqual(await second, { block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) });
 
 	s.prompter.release("Deny");
 	assert.deepEqual(await root, { block: true, reason: DENIED_BY_USER_REASON }, "the root ask denies");
@@ -519,7 +535,7 @@ test("warnings: a 29-character root id is cut and marked on the line", { timeout
 		childContext(CHILD_A, prompter),
 	);
 
-	assert.deepEqual(result, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(result, { block: true, reason: deadlineReason(20) });
 	const queued = linesWith("arrival");
 	assert.equal(queued.length, 1, "one arrival row");
 	assert.ok(queued[0].text.includes(`root=${longRoot.slice(0, 12)}… `), "the cut id carries its marker");
@@ -551,7 +567,7 @@ test("warnings: a log writer that throws still blocks the child at the deadline"
 		const result = await childAsk(s, CHILD_A);
 		assert.deepEqual(
 			result,
-			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			{ block: true, reason: deadlineReason(20) },
 			"the deadline block must arrive although the write threw",
 		);
 		assert.equal(childAskQueue()?.waiting(ROOT), 0, "the request left the queue");
@@ -583,7 +599,7 @@ test("fail closed: a child ask with no captured root surface blocks", { timeout:
 	assert.deepEqual(result, { block: true, reason: CHILD_ASK_NO_SURFACE_REASON });
 	// The missing-surface reason is its own text, apart from the deadline reason.
 	assert.equal(CHILD_ASK_NO_SURFACE_REASON, "Blocked: the root session has no prompt surface");
-	assert.notEqual(CHILD_ASK_NO_SURFACE_REASON, CHILD_ASK_DEADLINE_REASON);
+	assert.notEqual(CHILD_ASK_NO_SURFACE_REASON, deadlineReason(CHILD_ASK_DEADLINE_MS));
 	assert.equal(s.prompter.titles.length, 0, "no surface means no prompt");
 });
 

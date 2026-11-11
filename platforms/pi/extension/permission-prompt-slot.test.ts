@@ -15,9 +15,9 @@ import * as assert from "node:assert/strict";
 import { askPanelSlot } from "./ask-panel-slot.ts";
 import {
 	CHILD_ASK_DEADLINE_MS,
-	CHILD_ASK_DEADLINE_REASON,
 	bindChildAsk,
 	childAskQueue,
+	deadlineReason,
 	unbindChildAsk,
 } from "./child-ask.ts";
 import { CHILD_A, CHILD_B, CHILD_C, ROOT, captureRoot, childAsk, deferred, rootAsk, setup } from "./gate-child-ask-fixture.ts";
@@ -183,7 +183,7 @@ test("slot: a child that expires while it waits never mounts", { timeout: 2000 }
 	t.mock.timers.tick(1);
 	await drainMicrotasks();
 	assert.equal(settled, true, "the child settles at its arrival deadline");
-	assert.deepEqual(outcome, { block: true, reason: CHILD_ASK_DEADLINE_REASON });
+	assert.deepEqual(outcome, { block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) });
 
 	// Release the root panel, so the parked child mount resumes. It must stop at
 	// the settled guard instead of meeting the root surface a second time.
@@ -230,14 +230,14 @@ test(
 		await drainMicrotasks();
 		assert.deepEqual(
 			await first,
-			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			{ block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) },
 			"the first child expires in the wait",
 		);
 		t.mock.timers.tick(1000);
 		await drainMicrotasks();
 		assert.deepEqual(
 			await second,
-			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			{ block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) },
 			"the second child expires in the wait",
 		);
 		assert.equal(s.prompter.titles.length, 1, "an expired child mounts no panel");
@@ -288,7 +288,7 @@ test(
 		await drainMicrotasks();
 		assert.deepEqual(
 			await first,
-			{ block: true, reason: CHILD_ASK_DEADLINE_REASON },
+			{ block: true, reason: deadlineReason(CHILD_ASK_DEADLINE_MS) },
 			"the first child expires in the wait",
 		);
 		assert.equal(childAskQueue()?.rootCount(), 0, "the expired root state is dropped");
