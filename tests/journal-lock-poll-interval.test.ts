@@ -54,7 +54,8 @@ interface Retry {
 /**
  * One stale break that loses its first digest compare, so the caller takes
  * exactly one retry poll and then wins. The digest shim differs on its first
- * read only, and the sleep shim records the width it was given.
+ * read only, and the sleep shim records the width it was given. The fake answer
+ * drains its stdin, so the writer's printf never dies of SIGPIPE.
  */
 async function retryOnce(poll: string | undefined): Promise<Retry> {
 	const home = makeHome();
@@ -69,7 +70,7 @@ async function retryOnce(poll: string | undefined): Promise<Retry> {
 			'if [ -f "$count" ]; then now=$(cat "$count"); fi',
 			"now=$((now + 1))",
 			'printf "%s\\n" "$now" >"$count"',
-			'if [ "$now" -lt 2 ]; then printf "%s %s\\n" 1 1; exit 0; fi',
+			'if [ "$now" -lt 2 ]; then cat >/dev/null; printf "%s %s\\n" 1 1; exit 0; fi',
 			`exec ${realCksum} "$@"`,
 		].join("\n"),
 		sleep: [

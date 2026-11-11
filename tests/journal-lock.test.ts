@@ -26,7 +26,6 @@ import {
 	recordText,
 	rowOf,
 	run,
-	shimPath,
 	startAsync,
 	staleAgeOf,
 	waitForMark,
@@ -71,11 +70,18 @@ describe("C — a dead holder is broken", () => {
 	test("a date shim with no release variable never waits", () => {
 		const home = makeHome();
 		const shim = makeDateShim();
-		const start = Date.now();
-		const result = run(home, ["hold", "--agent", AGENT, "--session", SESSION], shimPath(shim));
-		const elapsed = Date.now() - start;
+		const mark = path.join(home, "gate-marked");
+		const waitLog = path.join(home, "gate-waits");
+		// The shim marks every gate read and logs every wait turn it enters. An
+		// empty release leaves the wait log absent, so the case reads the wait and
+		// not the wall clock.
+		const result = run(home, ["hold", "--agent", AGENT, "--session", SESSION], {
+			...gateEnv(shim, mark, ""),
+			JOURNAL_GATE_WAIT_LOG: waitLog,
+		});
 
 		assert.equal(result.status, 0, result.stderr);
-		assert.ok(elapsed < 8000, `an unset release means no wait, took ${elapsed} ms`);
+		assert.equal(fs.existsSync(mark), true, "the gate read ran");
+		assert.equal(fs.existsSync(waitLog), false, "the gate never waited");
 	});
 });

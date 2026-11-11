@@ -16,6 +16,7 @@ import {
 	RUN_TIMEOUT_MS,
 	SESSION,
 	claimNames,
+	holdWindow,
 	journalsDir,
 	lockPath,
 	makeHome,
@@ -34,9 +35,6 @@ import {
 import type { RunResult, SpawnedRun } from "./journal-lock-helpers.ts";
 
 const STALE_AGE = 601;
-
-/** The pause a shim holds, so a case signals the run inside the window. */
-const SHIM_SLEEP = "0.5";
 
 /** The record temp files left in the journals folder: not the lock, prev, or a claim. */
 function tempNames(home: string): string[] {
@@ -72,8 +70,9 @@ async function settled(what: string, held: SpawnedRun, capMs: number = RUN_TIMEO
 }
 
 describe("G — a caught signal cleans up", () => {
-	// The stale break claims the record, then the prev copy marks and sleeps, so
-	// the signal lands while the claim holds the record.
+	// The stale break claims the record, then the prev copy marks and holds, so
+	// the signal lands while the claim holds the record. The case releases the
+	// shim after it signals, because a bash trap runs after the foreground ends.
 	for (const [signal, status] of [
 		["SIGHUP", 129],
 		["SIGINT", 130],
@@ -82,23 +81,21 @@ describe("G — a caught signal cleans up", () => {
 		test(`a ${signal} inside the claim window drops the claim and the record temp`, async () => {
 			const home = makeHome();
 			const mark = path.join(home, `claim-window-${signal}`);
+			const release = path.join(home, `claim-window-${signal}-go`);
 			plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
 			const shim = makeShimDir({
-				cp: [
-					"#!/usr/bin/env bash",
-					': >"$CP_MARK"',
-					`sleep ${SHIM_SLEEP}`,
-					`exec ${realToolPath("cp")} "$@"`,
-				].join("\n"),
+				cp: holdWindow("CP_MARK", "CP_RELEASE", `exec ${realToolPath("cp")} "$@"`),
 			});
 			const held = spawnRun(home, ["hold", "--agent", AGENT, "--session", SESSION], {
 				...shimPath(shim),
 				CP_MARK: mark,
+				CP_RELEASE: release,
 			});
 			await waitForMark(mark);
 			assert.equal(claimNames(home).length, 1, "the claim exists when the signal lands");
 
 			held.kill(signal);
+			fs.writeFileSync(release, "");
 			const result = await settled(signal, held);
 
 			assert.equal(claimNames(home).length, 0, `the claim is gone: ${result.stderr}`);
@@ -113,19 +110,22 @@ describe("G — a caught signal cleans up", () => {
 	test("a TERM inside the record write drops the record temp", async () => {
 		const home = makeHome();
 		const mark = path.join(home, "temp-window");
+		const release = path.join(home, "temp-window-go");
 		// The record reaches the temp file before the link, and the link marks and
-		// sleeps, so the signal lands while the record waits in the temp file.
+		// holds, so the signal lands while the record waits in the temp file.
 		const shim = makeShimDir({
-			ln: ["#!/usr/bin/env bash", ': >"$LN_MARK"', `sleep ${SHIM_SLEEP}`, "exit 1"].join("\n"),
+			ln: holdWindow("LN_MARK", "LN_RELEASE", "exit 1"),
 		});
 		const held = spawnRun(home, ["hold", "--agent", AGENT, "--session", SESSION], {
 			...shimPath(shim),
 			LN_MARK: mark,
+			LN_RELEASE: release,
 		});
 		await waitForMark(mark);
 		assert.equal(tempNames(home).length, 1, "the record temp exists when the signal lands");
 
 		held.kill("SIGTERM");
+		fs.writeFileSync(release, "");
 		const result = await settled("SIGTERM record write", held);
 
 		assert.deepEqual(tempNames(home), [], `the record temp is gone: ${result.stderr}`);
@@ -143,16 +143,7 @@ describe("G — a caught signal cleans up", () => {
 		// The claim copy stalls in the shim until this case releases it, so the run
 		// cannot end by itself before the cap fires.
 		const shim = makeShimDir({
-			cp: [
-				"#!/usr/bin/env bash",
-				': >"$CP_MARK"',
-				"waited=0",
-				'while [ ! -e "$CP_RELEASE" ] && [ "$waited" -lt 3000 ]; do',
-				"  sleep 0.01",
-				"  waited=$((waited + 1))",
-				"done",
-				`exec ${realToolPath("cp")} "$@"`,
-			].join("\n"),
+			cp: holdWindow("CP_MARK", "CP_RELEASE", `exec ${realToolPath("cp")} "$@"`),
 		});
 		plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
 		const held = spawnRun(home, ["hold", "--agent", AGENT, "--session", SESSION], {

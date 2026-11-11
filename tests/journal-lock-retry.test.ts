@@ -46,7 +46,6 @@ describe("C — a dead holder is broken", () => {
 			].join("\n"),
 		});
 
-		const startMs = Date.now();
 		const result = run(
 			home,
 			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "1"],
@@ -58,7 +57,7 @@ describe("C — a dead holder is broken", () => {
 		assert.equal(
 			fs.existsSync(sleepLog),
 			true,
-			`the stale retry slept before the next poll; elapsed ${Date.now() - startMs} ms`,
+			"the stale retry slept before the next poll",
 		);
 		assert.ok(rows(fs.readFileSync(sleepLog, "utf8")).length >= 1, "the stale retry made one sleep");
 	});
@@ -128,20 +127,21 @@ describe("C — a dead holder is broken", () => {
 			].join("\n"),
 		});
 
-		const startMs = Date.now();
 		const result = run(
 			home,
-			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "1"],
+			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "30"],
 			{ ...shimPath(shim), SLEEP_LOG: sleepLog, LN_MARK: lnMark, CAT_MARK: catMark },
 			15000,
 		);
-		const elapsed = Date.now() - startMs;
 
 		assert.equal(result.status, 0, result.stderr);
 		assert.equal(rows(result.stdout).length, 4, `one hold block: ${result.stdout}`);
 		assert.equal(recordOf(home).session, SESSION, "the caller owns the lock");
 		assert.equal(fs.existsSync(sleepLog), true, "the absent-name retry slept before the next poll");
-		assert.equal(rows(fs.readFileSync(sleepLog, "utf8")).length, 1, "the absent-name retry made one sleep");
-		assert.ok(elapsed < 2000, `the fast poll stays well under two seconds, took ${elapsed} ms`);
+		assert.deepEqual(
+			rows(fs.readFileSync(sleepLog, "utf8")),
+			["0.050"],
+			"the absent-name retry sleeps the fast poll width, not a whole second",
+		);
 	});
 });

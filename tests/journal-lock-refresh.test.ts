@@ -14,6 +14,7 @@ import * as path from "node:path";
 import {
 	AGENT,
 	SESSION,
+	fixedClockShim,
 	lockPath,
 	makeHome,
 	makeShimDir,
@@ -25,31 +26,38 @@ import {
 	rowOf,
 	rows,
 	run,
-	settle,
 	shimPath,
 } from "./journal-lock-helpers.ts";
 
 const STALE_AGE = 601;
 
 describe("E — refresh", () => {
-	test("a second hold from the same session keeps the token and moves at", async () => {
+	test("a second hold from the same session keeps the token and moves at", () => {
 		const home = makeHome();
-		const first = run(home, ["hold", "--agent", AGENT, "--session", SESSION]);
+		const clock = path.join(home, "clock");
+		const start = 1000000000;
+		fs.writeFileSync(clock, `${start}\n`);
+		// The clock shim answers the epoch from a clock file, so the second hold
+		// reads a later second without a timer wait.
+		const shim = makeShimDir({ date: fixedClockShim() });
+		const env = { ...shimPath(shim), CLOCK: clock };
+
+		const first = run(home, ["hold", "--agent", AGENT, "--session", SESSION], env);
 		assert.equal(first.status, 0, first.stderr);
 		const token = rowOf(first.stdout, "token");
 		const at = rowOf(first.stdout, "at");
 		const deadline = rowOf(first.stdout, "deadline");
 		const before = recordOf(home).at;
 
-		// The `at` field is an epoch second, so the wait must cross a clock tick.
-		await settle(1100);
-		const second = run(home, ["hold", "--agent", AGENT, "--session", SESSION]);
+		fs.writeFileSync(clock, `${start + 1}\n`);
+		const second = run(home, ["hold", "--agent", AGENT, "--session", SESSION], env);
 		assert.equal(second.status, 0, second.stderr);
 		assert.equal(rowOf(second.stdout, "token"), token);
 		assert.notEqual(rowOf(second.stdout, "at"), at);
 		assert.notEqual(rowOf(second.stdout, "deadline"), deadline);
 		assert.equal(recordOf(home).token, token);
 		assert.ok(Number(recordOf(home).at) > Number(before), "the refresh moves the at field");
+		assert.equal(Number(recordOf(home).at), start + 1, "the at field is the second clock read");
 	});
 
 	test("a refresh whose re-probe finds the name gone creates once", () => {

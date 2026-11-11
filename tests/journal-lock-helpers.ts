@@ -189,7 +189,8 @@ export async function settle(ms: number): Promise<void> {
  * bounded, so a case that never releases fails instead of hanging. An unset
  * release variable means no wait at all. The skip keeps the first reads
  * ungated, so a case can open the window on a later read. The wait calls the
- * real sleep, so a sleep shim records only the script polls.
+ * real sleep, so a sleep shim records only the script polls. A set wait-log
+ * variable records every wait turn, so a case can prove that no wait ran.
  */
 export function makeDateShim(skipReads = 0): string {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "journal-date-"));
@@ -212,6 +213,7 @@ export function makeDateShim(skipReads = 0): string {
 		'      if [ -n "${JOURNAL_GATE_RELEASE:-}" ]; then',
 		"        waited=0",
 		'        while [ ! -e "$JOURNAL_GATE_RELEASE" ]; do',
+		'          if [ -n "${JOURNAL_GATE_WAIT_LOG:-}" ]; then printf "%s\\n" "$reads" >>"$JOURNAL_GATE_WAIT_LOG"; fi',
 		`          ${realSleep} 0.01`,
 		"          waited=$((waited + 1))",
 		'          if [ "$waited" -ge 2000 ]; then break; fi',
@@ -270,7 +272,12 @@ export function shimPath(dir: string): RunEnv {
 	return { PATH: `${dir}:${process.env.PATH ?? ""}` };
 }
 
-/** A `cksum` body that answers a counted value, so two reads never agree. */
+/**
+ * A `cksum` body that answers a counted value, so two reads never agree. A fake
+ * answer drains its stdin first: a reader that exits with the pipe still full
+ * lets the writer's printf die of SIGPIPE, and that status is not the case.
+ * The real-cksum branch keeps stdin, because its digest is the answer.
+ */
 export function countingCksum(realCksum: string, firstIsReal: boolean): string {
 	return [
 		"#!/usr/bin/env bash",
@@ -280,7 +287,58 @@ export function countingCksum(realCksum: string, firstIsReal: boolean): string {
 		"now=$((now + 1))",
 		'printf "%s\\n" "$now" >"$count"',
 		...(firstIsReal ? [`if [ "$now" -lt 2 ]; then exec ${realCksum} "$@"; fi`] : []),
+		'if [ "$#" -eq 0 ]; then cat >/dev/null; fi',
 		'printf "%s %s\\n" "$now" "$now"',
+	].join("\n");
+}
+
+/**
+ * A `date` body that answers the epoch from the `CLOCK` file, so a case drives
+ * the clock seam and no wall clock reaches an assert. Every other form forwards.
+ */
+export function fixedClockShim(): string {
+	return [
+		"#!/usr/bin/env bash",
+		'for arg in "$@"; do',
+		'  if [ "$arg" = "+%s" ]; then',
+		'    cat "$CLOCK"',
+		"    exit 0",
+		"  fi",
+		"done",
+		`exec ${realToolPath("date")} "$@"`,
+	].join("\n");
+}
+
+/**
+ * A `sleep` body that moves the `CLOCK` file one second, so a poll count
+ * measures the wait bound at once. `extra` lines run before the step, for a case
+ * that also drops a record or logs the poll width.
+ */
+export function steppingSleepShim(extra: string[] = []): string {
+	return [
+		"#!/usr/bin/env bash",
+		...extra,
+		'now=$(cat "$CLOCK")',
+		'printf "%s\\n" "$((now + 1))" >"$CLOCK"',
+	].join("\n");
+}
+
+/**
+ * A shim body that marks the open window, then waits for the release file the
+ * case writes. A bash trap runs only after the foreground command ends, so the
+ * case signals the run and then releases the shim. The wait is bounded, so a lost
+ * release fails the case instead of hanging it.
+ */
+export function holdWindow(markVar: string, releaseVar: string, forward: string): string {
+	return [
+		"#!/usr/bin/env bash",
+		`: >"$${markVar}"`,
+		"waited=0",
+		`while [ ! -e "$${releaseVar}" ] && [ "$waited" -lt 3000 ]; do`,
+		"  sleep 0.01",
+		"  waited=$((waited + 1))",
+		"done",
+		forward,
 	].join("\n");
 }
 

@@ -16,6 +16,7 @@ import {
 	SESSION,
 	claimNames,
 	countingCksum,
+	fixedClockShim,
 	makeHome,
 	makeShimDir,
 	nowSeconds,
@@ -27,6 +28,7 @@ import {
 	rowOf,
 	run,
 	shimPath,
+	steppingSleepShim,
 } from "./journal-lock-helpers.ts";
 
 const STALE_AGE = 601;
@@ -34,19 +36,24 @@ const STALE_AGE = 601;
 describe("C — a dead holder is broken", () => {
 	test("a record past the TTL is broken and kept in the prev file", () => {
 		const home = makeHome();
-		const lock = plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
+		const clock = path.join(home, "clock");
+		const start = 1000000000;
+		fs.writeFileSync(clock, `${start}\n`);
+		const lock = plantLock(home, recordText("dead-session", "dead-session-4242", start - STALE_AGE));
+		// The clock shim answers the epoch from a clock file, so the age is exact
+		// and no wall clock reaches the assert.
+		const shim = makeShimDir({ date: fixedClockShim() });
 
-		const result = run(home, ["hold", "--agent", AGENT, "--session", SESSION]);
+		const result = run(home, ["hold", "--agent", AGENT, "--session", SESSION], {
+			...shimPath(shim),
+			CLOCK: clock,
+		});
 		assert.equal(result.status, 0, result.stderr);
 
 		const match = /^(.*) age (\d+)s$/.exec(rowOf(result.stdout, "stale"));
 		assert.ok(match, `the stale row names the lock and the age: ${result.stdout}`);
 		assert.equal(match[1], lock);
-		const age = Number(match[2]);
-		assert.ok(
-			age >= STALE_AGE && age <= STALE_AGE + 30,
-			`the age meets the floor and stays under the widened ceiling, got ${age}`,
-		);
+		assert.equal(Number(match[2]), STALE_AGE, `the age is the fixed clock gap: ${result.stdout}`);
 
 		assert.match(fs.readFileSync(prevPath(home), "utf8"), /^session dead-session$/m);
 		assert.equal(recordOf(home).session, SESSION);
@@ -106,21 +113,31 @@ describe("C — a dead holder is broken", () => {
 
 	test("a break that never wins ends at the timeout", () => {
 		const home = makeHome();
-		plantLock(home, recordText("dead-session", "dead-session-4242", nowSeconds() - STALE_AGE));
+		const clock = path.join(home, "clock");
+		const start = 1000000000;
+		fs.writeFileSync(clock, `${start}\n`);
+		plantLock(home, recordText("dead-session", "dead-session-4242", start - STALE_AGE));
 		// Every digest read differs from the last, so the claim never equals the
-		// probe and the break never wins.
-		const shim = makeShimDir({ cksum: countingCksum(realToolPath("cksum"), false) });
+		// probe and the break never wins. The date shim answers the epoch from a
+		// clock file and the sleep shim moves that clock one second, so the poll
+		// count measures the wait bound without a wall clock.
+		const shim = makeShimDir({
+			cksum: countingCksum(realToolPath("cksum"), false),
+			date: fixedClockShim(),
+			sleep: steppingSleepShim(),
+		});
 
-		const started = Date.now();
 		const result = run(
 			home,
-			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "1"],
-			shimPath(shim),
+			["hold", "--agent", AGENT, "--session", SESSION, "--timeout", "3"],
+			{ ...shimPath(shim), CLOCK: clock },
 			20000,
 		);
-		const elapsed = Date.now() - started;
+		const waited = Number(fs.readFileSync(clock, "utf8").trim()) - start;
+
 		assert.equal(result.status, 4, `the wait ends at the timeout: ${result.stderr}`);
-		assert.ok(elapsed < 10000, `the wait is bounded, took ${elapsed} ms`);
+		assert.ok(waited >= 3, `the hold waits at least the timeout, got ${waited}`);
+		assert.ok(waited <= 4, `the hold ends within the timeout plus one poll, got ${waited}`);
 		assert.match(result.stderr, /^held .* by dead-session since /m);
 		assert.equal(recordOf(home).session, "dead-session", "the unbroken record stays");
 	});
@@ -134,21 +151,8 @@ describe("C — a dead holder is broken", () => {
 		// The date shim answers the epoch from a clock file and the sleep shim moves
 		// that clock one second, so the poll count measures the wait bound.
 		const shim = makeShimDir({
-			date: [
-				"#!/usr/bin/env bash",
-				'for arg in "$@"; do',
-				'  if [ "$arg" = "+%s" ]; then',
-				'    cat "$CLOCK"',
-				"    exit 0",
-				"  fi",
-				"done",
-				`exec ${realToolPath("date")} "$@"`,
-			].join("\n"),
-			sleep: [
-				"#!/usr/bin/env bash",
-				'now=$(cat "$CLOCK")',
-				'printf "%s\\n" "$((now + 1))" >"$CLOCK"',
-			].join("\n"),
+			date: fixedClockShim(),
+			sleep: steppingSleepShim(),
 		});
 
 		const result = run(

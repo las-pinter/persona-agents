@@ -16,6 +16,7 @@ import {
 	SESSION,
 	claimNames,
 	countingCksum,
+	fixedClockShim,
 	journalsDir,
 	lockPath,
 	makeHome,
@@ -30,6 +31,7 @@ import {
 	rows,
 	run,
 	shimPath,
+	steppingSleepShim,
 } from "./journal-lock-helpers.ts";
 
 const STALE_AGE = 601;
@@ -127,22 +129,8 @@ describe("F — a record that goes away mid-call", () => {
 		// The live holder drops its record during the wait and the clock reaches
 		// the deadline, so the re-probe finds a free name and the caller creates.
 		const shim = makeShimDir({
-			date: [
-				"#!/usr/bin/env bash",
-				'for arg in "$@"; do',
-				'  if [ "$arg" = "+%s" ]; then',
-				'    cat "$CLOCK"',
-				"    exit 0",
-				"  fi",
-				"done",
-				`exec ${realToolPath("date")} "$@"`,
-			].join("\n"),
-			sleep: [
-				"#!/usr/bin/env bash",
-				'rm -f -- "$VANISH_LOCK"',
-				'now=$(cat "$CLOCK")',
-				'printf "%s\\n" "$((now + 1))" >"$CLOCK"',
-			].join("\n"),
+			date: fixedClockShim(),
+			sleep: steppingSleepShim(['rm -f -- "$VANISH_LOCK"']),
 		});
 
 		const result = run(
@@ -171,22 +159,8 @@ describe("F — a record that goes away mid-call", () => {
 		// The create loses to a name that another writer makes, and the next read
 		// finds the name gone. So no create failed when the final probe ran.
 		const shim = makeShimDir({
-			date: [
-				"#!/usr/bin/env bash",
-				'for arg in "$@"; do',
-				'  if [ "$arg" = "+%s" ]; then',
-				'    cat "$CLOCK"',
-				"    exit 0",
-				"  fi",
-				"done",
-				`exec ${realToolPath("date")} "$@"`,
-			].join("\n"),
-			sleep: [
-				"#!/usr/bin/env bash",
-				'printf "%s\\n" "$*" >>"$SLEEP_LOG"',
-				'now=$(cat "$CLOCK")',
-				'printf "%s\\n" "$((now + 1))" >"$CLOCK"',
-			].join("\n"),
+			date: fixedClockShim(),
+			sleep: steppingSleepShim(['printf "%s\\n" "$*" >>"$SLEEP_LOG"']),
 			ln: [
 				"#!/usr/bin/env bash",
 				'args=("$@")',
