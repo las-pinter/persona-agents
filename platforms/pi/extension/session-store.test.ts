@@ -173,6 +173,43 @@ test("the sidecar file holds exactly the eight fields", () => {
 	]);
 });
 
+test("a distinct value in every field writes and reads back unchanged", () => {
+	const agentDir = tempAgentDir();
+	const record: SidecarRecord = {
+		agent: "reviewer",
+		class: "reader",
+		rounds: SESSION_ROUND_CAP,
+		turns: 9,
+		createdAt: NOW - 7 * DAY,
+		updatedAt: NOW - 3 * DAY,
+		parentSession: "reviewer-root-session",
+		cwd: "/repo/other-checkout",
+	};
+
+	writeSidecar(agentDir, ID, record);
+
+	assert.deepEqual(readSidecar(agentDir, ID), record);
+	assert.equal(readSidecar(agentDir, ID)?.class, "reader");
+});
+
+test("the sidecar file text keeps the interface field order", () => {
+	const agentDir = tempAgentDir();
+	writeSidecar(agentDir, ID, sidecar());
+
+	const raw = JSON.parse(fs.readFileSync(sidecarPath(agentDir, ID), "utf8")) as Record<string, unknown>;
+
+	assert.deepEqual(Object.keys(raw), [
+		"agent",
+		"class",
+		"rounds",
+		"turns",
+		"createdAt",
+		"updatedAt",
+		"parentSession",
+		"cwd",
+	]);
+});
+
 test("a missing sidecar reads as absent without throwing", () => {
 	const agentDir = tempAgentDir();
 
@@ -201,6 +238,7 @@ test("each sidecar field guard refuses its own bad value", () => {
 		{ name: "a negative round", raw: { ...sidecar(), rounds: -1 } },
 		{ name: "a null agent", raw: { ...sidecar(), agent: null } },
 		{ name: "an empty cwd", raw: { ...sidecar(), cwd: "" } },
+		{ name: "a number cwd", raw: { ...sidecar(), cwd: 42 } },
 		{ name: "an unknown class name", raw: { ...sidecar(), class: "admin" } },
 		{ name: "a fractional turn count", raw: { ...sidecar(), turns: 1.5 } },
 		{ name: "a string parent session", raw: { ...sidecar(), parentSession: 7 } },

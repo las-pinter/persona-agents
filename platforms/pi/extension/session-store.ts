@@ -207,38 +207,92 @@ function isStamp(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
 }
 
+/** How the field list reads one raw value and stores one field. */
+interface SidecarField<K extends keyof SidecarRecord> {
+	/** One raw value, checked. Undefined means a bad value, so the file is absent. */
+	read: (value: unknown) => SidecarRecord[K] | undefined;
+	/** The value the writer stores for this field. */
+	write: (record: SidecarRecord) => SidecarRecord[K];
+}
+
+/** One entry per record field. A key missing here fails the type check. */
+type SidecarFields = { [K in keyof SidecarRecord]: SidecarField<K> };
+
+/**
+ * The one field list: the record, the parser, and the writer all read it.
+ *
+ * The order is the order the file text keeps.
+ */
+const SIDECAR_FIELDS: SidecarFields = {
+	agent: {
+		read: (value) => (typeof value === "string" && value.length > 0 ? value : undefined),
+		write: (record) => record.agent,
+	},
+	class: {
+		read: (value) => (typeof value === "string" && isPermissionClass(value) ? value : undefined),
+		write: (record) => record.class,
+	},
+	rounds: {
+		read: (value) => (isCount(value) ? value : undefined),
+		write: (record) => record.rounds,
+	},
+	turns: {
+		read: (value) => (isCount(value) ? value : undefined),
+		write: (record) => record.turns,
+	},
+	createdAt: {
+		read: (value) => (isStamp(value) ? value : undefined),
+		write: (record) => record.createdAt,
+	},
+	updatedAt: {
+		read: (value) => (isStamp(value) ? value : undefined),
+		write: (record) => record.updatedAt,
+	},
+	parentSession: {
+		read: (value) => (value === null || typeof value === "string" ? value : undefined),
+		write: (record) => record.parentSession,
+	},
+	cwd: {
+		read: (value) => (typeof value === "string" && value.length > 0 ? value : undefined),
+		write: (record) => record.cwd,
+	},
+};
+
+/** The field keys in file order. `Object.keys` widens to `string`, so the key list is narrowed back. */
+const SIDECAR_KEYS = Object.keys(SIDECAR_FIELDS) as Array<keyof SidecarRecord>;
+
+/** The value the writer stores for one field. */
+function sidecarValue<K extends keyof SidecarRecord>(
+	record: SidecarRecord,
+	key: K,
+): SidecarRecord[K] {
+	return SIDECAR_FIELDS[key].write(record);
+}
+
+/** Copy one checked field out of the raw object. False when the value is bad. */
+function parseField<K extends keyof SidecarRecord>(
+	record: SidecarRecord,
+	raw: Record<string, unknown>,
+	key: K,
+): boolean {
+	const parsed = SIDECAR_FIELDS[key].read(raw[key]);
+	if (parsed === undefined) return false;
+	record[key] = parsed;
+	return true;
+}
+
 /** Parse one sidecar value. Any missing or invalid field means absent. */
 function parseSidecar(value: unknown): SidecarRecord | null {
 	if (typeof value !== "object" || value === null) return null;
 	const raw = value as Record<string, unknown>;
-	const agent = raw["agent"];
-	const permissionClass = raw["class"];
-	const rounds = raw["rounds"];
-	const turns = raw["turns"];
-	const createdAt = raw["createdAt"];
-	const updatedAt = raw["updatedAt"];
-	const parentSession = raw["parentSession"];
-	const cwd = raw["cwd"];
-
-	if (typeof agent !== "string" || agent.length === 0) return null;
-	if (typeof permissionClass !== "string" || !isPermissionClass(permissionClass)) return null;
-	if (!isCount(rounds) || !isCount(turns)) return null;
+	// The list names every record key, so the empty object is complete after the loop.
+	const record = {} as SidecarRecord;
+	for (const key of SIDECAR_KEYS) {
+		if (!parseField(record, raw, key)) return null;
+	}
 	// A round above the cap is corrupt, not capped: the file reads as absent.
-	if (rounds > SESSION_ROUND_CAP) return null;
-	if (!isStamp(createdAt) || !isStamp(updatedAt)) return null;
-	if (parentSession !== null && typeof parentSession !== "string") return null;
-	if (typeof cwd !== "string" || cwd.length === 0) return null;
-
-	return {
-		agent,
-		class: permissionClass as PermissionClass,
-		rounds,
-		turns,
-		createdAt,
-		updatedAt,
-		parentSession,
-		cwd,
-	};
+	if (record.rounds > SESSION_ROUND_CAP) return null;
+	return record;
 }
 
 /** Read one sidecar. A missing, unreadable, corrupt, or partial file is absent. */
@@ -253,16 +307,8 @@ export function readSidecar(agentDir: string, id: string): SidecarRecord | null 
 
 /** Write one sidecar file and return its path. The caller supplies a safe path. */
 function writeSidecarFile(file: string, record: SidecarRecord): string {
-	const stored: SidecarRecord = {
-		agent: record.agent,
-		class: record.class,
-		rounds: record.rounds,
-		turns: record.turns,
-		createdAt: record.createdAt,
-		updatedAt: record.updatedAt,
-		parentSession: record.parentSession,
-		cwd: record.cwd,
-	};
+	const stored: Record<string, unknown> = {};
+	for (const key of SIDECAR_KEYS) stored[key] = sidecarValue(record, key);
 	fs.mkdirSync(path.dirname(file), { recursive: true });
 	fs.writeFileSync(file, `${JSON.stringify(stored)}\n`, "utf8");
 	return file;
