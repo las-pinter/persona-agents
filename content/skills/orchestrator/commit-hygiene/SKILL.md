@@ -58,6 +58,11 @@ Confirm the net change is intended. Confirm no workaround scaffolding stays.
 Run the tests and the typecheck on the final tree. All must pass.
 Re-run both after any squash.
 
+Run points have one owner per role. The implementer run point lives in Phase 1 of
+**code-implementation**. The reviewer run point lives in the verification section
+of **code-review-checklist**. This skill owns the final-tree run and the
+squash run.
+
 ### 4. Plan and Docs State
 
 Confirm the plan is marked done with the commit IDs. Confirm the project

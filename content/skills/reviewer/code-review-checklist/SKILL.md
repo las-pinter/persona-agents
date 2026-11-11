@@ -76,6 +76,10 @@ The orchestrator reads the batch diff and confirms.
 
 ## Verification Evidence
 
+The reviewer runs the suite once in each review round. A passing suite is its
+own evidence, and CI reruns the same suite. A red run is a failure to report
+or a flake to fix. A red run is never a reason to re-run until green.
+
 A permission fix or a configuration fix is not closed until one live command
 runs through the real engine. A test over a mirror or a copy of the engine
 does not close the fix.

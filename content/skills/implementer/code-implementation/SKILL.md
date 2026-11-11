@@ -8,7 +8,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 ## Quick Reference
 
 ```
-1. ORIENT    → Read configs, run baseline, trace a similar feature
+1. ORIENT    → Read configs, trace a similar feature
 2. PLAN      → Read full files, consider edge cases, identify changes
 3. IMPLEMENT → Follow patterns, handle all states, comment WHY not WHAT
 4. VERIFY    → Run the project language gate (see Phase 4)
@@ -23,7 +23,9 @@ Before touching a single line:
 
 - Read project configs (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`) — identify language, framework, test runner, linter.
 - Read convention docs: `CLAUDE.md`, `README.md`, `.editorconfig`.
-- Run the baseline build/test command and confirm it's green. If baseline is broken, **stop and report it** — never build on a broken foundation.
+- The previous green commit is the evidence of the starting state. If the
+  previous commit is not green, report it before the first edit. Do not run the
+  test suite before the first edit. Run the suite only after a change.
 - Trace an existing similar feature end-to-end to understand the patterns and conventions expected.
 
 ---
@@ -86,6 +88,9 @@ test. Skip this step for it.
 3. Restore the code. Run the test again. See it pass.
 4. Record one result line: the test name, a one-line description of the break, and `fail` or `pass`.
 
+- One break run can cover several tests that share one guard. Each of those
+  tests still gets its own break-fail-restore line. That line names the shared
+  break.
 - If the test still passes with the code broken, the test is wrong. Fix the test
   before the hand-back.
 - A bug-fix test that failed before the fix already shows step 2. Record that
@@ -154,7 +159,7 @@ Write tests for ALL new functionality, following Arrange → Act → Assert with
 | Anti-Pattern | Do This Instead |
 |---|---|
 | Editing without reading the full file | Read first, always |
-| Skipping tests for "small" changes | Run the full suite always |
+| Skipping tests for "small" changes | Run the full suite after the change |
 | Leaving TODOs/FIXMEs | Implement properly or create a tracked task |
 | Refactoring while adding features | Separate tasks |
 | Writing clever code | Write clear, obvious code |
