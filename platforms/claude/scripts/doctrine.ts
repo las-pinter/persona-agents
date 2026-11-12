@@ -75,7 +75,7 @@ import { appendFileSync, lstatSync, mkdirSync, readFileSync, realpathSync } from
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseShellCommand } from "../../pi/extension/command-segments.ts";
+import { parseShellCommand } from "../../pi/extension/shell-parse.ts";
 
 const PREFIX = "persona-agents:";
 

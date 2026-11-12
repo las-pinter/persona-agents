@@ -44,8 +44,8 @@
  * segment. The prompt shows the full command, highlights the blocked part, and
  * shows the rule's human `reason`, never a pattern.
  *
- * Compound shell commands are split into segments by `command-segments.ts`;
- * every segment must pass. See that module for the parse/decision core.
+ * Compound shell commands are split into segments by `shell-parse.ts`; every
+ * segment must pass. `command-segments.ts` owns the decision core.
  * Headless runs (no UI) treat ask as a hard block — undefined (no prompt) never
  * auto-allows.
  *

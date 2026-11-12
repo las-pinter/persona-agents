@@ -28,7 +28,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
-import { parseShellCommand } from "../platforms/pi/extension/command-segments.ts";
+import { parseShellCommand } from "../platforms/pi/extension/shell-parse.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");

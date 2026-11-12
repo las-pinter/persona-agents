@@ -14,7 +14,8 @@ module below lives in `extension/`, except the shipped table data file):
 | `permission-class.ts` | The permission vocabulary: the class union, the class list, the role-to-class map, and one membership test for each |
 | `permission-table.ts` | The compiler: row to one anchored pattern, then the five rule sets the engine reads |
 | `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
-| `command-segments.ts` | Pure (no pi imports) shell splitter + rule-decision core used by `permissions.ts`; testable under plain Node |
+| `command-segments.ts` | Pure (no pi imports) rule-decision core used by `permissions.ts`; testable under plain Node |
+| `shell-parse.ts` | Pure (no pi imports) shell splitter: one command line to segments, nested sub-commands, the leading `cd` fold, and the fail-closed constructs; testable under plain Node |
 | `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | In-process subagent tool (single / parallel / chain): one child session per run |
@@ -119,7 +120,7 @@ compiler writes the pattern. Translation notes:
   allowed. The `cd X && …` fold above is what keeps the git regexes valid. A
   disallowed segment blocks the whole command. Heredocs (`<<`, `<<<`), ANSI-C
   quoting (`$'...'`), unbalanced quotes, and dangling operators fail closed. See
-  `extension/command-segments.ts`.
+  `extension/shell-parse.ts`.
   `$(...)`/backtick/process-substitution inner commands are added as their own
   segments, so `echo $(id)` blocks. Arithmetic bodies are recursed into too:
   `echo $(( $(id) + 0 ))` still blocks, and single quotes do not hide the
@@ -164,7 +165,7 @@ gate reads one compiled table:
 | `permission-config.ts` | the layer loader: default, override, overlay; row-id patch; layer stamp |
 | `permission-table.ts` | the compiler: row to one anchored pattern, five rule sets |
 | `permissions.ts` | loads the three layers once at factory time and gates each tool call |
-| `command-segments.ts` | the parse and decision core, unchanged |
+| `command-segments.ts` | the decision core: rule sets, ask probes, and the verdict |
 
 - **Three classes.** `reader` is the planner, the reviewer, the researcher, and
 the mascot. `worker` is the implementer and the tester. `orchestrator` is the

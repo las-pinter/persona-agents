@@ -14,7 +14,6 @@ import {
 	compileRegex,
 	evaluateCommandRules,
 	neutralDequoteProbe,
-	parseShellCommand,
 	ruleReasonFallback,
 	splitShellSegments,
 	unallowedSegments,
@@ -23,6 +22,7 @@ import {
 	type RawRule,
 	type RuleSets,
 } from "./command-segments.ts";
+import { parseShellCommand } from "./shell-parse.ts";
 
 // --- representative rule sets (trimmed from the shipped frontmatters) --------
 
