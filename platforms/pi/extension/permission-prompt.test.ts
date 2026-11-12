@@ -23,7 +23,6 @@ import {
 	buildPromptModel,
 	blockedLabel,
 	highlightCommand,
-	humanReason,
 	plainPromptTitle,
 	promptOptions,
 	renderPanel,
@@ -31,6 +30,7 @@ import {
 	type PromptModel,
 } from "./permission-prompt.ts";
 import { isShellTool } from "./shell-tools.ts";
+import { ruleReasonFallback, evaluateCommandRules, humanReason } from "./command-segments.ts";
 
 const REASON = "orchestrator commit requires user approval";
 const REGEX = "(?:^|[;&|(\\n])\\s*git\\s+(push|pull)\\b";
@@ -217,8 +217,51 @@ test("a spanning probe shows the spanning note and keeps the three decisions", (
 
 test("a missing reason falls back without leaking the regex", () => {
 	const model = shellModel({ reason: undefined });
-	assert.equal(model.remember, "matches a permission rule");
+	assert.equal(
+		model.remember,
+		"bash is gated by global policy, and the rule has no written reason of its own",
+	);
 	assert.ok(!JSON.stringify(model).includes(REGEX));
+});
+
+// A rule whose reason is its own regex has no human text. The rule shows one
+// fallback sentence, and the panel and the deny log both show it.
+test("a regex-equal reason shows one fallback in the panel and in the log", () => {
+	const rule = { tool: "bash", match: REGEX, reason: REGEX };
+	const denial = evaluateCommandRules(
+		"git push",
+		true,
+		{ globalDeny: [rule], agentDeny: [], globalAsk: [], agentAsk: [], agentAllow: [] },
+		"deny-by-default",
+		"bash",
+		null,
+	);
+	assert.equal(denial.kind, "deny");
+	if (denial.kind !== "deny") return;
+	const model = shellModel({ reason: rule.reason, match: rule.match });
+	const expected = ruleReasonFallback("bash", "global", null);
+	assert.equal(model.remember, expected);
+	assert.equal(denial.reason, expected);
+	// The match is an input only; the model never carries the regex.
+	assert.ok(!JSON.stringify(model).includes(REGEX));
+});
+
+// A human reason is the reason text in both surfaces: the same words, no label.
+test("a human reason shows in the panel and in the log", () => {
+	const rule = { tool: "bash", match: REGEX, reason: REASON };
+	const denial = evaluateCommandRules(
+		"git push",
+		true,
+		{ globalDeny: [rule], agentDeny: [], globalAsk: [], agentAsk: [], agentAllow: [] },
+		"deny-by-default",
+		"bash",
+		null,
+	);
+	assert.equal(denial.kind, "deny");
+	if (denial.kind !== "deny") return;
+	const model = shellModel({ reason: rule.reason, match: rule.match });
+	assert.equal(model.remember, REASON);
+	assert.equal(denial.reason, REASON);
 });
 
 test("plainPromptTitle marks the blocked part in the full command", () => {

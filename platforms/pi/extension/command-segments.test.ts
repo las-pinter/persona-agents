@@ -15,6 +15,7 @@ import {
 	evaluateCommandRules,
 	neutralDequoteProbe,
 	parseShellCommand,
+	ruleReasonFallback,
 	splitShellSegments,
 	unallowedSegments,
 	type Decision,
@@ -350,7 +351,7 @@ test("a global deny reason never embeds the rule regex", () => {
 	assert.equal(decision.kind, "deny");
 	if (decision.kind !== "deny") return;
 	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
-	assert.match(decision.reason, /Denied by global policy/);
+	assert.equal(decision.reason, ruleReasonFallback("bash", "global", null));
 });
 
 test("an agent deny reason never embeds the rule regex", () => {
@@ -360,7 +361,10 @@ test("an agent deny reason never embeds the rule regex", () => {
 	assert.equal(decision.kind, "deny");
 	if (decision.kind !== "deny") return;
 	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
-	assert.match(decision.reason, /Denied by test-agent policy/);
+	assert.equal(
+		decision.reason,
+		"bash is gated by test-agent policy, and the rule has no written reason of its own",
+	);
 });
 
 test("a deny reason uses the human reason when it differs from the regex", () => {

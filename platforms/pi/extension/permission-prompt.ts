@@ -19,6 +19,7 @@ import { recordAsk, recordLogLine } from "./ask-record.ts";
 import { boundRunRegistry, UNKNOWN_RUN_ROLE } from "./run-registry.ts";
 import { sessionIdOf } from "./session-id.ts";
 import { isShellTool } from "./shell-tools.ts";
+import { humanReason, policyLayer, ruleReasonFallback } from "./command-segments.ts";
 import { getActiveAgent } from "./state.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
@@ -71,6 +72,12 @@ export interface PromptInput {
 	segmentStart: number;
 	/** The rule's human reason. Never the regex. */
 	reason?: string;
+	/** The rule regex, read only to drop a reason that repeats it. Never shown. */
+	match?: string;
+	/** Which policy layer holds the rule. Defaults to the global layer. */
+	source?: "global" | "agent";
+	/** The agent name, read only when the rule is an agent rule. */
+	agentName?: string | null;
 	/** True when the rule spans the whole command (no single segment matches). */
 	isSpanning: boolean;
 }
@@ -92,24 +99,6 @@ export interface PromptModel {
 	options: PromptOption[];
 }
 
-/** Fallback for a rule without a human reason. Never the regex. */
-const NO_REASON = "matches a permission rule";
-
-/** The remembered text for an always-allow choice. */
-function rememberText(reason: string | undefined): string {
-	const trimmed = reason?.trim();
-	return trimmed && trimmed.length > 0 ? trimmed : NO_REASON;
-}
-
-/**
- * The rule's human reason, or undefined when it is empty or equals the regex.
- * A reason equal to the regex is not human text, so it is dropped.
- */
-export function humanReason(reason: string | undefined, match: string | undefined): string | undefined {
-	const trimmed = reason?.trim();
-	return trimmed && trimmed.length > 0 && trimmed !== match ? trimmed : undefined;
-}
-
 /**
  * Stable label for the headless block reason. It is built from the tool name
  * and the rule source, plus the rule's human reason when that reason exists
@@ -122,20 +111,23 @@ export function blockedLabel(
 	reason?: string,
 	match?: string,
 ): string {
-	const who = source === "global" ? "global policy" : `${agentName ?? "agent"} policy`;
+	const who = policyLayer(source, agentName);
 	const base = `Permission required: ${toolName} (${who})`;
 	const human = humanReason(reason, match);
 	return human ? `${base}: ${human}` : base;
 }
 
 /**
- * Build the permission panel model. Pure. The regex is never an input, so it
- * can never appear in the model.
+ * Build the permission panel model. Pure. The rule regex may come in only to
+ * drop a reason that repeats it; the model never carries it.
  */
 export function buildPromptModel(input: PromptInput): PromptModel {
 	// Shell tools have segments; every other gated tool has one target.
 	const isShell = isShellTool(input.toolName);
-	const remember = rememberText(input.reason);
+	// A reason equal to the rule regex is not human text, so the model drops it.
+	const remember =
+		humanReason(input.reason, input.match) ??
+		ruleReasonFallback(input.toolName, input.source ?? "global", input.agentName ?? null);
 	const why = `Why: ${remember}`;
 	const lines: string[] = [];
 	let highlight: { start: number; end: number } | null = null;

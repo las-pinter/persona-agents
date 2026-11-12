@@ -814,14 +814,49 @@ function findAsk(
 }
 
 /**
- * Human deny reason. It never contains the rule regex. The fallback label names
- * the tool and the rule source. A rule's `reason` is used only when it exists
- * and differs from the regex.
+ * The policy layer that owns a rule, as the reason text names it.
  */
-function denyReason(rule: RawRule, toolName: string, scope: string): string {
-	const reason = rule.reason?.trim();
-	if (reason && reason !== rule.match) return reason;
-	return `Denied by ${scope} policy: ${toolName}`;
+export function policyLayer(source: "global" | "agent", agentName: string | null): string {
+	return source === "global" ? "global policy" : `${agentName ?? "agent"} policy`;
+}
+
+/**
+ * The one reason sentence for a rule that carries no written reason of its own.
+ * It names the policy layer and the tool, and the deny log and the ask panel
+ * both show it, so one rule never reads two ways.
+ */
+export function ruleReasonFallback(
+	toolName: string,
+	source: "global" | "agent",
+	agentName: string | null,
+): string {
+	return `${toolName} is gated by ${policyLayer(source, agentName)}, and the rule has no written reason of its own`;
+}
+
+/**
+ * The rule's human reason, or undefined when the text is empty or is the rule
+ * regex. A reason equal to the regex is not human text, so it is dropped.
+ */
+export function humanReason(
+	reason: string | undefined,
+	match: string | undefined,
+): string | undefined {
+	const trimmed = reason?.trim();
+	if (!trimmed || trimmed === match) return undefined;
+	return trimmed;
+}
+
+/**
+ * Human deny reason. It never contains the rule regex. A rule's `reason` is
+ * used only when it is human text; the fallback sentence speaks otherwise.
+ */
+function denyReason(
+	rule: RawRule,
+	toolName: string,
+	source: "global" | "agent",
+	agentName: string | null,
+): string {
+	return humanReason(rule.reason, rule.match) ?? ruleReasonFallback(toolName, source, agentName);
 }
 
 interface FoldedSegments {
@@ -914,11 +949,11 @@ export function evaluateCommandRules(
 
 	const globalDeny = firstMatch(compile(ruleSets.globalDeny), toolName, denyProbes);
 	if (globalDeny) {
-		return { kind: "deny", reason: denyReason(globalDeny.rule, toolName, "global") };
+		return { kind: "deny", reason: denyReason(globalDeny.rule, toolName, "global", agentName) };
 	}
 	const agentDeny = firstMatch(compile(ruleSets.agentDeny), toolName, denyProbes);
 	if (agentDeny) {
-		return { kind: "deny", reason: denyReason(agentDeny.rule, toolName, agentName ?? "agent") };
+		return { kind: "deny", reason: denyReason(agentDeny.rule, toolName, "agent", agentName) };
 	}
 
 	// "Approved" carries both segment "Always allow" choices and session-allowed

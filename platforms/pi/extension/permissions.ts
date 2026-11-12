@@ -90,7 +90,6 @@ import {
 	buildPromptModel,
 	blockedLabel,
 	DENIED_BY_USER_REASON,
-	humanReason,
 	renderRootPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
@@ -490,13 +489,16 @@ export function installToolCallGate(
 			const rule = decision.rule;
 			const key = sessionKey(rule.match);
 
-			// The rule's regex is never shown; the prompt uses the human reason.
+			// The rule's regex is never shown; the model drops a reason that repeats it.
 			const promptModel = buildPromptModel({
 				toolName,
 				probe,
 				segment: decision.segment,
 				segmentStart: decision.segmentStart,
-				reason: humanReason(rule.reason, rule.match),
+				reason: rule.reason,
+				match: rule.match,
+				source: decision.source,
+				agentName: agent?.name ?? null,
 				isSpanning: decision.segmentIndex === -1,
 			});
 

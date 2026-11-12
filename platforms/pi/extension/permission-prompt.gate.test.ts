@@ -22,6 +22,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { PROMPT_OPTION_LABELS } from "./permission-prompt.ts";
+import { ruleReasonFallback } from "./command-segments.ts";
 import { installToolCallGate } from "./permissions.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import { RunRegistry } from "./run-registry.ts";
@@ -292,7 +293,7 @@ test("the real gate drops a reason equal to the regex from the prompt title", as
 	assert.equal(prompts.length, 1);
 	assert.ok(!prompts[0].includes(regex), `title must not leak the regex: ${prompts[0]}`);
 	assert.ok(
-		prompts[0].includes("matches a permission rule"),
+		prompts[0].includes(ruleReasonFallback("bash", "agent", "orchestrator")),
 		`title must use the fallback: ${prompts[0]}`,
 	);
 });
@@ -365,6 +366,29 @@ test("a deny rule wins over an ask rule and never prompts", async () => {
 	assert.ok(!JSON.stringify(result).includes(regex), `deny reason leaks the regex: ${JSON.stringify(result)}`);
 });
 
+// A deny rule whose reason repeats its regex has no human text, so the block
+// reason is the one shared sentence, naming the layer and the tool.
+test("a regex-equal deny reason blocks with the one shared sentence", async () => {
+	const regex = "^git\\b";
+	const { handler } = installGate({
+		mode: "deny-by-default",
+		deny: [{ tool: "bash", match: regex, reason: regex }],
+	});
+	const prompts: string[] = [];
+
+	const result = await handler(
+		{ toolName: "bash", input: { command: "git status" } },
+		selectContext("Allow once", prompts),
+	);
+
+	assert.equal(prompts.length, 0, "a deny never prompts");
+	assert.deepEqual(result, {
+		block: true,
+		reason: ruleReasonFallback("bash", "agent", "orchestrator"),
+	});
+	assert.ok(!JSON.stringify(result).includes(regex), `deny reason leaks the regex: ${JSON.stringify(result)}`);
+});
+
 test("a headless spanning ask is a hard block with a non-regex reason", async () => {
 	const regex = "foo\\s*&&\\s*bar";
 	const { handler } = installGate({
@@ -410,7 +434,7 @@ test("an unnamed reason does not leak the regex into the prompt title", async ()
 
 	assert.equal(prompts.length, 1);
 	assert.ok(!prompts[0].includes(regex), `title leaks the regex: ${prompts[0]}`);
-	assert.ok(prompts[0].includes("matches a permission rule"));
+	assert.ok(prompts[0].includes(ruleReasonFallback("bash", "agent", "orchestrator")));
 });
 
 test("a segment always-allow re-evaluates and prompts for the next blocked segment", async () => {
