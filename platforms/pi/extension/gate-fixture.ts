@@ -29,8 +29,8 @@ export const CHILD_D0 = "child-d0";
 export const CHILD_E = "child-e";
 /** The parent id `CHILD_E` names, which the registry never holds. */
 export const MISSING_PARENT = "gone-parent";
-/** The three choices every prompt shows, in order. */
-export const THREE_LABELS = ["Allow once", "Always allow this rule (session)", "Deny"];
+/** The three choices every prompt shows, in order. Owned by the prompt model. */
+export { PROMPT_OPTION_LABELS } from "./permission-prompt.ts";
 
 export type ToolCallContext = {
 	cwd: string;

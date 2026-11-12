@@ -30,6 +30,30 @@ export interface PromptOption {
 	decision: PermissionChoice;
 }
 
+/**
+ * The three choices in paint order, each label beside its own decision, so no
+ * swap can pair a label with a decision that belongs to another row.
+ */
+const PROMPT_OPTION_TABLE = [
+	{ label: "Allow once", decision: "allow-once" },
+	{ label: "Always allow this rule (session)", decision: "always-allow" },
+	{ label: "Deny", decision: "deny" },
+] as const satisfies readonly PromptOption[];
+
+/**
+ * The labels of that table in paint order. The pi README quotes these labels.
+ */
+export const PROMPT_OPTION_LABELS = [
+	PROMPT_OPTION_TABLE[0].label,
+	PROMPT_OPTION_TABLE[1].label,
+	PROMPT_OPTION_TABLE[2].label,
+] as const;
+
+/** The three options in paint order, copied from the one table. */
+export function promptOptions(): PromptOption[] {
+	return PROMPT_OPTION_TABLE.map((option) => ({ label: option.label, decision: option.decision }));
+}
+
 /** How the prompt treats the tool call. */
 export type PromptKind = "shell-segment" | "shell-spanning" | "target";
 
@@ -137,11 +161,7 @@ export function buildPromptModel(input: PromptInput): PromptModel {
 	}
 
 	// One shared list: every kind offers the same three choices.
-	const options: PromptOption[] = [
-		{ label: "Allow once", decision: "allow-once" },
-		{ label: "Always allow this rule (session)", decision: "always-allow" },
-		{ label: "Deny", decision: "deny" },
-	];
+	const options = promptOptions();
 
 	return {
 		title: "Permission required",

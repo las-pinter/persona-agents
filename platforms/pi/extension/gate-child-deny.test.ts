@@ -26,7 +26,7 @@ import {
 	MISSING_PARENT,
 	ROOT,
 	RootPrompter,
-	THREE_LABELS,
+	PROMPT_OPTION_LABELS,
 	childContext,
 	registryOf,
 	rootContext,
@@ -91,7 +91,7 @@ test("child ask: the captured root surface renders the prompt and the answer is 
 	assert.equal(prompter.titles.length, 1, "the child ask renders the shared prompt");
 	assert.match(prompter.titles[0], /implementer/, "the prompt names the asking child");
 	assert.match(prompter.titles[0], /1 of 1 waiting/, "the prompt counts the waiting child");
-	assert.deepEqual(prompter.options[0], THREE_LABELS, "the three choices are unchanged");
+	assert.deepEqual(prompter.options[0], PROMPT_OPTION_LABELS, "the three choices are unchanged");
 	assert.equal(prompter.childUiCalls, 0, "the child surface is never asked");
 });
 
@@ -133,7 +133,7 @@ test("root ask: the shared prompt still renders unchanged", async () => {
 	assert.equal(sessionDepthOf(ROOT), 0, "the walk reaches the root at depth 0");
 	assert.equal(prompter.titles.length, 1, "the root ask renders one prompt");
 	assert.match(prompter.titles[0], /Permission required \(bash\)/, "the root keeps the shared title");
-	assert.deepEqual(prompter.options[0], THREE_LABELS, "the three choices are unchanged");
+	assert.deepEqual(prompter.options[0], PROMPT_OPTION_LABELS, "the three choices are unchanged");
 });
 
 test("root ask: the owner's deny still blocks with the user reason", async () => {

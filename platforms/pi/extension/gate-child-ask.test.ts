@@ -24,7 +24,7 @@ import {
 	CHILD_E,
 	ROOT,
 	RootPrompter,
-	THREE_LABELS,
+	PROMPT_OPTION_LABELS,
 	captureRoot,
 	childAsk,
 	childContext,
@@ -110,7 +110,7 @@ test("root ask: the shared prompt renders", { timeout: 2000 }, async () => {
 	assert.equal(s.prompter.titles.length, 1, "the root ask renders the shared prompt");
 	assert.match(s.prompter.titles[0], /Permission required \(bash\)/);
 	assert.ok(!s.prompter.titles[0].includes("waiting"), "a root prompt names no child");
-	assert.deepEqual(s.prompter.options[0], THREE_LABELS);
+	assert.deepEqual(s.prompter.options[0], PROMPT_OPTION_LABELS);
 });
 
 // --- bind order --------------------------------------------------------------

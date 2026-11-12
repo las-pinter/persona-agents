@@ -43,7 +43,8 @@ export const CHILD_E = "child-e";
 export const WORKER_CLASS_DENY_REASON = "The worker class row denies a read the root class allows";
 /** The parent id that no record holds. */
 export const MISSING_PARENT = "gone-parent";
-export const THREE_LABELS = ["Allow once", "Always allow this rule (session)", "Deny"];
+/** The three choices every prompt shows, in order. Owned by the prompt model. */
+export { PROMPT_OPTION_LABELS } from "./permission-prompt.ts";
 
 export type ToolCallContext = {
 	cwd: string;

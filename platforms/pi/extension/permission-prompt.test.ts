@@ -24,11 +24,13 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import * as tui from "@earendil-works/pi-tui";
 import {
+	PROMPT_OPTION_LABELS,
 	buildPromptModel,
 	blockedLabel,
 	highlightCommand,
 	humanReason,
 	plainPromptTitle,
+	promptOptions,
 	renderPanel,
 	renderPermissionPrompt,
 	type PromptModel,
@@ -39,7 +41,6 @@ import { RunRegistry } from "./run-registry.ts";
 
 const REASON = "orchestrator commit requires user approval";
 const REGEX = "(?:^|[;&|(\\n])\\s*git\\s+(push|pull)\\b";
-const THREE_LABELS = ["Allow once", "Always allow this rule (session)", "Deny"];
 
 function shellModel(overrides: Partial<Parameters<typeof buildPromptModel>[0]> = {}): PromptModel {
 	const probe = overrides.probe ?? 'git status && git commit -m "fix" && git push';
@@ -146,8 +147,17 @@ test("a shell segment prompt keeps the three decisions in order", () => {
 	assert.deepEqual(decisions(model), ["allow-once", "always-allow", "deny"]);
 	assert.deepEqual(
 		model.options.map((option) => option.label),
-		THREE_LABELS,
+		PROMPT_OPTION_LABELS,
 	);
+});
+
+// Pins all three shared pairs. One label is also pinned on its own below.
+test("every row of the shared table keeps its own decision", () => {
+	assert.deepEqual(promptOptions(), [
+		{ label: "Allow once", decision: "allow-once" },
+		{ label: "Always allow this rule (session)", decision: "always-allow" },
+		{ label: "Deny", decision: "deny" },
+	]);
 });
 
 test("the always-allow option is the exact shared label", () => {
@@ -621,7 +631,7 @@ test("the real gate prompt title carries the rule reason, not the rule regex", a
 	assert.equal(prompts.length, 1);
 	assert.ok(prompts[0].includes(reason), `title must show the reason: ${prompts[0]}`);
 	assert.ok(!prompts[0].includes(regex), `title must not leak the regex: ${prompts[0]}`);
-	assert.deepEqual(capturedOptions, THREE_LABELS);
+	assert.deepEqual(capturedOptions, PROMPT_OPTION_LABELS);
 });
 
 test("the real gate highlights the later occurrence of a repeated segment", async () => {
