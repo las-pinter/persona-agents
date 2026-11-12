@@ -479,8 +479,13 @@ const SECRET: Record<string, string> = {
 
 // --- row validation ---------------------------------------------------------
 
+/** The one row-fault error, so both layers write one prefix and one format. */
+export function rowFault(id: string | undefined, problem: string): Error {
+	return new Error(`row "${id ?? "<missing>"}": ${problem}`);
+}
+
 function fail(id: string | undefined, problem: string): never {
-	throw new Error(`permission-table: row "${id ?? "<missing>"}": ${problem}`);
+	throw rowFault(id, problem);
 }
 
 function oneLine(value: string): boolean {

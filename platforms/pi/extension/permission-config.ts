@@ -14,10 +14,10 @@
  * here, so the compiler never drops it in silence. Every loaded rule records the
  * layer that produced it.
  *
- * A broken table layer fails closed. One line names the file and, when a row is
- * at fault, the row id. The returned overlay then carries a deny-all fence, so
- * no tool call runs until the file is fixed. The global overlay keeps this
- * behavior from the earlier loader.
+ * A broken table layer fails closed. One line names the kind of file, the file,
+ * and, when a row is at fault, the row id. The returned overlay then carries a
+ * deny-all fence, so no tool call runs until the file is fixed. The global
+ * overlay keeps this behavior from the earlier loader.
  *
  * No project-level table exists. The default path resolves from this module, the
  * override and overlay paths resolve from the home agent folder, and none of
@@ -35,7 +35,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { validateRow, validateRows, type RuleRow, type Verdict } from "./permission-table.ts";
+import { rowFault, validateRow, validateRows, type RuleRow, type Verdict } from "./permission-table.ts";
 import { recordLogLine } from "./ask-record.ts";
 import { compileRegex, type RawRule } from "./command-segments.ts";
 
@@ -177,10 +177,6 @@ export function loadDefaultRows(): RuleRow[] {
 	return loadTableFile(DEFAULT_TABLE_FILE);
 }
 
-function fail(id: string, problem: string): never {
-	throw new Error(`row "${id}": ${problem}`);
-}
-
 /** The sorted class union of every row one id carries. */
 function idClassList(rows: RuleRow[], indices: number[]): string {
 	const classes = new Set<string>();
@@ -192,7 +188,7 @@ function idClassList(rows: RuleRow[], indices: number[]): string {
 function replaceRow(rows: RuleRow[], id: string, indices: number[], raw: unknown): RuleRow[] {
 	const supplied = asRecord(raw, "the supplied row");
 	if (supplied.id !== id) {
-		fail(id, `the supplied row names "${String(supplied.id)}"`);
+		throw rowFault(id, `the supplied row names "${String(supplied.id)}"`);
 	}
 	// SAFETY: a patch row arrives as JSON with no declared type. validateRow
 	// reads every field as unknown and refuses anything outside the row schema,
@@ -202,7 +198,9 @@ function replaceRow(rows: RuleRow[], id: string, indices: number[], raw: unknown
 	if (indices.length > 0) {
 		const before = idClassList(rows, indices);
 		const after = [...new Set(row.classes)].sort().join(",");
-		if (before !== after) fail(id, `a replacement must keep the class list (${before} to ${after})`);
+		if (before !== after) {
+			throw rowFault(id, `a replacement must keep the class list (${before} to ${after})`);
+		}
 	}
 	if (indices.length === 0) return [...rows, row];
 	const first = indices[0];
@@ -217,15 +215,18 @@ function replaceRow(rows: RuleRow[], id: string, indices: number[], raw: unknown
 /** Apply one patch entry. A bad entry throws, and the whole override layer fails. */
 function applyEntry(rows: RuleRow[], raw: unknown): RuleRow[] {
 	const entry = asRecord(raw, "a patch entry");
-	const id = typeof entry.id === "string" ? entry.id : "";
+	const id = typeof entry.id === "string" ? entry.id : undefined;
 	for (const key of Object.keys(entry)) {
-		if (!ENTRY_KEYS.has(key)) fail(id || "<unknown>", `unknown field "${key}"`);
+		if (!ENTRY_KEYS.has(key)) throw rowFault(id, `unknown field "${key}"`);
 	}
-	if (id.length === 0) fail("<unknown>", "an entry needs a string id");
+	if (id === undefined || id.length === 0) throw rowFault(undefined, "an entry needs a string id");
 
 	const actions = ["verdict", "disabled", "row"].filter((key) => entry[key] !== undefined);
 	if (actions.length !== 1) {
-		fail(id, "an entry does one of: change the verdict, disable the row, or supply a complete row");
+		throw rowFault(
+			id,
+			"an entry does one of: change the verdict, disable the row, or supply a complete row",
+		);
 	}
 
 	const indices: number[] = [];
@@ -234,9 +235,9 @@ function applyEntry(rows: RuleRow[], raw: unknown): RuleRow[] {
 	});
 
 	if (actions[0] === "row") return replaceRow(rows, id, indices, entry.row);
-	if (indices.length === 0) fail(id, "unknown row id");
+	if (indices.length === 0) throw rowFault(id, "unknown row id");
 	if (actions[0] === "disabled") {
-		if (entry.disabled !== true) fail(id, `"disabled" must be true`);
+		if (entry.disabled !== true) throw rowFault(id, `"disabled" must be true`);
 		return rows.filter((_row, index) => !indices.includes(index));
 	}
 	// The verdict value is checked by the final `validateRows`, which names the id.
@@ -341,8 +342,8 @@ export function loadGlobalRules(file: string = overlayFile()): OverlayRules {
 	}
 }
 
-function reportFailure(file: string, error: unknown): string {
-	const line = `permission gate: cannot load ${file}: ${fault(error)}; every tool call is denied until the file is fixed`;
+function reportFailure(file: string, kind: PathKind, error: unknown): string {
+	const line = `permission gate: cannot load the ${kind} file ${file}: ${fault(error)}; every tool call is denied until the file is fixed`;
 	recordLogLine({ text: line });
 	return line;
 }
@@ -363,40 +364,44 @@ function resolveRealPath(file: string, what: string): string | null {
 	}
 }
 
-/** The table path: absolute, real, and never inside a repository. */
-function resolveTablePath(configured: string | undefined): string {
-	const raw = configured ?? tableFile();
+/** The two configured layer kinds, named in every failure and refusal line. */
+type PathKind = "table" | "override";
+
+/**
+ * One rule for both configured layers: the path is absolute, its real path is
+ * checked, and a path inside a repository is refused. An absent or refused path
+ * yields `fallback`. An absent override file applies no patch, so it needs no
+ * refusal line; a table path has no such check.
+ */
+function resolvePermissionPath<F extends string | null>(
+	configured: string | undefined,
+	kind: PathKind,
+	fallback: F,
+): string | F {
+	const raw = configured ?? (kind === "table" ? tableFile() : overrideFile());
 	if (!path.isAbsolute(raw)) {
-		reportRefusal(raw, "a table path must be absolute");
-		return DEFAULT_TABLE_FILE;
+		reportRefusal(raw, `the ${kind} path must be absolute`);
+		return fallback;
 	}
 	const wanted = path.resolve(raw);
-	if (wanted === path.resolve(DEFAULT_TABLE_FILE)) return wanted;
-	const real = resolveRealPath(wanted, "table");
-	if (real === null) return DEFAULT_TABLE_FILE;
+	// The shipped default is the fallback, so it needs no real path check.
+	if (kind === "table" && wanted === path.resolve(DEFAULT_TABLE_FILE)) return wanted;
+	if (kind === "override" && !fs.existsSync(wanted)) return fallback;
+	const real = resolveRealPath(wanted, kind);
+	if (real === null) return fallback;
 	if (isInsideRepository(real)) {
 		reportRefusal(real, "a permission file inside a repository is ignored");
-		return DEFAULT_TABLE_FILE;
+		return fallback;
 	}
 	return real;
 }
 
-/** The override path: absolute, real, and never inside a repository. */
+function resolveTablePath(configured: string | undefined): string {
+	return resolvePermissionPath(configured, "table", DEFAULT_TABLE_FILE);
+}
+
 function resolveOverridePath(configured: string | undefined): string | null {
-	const raw = configured ?? overrideFile();
-	if (!path.isAbsolute(raw)) {
-		reportRefusal(raw, "an override path must be absolute");
-		return null;
-	}
-	const wanted = path.resolve(raw);
-	if (!fs.existsSync(wanted)) return null;
-	const real = resolveRealPath(wanted, "override");
-	if (real === null) return null;
-	if (isInsideRepository(real)) {
-		reportRefusal(real, "a permission file inside a repository is ignored");
-		return null;
-	}
-	return real;
+	return resolvePermissionPath(configured, "override", null);
 }
 
 /**
@@ -412,7 +417,7 @@ export function loadPermissionConfig(paths: ConfigPaths = {}): PermissionConfig 
 	try {
 		rows = loadTableFile(tablePath);
 	} catch (error) {
-		errors.push(reportFailure(tablePath, error));
+		errors.push(reportFailure(tablePath, "table", error));
 	}
 
 	const overridePath = errors.length === 0 ? resolveOverridePath(paths.override) : null;
@@ -420,7 +425,7 @@ export function loadPermissionConfig(paths: ConfigPaths = {}): PermissionConfig 
 		try {
 			rows = applyOverrideFile(rows, overridePath);
 		} catch (error) {
-			errors.push(reportFailure(overridePath, error));
+			errors.push(reportFailure(overridePath, "override", error));
 		}
 	}
 

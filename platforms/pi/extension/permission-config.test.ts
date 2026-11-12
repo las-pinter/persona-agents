@@ -75,6 +75,26 @@ function load(paths: ConfigPaths): { config: PermissionConfig; lines: string[] }
 	}
 }
 
+/** The lead one failure line carries before the fault text. */
+function failureHead(file: string, kind: "table" | "override"): string {
+	return `permission gate: cannot load the ${kind} file ${file}: `;
+}
+
+/** The fault text one failure line carries after its lead. */
+function faultText(line: string, file: string, kind: "table" | "override"): string {
+	const head = failureHead(file, kind);
+	assert.ok(line.startsWith(head), line);
+	const tail = "; every tool call is denied until the file is fixed";
+	const at = line.indexOf(tail, head.length);
+	assert.notEqual(at, -1, line);
+	return line.slice(head.length, at);
+}
+
+/** The one refusal sentence both layers share, with the kind of path named. */
+function refusalLine(file: string, kind: "table" | "override"): string {
+	return `permission gate: refused ${file}: the ${kind} path must be absolute, so the shipped default stays in force`;
+}
+
 /** The verdict the engine reaches for one tool call under one rule set. */
 function verdict(sets: RuleSets, tool: string, probe: string, open = false): string {
 	const mode = open ? "allow-unless-matched" : "deny-by-default";
@@ -462,15 +482,14 @@ function assertFenced(config: PermissionConfig): void {
 	assert.equal(verdict(sets, "read", "/fixture/notes.txt", true), "deny");
 }
 
-test("a malformed default layer fails closed with the file and row id", () => {
+test("a malformed default layer fails closed with the layer, the file and the row id", () => {
 	const file = write("malformed-table.json", {
 		version: 1,
 		rows: [{ ...fixtureRow("bad.verdict"), verdict: "maybe" }],
 	});
 	const { config, lines } = load(basePaths({ table: file }));
-	assert.equal(lines.length, 1);
-	assert.ok(lines[0].includes(file), lines[0]);
-	assert.ok(lines[0].includes("bad.verdict"), lines[0]);
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(faultText(lines[0], file, "table"), 'row "bad.verdict": unknown verdict "maybe"');
 	assertFenced(config);
 });
 
@@ -491,6 +510,25 @@ test("an override with an unknown row id fails closed with the file and id", () 
 	assert.equal(lines.length, 1);
 	assert.ok(lines[0].includes(file), lines[0]);
 	assert.ok(lines[0].includes("no.such.row"), lines[0]);
+	assertFenced(config);
+});
+
+test("an override row fault starts with the one row prefix", () => {
+	const file = write("row-prefix-override.json", {
+		version: 1,
+		patch: [{ id: "no.such.row", verdict: "ask" }],
+	});
+	const { config, lines } = load(basePaths({ override: file }));
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(faultText(lines[0], file, "override"), 'row "no.such.row": unknown row id');
+	assertFenced(config);
+});
+
+test("an override entry with no string id names the one missing placeholder", () => {
+	const file = write("no-id-entry.json", { version: 1, patch: [{ verdict: "deny" }] });
+	const { config, lines } = load(basePaths({ override: file }));
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(faultText(lines[0], file, "override"), 'row "<missing>": an entry needs a string id');
 	assertFenced(config);
 });
 
@@ -541,7 +579,12 @@ test("a table path inside a repository is refused and the default stays in force
 	const { config, lines } = load(basePaths({ table: planted }));
 	assert.equal(config.errors.length, 0);
 	assert.equal(config.rows.length, 87);
-	assert.ok(lines.some((line) => line.includes(planted)), lines.join("\n"));
+	// Both layers carry one refusal sentence, so a parser reads one format.
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(
+		lines[0],
+		`permission gate: refused ${planted}: a permission file inside a repository is ignored, so the shipped default stays in force`,
+	);
 	assert.ok(config.overlay.deny.every((rule) => rule.reason !== FENCE_REASON));
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");
 });
@@ -557,25 +600,33 @@ test("an override path inside a repository is refused and the shipped rows stay"
 	const { config, lines } = load(basePaths({ override: planted }));
 	assert.equal(config.errors.length, 0);
 	assert.equal(config.rows.length, 87);
-	assert.ok(lines.some((line) => line.includes(planted)), lines.join("\n"));
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(
+		lines[0],
+		`permission gate: refused ${planted}: a permission file inside a repository is ignored, so the shipped default stays in force`,
+	);
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");
 });
 
 test("a relative table path is refused and the default stays in force", () => {
-	const { config, lines } = load(basePaths({ table: path.join("relative", "permissions.table.json") }));
+	const configured = path.join("relative", "permissions.table.json");
+	const { config, lines } = load(basePaths({ table: configured }));
 	assert.equal(config.errors.length, 0);
+	// The table layer falls back to DEFAULT_TABLE_FILE, so the shipped rows load.
 	assert.equal(config.rows.length, 87);
-	assert.equal(lines.length, 1);
-	assert.ok(lines[0].includes("absolute"), lines[0]);
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(lines[0], refusalLine(configured, "table"));
 	assert.ok(config.overlay.deny.every((rule) => rule.reason !== FENCE_REASON));
 });
 
 test("a relative override path is refused and the shipped rows stay", () => {
-	const { config, lines } = load(basePaths({ override: path.join("relative", "permissions.table.json") }));
+	const configured = path.join("relative", "permissions.table.json");
+	const { config, lines } = load(basePaths({ override: configured }));
 	assert.equal(config.errors.length, 0);
+	// The override layer falls back to null, so no patch applies.
 	assert.equal(config.rows.length, 87);
-	assert.equal(lines.length, 1);
-	assert.ok(lines[0].includes("absolute"), lines[0]);
+	assert.equal(lines.length, 1, lines.join("\n"));
+	assert.equal(lines[0], refusalLine(configured, "override"));
 	assert.equal(verdict(compileRole(config.rows, "orchestrator"), "bash", "git push origin main"), "ask");
 });
 
