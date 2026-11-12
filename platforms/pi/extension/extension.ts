@@ -209,13 +209,13 @@ import { getActiveAgent, getActivePersona } from "./state.ts";
 import {
 	discoverAgents,
 	discoverSkills,
-	formatPersonaId,
 	matchSkills,
 	resolvePersonaForAgent,
 	resolveResources,
 	skillScriptsDir,
 	type AgentDiscoveryResult,
 } from "./resolver.ts";
+import { formatPersonaId, personaBlock, personaLabel } from "./persona-text.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
 import { dimText, type StatusUi } from "./status-text.ts";
 import registerSubagentTool from "./subagent.ts";
@@ -379,11 +379,7 @@ export default function (pi: ExtensionAPI): void {
 		ctx.ui.setStatus(
 			"persona",
 			persona
-				? dimText(
-						ctx.ui,
-						`persona: ${persona.theme ? `${persona.theme}/${persona.name}` : persona.name}`,
-						ctx.mode,
-					)
+				? dimText(ctx.ui, `persona: ${personaLabel(persona.theme, persona.name)}`, ctx.mode)
 				: undefined,
 		);
 	};
@@ -443,7 +439,7 @@ export default function (pi: ExtensionAPI): void {
 			"before_agent_start agent=",
 			agent?.name ?? "none",
 			"persona=",
-			persona ? `${persona.theme}/${persona.name}` : "none",
+			persona ? personaLabel(persona.theme, persona.name) : "none",
 			"personaBodyLen=",
 			persona?.body?.length ?? 0,
 			"baseLen=",
@@ -536,11 +532,7 @@ export default function (pi: ExtensionAPI): void {
 				);
 			}
 		}
-		if (persona) {
-			extra += `\n\n## PERSONA (MANDATORY VOICE)\n`;
-			extra += `Ignore any earlier plain-voice context. From now on you ARE the persona below.\n`;
-			extra += `Adopt its speech patterns and role in every reply, until the persona changes.\n\n${persona.body}`;
-		}
+		if (persona) extra += personaBlock(persona);
 		debugLog("injecting; extraLen=", extra.length);
 
 		syncStatus(ctx);

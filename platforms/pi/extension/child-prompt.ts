@@ -18,6 +18,7 @@ import {
 	type SkillRef,
 	skillScriptsDir,
 } from "./resolver.ts";
+import { personaBlock } from "./persona-text.ts";
 
 /** Everything the child role text reads. */
 export interface ChildRoleInput {
@@ -55,11 +56,7 @@ export function childRoleText(input: ChildRoleInput): string {
 	for (const pattern of input.missingPatterns ?? []) {
 		text += `\n\nMISSING skill for alwaysLoad entry: ${pattern}`;
 	}
-	if (persona) {
-		text += `\n\n## PERSONA (MANDATORY VOICE)\n`;
-		text += `Ignore any earlier plain-voice context. From now on you ARE the persona below.\n`;
-		text += `Adopt its speech patterns and role in every reply, until the persona changes.\n\n${persona.body}`;
-	}
+	if (persona) text += personaBlock(persona);
 	return text;
 }
 

@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig, PersonaConfig } from "./resolver.ts";
+import { personaLabel } from "./persona-text.ts";
 
 /** Shared debug-log path for the whole agent-stack extension (written by extension.ts). */
 export const DEBUG_AGENT_STACK_PATH = path.join(os.tmpdir(), "pi-agent-stack-debug.log");
@@ -41,7 +42,7 @@ export function getActivePersona(): PersonaConfig | null {
 export function setActivePersona(persona: PersonaConfig | null): void {
 	debugLog(
 		"state: setActivePersona ->",
-		persona ? (persona.theme ? `${persona.theme}/${persona.name}` : persona.name) : "null",
+		persona ? personaLabel(persona.theme, persona.name) : "null",
 	);
 	activePersona = persona;
 }

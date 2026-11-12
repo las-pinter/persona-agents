@@ -15,11 +15,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	discoverAgents,
 	discoverSkills,
-	formatPersonaId,
 	matchSkills,
 	resolveAgentAlias,
 	resolvePersonaForAgent,
 } from "./resolver.ts";
+import { personaLabel } from "./persona-text.ts";
 import { getActiveAgent, setActiveAgent, setActivePersona } from "./state.ts";
 import { dimText } from "./status-text.ts";
 
@@ -86,7 +86,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 					const persona = resolvePersonaForAgent(discovery.personas, effectivePersonaArg, agent.name);
 					if (persona) {
 						setActivePersona(persona);
-						ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${formatPersonaId(persona)}`, ctx.mode));
+						ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${personaLabel(persona.theme, persona.name)}`, ctx.mode));
 					} else {
 						ctx.ui?.notify?.(`Unknown persona "${effectivePersonaArg}".`, "warning");
 					}
@@ -95,7 +95,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 				const persona = resolvePersonaForAgent(discovery.personas, agent.persona, agent.name);
 				if (persona) {
 					setActivePersona(persona);
-					ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${formatPersonaId(persona)}`, ctx.mode));
+					ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${personaLabel(persona.theme, persona.name)}`, ctx.mode));
 				}
 			}
 
@@ -121,7 +121,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 				for (const p of discovery.personas) {
 					const bucket = p.theme ?? "(root)";
 					const existing = byTheme.get(bucket) ?? [];
-					existing.push(formatPersonaId(p));
+					existing.push(personaLabel(p.theme, p.name));
 					byTheme.set(bucket, existing);
 				}
 				const list = Array.from(byTheme.entries())
@@ -145,9 +145,9 @@ export function registerCommands(pi: ExtensionAPI): void {
 			}
 
 			setActivePersona(persona);
-			ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${formatPersonaId(persona)}`, ctx.mode));
+			ctx.ui?.setStatus?.("persona", dimText(ctx.ui, `persona: ${personaLabel(persona.theme, persona.name)}`, ctx.mode));
 			ctx.ui?.notify?.(
-				`Persona activated: ${formatPersonaId(persona)}\nTip: run /new first — in a long session earlier plain replies can outvote the persona.`,
+				`Persona activated: ${personaLabel(persona.theme, persona.name)}\nTip: run /new first — in a long session earlier plain replies can outvote the persona.`,
 				"info",
 			);
 		},

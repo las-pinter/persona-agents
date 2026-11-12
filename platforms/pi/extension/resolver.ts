@@ -19,6 +19,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { recordLogLine } from "./ask-record.ts";
+import { formatPersonaId } from "./persona-text.ts";
 import { READER_CLASS, isPermissionClass, type PermissionClass } from "./permission-class.ts";
 
 export type AgentScope = "user" | "project" | "both";
@@ -474,7 +475,7 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 
 	const personaMap = new Map<string, PersonaConfig>();
 	for (const p of [...userPersonas, ...projectPersonas, ...packagePersonas]) {
-		personaMap.set(personaId(p), p);
+		personaMap.set(formatPersonaId(p), p);
 	}
 
 	return {
@@ -483,15 +484,6 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 		projectAgentsDir,
 	};
 }
-
-export function personaId(p: PersonaConfig): string {
-	return p.theme ? `${p.theme}/${p.name}` : p.name;
-}
-
-export function formatPersonaId(p: PersonaConfig): string {
-	return p.theme ? `${p.theme}/${p.name}` : p.name;
-}
-
 
 // ---------------------------------------------------------------------------
 // agents.json theme ↔ profession ↔ persona mapping
