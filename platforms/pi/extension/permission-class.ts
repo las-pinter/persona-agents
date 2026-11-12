@@ -12,6 +12,9 @@
  */
 export type PermissionClass = "reader" | "worker" | "orchestrator";
 
+/** The class of an agent that names none. One fallback, one owner. */
+export const READER_CLASS: PermissionClass = "reader";
+
 export const PERMISSION_CLASSES: readonly PermissionClass[] = ["reader", "worker", "orchestrator"];
 
 export type Role =

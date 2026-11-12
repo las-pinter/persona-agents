@@ -58,6 +58,8 @@ interface Child {
 }
 
 interface HarnessOptions {
+	/** The agent every target resolves to. Solves to `AGENT` by default. */
+	agent?: AgentConfig;
 	/** The most assistant turns the fake emits before it stops on its own. */
 	emitLimit?: number;
 	/** Runs after each emitted turn, so a test can fire the parent signal mid-run. */
@@ -93,6 +95,7 @@ function fakeSettings(): SettingsManager {
 
 /** A harness with one registry, one fake agent, and one fake session per build. */
 function harness(options: HarnessOptions = {}): Harness {
+	const agent = options.agent ?? AGENT;
 	const children: Child[] = [];
 	const registry = new RunRegistry();
 	// A live process holds its caller record, so the harness registers the root.
@@ -176,8 +179,8 @@ function harness(options: HarnessOptions = {}): Harness {
 			modelObject: { id: "fake-model" } as ChildModel,
 			thinkingLevel: "medium",
 		},
-		agents: [AGENT],
-		resolveTarget: (name: string) => (name === AGENT.name ? { agent: AGENT } : null),
+		agents: [agent],
+		resolveTarget: (name: string) => (name === agent.name ? { agent } : null),
 		resolveSpawnPersona: () => null,
 		runtime: { registry, parentSessionId: "root-session", createSession, prepare },
 	};
@@ -271,6 +274,17 @@ test("run: a child runs to its own end, and the turn count equals the registry r
 	assert.equal(result.messages.at(-1)?.role, "assistant", "the final message is kept");
 	assert.equal(result.exitCode, 0, "the run exits clean");
 	assert.equal(child.disposed, 1, "the child is disposed once");
+});
+
+test("run: a child whose agent names no class records the reader class", async () => {
+	const classless: AgentConfig = { ...AGENT, permissionClass: undefined };
+	const h = harness({ agent: classless, emitLimit: 1 });
+	const result = await run(h);
+	const record = h.registry.get("child-0");
+
+	assert.ok(record, "the run writes one record");
+	assert.equal(record.class, "reader", "a classless child records the reader class");
+	assert.equal(result.exitCode, 0, "the child still runs");
 });
 
 test("run: a parent id no record holds refuses the spawn at the cap", async () => {

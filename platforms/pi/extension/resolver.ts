@@ -19,7 +19,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { recordLogLine } from "./ask-record.ts";
-import { isPermissionClass, type PermissionClass } from "./permission-class.ts";
+import { READER_CLASS, isPermissionClass, type PermissionClass } from "./permission-class.ts";
 
 export type AgentScope = "user" | "project" | "both";
 export type AgentSource = "user" | "project" | "package";
@@ -167,15 +167,15 @@ function parsePermissionClass(value: unknown, filePath: string, source: AgentSou
 			warnOnce(
 				warnedClampedClass,
 				filePath,
-				`agent-stack: ${filePath}: permissionClass "${named}" is above reader for a ${source} file; loaded as reader`,
+				`agent-stack: ${filePath}: permissionClass "${named}" is above reader for a ${source} file; loaded as ${READER_CLASS}`,
 			);
-			return "reader";
+			return READER_CLASS;
 		}
 		return named;
 	}
 	if (absent && source !== "package") {
-		warnOnce(warnedMissingClass, filePath, `agent-stack: ${filePath}: no permissionClass; loaded as reader`);
-		return "reader";
+		warnOnce(warnedMissingClass, filePath, `agent-stack: ${filePath}: no permissionClass; loaded as ${READER_CLASS}`);
+		return READER_CLASS;
 	}
 	const shown = absent ? "missing" : JSON.stringify(value);
 	throw new Error(`${filePath}: invalid permissionClass ${shown}; expected reader, worker, or orchestrator`);

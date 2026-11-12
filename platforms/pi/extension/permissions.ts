@@ -80,6 +80,7 @@ import {
 } from "./permission-table.ts";
 import {
 	PERMISSION_CLASSES,
+	READER_CLASS,
 	ROLE_CLASS,
 	isRole,
 	type PermissionClass,
@@ -315,7 +316,7 @@ export function compileGateSource(rows: readonly RuleRow[] = loadDefaultRows()):
 	};
 	return (agent) => {
 		if (!agent) return noAgent;
-		const cls = agent.permissionClass ?? "reader";
+		const cls = agent.permissionClass ?? READER_CLASS;
 		// A name alone never widens the fence: discovery clamps a user or project
 		// file above `reader`, and the class must agree with the role map here. The
 		// notes zone binds only for a package file, so a user file named after a

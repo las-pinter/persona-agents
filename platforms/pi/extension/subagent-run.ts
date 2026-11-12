@@ -36,6 +36,7 @@ import {
 import { childRoleText, childTaskPrompt } from "./child-prompt.ts";
 import { DEPTH_CAP_REASON, canSpawn, newRunId, planSpawn, resolvedDepth } from "./depth.ts";
 import { createSubagentMcpCounter } from "./mcp-usage.ts";
+import { READER_CLASS } from "./permission-class.ts";
 import { RunRegistry, UNKNOWN_RUN_ROLE, newRunRecord, type RunRegistry as RegistryType } from "./run-registry.ts";
 import { type AgentConfig, type PersonaConfig, discoverSkills, formatPersonaId, matchSkills } from "./resolver.ts";
 import { foldEvent } from "./subagent-fold.ts";
@@ -67,9 +68,6 @@ import type { RunEvent } from "./tree-log.ts";
 
 /** Live repaint period during a run. Short enough to look live, long enough to stay cheap. */
 const RUN_TICK_MS = 250;
-
-/** The class a record carries when the agent names none. Matches the gate rule. */
-const FALLBACK_CLASS = "reader";
 
 /** The refusal when no parent session id exists, so a child would walk to depth 0. */
 export const NO_PARENT_SESSION_REASON =
@@ -176,7 +174,7 @@ export function registerRootSession(sessionId: string, agent: AgentConfig | null
 		newRunRecord({
 			sessionId,
 			role: agent?.name ?? UNKNOWN_RUN_ROLE,
-			class: agent?.permissionClass ?? FALLBACK_CLASS,
+			class: agent?.permissionClass ?? READER_CLASS,
 			source: agent?.source ?? "user",
 			skills: agent?.skills ?? [],
 			alwaysLoad: agent?.alwaysLoad ?? [],
@@ -292,7 +290,7 @@ export async function runSingleAgent(
 				agentDir: deps.runtime.agentDir ?? getAgentDir(),
 				id: session,
 				agent: agent.name,
-				class: agent.permissionClass ?? FALLBACK_CLASS,
+				class: agent.permissionClass ?? READER_CLASS,
 				cwd: childCwd,
 				now: Date.now(),
 			})
@@ -421,7 +419,7 @@ export async function runSingleAgent(
 			start: {
 				sessionId,
 				role: agent.name,
-				class: agent.permissionClass ?? FALLBACK_CLASS,
+				class: agent.permissionClass ?? READER_CLASS,
 				source: agent.source,
 				skills: agent.skills ?? [],
 				alwaysLoad: agent.alwaysLoad ?? [],
