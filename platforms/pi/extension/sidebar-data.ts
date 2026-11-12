@@ -53,7 +53,7 @@ export const TPS_WINDOW_MS = 2000;
 export const STALE_MS = 5 * 60 * 1000;
 /** Git command timeout. Every git read uses this one value. */
 export const GIT_TIMEOUT_MS = 2000;
-/** Changed names kept in the snapshot; the renderer shows this many. */
+/** Changed names kept in the snapshot. This is the only changed-name cap. */
 const CHANGED_SHOWN = 4;
 /** Per-file diff rows kept in the snapshot. Bounds the cross-timer payload. */
 const WORKSPACE_FILES_CAP = 50;

@@ -19,8 +19,6 @@ import { clipLine } from "./sidebar-line.ts";
 import { roundMark } from "./subagent-marks.ts";
 import { flattenTreeKeeping, type TreeNode, type TreeNodeStatus } from "./tree-model.ts";
 
-/** Changed names shown inline in WORKSPACE before the `… +N more` mark. */
-export const WORKSPACE_CHANGED_SHOWN = 4;
 /** Per-file diff lines shown in WORKSPACE before the `… +N more` mark. */
 export const WORKSPACE_FILES_SHOWN = 4;
 /** Server lines shown in MCP before the `… +N more` mark. */
@@ -233,6 +231,11 @@ function styleDim(theme: SidebarTheme, text: string): string {
 		}
 	}
 	return color(theme, "dim", text);
+}
+
+/** The `… +N more` mark for N hidden rows. Zero hides nothing, so no mark. */
+function overflowMark(hidden: number): string | null {
+	return hidden > 0 ? `… +${hidden} more` : null;
 }
 
 /** A panel header: accent-colored and bold when the theme supports it. */
@@ -458,9 +461,8 @@ export function renderAgentTreePanel(
 		const nodeLines = renderTreeLines(tree, theme, frame, now);
 		const shown = nodeLines.slice(0, TREE_ROWS_SHOWN);
 		lines.push(...shown);
-		if (nodeLines.length > shown.length) {
-			lines.push(styleDim(theme, `… +${nodeLines.length - shown.length} more`));
-		}
+		const mark = overflowMark(nodeLines.length - shown.length);
+		if (mark) lines.push(styleDim(theme, mark));
 	}
 
 	// padToMin: reserve a stable footprint, so lower panels do not jump.
@@ -521,9 +523,8 @@ export function renderStatusPanel(
 	} else {
 		const shown = rows.slice(0, STUDY_STATUS_SHOWN);
 		for (const row of shown) lines.push(studyRow(row, width, theme, now));
-		if (rows.length > shown.length) {
-			lines.push(styleDim(theme, `… +${rows.length - shown.length} more`));
-		}
+		const mark = overflowMark(rows.length - shown.length);
+		if (mark) lines.push(styleDim(theme, mark));
 	}
 
 	return lines.map((line) => clipLine(line, width));
@@ -671,16 +672,15 @@ export function renderWorkspacePanel(
 	lines.push(total === 0 ? `${branchText} (clean)` : `${branchText} ${total} changed`);
 
 	if (files.length > 0) {
-		for (const file of files.slice(0, WORKSPACE_FILES_SHOWN)) {
-			lines.push(workspaceFileLine(file, width, theme));
-		}
-		const extra = total - Math.min(files.length, WORKSPACE_FILES_SHOWN);
-		if (extra > 0) lines.push(styleDim(theme, `… +${extra} more`));
+		const shown = files.slice(0, WORKSPACE_FILES_SHOWN);
+		for (const file of shown) lines.push(workspaceFileLine(file, width, theme));
+		const mark = overflowMark(files.length - shown.length);
+		if (mark) lines.push(styleDim(theme, mark));
 	} else if (changed.length > 0) {
-		const shown = changed.slice(0, WORKSPACE_CHANGED_SHOWN);
-		const extra = total - shown.length;
-		const summary = shown.join(", ") + (extra > 0 ? ` … +${extra} more` : "");
-		lines.push(summary);
+		// The data layer caps this list, so the panel drops no row here.
+		const mark = overflowMark(0);
+		const summary = changed.join(", ");
+		lines.push(mark ? `${summary} ${mark}` : summary);
 	}
 
 	lines.push(styleDim(theme, shortenHome(workspace.cwd, home) || "~"));
@@ -725,7 +725,8 @@ export function renderMcpPanel(
 			lines.push(`${color(theme, token, glyph)} ${server.name}${badge}`);
 		}
 		if (servers.length > shown.length) {
-			lines.push(styleDim(theme, `… +${servers.length - shown.length} more`));
+			const mark = overflowMark(servers.length - shown.length);
+			if (mark) lines.push(styleDim(theme, mark));
 		}
 	}
 	if (usage !== undefined) {
@@ -768,9 +769,8 @@ export function renderTodosPanel(
 
 	const shown = items.slice(0, TODOS_ROWS_SHOWN);
 	for (const item of shown) lines.push(itemLine(item));
-	if (items.length > shown.length) {
-		lines.push(styleDim(theme, `… +${items.length - shown.length} more`));
-	}
+	const mark = overflowMark(items.length - shown.length);
+	if (mark) lines.push(styleDim(theme, mark));
 	return lines.map((line) => clipLine(line, width));
 }
 
@@ -802,9 +802,8 @@ export function renderNodeDetail(
 		const previewLines = preview.split("\n");
 		const shown = previewLines.slice(0, DETAIL_PREVIEW_LINES);
 		for (const line of shown) lines.push(line);
-		if (previewLines.length > shown.length) {
-			lines.push(styleDim(theme, `… +${previewLines.length - shown.length} more`));
-		}
+		const mark = overflowMark(previewLines.length - shown.length);
+		if (mark) lines.push(styleDim(theme, mark));
 	}
 
 	return lines.map((line) => clipLine(line, width));

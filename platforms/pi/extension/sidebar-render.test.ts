@@ -435,6 +435,37 @@ test("a long changed list clips with a more marker", () => {
 	assert.ok(lines.some((line) => line.includes("… +2 more")));
 });
 
+test("the workspace mark counts the capped files it hides, not the changed total", () => {
+	const files = Array.from({ length: 50 }, (_value, index) => ({
+		path: `file-${index}.ts`,
+		added: 1,
+		removed: 0,
+		untracked: false,
+	}));
+	const lines = renderWorkspacePanel(
+		makeWorkspace({ files, changed: files.slice(0, 4).map((file) => file.path), changedCount: 60 }),
+		60,
+		theme,
+	);
+	assert.ok(lines.some((line) => line.includes("60 changed")));
+	assert.equal(lines.filter((line) => line.includes(".ts")).length, 4, "the panel paints four file rows");
+	assert.ok(
+		lines.some((line) => line.includes("… +46 more")),
+		"the mark counts the hidden capped rows, not the changed total plus 4",
+	);
+});
+
+test("three changed files paint three rows and no mark", () => {
+	const files = ["a.ts", "b.ts", "c.ts"].map((path) => ({ path, added: 1, removed: 0, untracked: false }));
+	const lines = renderWorkspacePanel(
+		makeWorkspace({ files, changed: files.map((file) => file.path), changedCount: 3 }),
+		60,
+		theme,
+	);
+	assert.equal(lines.filter((line) => line.includes(".ts")).length, 3, "the panel paints three file rows");
+	assert.ok(!lines.some((line) => line.includes("more")), "nothing is hidden, so no mark paints");
+});
+
 // --- MCP ---------------------------------------------------------------------
 
 test("MCP renders a configured/connected summary and server dots", () => {
