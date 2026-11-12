@@ -17,6 +17,7 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 import { askPanelSlot } from "./ask-panel-slot.ts";
 import { recordAsk, recordLogLine } from "./ask-record.ts";
 import { boundRunRegistry, UNKNOWN_RUN_ROLE } from "./run-registry.ts";
+import { isShellTool } from "./shell-tools.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
@@ -89,9 +90,6 @@ export interface PromptModel {
 	options: PromptOption[];
 }
 
-/** Shell tools have segments; every other gated tool has one target. */
-const SHELL_TOOLS = new Set(["bash", "powershell"]);
-
 /** Fallback for a rule without a human reason. Never the regex. */
 const NO_REASON = "matches a permission rule";
 
@@ -133,7 +131,8 @@ export function blockedLabel(
  * can never appear in the model.
  */
 export function buildPromptModel(input: PromptInput): PromptModel {
-	const isShell = SHELL_TOOLS.has(input.toolName);
+	// Shell tools have segments; every other gated tool has one target.
+	const isShell = isShellTool(input.toolName);
 	const remember = rememberText(input.reason);
 	const why = `Why: ${remember}`;
 	const lines: string[] = [];

@@ -36,6 +36,7 @@ import {
 	type PromptModel,
 } from "./permission-prompt.ts";
 import { installToolCallGate } from "./permissions.ts";
+import { isShellTool } from "./shell-tools.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import { RunRegistry } from "./run-registry.ts";
 
@@ -190,6 +191,24 @@ test("a non-bash tool shows the target and the three shared options", () => {
 	const always = model.options.find((option) => option.decision === "always-allow");
 	assert.equal(always?.label, "Always allow this rule (session)");
 	assert.ok(!always?.label.includes("reading system host files"));
+});
+
+// One predicate owns the shell class, so the gate and the prompt cannot drift.
+test("one shell predicate decides the prompt kind", () => {
+	assert.equal(isShellTool("bash"), true);
+	assert.equal(isShellTool("powershell"), true);
+	assert.equal(isShellTool("read"), false);
+	for (const toolName of ["bash", "powershell"]) {
+		const model = buildPromptModel({
+			toolName,
+			probe: "git status",
+			segment: "git status",
+			segmentStart: 0,
+			reason: REASON,
+			isSpanning: false,
+		});
+		assert.equal(model.kind, "shell-segment");
+	}
 });
 
 test("a spanning probe shows the spanning note and keeps the three decisions", () => {

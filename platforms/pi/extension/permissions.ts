@@ -94,6 +94,7 @@ import {
 	renderRootPermissionPrompt,
 	type PermissionChoice,
 } from "./permission-prompt.ts";
+import { SHELL_PROBES, isShellTool } from "./shell-tools.ts";
 import { bindChildAsk, childAskQueue } from "./child-ask.ts";
 import { type ParentGateHandler, bindParentGate } from "./child-tools.ts";
 import { bindRunRegistry, UNKNOWN_RUN_REASON, type RunRecord, type RunRegistry } from "./run-registry.ts";
@@ -109,10 +110,10 @@ function grantKey(sessionId: string, role: string, toolName: string, ruleId: str
 }
 
 function probeFor(toolName: string, input: Record<string, unknown>): string {
+	// The shell field comes from the shell-tool owner, so a new shell tool lands once.
+	const shellField = SHELL_PROBES.get(toolName);
+	if (shellField !== undefined) return String(input[shellField] ?? "");
 	switch (toolName) {
-		case "bash":
-		case "powershell":
-			return String(input.command ?? "");
 		case "read":
 		case "grep":
 		case "find":
@@ -435,7 +436,7 @@ export function installToolCallGate(
 		const probe = probeFor(toolName, input);
 		const fromSource = source(agent);
 		const mode = fromSource.mode;
-		const isShell = toolName === "bash" || toolName === "powershell";
+		const isShell = isShellTool(toolName);
 		const skillDirs = isShell && agent ? derivedSkillScriptDirs(agent, ctx.cwd) : [];
 		// The table rows come first, then the live overlay. Deny wins by order, so an
 		// overlay row can only add a verdict; it can never loosen a table row.
