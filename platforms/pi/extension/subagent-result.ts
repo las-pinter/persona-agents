@@ -8,8 +8,11 @@
 import type { Message } from "@earendil-works/pi-ai";
 import type { InspectTask } from "./inspector.ts";
 import type { AgentScope } from "./resolver.ts";
-import { formatTokens } from "./duration.ts";
 import type { ThinkingState } from "./subagent-thinking.ts";
+import type { UsageTextInput } from "./usage-text.ts";
+
+/** Re-exported so a caller of the result helpers keeps one import path. */
+export { formatUsageStats, type UsageTextInput } from "./usage-text.ts";
 
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
@@ -18,38 +21,8 @@ const PER_TASK_OUTPUT_CAP = 50 * 1024;
 /** The abort text an aborted run carries. */
 export const ABORT_TEXT = "Subagent was aborted";
 
-export function formatUsageStats(
-	usage: {
-		input: number;
-		output: number;
-		cacheRead: number;
-		cacheWrite: number;
-		cost: number;
-		contextTokens?: number;
-		turns?: number;
-	},
-	model?: string,
-): string {
-	const parts: string[] = [];
-	if (usage.turns) parts.push(`${usage.turns} turn${usage.turns > 1 ? "s" : ""}`);
-	if (usage.input) parts.push(`↑${formatTokens(usage.input)}`);
-	if (usage.output) parts.push(`↓${formatTokens(usage.output)}`);
-	if (usage.cacheRead) parts.push(`R${formatTokens(usage.cacheRead)}`);
-	if (usage.cacheWrite) parts.push(`W${formatTokens(usage.cacheWrite)}`);
-	if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
-	if (usage.contextTokens && usage.contextTokens > 0) {
-		parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
-	}
-	if (model) parts.push(model);
-	return parts.join(" ");
-}
-
-interface UsageStats {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	cost: number;
+/** The run usage shape: the shared usage fields plus the fields a run always carries. */
+interface UsageStats extends UsageTextInput {
 	contextTokens: number;
 	turns: number;
 }
@@ -150,8 +123,10 @@ export function toInspectTask(r: SingleResult): InspectTask {
 			cacheRead: r.usage.cacheRead,
 			cacheWrite: r.usage.cacheWrite,
 			cost: r.usage.cost,
+			contextTokens: r.usage.contextTokens,
 			turns: r.usage.turns,
 		},
+		model: r.model,
 		thinkingMs: r.thinking?.thinkingMs ?? 0,
 		reasoningTokens: r.reasoningTokens,
 		errorMessage: r.errorMessage,

@@ -17,7 +17,15 @@ import type { Component } from "@earendil-works/pi-tui";
 import { toInspectTask } from "./subagent.ts";
 import { failureResult } from "./subagent-result.ts";
 import { archiveRun, getRuns, registerInspectorCommands } from "./inspector.ts";
-import { countOccurrences, makeSingle, zeroUsage } from "./subagent-render-fixtures.ts";
+import {
+	captureTool,
+	countOccurrences,
+	makeDetails,
+	makeResult,
+	makeSingle,
+	render,
+	zeroUsage,
+} from "./subagent-render-fixtures.ts";
 
 interface CapturedCommand {
 	handler: (args: string, ctx: unknown) => unknown;
@@ -245,6 +253,31 @@ test("an old archive record without thinking fields renders without them", async
 	const line = notified.split("\n").find((candidate) => candidate.includes("2024-01-06")) ?? "";
 	assert.ok(line.includes("tester"), notified);
 	assert.ok(!line.includes("🧠"), line);
+});
+
+/** The usage line one run prints, pinned as text. */
+const EXPECTED_USAGE = "3 turns ↑1.5k ↓900 R2.4k W600 $0.0123 ctx:48k grub-model";
+
+test("one run prints the same usage text in the result row and the inspector", async () => {
+	const run = makeSingle({
+		model: "grub-model",
+		usage: {
+			input: 1_500,
+			output: 900,
+			cacheRead: 2_400,
+			cacheWrite: 600,
+			cost: 0.0123,
+			contextTokens: 48_000,
+			turns: 3,
+		},
+	});
+	archiveRun({ at: "2024-01-14T00:00:00.000Z", mode: "single", agentScope: "user", results: [toInspectTask(run)] });
+
+	const row = render(captureTool(), makeResult(makeDetails("single", [run])), false);
+	assert.ok(row.includes(EXPECTED_USAGE), `the result row prints the usage text:\n${row}\nexpected: ${EXPECTED_USAGE}`);
+
+	const detail = await inspectDetail("last");
+	assert.ok(detail.includes(EXPECTED_USAGE), `the inspector prints the usage text:\n${detail}\nexpected: ${EXPECTED_USAGE}`);
 });
 
 test("a narrow inspector leads the nav line with the whole page counter", async () => {

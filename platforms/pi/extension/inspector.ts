@@ -13,6 +13,7 @@ import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tu
 import type { Message } from "@earendil-works/pi-ai";
 import { formatDuration, formatTokens } from "./duration.ts";
 import { resultBodyBlock, resultText } from "./subagent-result.ts";
+import { formatUsageStats } from "./usage-text.ts";
 
 export interface InspectTask {
 	agent: string;
@@ -27,8 +28,10 @@ export interface InspectTask {
 		cacheRead: number;
 		cacheWrite: number;
 		cost: number;
+		contextTokens: number;
 		turns: number;
 	};
+	model?: string;
 	thinkingMs?: number;
 	reasoningTokens?: number;
 	errorMessage?: string;
@@ -64,13 +67,10 @@ function toolCalls(messages: Message[]): string[] {
 	return out;
 }
 
-function formatUsage(u: InspectTask["usage"]): string {
-	if (!u) return "";
-	const parts: string[] = [];
-	if (u.input) parts.push(`↑${u.input}`);
-	if (u.output) parts.push(`↓${u.output}`);
-	if (u.cost) parts.push(`$${u.cost.toFixed(4)}`);
-	return parts.join(" ");
+/** One mapping from the archive fields to the shared usage text. */
+function taskUsageText(t: InspectTask): string {
+	if (!t.usage) return "";
+	return formatUsageStats(t.usage, t.model);
 }
 
 function formatAt(iso: string): string {
@@ -153,7 +153,7 @@ class InspectorComponent implements Component {
 			detail.push(`→ ${c.length > width - 4 ? c.slice(0, width - 4) : c}`);
 		}
 		for (const line of resultBodyBlock(t).split("\n")) detail.push(` ${line}`.slice(0, width));
-		const usage = formatUsage(t.usage);
+		const usage = taskUsageText(t);
 		if (usage) detail.push(`${usage}`);
 		// A refusal sets the body from stderr, so the stderr line would repeat it.
 		if (t.stderr && t.status === "failed" && t.stderr !== runText.body)
