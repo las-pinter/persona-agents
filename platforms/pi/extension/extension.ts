@@ -15,22 +15,12 @@
 
 import * as fs from "node:fs";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
+import { debugLog } from "./state.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts";
 import { MAX_LOG_BYTES, appendEvent, compactLog, compactionLiveRuns, createRootLogPath } from "./tree-log.ts";
 import { flushPendingLogEvents, recordLogLine } from "./ask-record.ts";
 import { inChildBuild, skipsDefaults } from "./child-session.ts";
 import { sessionIdOf } from "./session-id.ts";
-
-function debugLog(...parts: unknown[]): void {
-	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
-	if (!process.env["PI_AGENT_STACK_DEBUG"]) return;
-	try {
-		fs.appendFileSync(DEBUG_AGENT_STACK_PATH, `${new Date().toISOString()} ${parts.join(" ")}\n`);
-	} catch {
-		/* ignore */
-	}
-}
 
 const MODULE_LOAD_ID = `${process.pid}-${Math.random().toString(36).slice(2, 7)}`;
 

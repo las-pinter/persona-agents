@@ -16,7 +16,6 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import * as fs from "node:fs";
 import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
@@ -35,7 +34,7 @@ import {
 	newRunRecord,
 } from "./run-registry.ts";
 import { wildcardChildTools, wildcardLoadoutReason } from "./child-tools.ts";
-import { DEBUG_AGENT_STACK_PATH } from "./state.ts";
+import { debugLog } from "./state.ts";
 import { DEPTH_CAP_REASON, canSpawn, resolvedDepth, stripSpawnTool } from "./depth.ts";
 
 /** The reason a build raises when the parent aborted before the child ran. */
@@ -69,16 +68,6 @@ export function childWildcardLoadoutError(entries: readonly string[]): Error {
 	const error = new Error(wildcardLoadoutReason(entries));
 	error.name = CHILD_WILDCARD_ERROR_NAME;
 	return error;
-}
-
-/** Off unless PI_AGENT_STACK_DEBUG is set. A debug line must never break a build. */
-function debugLog(...parts: unknown[]): void {
-	if (!process.env["PI_AGENT_STACK_DEBUG"]) return;
-	try {
-		fs.appendFileSync(DEBUG_AGENT_STACK_PATH, `${new Date().toISOString()} ${parts.join(" ")}\n`);
-	} catch {
-		// A debug line must never break a build.
-	}
 }
 
 /**

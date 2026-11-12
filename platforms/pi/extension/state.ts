@@ -11,9 +11,11 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig, PersonaConfig } from "./resolver.ts";
 import { personaLabel } from "./persona-text.ts";
 
-/** Shared debug-log path for the whole agent-stack extension (written by extension.ts). */
+/** Shared debug-log path for the whole agent-stack extension (written by the debugLog in this module). */
 export const DEBUG_AGENT_STACK_PATH = path.join(os.tmpdir(), "pi-agent-stack-debug.log");
-function debugLog(...parts: unknown[]): void {
+
+/** The one debug-log writer. Off unless PI_AGENT_STACK_DEBUG is set; a line must never break a build. */
+export function debugLog(...parts: unknown[]): void {
 	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
 	if (!process.env["PI_AGENT_STACK_DEBUG"]) return;
 	try {
