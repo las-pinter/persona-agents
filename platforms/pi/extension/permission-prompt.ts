@@ -17,7 +17,9 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 import { askPanelSlot } from "./ask-panel-slot.ts";
 import { recordAsk, recordLogLine } from "./ask-record.ts";
 import { boundRunRegistry, UNKNOWN_RUN_ROLE } from "./run-registry.ts";
+import { sessionIdOf } from "./session-id.ts";
 import { isShellTool } from "./shell-tools.ts";
+import { getActiveAgent } from "./state.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
@@ -367,22 +369,14 @@ export async function renderPermissionPrompt(
 	return model.options.find((option) => option.label === picked)?.decision ?? "deny";
 }
 
-/** The session id of one ask, or null when the context carries none. */
-function askSessionId(ctx: ExtensionContext): string | null {
-	try {
-		const manager = ctx.sessionManager as { getSessionId?: () => string } | undefined;
-		return manager?.getSessionId?.() ?? null;
-	} catch {
-		// A lost id must not lose the verdict the owner gave.
-		return null;
-	}
-}
-
-/** The role of the asking session, or `unknown` when no record answers. */
-function askRole(ctx: ExtensionContext): string {
-	const sessionId = askSessionId(ctx);
-	if (!sessionId) return UNKNOWN_RUN_ROLE;
-	return boundRunRegistry()?.get(sessionId)?.role ?? UNKNOWN_RUN_ROLE;
+/**
+ * The role of one ask: the role in its run record, else the role of the agent
+ * the gate judged with. A lost id leaves the gate on the active agent, so the
+ * record names that same role instead of a placeholder.
+ */
+function askRole(sessionId: string | null): string {
+	const fromRecord = sessionId ? boundRunRegistry()?.get(sessionId)?.role : undefined;
+	return fromRecord ?? getActiveAgent()?.name ?? UNKNOWN_RUN_ROLE;
 }
 
 /**
@@ -403,12 +397,13 @@ export async function renderRootPermissionPrompt(
 	try {
 		const choice = await renderPermissionPrompt(ctx, model, signal);
 		// One settled root ask writes one record with its own id. A throw above
-		// writes none.
+		// writes none. The id is read once, so the role and the run id agree.
+		const sessionId = sessionIdOf(ctx);
 		recordAsk({
 			tool: model.toolName,
-			role: askRole(ctx),
+			role: askRole(sessionId),
 			verdict: choice === "deny" ? "deny" : "allow",
-			runId: askSessionId(ctx) ?? undefined,
+			runId: sessionId ?? undefined,
 			depth: 0,
 			phase: "settle",
 		});

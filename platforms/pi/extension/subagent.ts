@@ -11,7 +11,6 @@ import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import {
 	CONFIG_DIR_NAME,
 	type ExtensionAPI,
-	type ExtensionContext,
 	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -25,6 +24,7 @@ import {
 } from "./resolver.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { SPAWN_TOOL_NAME } from "./depth.ts";
+import { parentSessionIdOf } from "./session-id.ts";
 import { archiveRun } from "./inspector.ts";
 import {
 	type SingleResult,
@@ -260,14 +260,6 @@ export async function runSingleMode(
 	};
 }
 
-/** The parent session id, or null when the manager cannot answer. */
-function parentSessionIdOf(ctx: ExtensionContext): string | null {
-	try {
-		return ctx.sessionManager.getSessionId() ?? null;
-	} catch {
-		return null;
-	}
-}
 /** Duration formatting lives in `duration.ts`; re-exported for callers. */
 export { formatDuration as formatToolDuration } from "./duration.ts";
 /** Thinking state lives in `subagent-thinking.ts`; re-exported for callers. */

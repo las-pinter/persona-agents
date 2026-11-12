@@ -20,6 +20,7 @@ import { ENV_RUN_ID, ENV_TREE_LOG, isRootProcessEnv, newRunId } from "./depth.ts
 import { MAX_LOG_BYTES, appendEvent, compactLog, compactionLiveRuns, createRootLogPath } from "./tree-log.ts";
 import { flushPendingLogEvents, recordLogLine } from "./ask-record.ts";
 import { inChildBuild, skipsDefaults } from "./child-session.ts";
+import { sessionIdOf } from "./session-id.ts";
 
 function debugLog(...parts: unknown[]): void {
 	// Off by default; enable with PI_AGENT_STACK_DEBUG=1 in the pi process env.
@@ -253,19 +254,6 @@ function skillBodyBytes(text: string): number {
 	return Buffer.byteLength(text, "utf8");
 }
 
-/**
- * The pi session id of a start, or null when the context cannot supply one. A
- * start without an id skips the defaults, because a missing id is not trusted
- * as the root start.
- */
-function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } } | undefined): string | null {
-	try {
-		return ctx?.sessionManager?.getSessionId?.() ?? null;
-	} catch {
-		return null;
-	}
-}
-
 export default function (pi: ExtensionAPI): void {
 	// A child build has no gate of its own, so this factory must not re-apply defaults.
 	if (inChildBuild()) {
@@ -404,6 +392,7 @@ export default function (pi: ExtensionAPI): void {
 		// A child shares this module state. Its start must not rewrite the active role.
 		// The gate reads the child's own role from its record. The root keeps this
 		// live role, because a root record sits at depth 0.
+		// A start with no id skips the defaults: a missing id is not a trusted root start.
 		const sessionId = sessionIdOf(ctx);
 		const skipDefaults = skipsDefaults(sessionId);
 		debugLog("session_start cwd=", ctx.cwd, "skipDefaults=", skipDefaults);

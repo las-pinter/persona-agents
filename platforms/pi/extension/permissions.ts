@@ -98,6 +98,7 @@ import { SHELL_PROBES, isShellTool } from "./shell-tools.ts";
 import { bindChildAsk, childAskQueue } from "./child-ask.ts";
 import { type ParentGateHandler, bindParentGate } from "./child-tools.ts";
 import { bindRunRegistry, UNKNOWN_RUN_REASON, type RunRecord, type RunRegistry } from "./run-registry.ts";
+import { sessionIdOf } from "./session-id.ts";
 
 export { loadGlobalRules } from "./permission-config.ts";
 
@@ -284,11 +285,6 @@ function childAgentOf(record: Readonly<RunRecord>): AgentConfig {
 		skills: record.skills,
 		alwaysLoad: record.alwaysLoad,
 	};
-}
-
-/** The session id of one tool call, or null when the context carries none. */
-function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => string } }): string | null {
-	return ctx.sessionManager?.getSessionId?.() ?? null;
 }
 
 /**

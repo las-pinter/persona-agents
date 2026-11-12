@@ -14,6 +14,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { isRootProcessEnv } from "./depth.ts";
 import { sessionDepthOf } from "./run-registry.ts";
+import { sessionIdOf } from "./session-id.ts";
 
 /** One todo item. `id` is a string so it can feed the pure renderer directly. */
 export interface Todo {
@@ -312,15 +313,6 @@ function emitTodos(pi: ExtensionAPI, state: TodoState): void {
  * Assumption: pi always supplies an id, so this key stays unreachable.
  */
 const UNSCOPED_SESSION_KEY = "";
-
-/** The pi session id of one context, or null when it carries none. */
-function sessionIdOf(ctx: ExtensionContext | undefined): string | null {
-	try {
-		return ctx?.sessionManager?.getSessionId?.() ?? null;
-	} catch {
-		return null;
-	}
-}
 
 /** True when the call comes from a session below the root. */
 function isChildSession(sessionId: string | null): boolean {
