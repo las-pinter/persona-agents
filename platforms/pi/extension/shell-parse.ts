@@ -1,12 +1,15 @@
 /**
  * Shell-command lexer: splits one command line into per-segment strings.
  *
- * This module has no imports, so it runs under plain Node and is testable with
- * `node:test`. Compound commands (`echo hi && id`, `a; b`, `a | b`) are split
- * on unquoted control operators. Fail-closed constructs (heredoc, ANSI-C
- * quoting, unbalanced quotes, dangling operators, recursion limit) block the
- * whole command. `command-segments.ts` keeps the permission decision core.
+ * This module imports only the nested-construct grammar, so it runs under plain
+ * Node and is testable with `node:test`. Compound commands (`echo hi && id`,
+ * `a; b`, `a | b`) are split on unquoted control operators. Fail-closed
+ * constructs (heredoc, ANSI-C quoting, unbalanced quotes, dangling operators,
+ * recursion limit) block the whole command. `command-segments.ts` keeps the
+ * permission decision core.
  */
+
+import { extractSubstitutions } from "./shell-grammar.ts";
 
 export interface ShellParse {
 	segments: string[];
@@ -22,216 +25,6 @@ const MAX_DEPTH = 8;
 
 function isSpace(c: string): boolean {
 	return c === " " || c === "\t" || c === "\r";
-}
-
-/** Index after the closing single quote (or end of text). */
-function skipSingle(text: string, start: number): number {
-	let i = start + 1;
-	while (i < text.length) {
-		if (text[i] === "'") return i + 1;
-		i++;
-	}
-	return text.length;
-}
-
-/** Index after the closing double quote (or end of text); honours escapes. */
-function skipDouble(text: string, start: number): number {
-	let i = start + 1;
-	while (i < text.length) {
-		if (text[i] === "\\") {
-			i += 2;
-			continue;
-		}
-		if (text[i] === '"') return i + 1;
-		i++;
-	}
-	return text.length;
-}
-
-/**
- * Read a balanced `(...)` starting at `openIdx` (which points at `(`).
- * Skips quoted spans and escaped characters. Returns the inner text and the
- * index after the closing paren. Unterminated input reads to the end.
- */
-function readBalancedParens(text: string, openIdx: number): [string, number] {
-	const start = openIdx + 1;
-	let depth = 0;
-	let i = openIdx;
-	while (i < text.length) {
-		const c = text[i];
-		if (c === "\\") {
-			i += 2;
-			continue;
-		}
-		if (c === "'") {
-			i = skipSingle(text, i);
-			continue;
-		}
-		if (c === '"') {
-			i = skipDouble(text, i);
-			continue;
-		}
-		if (c === "(") {
-			depth++;
-			i++;
-			continue;
-		}
-		if (c === ")") {
-			depth--;
-			if (depth === 0) return [text.slice(start, i), i + 1];
-			i++;
-			continue;
-		}
-		i++;
-	}
-	return [text.slice(start), text.length];
-}
-
-/** Read a backtick substitution. Returns inner text and index after the close. */
-function readBackticks(text: string, tickIdx: number): [string, number] {
-	const start = tickIdx + 1;
-	let i = start;
-	while (i < text.length) {
-		if (text[i] === "\\") {
-			i += 2;
-			continue;
-		}
-		if (text[i] === "`") return [text.slice(start, i), i + 1];
-		i++;
-	}
-	return [text.slice(start), text.length];
-}
-
-/**
- * Read a balanced `$(( ... ))` arithmetic block starting at `$`. Returns the
- * inner arithmetic text and the index after the closing `)`. Skips quoted spans
- * and escaped characters, so a `)` inside a string does not end the block.
- */
-function readArithmetic(text: string, dollarIdx: number): [string, number] {
-	let depth = 0;
-	let i = dollarIdx + 1;
-	while (i < text.length) {
-		const c = text[i];
-		if (c === "\\") {
-			i += 2;
-			continue;
-		}
-		if (c === "'") {
-			i = skipSingle(text, i);
-			continue;
-		}
-		if (c === '"') {
-			i = skipDouble(text, i);
-			continue;
-		}
-		if (c === "(") {
-			depth++;
-			i++;
-			continue;
-		}
-		if (c === ")") {
-			depth--;
-			if (depth === 0) return [text.slice(dollarIdx + 2, i), i + 1];
-			i++;
-			continue;
-		}
-		i++;
-	}
-	return [text.slice(dollarIdx + 2), text.length];
-}
-
-/** An inner command found by `extractSubstitutions`, with its start offset. */
-interface Substitution {
-	text: string;
-	/** Offset of `text` inside the input to `extractSubstitutions`. */
-	offset: number;
-}
-
-/**
- * Collect the inner commands of `$(...)`, backticks, and `<(...)`/`>(...)`.
- * `$((...))` arithmetic bodies are recursed into: bash runs command
- * substitution inside arithmetic. `${...}` and `$VAR` are expansions, not
- * executions, so they stay in place.
- *
- * `skipSingleQuotes` guards normal extraction only. In an arithmetic body, bash
- * treats quotes as part of the expansion context, so `'$(id)'` still runs `id`
- * there; the arithmetic recursion passes `false`.
- */
-function extractSubstitutions(text: string, skipSingleQuotes = true): Substitution[] {
-	const out: Substitution[] = [];
-	let i = 0;
-	while (i < text.length) {
-		const c = text[i];
-		if (c === "\\") {
-			i += 2;
-			continue;
-		}
-		if (c === "'" && skipSingleQuotes) {
-			i = skipSingle(text, i);
-			continue;
-		}
-		if (c === '"') {
-			i++;
-			while (i < text.length && text[i] !== '"') {
-				const d = text[i];
-				if (d === "\\") {
-					i += 2;
-					continue;
-				}
-				if (d === "$" && text[i + 1] === "(") {
-					if (text[i + 2] === "(") {
-						const [arith, j] = readArithmetic(text, i);
-						for (const sub of extractSubstitutions(arith, false)) {
-							out.push({ text: sub.text, offset: i + 2 + sub.offset });
-						}
-						i = j;
-						continue;
-					}
-					const [inner, j] = readBalancedParens(text, i + 1);
-					out.push({ text: inner, offset: i + 2 });
-					i = j;
-					continue;
-				}
-				if (d === "`") {
-					const [inner, j] = readBackticks(text, i);
-					out.push({ text: inner, offset: i + 1 });
-					i = j;
-					continue;
-				}
-				i++;
-			}
-			i++;
-			continue;
-		}
-		if (c === "$" && text[i + 1] === "(") {
-			if (text[i + 2] === "(") {
-				const [arith, j] = readArithmetic(text, i);
-				for (const sub of extractSubstitutions(arith, false)) {
-					out.push({ text: sub.text, offset: i + 2 + sub.offset });
-				}
-				i = j;
-				continue;
-			}
-			const [inner, j] = readBalancedParens(text, i + 1);
-			out.push({ text: inner, offset: i + 2 });
-			i = j;
-			continue;
-		}
-		if (c === "`") {
-			const [inner, j] = readBackticks(text, i);
-			out.push({ text: inner, offset: i + 1 });
-			i = j;
-			continue;
-		}
-		if ((c === "<" || c === ">") && text[i + 1] === "(") {
-			const [inner, j] = readBalancedParens(text, i + 1);
-			out.push({ text: inner, offset: i + 2 });
-			i = j;
-			continue;
-		}
-		i++;
-	}
-	return out;
 }
 
 /**
@@ -486,4 +279,4 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 }
 
 // The expansion probe in `command-segments.ts` walks quoted spans.
-export { skipSingle };
+export { skipSingle } from "./shell-grammar.ts";

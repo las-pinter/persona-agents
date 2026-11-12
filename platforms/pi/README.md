@@ -16,6 +16,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
 | `command-segments.ts` | Pure (no pi imports) rule-decision core used by `permissions.ts`; testable under plain Node |
 | `shell-parse.ts` | Pure (no pi imports) shell splitter: one command line to segments, nested sub-commands, the leading `cd` fold, and the fail-closed constructs; testable under plain Node |
+| `shell-grammar.ts` | Pure (no pi imports) nested-construct grammar: one skip loop for a parenthesised group, a dollar-paren, an arithmetic body, and a backtick; testable under plain Node |
 | `state.ts` | Active agent/persona state; reads session defaults from `~/.pi/agent/settings.json` and `PI_DEFAULT_*` env (never writes) |
 | `commands.ts` | `/agents [name|off] [-persona id\|off]`, `/persona`, `/skills` slash commands |
 | `subagent.ts` | In-process subagent tool (single / parallel / chain): one child session per run |

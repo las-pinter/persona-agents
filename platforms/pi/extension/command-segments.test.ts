@@ -263,6 +263,50 @@ test("blocks single-quoted command substitution hidden in arithmetic", () => {
 	assert.equal(evaluateCmd("cat $(( '$(id)' ))", plannerRules).kind, "default");
 });
 
+// --- nested-construct grammar ------------------------------------------------
+
+// A closing paren inside a quoted span is data. It must not end the read of a
+// `(...)` group, a `$(...)` substitution, or an arithmetic body.
+
+test("a quoted closing paren does not end a command substitution", () => {
+	for (const command of ['echo $(echo ")x")', "echo $(echo ')x')"]) {
+		const parsed = parseShellCommand(command);
+		assert.equal(parsed.unsupported, null, command);
+		assert.deepEqual(parsed.segments, [command, command.slice(7, -1)], command);
+	}
+});
+
+test("a quoted closing paren does not end a process substitution", () => {
+	const command = 'diff <(echo ")x") <(id)';
+	assert.deepEqual(splitShellSegments(command), [command, 'echo ")x"', "id"]);
+});
+
+test("a quoted closing paren does not end an arithmetic body", () => {
+	// The inner `$(...)` after the quoted paren proves the read ran to the end.
+	const command = 'echo $(( $(echo ")x") + 1 ))';
+	const parsed = parseShellCommand(command);
+	assert.equal(parsed.unsupported, null);
+	assert.deepEqual(parsed.segments, [command, 'echo ")x"']);
+	assert.deepEqual(splitShellSegments("echo $(( 1 + $(echo ')x') ))"), [
+		"echo $(( 1 + $(echo ')x') ))",
+		"echo ')x'",
+	]);
+});
+
+// A closing paren never ends a backtick read, so this case proves the backtick
+// folds into the one reader; it is not a quote guard.
+test("a backtick pair folds into the one reader", () => {
+	const command = 'echo `echo ")x"`';
+	assert.deepEqual(splitShellSegments(command), [command, 'echo ")x"']);
+});
+
+test("a quoted substitution inside a double-quoted span is read once", () => {
+	assert.deepEqual(splitShellSegments('echo "a $(echo ")x") b"'), [
+		'echo "a $(echo ")x") b"',
+		'echo ")x"',
+	]);
+});
+
 test("denies the &> file redirect fail-closed", () => {
 	assert.equal(evaluateCmd("echo hi &>file", implementerRules).kind, "deny");
 });
