@@ -239,6 +239,7 @@ test("the MCP total row fits the column width", () => {
 	for (const line of lines) {
 		assert.ok(visibleWidth(line) <= 20, `line exceeds 20: ${JSON.stringify(line)}`);
 	}
+	assert.ok(!lines.some((line) => line.includes("more")), "a list inside the cap paints no mark");
 });
 
 test("a long server name and a large count clip cleanly to a narrow width", () => {

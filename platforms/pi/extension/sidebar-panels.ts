@@ -49,9 +49,9 @@ import type {
 import { flattenTreeKeeping, type TreeNode } from "./tree-model.ts";
 
 /** Per-file diff lines shown in WORKSPACE before the `… +N more` mark. */
-export const WORKSPACE_FILES_SHOWN = 4;
+const WORKSPACE_FILES_SHOWN = 4;
 /** Server lines shown in MCP before the `… +N more` mark. */
-export const MCP_SERVERS_SHOWN = 4;
+const MCP_SERVERS_SHOWN = 4;
 /** Output-preview lines kept in the node detail overlay. */
 export const DETAIL_PREVIEW_LINES = 20;
 /** Width of the SESSION stats label column. Fits sidebar width 45. */
@@ -290,9 +290,7 @@ export function renderWorkspacePanel(
 		if (mark) lines.push(styleDim(theme, mark));
 	} else if (changed.length > 0) {
 		// The data layer caps this list, so the panel drops no row here.
-		const mark = overflowMark(0);
-		const summary = changed.join(", ");
-		lines.push(mark ? `${summary} ${mark}` : summary);
+		lines.push(changed.join(", "));
 	}
 
 	lines.push(styleDim(theme, shortenHome(workspace.cwd, home) || "~"));
@@ -334,10 +332,8 @@ export function renderMcpPanel(
 			const badge = usage !== undefined ? ` ${styleDim(theme, `x${lookupMcpCount(usage, server.name)}`)}` : "";
 			lines.push(`${glyph} ${server.name}${badge}`);
 		}
-		if (servers.length > shown.length) {
-			const mark = overflowMark(servers.length - shown.length);
-			if (mark) lines.push(styleDim(theme, mark));
-		}
+		const mark = overflowMark(servers.length - shown.length);
+		if (mark) lines.push(styleDim(theme, mark));
 	}
 	if (usage !== undefined) {
 		// The total spans every server, including the rows beyond the visible cap.
@@ -434,7 +430,7 @@ function sectionRule(theme: SidebarTheme, width: number): string {
  * the column is as tall as the panels it holds, and the paint layer takes one
  * window of it.
  */
-export function composePanels(width: number, panels: string[][], theme: SidebarTheme): string[] {
+function composePanels(width: number, panels: string[][], theme: SidebarTheme): string[] {
 	const lines: string[] = [];
 	panels.forEach((panel, index) => {
 		if (index > 0) lines.push(sectionRule(theme, width));

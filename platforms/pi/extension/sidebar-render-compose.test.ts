@@ -12,6 +12,11 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+	AGENTS_PAD_MIN,
+	DETAIL_PREVIEW_LINES,
+	SECTION_RULE_CHAR,
+	STUDY_STATUS_SHOWN,
+	TODOS_ROWS_SHOWN,
 	renderAgentTreePanel,
 	renderMcpPanel,
 	renderNodeDetail,
@@ -20,12 +25,6 @@ import {
 	renderStatusPanel,
 	renderTodosPanel,
 	renderWorkspacePanel,
-} from "./sidebar-panels.ts";
-import {
-	AGENTS_PAD_MIN,
-	SECTION_RULE_CHAR,
-	STUDY_STATUS_SHOWN,
-	TODOS_ROWS_SHOWN,
 } from "./sidebar-panels.ts";
 import { formatRow } from "./sidebar-render.ts";
 import { stateGlyph, type SidebarTheme } from "./sidebar-theme.ts";
@@ -393,6 +392,12 @@ test("six studies paint the cap and the overflow marker inside the column", () =
 test("renderNodeDetail clips a very long output preview to the width", () => {
 	const node = makeNode({ runId: "n1", outputPreview: "x".repeat(500) });
 	assertFits(renderNodeDetail(node, 40, theme), 40);
+});
+
+test("renderNodeDetail marks the preview rows past the cap", () => {
+	const preview = Array.from({ length: DETAIL_PREVIEW_LINES + 1 }, (_value, index) => `line-${index}`).join("\n");
+	const lines = renderNodeDetail(makeNode({ runId: "n1", outputPreview: preview }), 60, theme);
+	assert.equal(lines.at(-1)?.trimEnd(), "… +1 more", "the cap hides one row, so the mark closes the panel");
 });
 
 test("renderNodeDetail clips a very long error to the width", () => {

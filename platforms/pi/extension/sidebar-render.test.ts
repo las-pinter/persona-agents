@@ -465,6 +465,16 @@ test("three changed files paint three rows and no mark", () => {
 	assert.ok(!lines.some((line) => line.includes("more")), "nothing is hidden, so no mark paints");
 });
 
+test("a changed list with no file row paints the joined names and no mark", () => {
+	const lines = renderWorkspacePanel(
+		makeWorkspace({ files: [], changed: ["a.ts", "b.ts"], changedCount: 2 }),
+		60,
+		theme,
+	);
+	assert.ok(lines.includes("a.ts, b.ts"), "the fallback paints both names on one line");
+	assert.ok(!lines.some((line) => line.includes("more")), "the fallback holds no capped row, so no mark paints");
+});
+
 // --- MCP ---------------------------------------------------------------------
 
 test("MCP renders a configured/connected summary and server dots", () => {
