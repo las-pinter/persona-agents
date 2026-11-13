@@ -198,13 +198,11 @@ import { getRunRegistry, finishRootSession, registerRootSession } from "./subage
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import {
 	discoverAgents,
-	discoverSkills,
-	matchSkills,
 	resolvePersonaForAgent,
 	resolveResources,
-	skillScriptsDir,
 	type AgentDiscoveryResult,
 } from "./resolver.ts";
+import { discoverSkills, matchSkills, skillScriptsDir } from "./skill-discovery.ts";
 import { formatPersonaId, personaBlock, personaLabel } from "./persona-text.ts";
 import { getDefaultAgentName, getDefaultPersonaId, setActiveAgent, setActivePersona } from "./state.ts";
 import { dimText, type StatusUi } from "./status-text.ts";

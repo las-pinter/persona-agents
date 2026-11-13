@@ -22,7 +22,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { childRoleText, childTaskPrompt } from "./child-prompt.ts";
 import extension from "./extension.ts";
 import { PERSONA_HEADING, formatPersonaId, personaBlock, personaLabel } from "./persona-text.ts";
-import { type AgentConfig, type PersonaConfig, discoverSkills, matchSkills } from "./resolver.ts";
+import { type AgentConfig, type PersonaConfig } from "./resolver.ts";
+import { discoverSkills, matchSkills } from "./skill-discovery.ts";
 import { setActiveAgent, setActivePersona } from "./state.ts";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");

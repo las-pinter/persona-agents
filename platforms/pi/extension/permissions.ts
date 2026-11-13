@@ -60,12 +60,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
-import {
-	discoverSkills,
-	matchSkills,
-	skillScriptsDirs,
-	type AgentConfig,
-} from "./resolver.ts";
+import type { AgentConfig } from "./resolver.ts";
+import { discoverSkills, matchSkills, skillScriptsDirs } from "./skill-discovery.ts";
 import {
 	evaluateCommandRules,
 	unallowedSegments,

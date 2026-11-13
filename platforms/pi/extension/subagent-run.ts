@@ -38,7 +38,8 @@ import { DEPTH_CAP_REASON, canSpawn, newRunId, planSpawn, resolvedDepth } from "
 import { createSubagentMcpCounter } from "./mcp-usage.ts";
 import { READER_CLASS } from "./permission-class.ts";
 import { RunRegistry, UNKNOWN_RUN_ROLE, newRunRecord, type RunRegistry as RegistryType } from "./run-registry.ts";
-import { type AgentConfig, type PersonaConfig, discoverSkills, matchSkills } from "./resolver.ts";
+import { type AgentConfig, type PersonaConfig } from "./resolver.ts";
+import { discoverSkills, matchSkills } from "./skill-discovery.ts";
 import { formatPersonaId } from "./persona-text.ts";
 import { foldEvent } from "./subagent-fold.ts";
 import {

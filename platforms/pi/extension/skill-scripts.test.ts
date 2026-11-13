@@ -21,7 +21,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { discoverSkills, matchSkills, skillScriptsDirs } from "./resolver.ts";
+import { discoverSkills, matchSkills, skillScriptsDirs } from "./skill-discovery.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import {
 	allSegmentsAreSkillScripts,
