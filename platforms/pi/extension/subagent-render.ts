@@ -16,12 +16,12 @@ import {
 	type ResultText,
 	type SingleResult,
 	type SubagentDetails,
-	formatUsageStats,
 	isFailedResult,
 	resultBodyBlock,
 	resultText,
 } from "./subagent-result.ts";
 import { formatThinkingIndicator } from "./subagent-thinking.ts";
+import { formatUsageStats } from "./usage-text.ts";
 
 const COLLAPSED_ITEM_COUNT = 10;
 

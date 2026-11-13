@@ -11,9 +11,6 @@ import type { AgentScope } from "./resolver.ts";
 import type { ThinkingState } from "./subagent-thinking.ts";
 import type { UsageTextInput } from "./usage-text.ts";
 
-/** Re-exported so a caller of the result helpers keeps one import path. */
-export { formatUsageStats, type UsageTextInput } from "./usage-text.ts";
-
 /** Tunable budget for the chain `{previous}` substitution, not yet settings-backed. */
 const CHAIN_PREVIOUS_CAP = 24 * 1024;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
