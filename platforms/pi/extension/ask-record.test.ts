@@ -29,8 +29,19 @@ import {
 import { unbindChildAsk } from "./child-ask.ts";
 import { newRequest } from "./child-ask-state.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { CHILD_A, ROOT, captureRoot, childAsk, rootAsk, setup } from "./gate-child-ask-fixture.ts";
+import {
+	CHILD_A,
+	ROOT,
+	captureRoot,
+	childAsk,
+	rootAsk,
+	repoRoot,
+	setup,
+	type ToolCallContext,
+} from "./gate-child-ask-fixture.ts";
 import type { PromptModel } from "./permission-prompt.ts";
+import type { AgentConfig } from "./resolver.ts";
+import { getActiveAgent, setActiveAgent } from "./state.ts";
 import { appendEvent, readAllEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 
@@ -385,6 +396,73 @@ test("one denied root ask appends one ask record with the root role", { timeout:
 		assert.equal(asks[0].depth, 0);
 	} finally {
 		unbindChildAsk();
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+/** The live agent a mid-ask switch installs. Its name must not reach the record. */
+const SWITCHED_AGENT: AgentConfig = {
+	name: "implementer",
+	description: "mid-ask switch",
+	systemPrompt: "",
+	source: "package",
+	filePath: "",
+};
+
+test("a mid-ask agent switch leaves the settle role the gate judged", { timeout: 4000 }, async () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	const previousAgent = getActiveAgent();
+	const s = setup({ answers: ["Deny"] });
+	// No session manager, so the id reads null and no run record can supply the role.
+	const noIdContext = {
+		cwd: repoRoot,
+		hasUI: true,
+		mode: "rpc",
+		ui: {
+			select: (title: string, options: string[]) => {
+				setActiveAgent(SWITCHED_AGENT);
+				return s.prompter.select(title, options);
+			},
+		},
+	} as unknown as ToolCallContext;
+	try {
+		const result = await s.handler({ toolName: "bash", input: { command: "git push" } }, noIdContext);
+		assert.deepEqual(result, { block: true, reason: "Denied by user" });
+		const asks = askEvents(logPath);
+		assert.equal(asks.length, 1, "a root ask queues nothing, so it writes one record");
+		assert.equal(asks[0].ask?.role, "orchestrator", "the settle role is the one the gate judged");
+		assert.equal(asks[0].runId, ASK_ROOT_RUN_ID, "a call with no id is judged as the root");
+	} finally {
+		setActiveAgent(previousAgent);
+		unbindChildAsk();
+		restore();
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("a settle beside the root run id keeps the session-scoped ask id", () => {
+	const { dir, logPath } = tempLog();
+	const restore = useLog(logPath);
+	try {
+		const arrivalId = mintAskId(CHILD_A, AT);
+		recordAsk({
+			tool: "bash",
+			role: "implementer",
+			verdict: "pending",
+			runId: CHILD_A,
+			at: AT,
+			askId: arrivalId,
+			phase: "arrival",
+			flags: FLAGS,
+		});
+		// No run id here, so the writer's own default is the root scope.
+		recordAsk({ tool: "bash", role: "implementer", verdict: "allow", at: AT, askId: arrivalId });
+		const [, settle] = askEvents(logPath);
+		assert.equal(settle?.runId, ASK_ROOT_RUN_ID, "the settle falls to the root run id");
+		assert.equal(settle?.ask?.askId, arrivalId, "the settle keeps the id its arrival carried");
+	} finally {
 		restore();
 		rmSync(dir, { recursive: true, force: true });
 	}

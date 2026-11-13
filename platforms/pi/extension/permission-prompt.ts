@@ -20,7 +20,6 @@ import { boundRunRegistry, UNKNOWN_RUN_ROLE } from "./run-registry.ts";
 import { sessionIdOf } from "./session-id.ts";
 import { isShellTool } from "./shell-tools.ts";
 import { humanReason, policyLayer, ruleReasonFallback } from "./command-segments.ts";
-import { getActiveAgent } from "./state.ts";
 
 /** The gate decisions. The names are stable; the labels are display text. */
 export type PermissionChoice = "deny" | "allow-once" | "always-allow";
@@ -362,13 +361,21 @@ export async function renderPermissionPrompt(
 }
 
 /**
- * The role of one ask: the role in its run record, else the role of the agent
- * the gate judged with. A lost id leaves the gate on the active agent, so the
- * record names that same role instead of a placeholder.
+ * The role of one ask: the role in its run record, else the role the gate passed
+ * in, else the unknown placeholder. The gate supplies the role, so a lost id
+ * cannot name an agent the gate did not judge.
  */
-function askRole(sessionId: string | null): string {
+function askRole(sessionId: string | null, judgedRole: string | null | undefined): string {
 	const fromRecord = sessionId ? boundRunRegistry()?.get(sessionId)?.role : undefined;
-	return fromRecord ?? getActiveAgent()?.name ?? UNKNOWN_RUN_ROLE;
+	return fromRecord ?? judgedRole ?? UNKNOWN_RUN_ROLE;
+}
+
+/** What the root renderer needs from its caller. */
+export interface RootAskOptions {
+	/** Aborts the ask. The host select dialog is not closed by it. */
+	signal?: AbortSignal;
+	/** The role the gate judged, recorded at settle when no run record names one. */
+	role?: string | null;
 }
 
 /**
@@ -379,21 +386,24 @@ function askRole(sessionId: string | null): string {
  * cancel, abort, or throw. A signal can release the slot while the host select
  * dialog is still on screen, because the fallback cannot close that dialog. The
  * root gate passes no signal today, so that release path is not reached.
+ *
+ * The options carry the role the gate judged, so the record cannot name an
+ * agent the gate never saw.
  */
 export async function renderRootPermissionPrompt(
 	ctx: ExtensionContext,
 	model: PromptModel,
-	signal?: AbortSignal,
+	options: RootAskOptions = {},
 ): Promise<PermissionChoice> {
 	const releaseSlot = await askPanelSlot.acquire();
 	try {
-		const choice = await renderPermissionPrompt(ctx, model, signal);
+		const choice = await renderPermissionPrompt(ctx, model, options.signal);
 		// One settled root ask writes one record with its own id. A throw above
 		// writes none. The id is read once, so the role and the run id agree.
 		const sessionId = sessionIdOf(ctx);
 		recordAsk({
 			tool: model.toolName,
-			role: askRole(sessionId),
+			role: askRole(sessionId, options.role),
 			verdict: choice === "deny" ? "deny" : "allow",
 			runId: sessionId ?? undefined,
 			depth: 0,

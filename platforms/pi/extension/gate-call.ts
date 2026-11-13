@@ -135,10 +135,10 @@ export async function evaluateCall(call: GateCallInput): Promise<ToolCallEventRe
 	// A record that under-reports its depth is still judged as the child it is.
 	const walk = sessionId ? registry.walk(sessionId) : null;
 	const depth = walk !== null && walk.ok ? walk.depth : null;
-	// Assumption: a context with no session id is the root. pi always supplies
-	// one, so that fallback keeps its pre-child behaviour and stays unreachable.
-	// A bound registry with no record for the caller denies. The live root role
-	// must not cover an id the registry never saw.
+	// A throwing session manager gives no id, and a call with no id is judged as
+	// the root, so this fallback is open rather than unreachable. A bound registry
+	// with no record for the caller denies. The live root role must not cover an
+	// id the registry never saw.
 	if (sessionId && !record) {
 		return { block: true, reason: UNKNOWN_RUN_REASON };
 	}
@@ -263,7 +263,9 @@ export async function evaluateCall(call: GateCallInput): Promise<ToolCallEventRe
 			};
 		}
 
-		const choice: PermissionChoice = await renderRootPermissionPrompt(ctx, promptModel);
+		const choice: PermissionChoice = await renderRootPermissionPrompt(ctx, promptModel, {
+			role: agent?.name ?? null,
+		});
 
 		if (choice === "always-allow") {
 			sessionAllow.add(key); // remembered for the rest of the session

@@ -19,6 +19,7 @@ import {
 	childAskQueue,
 	deadlineReason,
 	unbindChildAsk,
+	type ChildAskRender,
 } from "./child-ask.ts";
 import { CHILD_A, CHILD_B, CHILD_C, ROOT, captureRoot, childAsk, deferred, rootAsk, setup } from "./gate-child-ask-fixture.ts";
 import {
@@ -80,9 +81,11 @@ test("slot: a root panel and a child panel never mount together", { timeout: 200
 	assert.equal(askPanelSlot.busy, false, "both panels released the slot");
 });
 
-// Only the exact renderRootPermissionPrompt reference is caught.
+// Only the exact renderRootPermissionPrompt reference is caught. The cast only
+// lets this reference reach the child render type; the identity check still runs.
 test("slot: bindChildAsk rejects the root renderer", { timeout: 2000 }, () => {
-	assert.throws(() => bindChildAsk({ render: renderRootPermissionPrompt }), /deadlock/);
+	const rootRenderer = renderRootPermissionPrompt as unknown as ChildAskRender;
+	assert.throws(() => bindChildAsk({ render: rootRenderer }), /deadlock/);
 });
 
 // --- exception safety --------------------------------------------------------
