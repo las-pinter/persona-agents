@@ -2,7 +2,8 @@
  * Tests for the permission rule table and its compiler shape.
  *
  * The file holds the table shape, the compiler refusals, the parity ledger, and
- * the count assertions; the gate verdict cases live in permission-table.gate.test.ts.
+ * the count assertions; the gate verdict cases live in
+ * permission-table.gate.test.ts and permission-table.gate-history.test.ts.
  */
 
 import { test } from "node:test";
