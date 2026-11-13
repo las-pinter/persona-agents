@@ -287,6 +287,12 @@ test("a row that names an unknown profession fails the load and names the row", 
 	);
 });
 
+test("a blank row id prints the placeholder word, never a blank name", () => {
+	for (const id of ["", " ", " \t "]) {
+		assert.throws(() => validateRows([bashRow({ id })]), /row "<missing>": id must be lower-case/);
+	}
+});
+
 test("a forbidden regex character fails the load and names the row", () => {
 	assert.throws(() => validateRows([bashRow({ verb: ["rm|sh"] })]), /probe\.row.*forbidden regex character/);
 	assert.throws(() => validateRows([bashRow({ sub: ["a.*b"] })]), /probe\.row.*forbidden regex character/);

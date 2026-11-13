@@ -230,7 +230,8 @@ const TOOL_SHAPE = /^[a-z][a-z0-9_]*$/;
 
 /** The one row-fault error, so both layers write one prefix and one format. */
 export function rowFault(id: string | undefined, problem: string): Error {
-	return new Error(`row "${id ?? "<missing>"}": ${problem}`);
+	const blank = id == null || (typeof id === "string" && id.trim().length === 0);
+	return new Error(`row "${blank ? "<missing>" : String(id)}": ${problem}`);
 }
 
 /**

@@ -325,10 +325,7 @@ export function loadGlobalRules(file: string = overlayFile()): OverlayRules {
 			ask: stamp(overlaySection(cfg.ask, "ask")),
 		};
 	} catch (error) {
-		const problem = fault(error);
-		recordLogLine({
-			text: `permission gate: cannot load ${file}: ${problem}; every tool call is denied until the file is fixed`,
-		});
+		reportFailure(file, "overlay", error);
 		return {
 			deny: [
 				{
@@ -342,7 +339,7 @@ export function loadGlobalRules(file: string = overlayFile()): OverlayRules {
 	}
 }
 
-function reportFailure(file: string, kind: PathKind, error: unknown): string {
+function reportFailure(file: string, kind: PathKind | "overlay", error: unknown): string {
 	const line = `permission gate: cannot load the ${kind} file ${file}: ${fault(error)}; every tool call is denied until the file is fixed`;
 	recordLogLine({ text: line });
 	return line;
@@ -364,20 +361,22 @@ function resolveRealPath(file: string, what: string): string | null {
 	}
 }
 
-/** The two configured layer kinds, named in every failure and refusal line. */
+/** The two resolved layer kinds: the resolver reads the table file or the override file. */
 type PathKind = "table" | "override";
 
 /**
- * One rule for both configured layers: the path is absolute, its real path is
+ * One rule for both resolved layers: the path is absolute, its real path is
  * checked, and a path inside a repository is refused. An absent or refused path
  * yields `fallback`. An absent override file applies no patch, so it needs no
  * refusal line; a table path has no such check.
  */
-function resolvePermissionPath<F extends string | null>(
+function resolvePermissionPath(configured: string | undefined, kind: PathKind, fallback: string): string;
+function resolvePermissionPath(configured: string | undefined, kind: PathKind, fallback: null): string | null;
+function resolvePermissionPath(
 	configured: string | undefined,
 	kind: PathKind,
-	fallback: F,
-): string | F {
+	fallback: string | null,
+): string | null {
 	const raw = configured ?? (kind === "table" ? tableFile() : overrideFile());
 	if (!path.isAbsolute(raw)) {
 		reportRefusal(raw, `the ${kind} path must be absolute`);

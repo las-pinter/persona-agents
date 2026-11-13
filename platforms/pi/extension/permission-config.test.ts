@@ -77,12 +77,12 @@ function load(paths: ConfigPaths): { config: PermissionConfig; lines: string[] }
 }
 
 /** The lead one failure line carries before the fault text. */
-function failureHead(file: string, kind: "table" | "override"): string {
+function failureHead(file: string, kind: "table" | "override" | "overlay"): string {
 	return `permission gate: cannot load the ${kind} file ${file}: `;
 }
 
 /** The fault text one failure line carries after its lead. */
-function faultText(line: string, file: string, kind: "table" | "override"): string {
+function faultText(line: string, file: string, kind: "table" | "override" | "overlay"): string {
 	const head = failureHead(file, kind);
 	assert.ok(line.startsWith(head), line);
 	const tail = "; every tool call is denied until the file is fixed";
@@ -365,8 +365,7 @@ test("an overlay fault writes one line that names the file and the fault", () =>
 	const file = write("overlay-fault-line.json", { deny: [{ reason: "x" }], ask: [] });
 	const { lines } = loadOverlay(file);
 	assert.equal(lines.length, 1);
-	assert.ok(lines[0].includes(file), lines[0]);
-	assert.ok(lines[0].includes("match"), lines[0]);
+	assert.equal(faultText(lines[0], file, "overlay"), 'deny[0] needs a non-empty string "match"');
 });
 
 test("an overlay row with an empty match closes the fence", () => {
