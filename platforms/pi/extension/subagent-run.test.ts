@@ -29,7 +29,13 @@ import type { AgentConfig } from "./resolver.ts";
 import { RunRegistry, newRunRecord } from "./run-registry.ts";
 import { foldEvent } from "./subagent-fold.ts";
 import type { SingleResult, SubagentDetails } from "./subagent-result.ts";
-import { type DispatchDeps, type PreparedChildRuntime } from "./subagent-run.ts";
+import {
+	type DispatchDeps,
+	type PreparedChildRuntime,
+	finishRootSession,
+	getRunRegistry,
+	registerRootSession,
+} from "./subagent-run.ts";
 import { SESSION_ROUND_CAP, sessionStoreDir, writeSidecar } from "./session-store.ts";
 import { type ModeRun, runSingleMode } from "./subagent.ts";
 import { readAllEvents } from "./tree-log.ts";
@@ -285,6 +291,21 @@ test("run: a child whose agent names no class records the reader class", async (
 	assert.ok(record, "the run writes one record");
 	assert.equal(record.class, "reader", "a classless child records the reader class");
 	assert.equal(result.exitCode, 0, "the child still runs");
+});
+
+test("run: a null root agent records the unknown role and the reader class", () => {
+	registerRootSession("null-root", null);
+	const registry = getRunRegistry();
+	const record = registry.get("null-root");
+
+	assert.ok(record, "a null agent writes one record");
+	assert.equal(record.role, "unknown", "a null agent records the unknown role");
+	assert.equal(record.class, "reader", "a null agent records the reader class");
+	assert.equal(record.source, "user", "a null agent records the user source");
+	assert.equal(record.depth, 0, "the record is a root");
+	assert.equal(record.parentSessionId, null, "a root names no parent");
+	assert.equal(finishRootSession(registry, "null-root", Date.now()), true, "the record closes");
+	assert.equal(registry.delete("null-root"), true, "no record is left behind");
 });
 
 test("run: a parent id no record holds refuses the spawn at the cap", async () => {

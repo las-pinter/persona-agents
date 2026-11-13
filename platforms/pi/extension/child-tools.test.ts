@@ -45,6 +45,7 @@ import {
 	wrapChildTools,
 } from "./child-tools.ts";
 import { CHILD_A, ROOT, RootPrompter, childContext, repoRoot, rootContext } from "./gate-fixture.ts";
+import { bindChildAsk, unbindChildAsk } from "./child-ask.ts";
 import { loadDefaultRows } from "./permission-config.ts";
 import { DENIED_BY_USER_REASON } from "./permission-prompt.ts";
 import { compileGateSource, type GateRuleSourceFactory, installToolCallGate } from "./permissions.ts";
@@ -57,6 +58,7 @@ import { registerTodoTool } from "./todo-tool.ts";
 
 afterEach(() => {
 	bindRunRegistry(null);
+	unbindChildAsk();
 	clearChildToolImplementations();
 });
 
@@ -546,6 +548,27 @@ test("identity: a child gets only the always-load patterns its record names", as
 
 	assert.equal(named.blocked, false, "the recorded pattern makes its script dir reachable");
 	assert.equal(unnamed.blocked, true, "the root's patterns do not reach the child");
+});
+
+test("identity: the record class alone picks the rule set", async () => {
+	const handler = installRealGate();
+	const prompter = prompterOf(["Allow once"]);
+	const target = "platforms/pi/class-probe.txt";
+	// The queue and the root surface let an ask reach the prompt, so a wrong
+	// allow cannot pass on a prompt the case never sees.
+	bindChildAsk();
+	await captureRoot(handler, prompter);
+
+	// The class is the only field that changed, and `reader` is the class the
+	// runner writes for an agent that names none.
+	registerChild({ role: "implementer", cls: "worker", source: "package" });
+	const worker = await childVerdict(handler, "write", { path: target }, prompter);
+	registerChild({ role: "implementer", cls: "reader", source: "package" });
+	const reader = await childVerdict(handler, "write", { path: target }, prompter);
+
+	assert.equal(worker.blocked, false, "the worker record allows a write inside the session working directory");
+	assert.equal(reader.blocked, true, "the reader record denies the same write");
+	assert.equal(prompter.titles.length, 0, "neither drive asks the root");
 });
 
 // --- the builtin delegates --------------------------------------------------

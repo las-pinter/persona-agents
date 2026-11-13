@@ -11,7 +11,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `../permissions.table.json` | The shipped default rows: data only, one row per rule and per class |
 | `permission-config.ts` | The layer loader: shipped default, user override, global overlay, layer stamp, fail-closed fence |
 | `permissions.table.ts` | A typed test view of the default rows; the gate never imports it |
-| `permission-class.ts` | The permission vocabulary: the class union, the class list, the role-to-class map, and one membership test for each |
+| `permission-class.ts` | The permission vocabulary: the class union, the class list, the `READER_CLASS` fallback constant, the role-to-class map, and one membership test for each |
 | `permission-table.ts` | The row vocabulary and its validation: the row types, the field sets, the row-fault prefix, and the row checks |
 | `permission-table-pattern.ts` | The row pattern: the shared pattern pieces and the one anchored pattern per row |
 | `permission-table-groups.ts` | The rule sets and the counts: the rows for one class or profession, then the table totals |
