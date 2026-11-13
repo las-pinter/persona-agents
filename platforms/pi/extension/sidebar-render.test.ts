@@ -11,9 +11,16 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
-	type McpSnapshot,
+	renderAgentTreePanel,
+	renderMcpPanel,
+	renderNodeDetail,
+	renderSessionPanel,
+	renderSidebarPanel,
+	renderTodosPanel,
+	renderWorkspacePanel,
+} from "./sidebar-panels.ts";
+import {
 	type SidebarTheme,
-	type TodoSnapshot,
 	CONTEXT_BAR_CELLS,
 	SESSION_LABEL_WIDTH,
 	TODOS_ROWS_SHOWN,
@@ -23,16 +30,10 @@ import {
 	formatCount,
 	formatElapsed,
 	hasRunningNode,
-	renderAgentTreePanel,
-	renderMcpPanel,
-	renderNodeDetail,
-	renderSessionPanel,
-	renderSidebarPanel,
-	renderTodosPanel,
 	renderTreeLines,
-	renderWorkspacePanel,
 	shortenHome,
 } from "./sidebar-render.ts";
+import type { McpSnapshot, TodoSnapshot } from "./sidebar-types.ts";
 import {
 	assertFits,
 	makeFullSnapshot,

@@ -8,13 +8,13 @@
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AskPhase } from "./ask-record.ts";
+import type { SidebarTheme } from "./sidebar-render.ts";
 import type {
 	AskLogRow,
 	SessionSnapshot,
 	SidebarSnapshot,
-	SidebarTheme,
 	WorkspaceSnapshot,
-} from "./sidebar-render.ts";
+} from "./sidebar-types.ts";
 import type { TreeNode, TreeNodeStatus } from "./tree-model.ts";
 
 export const theme: SidebarTheme = {

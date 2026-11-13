@@ -12,15 +12,6 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
-	type SidebarSnapshot,
-	type SidebarTheme,
-	type StatusSnapshot,
-	type StudyRowSnapshot,
-	AGENTS_PAD_MIN,
-	SECTION_RULE_CHAR,
-	STUDY_STATUS_SHOWN,
-	TODOS_ROWS_SHOWN,
-	formatRow,
 	renderAgentTreePanel,
 	renderMcpPanel,
 	renderNodeDetail,
@@ -29,8 +20,17 @@ import {
 	renderStatusPanel,
 	renderTodosPanel,
 	renderWorkspacePanel,
+} from "./sidebar-panels.ts";
+import {
+	type SidebarTheme,
+	AGENTS_PAD_MIN,
+	SECTION_RULE_CHAR,
+	STUDY_STATUS_SHOWN,
+	TODOS_ROWS_SHOWN,
+	formatRow,
 	statusIcon,
 } from "./sidebar-render.ts";
+import type { SidebarSnapshot, StatusSnapshot, StudyRowSnapshot } from "./sidebar-types.ts";
 import {
 	assertFits,
 	makeAskLogRows,

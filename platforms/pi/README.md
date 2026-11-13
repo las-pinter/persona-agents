@@ -33,7 +33,9 @@ module below lives in `extension/`, except the shipped table data file):
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
 | `tree-signature.ts` | Pure repaint key: serializes every painted field, so an unchanged key skips the paint |
 | `tree-selection.ts` | Pure keyboard selection over the overlay's node id list: next and previous, with wrap |
-| `sidebar-render.ts` | Pure seven-panel renderers (AGENTS, STUDY STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG) |
+| `sidebar-render.ts` | Pure render helpers: the theme duck type, the formatters, the glyphs, the tree line render, and the panel stack |
+| `sidebar-panels.ts` | Pure seven-panel renderers (AGENTS, STUDY STATUS, SESSION, WORKSPACE, MCP, TODOS, LOG), the node detail, and the column entry point |
+| `sidebar-types.ts` | The snapshot contract: the shapes the collector fills and every painter reads |
 | `sidebar-line.ts` | Pure line fit: the clip that renderers use and the pad that the compositor uses |
 | `mcp-usage.ts` | Pure MCP usage helpers: per-server counts, child counter, session tally |
 | `sidebar-data.ts` | Impure snapshot collector: subscribes once to pi events, owns the polls and the TPS window |

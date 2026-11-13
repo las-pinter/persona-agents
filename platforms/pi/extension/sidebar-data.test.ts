@@ -21,14 +21,13 @@ import { STUDY_POLL_MS, TREE_POLL_MS, createSidebarData, type SidebarData } from
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, createRootLogPath, MAX_EVENTS_READ } from "./tree-log.ts";
 import { findNode } from "./tree-model.ts";
-import {
-	renderStatusPanel,
-	renderTreeLines,
-	statusGlyph,
-	type McpSnapshot,
-	type SessionSnapshot,
-	type WorkspaceFileSnapshot,
-} from "./sidebar-render.ts";
+import { renderStatusPanel } from "./sidebar-panels.ts";
+import { renderTreeLines, statusGlyph } from "./sidebar-render.ts";
+import type {
+	McpSnapshot,
+	SessionSnapshot,
+	WorkspaceFileSnapshot,
+} from "./sidebar-types.ts";
 import { theme } from "./sidebar-render-fixtures.ts";
 import { TODOS_EVENT_CHANNEL, TODOS_TURN_ENTRY } from "./todo-tool.ts";
 

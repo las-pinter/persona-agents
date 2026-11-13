@@ -33,11 +33,9 @@ import {
 	toggleSidebarState,
 	writeSidebarConfig,
 } from "./sidebar.ts";
-import {
-	renderSidebarPanel,
-	type SidebarSnapshot,
-	type SidebarTheme,
-} from "./sidebar-render.ts";
+import { renderSidebarPanel } from "./sidebar-panels.ts";
+import type { SidebarTheme } from "./sidebar-render.ts";
+import type { SidebarSnapshot } from "./sidebar-types.ts";
 import { makeResizableTerminal, makeTerminal, makeTui } from "./sidebar-terminal-fixtures.ts";
 
 // --- compositor install / dispose -------------------------------------------

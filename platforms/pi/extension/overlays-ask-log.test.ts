@@ -11,7 +11,7 @@ import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { MAX_ASK_VIEW_ROWS, askLogViewRows } from "./overlays.ts";
-import type { AskLogRow } from "./sidebar-render.ts";
+import type { AskLogRow } from "./sidebar-types.ts";
 
 /** The rule glyph the frame repeats. */
 const RULE = "─";

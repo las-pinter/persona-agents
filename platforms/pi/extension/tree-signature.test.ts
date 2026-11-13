@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import type { SidebarSnapshot, StatusSnapshot } from "./sidebar-render.ts";
+import type { SidebarSnapshot, StatusSnapshot } from "./sidebar-types.ts";
 import { makeNode, makeSession, makeSnapshot, makeWorkspace } from "./sidebar-render-fixtures.ts";
 import { treeSignature } from "./tree-signature.ts";
 

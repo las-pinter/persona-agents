@@ -3,8 +3,9 @@
  *
  * Subscribes once to the pi events that keep a `SidebarSnapshot` fresh, owns the
  * tree/git/MCP polls and the TPS sliding window, and unsubscribes on dispose.
- * The pure renderers in `sidebar-render.ts` read the snapshot; this module
- * imports their view TYPES only (never the compositor or the render functions).
+ * The pure renderers in `sidebar-panels.ts` read the snapshot; this module
+ * imports their view TYPES from `sidebar-types.ts` only (never the compositor
+ * or the render functions).
  *
  * Every callback and timer body is wrapped in `try/catch`. Missing data yields a
  * defined default. A bad API call must never crash the TUI.
@@ -37,7 +38,7 @@ import type {
 	StatusSnapshot,
 	WorkspaceFileSnapshot,
 	WorkspaceSnapshot,
-} from "./sidebar-render.ts";
+} from "./sidebar-types.ts";
 
 /** Tree-log poll cadence. */
 export const TREE_POLL_MS = 500;

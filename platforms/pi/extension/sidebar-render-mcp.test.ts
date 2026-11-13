@@ -8,14 +8,14 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import {
-	type McpServerSnapshot,
-	type McpServerStatus,
-	type McpSnapshot,
-	type SidebarSnapshot,
-	type SidebarTheme,
-	renderMcpPanel,
-} from "./sidebar-render.ts";
+import { renderMcpPanel } from "./sidebar-panels.ts";
+import type { SidebarTheme } from "./sidebar-render.ts";
+import type {
+	McpServerSnapshot,
+	McpServerStatus,
+	McpSnapshot,
+	SidebarSnapshot,
+} from "./sidebar-types.ts";
 import { normalizeMcpStatus } from "./sidebar-data.ts";
 import {
 	countMcpTool,

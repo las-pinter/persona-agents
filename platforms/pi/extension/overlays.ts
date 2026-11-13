@@ -12,13 +12,9 @@
 
 import { Key, matchesKey, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import { clipLine } from "./sidebar-line.ts";
-import {
-	renderNodeDetail,
-	statusIcon,
-	type AskLogRow,
-	type SidebarSnapshot,
-	type SidebarTheme,
-} from "./sidebar-render.ts";
+import { renderNodeDetail } from "./sidebar-panels.ts";
+import { statusIcon, type SidebarTheme } from "./sidebar-render.ts";
+import type { AskLogRow, SidebarSnapshot } from "./sidebar-types.ts";
 import { findNode, flattenTree, type TreeNode } from "./tree-model.ts";
 import { selectNext, selectPrev } from "./tree-selection.ts";
 

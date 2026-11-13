@@ -6,7 +6,7 @@
  * no timer, no pi runtime import.
  */
 
-import type { SidebarSnapshot } from "./sidebar-render.ts";
+import type { SidebarSnapshot } from "./sidebar-types.ts";
 import { flattenTreeKeeping } from "./tree-model.ts";
 
 /**
