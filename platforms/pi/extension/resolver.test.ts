@@ -18,7 +18,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
 import { readAllEvents } from "./tree-log.ts";
-import { loadAgentsFromDir, loadTemplateAgents, type AgentConfig } from "./resolver.ts";
+import { loadAgentsFromDir, loadTemplateAgents, type AgentConfig, type PersonaConfig } from "./resolver.ts";
+import { loadPersonasFromDir } from "./persona-loader.ts";
 import type { PermissionClass } from "./permission-class.ts";
 
 const ROLE_CLASS: Record<string, PermissionClass> = {
@@ -239,6 +240,52 @@ test("a user agent file with a blank permission class loads as reader with one w
 	assert.equal(agents[0].permissionClass, "reader", "a blank class must load as reader");
 	assert.equal(warnings.length, 1, `expected one warning, got: ${warnings.join(" | ")}`);
 	assert.ok(warnings[0].includes(file), `warning does not name ${file}: ${warnings[0]}`);
+});
+
+// --- persona discovery: one read path for both layouts -----------------------
+
+/** A temp persona root with one bare file and one theme file holding the same body. */
+function personaRoot(t: TestContext, body: string): { dir: string; filePath: string; themePath: string } {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "resolver-persona-"));
+	t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+	const themeDir = path.join(dir, "goblin");
+	fs.mkdirSync(themeDir, { recursive: true });
+	const filePath = path.join(dir, "grubnik.md");
+	const themePath = path.join(themeDir, "grubnik.md");
+	fs.writeFileSync(filePath, body);
+	fs.writeFileSync(themePath, body);
+	return { dir, filePath, themePath };
+}
+
+test("a file persona and a theme persona with the same body yield the same config", (t) => {
+	const body = "# Grubnik the Tinkerer\n\nA practical goblin.\n";
+	const { dir, filePath, themePath } = personaRoot(t, body);
+
+	const personas = loadPersonasFromDir(dir);
+	assert.equal(personas.length, 2, `expected two personas, got: ${personas.length}`);
+
+	const filePersona = personas.find((p) => p.filePath === filePath);
+	const themePersona = personas.find((p) => p.filePath === themePath);
+	assert.ok(filePersona, "the bare file persona was not loaded");
+	assert.ok(themePersona, "the theme persona was not loaded");
+
+	/** The fields both layouts must read the same way. */
+	const shared = (p: PersonaConfig) => ({
+		name: p.name,
+		description: p.description,
+		body: p.body,
+		fileNameStem: p.fileNameStem,
+	});
+	assert.deepEqual(shared(themePersona), shared(filePersona), "the two layouts read different configs");
+	assert.equal(themePersona.theme, "goblin", "the theme persona lost its theme");
+	assert.equal(filePersona.theme, undefined, "a bare persona must carry no theme");
+	assert.equal(filePersona.name, "grubnik", "a persona with no name must fall back to the file stem");
+	assert.equal(filePersona.fileNameStem, "grubnik", "the file stem must be the bare file name");
+	assert.equal(
+		filePersona.description,
+		"Grubnik the Tinkerer",
+		"a persona with no description must use its heading",
+	);
 });
 
 // --- the gate survives a malformed agent file --------------------------------

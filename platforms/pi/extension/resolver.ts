@@ -22,6 +22,9 @@ import { recordLogLine } from "./ask-record.ts";
 import { formatPersonaId } from "./persona-text.ts";
 import { READER_CLASS, isPermissionClass, type PermissionClass } from "./permission-class.ts";
 import { findNearestConfigDir, globToRegExp, isDirectory } from "./path-glob.ts";
+import { loadPersonasFromDir, type PersonaConfig } from "./persona-loader.ts";
+
+export type { PersonaConfig } from "./persona-loader.ts";
 
 // Never import `skill-discovery.ts` here: it imports this module, so the edge closes a cycle.
 
@@ -68,17 +71,6 @@ export interface AgentConfig {
 	filePath: string;
 }
 
-export interface PersonaConfig {
-	name: string;
-	theme?: string;
-	description?: string;
-	/** The persona's full markdown body (prompt content). Legacy files are used verbatim. */
-	body: string;
-	filePath: string;
-	/** Filename stem (without .md) — used to match agents.json personaFile references. */
-	fileNameStem: string;
-}
-
 export interface AgentDiscoveryResult {
 	agents: AgentConfig[];
 	personas: PersonaConfig[];
@@ -103,7 +95,7 @@ type AgentFrontmatter = {
 };
 
 /**
- * Normalize a frontmatter `tools` value to a list of tool names.
+ * Normalize a frontmatter list value to a list of strings.
  *
  * Both spellings are valid YAML and both are in use:
  *
@@ -111,19 +103,9 @@ type AgentFrontmatter = {
  *     tools: [read, bash]      # array
  *
  * so accept either. Anything else (a number, a map, a nested list) yields no
- * tools rather than throwing: this runs inside agent discovery, where a single
+ * items rather than throwing: this runs inside agent discovery, where a single
  * bad file must not take down every other agent in the same directory.
  */
-function parseToolList(value: unknown): string[] | undefined {
-	const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
-	const tools = raw
-		.filter((t): t is string => typeof t === "string")
-		.map((t) => t.trim())
-		.filter(Boolean);
-	return tools.length > 0 ? tools : undefined;
-}
-
-/** Like parseToolList but for glob-style string resources (skills/resources). */
 function parseStringList(value: unknown): string[] | undefined {
 	const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
 	const items = raw
@@ -218,7 +200,7 @@ export function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig
 		agents.push({
 			name: frontmatter.name,
 			description: frontmatter.description,
-			tools: parseToolList(frontmatter.tools),
+			tools: parseStringList(frontmatter.tools),
 			model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
 			persona: typeof frontmatter.persona === "string" ? frontmatter.persona : undefined,
 			skills: parseStringList(frontmatter.skills),
@@ -237,85 +219,6 @@ export function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig
 	}
 
 	return agents;
-}
-
-/** First `# heading` line if present (used as description fallback for legacy personas). */
-function headingFromBody(body: string): string | undefined {
-	for (const line of body.split("\n")) {
-		const trimmed = line.trim();
-		if (trimmed.startsWith("# ")) {
-			return trimmed.replace(/^#+\s*/, "").trim();
-		}
-		if (trimmed && !trimmed.startsWith("#")) return undefined;
-	}
-	return undefined;
-}
-
-function loadPersonasFromDir(dir: string): PersonaConfig[] {
-	const personas: PersonaConfig[] = [];
-	if (!fs.existsSync(dir)) return personas;
-
-	let entries: fs.Dirent[];
-	try {
-		entries = fs.readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return personas;
-	}
-
-	// Immediate files -> theme-less personas; subdirs -> <theme>/<name>.md
-	for (const entry of entries) {
-		if (entry.name.endsWith(".md") && (entry.isFile() || entry.isSymbolicLink())) {
-			const filePath = path.join(dir, entry.name);
-			try {
-				const content = fs.readFileSync(filePath, "utf-8");
-				const { frontmatter, body } = parseFrontmatter<{ name?: unknown; description?: unknown }>(content);
-				const name =
-					(typeof frontmatter.name === "string" && frontmatter.name) || entry.name.replace(/\.md$/, "");
-				personas.push({
-					name,
-					description: typeof frontmatter.description === "string" ? frontmatter.description : headingFromBody(body),
-					body,
-					filePath,
-					fileNameStem: entry.name.replace(/\.md$/, ""),
-				});
-			} catch {
-				/* skip */
-			}
-		} else if (entry.isDirectory()) {
-			const theme = entry.name;
-			let themeEntries: fs.Dirent[];
-			try {
-				themeEntries = fs.readdirSync(path.join(dir, theme), { withFileTypes: true });
-			} catch {
-				continue;
-			}
-			for (const themeEntry of themeEntries) {
-				if (!themeEntry.name.endsWith(".md")) continue;
-				if (!themeEntry.isFile() && !themeEntry.isSymbolicLink()) continue;
-				const filePath = path.join(dir, theme, themeEntry.name);
-				try {
-					const content = fs.readFileSync(filePath, "utf-8");
-					const { frontmatter, body } = parseFrontmatter<{ name?: unknown; description?: unknown }>(content);
-					const name =
-						(typeof frontmatter.name === "string" && frontmatter.name) ||
-						themeEntry.name.replace(/\.md$/, "");
-					personas.push({
-						name,
-						theme,
-						description:
-							typeof frontmatter.description === "string" ? frontmatter.description : headingFromBody(body),
-						body,
-						filePath,
-						fileNameStem: themeEntry.name.replace(/\.md$/, ""),
-					});
-				} catch {
-					/* skip */
-				}
-			}
-		}
-	}
-
-	return personas;
 }
 
 /**
@@ -363,7 +266,7 @@ export function loadTemplateAgents(root: string | null = getPackageRoot()): Agen
 		out.push({
 			name: (typeof frontmatter.name === "string" && frontmatter.name) || name,
 			description: frontmatter.description,
-			tools: parseToolList(frontmatter.tools),
+			tools: parseStringList(frontmatter.tools),
 			model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
 			persona: typeof frontmatter.persona === "string" ? frontmatter.persona : undefined,
 			skills: parseStringList(frontmatter.skills),
