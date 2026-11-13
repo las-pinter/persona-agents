@@ -18,10 +18,8 @@ import {
 	type AgentScope,
 	type PersonaConfig,
 	discoverAgents,
-	personaForThemeProfession,
-	resolveAgentAlias,
-	resolvePersonaForAgent,
 } from "./resolver.ts";
+import { personaForThemeProfession, resolveAgentAlias, resolvePersonaForAgent } from "./persona-lookup.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { SPAWN_TOOL_NAME } from "./depth.ts";
 import { parentSessionIdOf } from "./session-id.ts";

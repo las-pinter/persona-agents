@@ -14,7 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { findNearestConfigDir, globToRegExp } from "./path-glob.ts";
-import { getPackageRoot, PACKAGE_LAYOUT } from "./resolver.ts";
+import { getPackageRoot, PACKAGE_LAYOUT } from "./package-layout.ts";
 
 export interface SkillRef {
 	name: string;

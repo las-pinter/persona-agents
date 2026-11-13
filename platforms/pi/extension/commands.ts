@@ -12,11 +12,8 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	discoverAgents,
-	resolveAgentAlias,
-	resolvePersonaForAgent,
-} from "./resolver.ts";
+import { discoverAgents } from "./resolver.ts";
+import { resolveAgentAlias, resolvePersonaForAgent } from "./persona-lookup.ts";
 import { discoverSkills, matchSkills } from "./skill-discovery.ts";
 import { personaLabel } from "./persona-text.ts";
 import { getActiveAgent, setActiveAgent, setActivePersona } from "./state.ts";

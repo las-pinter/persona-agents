@@ -1,5 +1,7 @@
 /**
- * Agent and persona discovery for the persona-agents pi package.
+ * Agent discovery for the persona-agents pi package: the agent types, the
+ * frontmatter parse, the class parse, the user, project, and package loaders,
+ * and `discoverAgents`.
  *
  * Sources (all optional, merged by name):
  *   - user:    ~/.pi/agent/agents,     ~/.pi/agent/personas
@@ -12,16 +14,20 @@
  * files (plain markdown starting with a `# heading`, as shipped in
  * `personas/<theme>/`) work as-is; an optional frontmatter block adds
  * name/description metadata.
+ *
+ * The persona file loader is `persona-loader.ts`. The agents.json mapping is
+ * `persona-lookup.ts`. This module loads the persona list into the discovery
+ * result and nothing else.
  */
 
-import { fileURLToPath } from "node:url";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { recordLogLine } from "./ask-record.ts";
 import { formatPersonaId } from "./persona-text.ts";
 import { READER_CLASS, isPermissionClass, type PermissionClass } from "./permission-class.ts";
-import { findNearestConfigDir, globToRegExp, isDirectory } from "./path-glob.ts";
+import { findNearestConfigDir, isDirectory } from "./path-glob.ts";
+import { getPackageRoot, PACKAGE_LAYOUT } from "./package-layout.ts";
 import { loadPersonasFromDir, type PersonaConfig } from "./persona-loader.ts";
 
 export type { PersonaConfig } from "./persona-loader.ts";
@@ -291,41 +297,6 @@ function mergeByName(list: AgentConfig[]): AgentConfig[] {
 	return Array.from(m.values());
 }
 
-/**
- * Where the package keeps each resource, relative to the package root. The
- * shared content (agents.json, personas, professions, skills) lives under
- * `content/`; the pi-only files live under `platforms/pi/`.
- */
-export const PACKAGE_LAYOUT = {
-	agentsJson: path.join("content", "agents.json"),
-	personas: path.join("content", "personas"),
-	professions: path.join("content", "professions"),
-	skills: path.join("content", "skills"),
-	piFrontmatters: path.join("platforms", "pi", "frontmatters"),
-	piAgents: path.join("platforms", "pi", "agents"),
-} as const;
-
-/** This file's depth below the package root: platforms/pi/extension/. */
-const EXTENSION_DIR_DEPTH = 3;
-
-/** Package root when this extension is loaded from a pi package (git/local install). */
-export function getPackageRoot(): string | null {
-	const candidate = path.resolve(
-		path.dirname(fileURLToPath(import.meta.url)),
-		...Array<string>(EXTENSION_DIR_DEPTH).fill(".."),
-	);
-	if (!isDirectory(candidate)) return null;
-	// Only treat it as a package root when it holds the package personas or
-	// agents, so plain copies under ~/.pi/agent/extensions fall back to user dirs.
-	if (
-		isDirectory(path.join(candidate, PACKAGE_LAYOUT.piAgents)) ||
-		isDirectory(path.join(candidate, PACKAGE_LAYOUT.personas))
-	) {
-		return candidate;
-	}
-	return null;
-}
-
 export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
 	const userDir = path.join(getAgentDir(), "agents");
 	const projectAgentsDir = findNearestConfigDir(cwd, "agents");
@@ -369,231 +340,4 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 		personas: Array.from(personaMap.values()),
 		projectAgentsDir,
 	};
-}
-
-// ---------------------------------------------------------------------------
-// agents.json theme ↔ profession ↔ persona mapping
-//   {"goblin": {"orchestrator": {"personaFile": "bossnik-chief.md", ...}, ...}}
-// ---------------------------------------------------------------------------
-
-interface AgentsJsonShape {
-	[theme: string]: {
-		[profession: string]: { personaFile?: unknown } | undefined;
-	} | undefined;
-}
-
-let agentsJsonMap: Map<string, Map<string, string>> | null | undefined;
-
-function loadAgentsJson(): Map<string, Map<string, string>> | null {
-	if (agentsJsonMap !== undefined) return agentsJsonMap;
-	agentsJsonMap = null;
-	const root = getPackageRoot();
-	if (!root) return null;
-	try {
-		const raw = JSON.parse(fs.readFileSync(path.join(root, PACKAGE_LAYOUT.agentsJson), "utf-8")) as AgentsJsonShape;
-		const outer = new Map<string, Map<string, string>>();
-		for (const [theme, professions] of Object.entries(raw)) {
-			const inner = new Map<string, string>();
-			for (const [profession, info] of Object.entries(professions ?? {})) {
-				if (typeof info?.personaFile === "string") {
-					inner.set(profession, info.personaFile.replace(/\.md$/, ""));
-				}
-			}
-			if (inner.size > 0) outer.set(theme, inner);
-		}
-		agentsJsonMap = outer;
-	} catch {
-		agentsJsonMap = null;
-	}
-	return agentsJsonMap;
-}
-
-/** The persona agents.json assigns to a (theme, profession) pair, if it exists. */
-export function personaForThemeProfession(
-	theme: string,
-	profession: string,
-	personas: PersonaConfig[],
-): PersonaConfig | null {
-	const stem = loadAgentsJson()?.get(theme)?.get(profession);
-	if (!stem) return null;
-	return (
-		personas.find((p) => p.theme === theme && (p.name === stem || p.fileNameStem === stem)) ??
-		personas.find((p) => p.theme === theme && p.fileNameStem === stem) ??
-		null
-	);
-}
-
-/**
- * Resolve an agent reference that may be a "theme-profession" alias from the
- * kiro/opencode ecosystem (e.g. "goblin-mascot" -> mascot agent + goblin theme).
- */
-export function resolveAgentAlias(
-	alias: string,
-	agents: AgentConfig[],
-	personas: PersonaConfig[],
-): { agent: AgentConfig; theme?: string } | null {
-	const direct = agents.find((a) => a.name === alias);
-	if (direct) return { agent: direct };
-
-	const dash = alias.indexOf("-");
-	if (dash > 0 && dash < alias.length - 1) {
-		const theme = alias.slice(0, dash);
-		const profession = alias.slice(dash + 1);
-		const isTheme = personas.some((p) => p.theme === theme) || loadAgentsJson()?.has(theme);
-		if (isTheme) {
-			const agent = agents.find((a) => a.name === profession);
-			if (agent) return { agent, theme };
-		}
-	}
-	return null;
-}
-
-/**
- * Match a persona reference against a persona list, theme-aware.
- *
- * Priority:
- *   1. explicit "theme/name" (name or filename stem)
- *   2. bare persona name
- *   3. type personas.json mapping for (ref=theme, agentName=profession)
- *   4. fallback: first persona in the theme
- */
-export function resolvePersonaForAgent(
-	personas: PersonaConfig[],
-	ref: string | undefined,
-	agentName?: string,
-): PersonaConfig | null {
-	if (!ref || ref === "none" || ref === "off") return null;
-
-	if (ref.includes("/")) {
-		const [theme, name] = ref.split("/", 2);
-		for (const p of personas) {
-			if (p.theme === theme && (p.name === name || p.fileNameStem === name)) return p;
-		}
-		return null;
-	}
-
-	for (const p of personas) {
-		if (p.name === ref) return p;
-	}
-
-	if (agentName) {
-		const mapped = personaForThemeProfession(ref, agentName, personas);
-		if (mapped) return mapped;
-	}
-
-	for (const p of personas) {
-		if (p.theme === ref) return p;
-	}
-	return null;
-}
-
-export function formatAgentList(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
-	if (agents.length === 0) return { text: "none", remaining: 0 };
-	const listed = agents.slice(0, maxItems);
-	const remaining = agents.length - listed.length;
-	return {
-		text: listed.map((a) => `${a.name} (${a.source}): ${a.description}`).join("; "),
-		remaining,
-	};
-}
-
-// ---------------------------------------------------------------------------
-// Resources (file globs attached to the agent context)
-// ---------------------------------------------------------------------------
-
-export interface ResourcesResult {
-	/** File contents inlined into the prompt (small files). */
-	inlined: { path: string; content: string }[];
-	/** Larger matched files; only paths are listed so the agent can read them. */
-	paths: string[];
-}
-
-const RESOURCE_SKIP_DIRS = new Set([".git", "node_modules", ".pi", ".venv", "dist", "build", ".cache"]);
-
-// Tunable resource budgets, not yet settings-backed.
-const MAX_INLINE_BYTES_PER_FILE = 4096;
-const MAX_TOTAL_RESOURCE_BYTES = 32768;
-const MAX_RESOURCE_DIR_DEPTH = 8;
-
-function walkFiles(dir: string, relPrefix: string, depth: number, out: string[]): void {
-	if (depth > MAX_RESOURCE_DIR_DEPTH) return;
-	let entries: fs.Dirent[];
-	try {
-		entries = fs.readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return;
-	}
-	for (const entry of entries) {
-		if (RESOURCE_SKIP_DIRS.has(entry.name)) continue;
-		const rel = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
-		const abs = path.join(dir, entry.name);
-		if (entry.isDirectory()) {
-			walkFiles(abs, rel, depth + 1, out);
-		} else if (entry.isFile() || entry.isSymbolicLink()) {
-			out.push(rel);
-		}
-	}
-}
-
-/** Expand "!exclusion" patterns (same convention as pi package manifests). */
-function expandsTo(patterns: string[]): { include: RegExp[]; exclude: RegExp[] } {
-	const include: RegExp[] = [];
-	const exclude: RegExp[] = [];
-	for (const raw of patterns) {
-		const p = raw.trim();
-		if (!p) continue;
-		if (p.startsWith("!")) {
-			exclude.push(globToRegExp(p.slice(1)));
-		} else {
-			include.push(globToRegExp(p));
-		}
-	}
-	return { include, exclude };
-}
-
-/**
- * Resolve frontmatter `resources:` globs relative to cwd. Matched files are
- * inlined when under maxInlineBytesPerFile; larger files are listed as paths.
- */
-export function resolveResources(
-	patterns: string[] | undefined,
-	cwd: string,
-	maxInlineBytesPerFile = MAX_INLINE_BYTES_PER_FILE,
-	maxTotalBytes = MAX_TOTAL_RESOURCE_BYTES,
-): ResourcesResult {
-	const result: ResourcesResult = { inlined: [], paths: [] };
-	if (!patterns || patterns.length === 0 || !isDirectory(cwd)) return result;
-
-	const all: string[] = [];
-	walkFiles(cwd, "", 0, all);
-	const { include, exclude } = expandsTo(patterns);
-
-	let total = 0;
-	for (const rel of all) {
-		const posix = rel.split(path.sep).join("/");
-		if (exclude.some((re) => re.test(posix))) continue;
-		if (!include.some((re) => re.test(posix))) continue;
-
-		if (total >= maxTotalBytes) {
-			result.paths.push(rel);
-			continue;
-		}
-		try {
-			const stat = fs.statSync(path.join(cwd, rel));
-			if (stat.size <= maxInlineBytesPerFile) {
-				const content = fs.readFileSync(path.join(cwd, rel), "utf-8");
-				if (total + content.length <= maxTotalBytes) {
-					total += content.length;
-					result.inlined.push({ path: rel, content });
-				} else {
-					result.paths.push(rel);
-				}
-			} else {
-				result.paths.push(rel);
-			}
-		} catch {
-			result.paths.push(rel);
-		}
-	}
-	return result;
 }
