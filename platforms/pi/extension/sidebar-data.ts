@@ -2,10 +2,11 @@
  * Sidebar data collector — impure.
  *
  * Subscribes once to the pi events that keep a `SidebarSnapshot` fresh, owns the
- * tree/git/MCP polls and the TPS sliding window, and unsubscribes on dispose.
- * The pure renderers in `sidebar-panels.ts` read the snapshot; this module
- * imports their view TYPES from `sidebar-types.ts` only (never the compositor
- * or the render functions).
+ * tree/MCP/study polls and the TPS sliding window, and unsubscribes on dispose.
+ * The git read lives in `git-workspace.ts`; this module owns its poll only. The
+ * pure renderers in `sidebar-panels.ts` read the snapshot; this module imports
+ * their view TYPES from `sidebar-types.ts` only (never the compositor or the
+ * render functions).
  *
  * Every callback and timer body is wrapped in `try/catch`. Missing data yields a
  * defined default. A bad API call must never crash the TUI.
@@ -19,6 +20,13 @@ import { basename, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createAskLog, pendingLogEvents, type AskLog } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
+import {
+	GIT_TIMEOUT_MS,
+	readGitWorkspace,
+	unavailableGitWorkspace,
+	type GitExec,
+	type GitWorkspaceRead,
+} from "./git-workspace.ts";
 import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
 import { readEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
@@ -52,12 +60,8 @@ export const STUDY_POLL_MS = 5000;
 export const TPS_WINDOW_MS = 2000;
 /** A running node with no log record for this long is stale. */
 export const STALE_MS = 5 * 60 * 1000;
-/** Git command timeout. Every git read uses this one value. */
-export const GIT_TIMEOUT_MS = 2000;
-/** Changed names kept in the snapshot. This is the only changed-name cap. */
-const CHANGED_SHOWN = 4;
-/** Per-file diff rows kept in the snapshot. Bounds the cross-timer payload. */
-const WORKSPACE_FILES_CAP = 50;
+// The git timeout belongs to the git read; the poll tests still import it here.
+export { GIT_TIMEOUT_MS } from "./git-workspace.ts";
 
 /** The public handle returned by `createSidebarData`. */
 export interface SidebarData {
@@ -171,97 +175,6 @@ export function normalizeMcpStatus(server: McpServerInput): McpServerSnapshot {
 	};
 }
 
-/** One row parsed from `git status --porcelain`. */
-interface StatusFile {
-	path: string;
-	untracked: boolean;
-}
-
-/** One row parsed from `git diff --numstat HEAD`. */
-interface DiffStat {
-	path: string;
-	added: number;
-	removed: number;
-}
-
-/**
- * Parse `git status --porcelain` v1. The first two columns hold the status;
- * a rename uses the destination path. A short or empty line is skipped.
- */
-function parsePorcelain(output: string): StatusFile[] {
-	const files: StatusFile[] = [];
-	for (const line of output.split("\n")) {
-		if (line.length < 4) continue;
-		const status = line.slice(0, 2);
-		let path = line.slice(3);
-		const arrow = path.indexOf(" -> ");
-		if (arrow >= 0) path = path.slice(arrow + 4);
-		if (path.length === 0) continue;
-		files.push({ path, untracked: status === "??" });
-	}
-	return files;
-}
-
-/** Resolve a numstat rename path (`old => new` or `dir/{old => new}.ts`). */
-function normalizeNumstatPath(rawPath: string): string {
-	const path = rawPath.trim();
-	const braced = path.match(/^(.*)\{([^{}]*) => ([^{}]*)\}(.*)$/);
-	if (braced) return `${braced[1]}${braced[3]}${braced[4]}`;
-	const arrow = path.lastIndexOf(" => ");
-	if (arrow >= 0) return path.slice(arrow + 4).trim();
-	return path;
-}
-
-/** Parse `git diff --numstat`. A binary row (`-`) counts as zero lines. */
-function parseNumstat(output: string): Map<string, DiffStat> {
-	const stats = new Map<string, DiffStat>();
-	for (const line of output.split("\n")) {
-		if (line.trim().length === 0) continue;
-		const parts = line.split("\t");
-		if (parts.length < 3) continue;
-		const added = parts[0] === "-" ? 0 : Number.parseInt(parts[0], 10);
-		const removed = parts[1] === "-" ? 0 : Number.parseInt(parts[1], 10);
-		const path = normalizeNumstatPath(parts.slice(2).join("\t"));
-		if (path.length === 0) continue;
-		stats.set(path, {
-			path,
-			added: Number.isFinite(added) ? added : 0,
-			removed: Number.isFinite(removed) ? removed : 0,
-		});
-	}
-	return stats;
-}
-
-/**
- * Merge the status rows with the numstat rows. A status row keeps its order and
- * its untracked flag; numstat supplies added/removed lines. A numstat-only path
- * is tracked. An untracked file has no numstat row, so it stays added/removed 0.
- */
-function combineWorkspaceFiles(
-	statusFiles: StatusFile[],
-	diffByPath: Map<string, DiffStat>,
-): WorkspaceFileSnapshot[] {
-	const files: WorkspaceFileSnapshot[] = [];
-	const seen = new Set<string>();
-	for (const status of statusFiles) {
-		if (seen.has(status.path)) continue;
-		seen.add(status.path);
-		const diff = diffByPath.get(status.path);
-		files.push({
-			path: status.path,
-			added: diff?.added ?? 0,
-			removed: diff?.removed ?? 0,
-			untracked: status.untracked,
-		});
-	}
-	for (const [path, diff] of diffByPath) {
-		if (seen.has(path)) continue;
-		seen.add(path);
-		files.push({ path, added: diff.added, removed: diff.removed, untracked: false });
-	}
-	return files;
-}
-
 /** Build the data module. */
 export function createSidebarData(pi: ExtensionAPI): SidebarData {
 	const state: InternalState = {
@@ -328,11 +241,10 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		};
 	}
 
-	/** Mark git as unavailable. The changed list shows the degradation marker. */
-	function markGitUnavailable(): void {
-		state.changed = ["(git unavailable)"];
-		state.changedCount = 1;
-		state.files = [];
+	/** Run one git command through pi, or `undefined` when pi has no exec. */
+	function gitExec(): GitExec | undefined {
+		if (typeof pi.exec !== "function") return undefined;
+		return (command, args, options) => pi.exec(command, args, options);
 	}
 
 	/** Sum assistant `usage` over a session branch and find the branch start. */
@@ -496,55 +408,43 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		};
 	}
 
-	/** Poll git status, diff, and branch for the workspace panel. */
+	/** Poll git for the workspace panel. A failure marks it unavailable. */
 	async function refreshGit(): Promise<void> {
 		const myGeneration = generation;
 		const cwd = state.snapshot.workspace.cwd || state.snapshot.cwd;
 		if (!cwd) return;
-		if (typeof pi.exec !== "function") {
-			markGitUnavailable();
-			applyWorkspace();
+		const exec = gitExec();
+		// A pi without exec paints the marker now, not one microtask later.
+		if (!exec) {
+			applyGitRead(unavailableGitWorkspace());
 			return;
 		}
-		try {
-			const [status, numstat, branch] = await Promise.all([
-				pi.exec("git", ["status", "--porcelain"], { cwd, timeout: GIT_TIMEOUT_MS }),
-				pi.exec("git", ["diff", "--numstat", "HEAD"], { cwd, timeout: GIT_TIMEOUT_MS }),
-				pi.exec("git", ["branch", "--show-current"], { cwd, timeout: GIT_TIMEOUT_MS }),
-			]);
-			// dispose() bumps the generation; drop a stale write after the await.
-			if (myGeneration !== generation) return;
-			// A failed branch read keeps the last name, so the panel does not flicker.
-			if (branch && branch.code === 0) {
-				const name = String(branch.stdout ?? "").trim();
-				state.branch = name.length > 0 ? name : null;
-			}
-			if (!status || status.code !== 0) {
-				markGitUnavailable();
-				applyWorkspace();
-				return;
-			}
-			// A numstat failure (for example a repo with no HEAD) still leaves the
-			// status list intact; only the per-file line counts are missing.
-			const statusFiles = parsePorcelain(String(status.stdout ?? ""));
-			const diffByPath =
-				numstat && numstat.code === 0 ? parseNumstat(String(numstat.stdout ?? "")) : new Map<string, DiffStat>();
-			const files = combineWorkspaceFiles(statusFiles, diffByPath);
-			state.changedCount = files.length;
-			state.changed = files.slice(0, CHANGED_SHOWN).map((file) => file.path);
-			state.files = files.slice(0, WORKSPACE_FILES_CAP);
-		} catch {
-			if (myGeneration !== generation) return;
-			markGitUnavailable();
-		}
+		const read = await readGitWorkspace(exec, cwd, GIT_TIMEOUT_MS);
+		// dispose() bumps the generation; drop a stale write after the await.
+		if (myGeneration !== generation) return;
+		applyGitRead(read);
+	}
+
+	/** Copy one git read into the workspace fields, then repaint the panel. */
+	function applyGitRead(read: GitWorkspaceRead): void {
+		// An `undefined` name keeps the last one, so the panel does not flicker.
+		if (read.branch !== undefined) state.branch = read.branch;
+		state.changed = read.changed;
+		state.changedCount = read.changedCount;
+		state.files = read.files;
 		applyWorkspace();
 	}
 
-	/** Refresh the MCP server list from `mcp.json` and `pi.getMcpServers()`. */
-	function refreshMcp(): void {
-		// Re-read `mcp.json` on every poll: a new server must appear without reload.
-		state.mcpJsonServers = readMcpJsonServers(state.mcpJsonPath);
-		const configured = new Set<string>(state.mcpJsonServers);
+	/** Read `mcp.json` once per refresh, then paint the MCP list from it. */
+	function refreshMcpFromDisk(): void {
+		// A new server must appear without a reload, so the read is per refresh.
+		refreshMcp(readMcpJsonServers(state.mcpJsonPath));
+	}
+
+	/** Refresh the MCP list from one parsed `mcp.json` read and pi's servers. */
+	function refreshMcp(jsonServers: string[]): void {
+		state.mcpJsonServers = jsonServers;
+		const configured = new Set<string>(jsonServers);
 		try {
 			if (typeof pi.getMcpServers === "function") {
 				for (const server of pi.getMcpServers() ?? []) {
@@ -692,10 +592,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		resetMcpUsage();
 		guard(() => refreshSession(ctx));
 		guard(() => refreshTodosFromEntries(ctx));
-		guard(() => {
-			state.mcpJsonServers = readMcpJsonServers(state.mcpJsonPath);
-		});
-		guard(() => refreshMcp());
+		guard(() => refreshMcpFromDisk());
 		guard(() => refreshTree());
 		guard(() => refreshStudy());
 		guardAsync(() => refreshGit());
@@ -765,7 +662,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 			pi.on("tool_execution_end", (_event, eventCtx) => guard(() => refreshSession(eventCtx))),
 		);
 		onPi(() =>
-			pi.on("mcp_servers_change", () => guard(() => refreshMcp())),
+			pi.on("mcp_servers_change", () => guard(() => refreshMcpFromDisk())),
 		);
 
 		// TODOS channel: process-local. A bad payload is ignored.
@@ -781,7 +678,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		// Polls. Each body is guarded.
 		state.timers.push(setInterval(() => guard(() => refreshTree()), TREE_POLL_MS));
 		state.timers.push(setInterval(() => guardAsync(() => refreshGit()), GIT_POLL_MS));
-		state.timers.push(setInterval(() => guard(() => refreshMcp()), MCP_POLL_MS));
+		state.timers.push(setInterval(() => guard(() => refreshMcpFromDisk()), MCP_POLL_MS));
 		state.timers.push(setInterval(() => guard(() => refreshStudy()), STUDY_POLL_MS));
 
 		return () => {

@@ -13,11 +13,18 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import fs, { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { STUDY_POLL_MS, TREE_POLL_MS, createSidebarData, type SidebarData } from "./sidebar-data.ts";
+import {
+	MCP_POLL_MS,
+	STUDY_POLL_MS,
+	TREE_POLL_MS,
+	createSidebarData,
+	type SidebarData,
+} from "./sidebar-data.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, createRootLogPath, MAX_EVENTS_READ } from "./tree-log.ts";
 import { findNode } from "./tree-model.ts";
@@ -344,6 +351,29 @@ test("an absent getAllTools marks the server unknown", () => {
 	const mcp = readMcp({ mcpServers: ["exa"], noGetAllTools: true });
 	const server = mcp.find((entry) => entry.name === "exa");
 	assert.equal(server?.status, "unknown");
+});
+
+test("one mcp.json read serves one MCP refresh", (t) => {
+	const original = fs.readFileSync;
+	let reads = 0;
+	fs.readFileSync = ((...args: unknown[]) => {
+		if (String(args[0]).endsWith("mcp.json")) reads += 1;
+		return (original as unknown as (...rest: unknown[]) => unknown)(...args);
+	}) as typeof fs.readFileSync;
+	syncBuiltinESMExports();
+	const data = createSidebarData(makeFakePi({}));
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	try {
+		data.subscribe(makeFakeCtx());
+		assert.equal(reads, 1, "the first paint read mcp.json more than once");
+		t.mock.timers.tick(MCP_POLL_MS);
+		assert.equal(reads, 2, "one MCP poll read mcp.json more than once");
+	} finally {
+		data.dispose();
+		t.mock.timers.reset();
+		fs.readFileSync = original;
+		syncBuiltinESMExports();
+	}
 });
 
 // --- session usage sums ------------------------------------------------------
