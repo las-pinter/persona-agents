@@ -24,57 +24,13 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
+import { makePi, promptFor } from "./pi-fixture.ts";
 import type { AgentConfig } from "./resolver.ts";
 import { DEBUG_AGENT_STACK_PATH, setActiveAgent, setActivePersona } from "./state.ts";
 import { ENV_PARENT_RUN_ID, ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
 import { MAX_EVENTS_READ, MAX_LOG_BYTES, readAllEvents, readEvents } from "./tree-log.ts";
 const DEBUG_ENV = "PI_AGENT_STACK_DEBUG";
-
-type Handler = (event: unknown, ctx: unknown) => unknown;
-
-interface Harness {
-	pi: ExtensionAPI;
-	handlers: Map<string, Handler[]>;
-}
-
-/** A fake pi that records `on` handlers; every other method is a no-op. */
-function makePi(settings: unknown = {}): Harness {
-	const handlers = new Map<string, Handler[]>();
-	const noop = (): void => {};
-	const pi: Record<string, unknown> = {
-		on: (event: string, handler: Handler) => {
-			const list = handlers.get(event) ?? [];
-			list.push(handler);
-			handlers.set(event, list);
-			return () => {};
-		},
-		registerCommand: noop,
-		registerTool: noop,
-		registerFlag: noop,
-		getFlag: () => undefined,
-		getSettings: () => settings,
-		appendEntry: noop,
-		exec: async () => ({ code: 0, stdout: "", stderr: "" }),
-		getAllTools: () => [],
-		getMcpServers: () => [],
-		events: { on: () => () => {}, emit: noop },
-	};
-	return { pi: pi as unknown as ExtensionAPI, handlers };
-}
-
-/** Run every `before_agent_start` handler and return the final prompt. */
-async function promptFor(harness: Harness, cwd: string): Promise<string> {
-	let prompt = "BASE";
-	for (const handler of harness.handlers.get("before_agent_start") ?? []) {
-		const result = (await handler({ systemPrompt: prompt }, { cwd })) as
-			| { systemPrompt?: string }
-			| undefined;
-		if (result?.systemPrompt) prompt = result.systemPrompt;
-	}
-	return prompt;
-}
 
 function testAgent(overrides: Partial<AgentConfig>): AgentConfig {
 	return {

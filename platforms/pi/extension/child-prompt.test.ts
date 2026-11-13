@@ -18,10 +18,10 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { childRoleText, childTaskPrompt } from "./child-prompt.ts";
 import extension from "./extension.ts";
 import { PERSONA_HEADING, formatPersonaId, personaBlock, personaLabel } from "./persona-text.ts";
+import { makePi, promptFor } from "./pi-fixture.ts";
 import { type AgentConfig, type PersonaConfig } from "./resolver.ts";
 import { discoverSkills, matchSkills } from "./skill-discovery.ts";
 import { setActiveAgent, setActivePersona } from "./state.ts";
@@ -62,41 +62,13 @@ after(() => {
 	setActivePersona(null);
 });
 
-type Handler = (event: unknown, ctx: unknown) => unknown;
-
 /** The root prompt the real extension factory builds for one active persona. */
 async function rootPromptFor(persona: PersonaConfig): Promise<string> {
-	const handlers = new Map<string, Handler[]>();
-	const noop = (): void => {};
-	const fake: Record<string, unknown> = {
-		on: (event: string, handler: Handler) => {
-			const list = handlers.get(event) ?? [];
-			list.push(handler);
-			handlers.set(event, list);
-			return () => {};
-		},
-		registerCommand: noop,
-		registerTool: noop,
-		registerFlag: noop,
-		getFlag: () => undefined,
-		getSettings: () => ({}),
-		appendEntry: noop,
-		exec: async () => ({ code: 0, stdout: "", stderr: "" }),
-		getAllTools: () => [],
-		getMcpServers: () => [],
-		events: { on: () => () => {}, emit: noop },
-	};
-	extension(fake as unknown as ExtensionAPI);
+	const harness = makePi();
+	extension(harness.pi);
 	setActiveAgent(null);
 	setActivePersona(persona);
-	let prompt = "BASE";
-	for (const handler of handlers.get("before_agent_start") ?? []) {
-		const result = (await handler({ systemPrompt: prompt }, { cwd: REPO_ROOT })) as
-			| { systemPrompt?: string }
-			| undefined;
-		if (result?.systemPrompt) prompt = result.systemPrompt;
-	}
-	return prompt;
+	return promptFor(harness, REPO_ROOT);
 }
 
 test("prompt: the root and the child carry one and the same persona block", async () => {
