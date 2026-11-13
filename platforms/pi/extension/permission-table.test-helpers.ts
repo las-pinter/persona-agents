@@ -11,6 +11,7 @@ import { compileRole } from "./permission-table-groups.ts";
 import { roleZone, rulesForRow } from "./permission-table-pattern.ts";
 import type { Role } from "./permission-class.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
+import { isShellTool } from "./shell-tools.ts";
 
 /** One neutral fixture root. No test carries a real home path. */
 export const FIXTURE_ROOT = "/fixture";
@@ -114,7 +115,7 @@ export function sourceDecision(
 ): Decision {
 	return evaluateCommandRules(
 		probe,
-		tool === "bash",
+		isShellTool(tool),
 		resolved.ruleSets,
 		resolved.mode,
 		tool,

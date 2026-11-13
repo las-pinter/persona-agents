@@ -39,7 +39,7 @@ import {
 	matches, MKDIR_ALLOW, NON_PATH_PROBES, NOTES_REMOVE_FILE, ORCH_SCRIPTS, PATH_PROBES,
 	PLAIN_ASK_FREE, READER_ALLOWED, READER_BLOCKED, RELEASE_ASK,
 	RELEASE_VERBS, REMOVE_NAMED, REMOVE_RECURSIVE, ROLES, rowMatches, rowReason,
-	sampleFor, shippedVerdict, SLOT_ALLOW_ROWS, slotProbe,
+	sampleFor, shippedDecision, shippedVerdict, SLOT_ALLOW_ROWS, slotProbe,
 	SOFT_RESET_ASK, SOFT_UNALLOWED,
 	TAG_DELETE_FLAGS, verdictOf, WORKER_ROW_TAIL,
 	WORKER_VERIFY_PROBES, WRITE_ABS_ASK, WRITE_ABS_OUTSIDE,
@@ -884,4 +884,17 @@ test("a non-orchestrator write zone stays narrow", () => {
 	assert.equal(shippedVerdict("researcher", "write", "agent-notes/orchestrator/a.md"), "default");
 	assert.equal(shippedVerdict("planner", "edit", "src/a.ts"), "default");
 	assert.equal(shippedVerdict("researcher", "write", "content/professions/orchestrator.md"), "default");
+});
+
+// --- shell tool class -------------------------------------------------------
+
+// No shipped row names the powershell tool, so the mode default decides it, and
+// a later row change must update this case.
+test("a powershell probe reaches the segment engine and the reason names one segment", () => {
+	const probe = "git status && git log";
+	const decision = shippedDecision("orchestrator", "powershell", probe);
+	if (decision.kind !== "default") assert.fail(`expected the mode default, got ${decision.kind}`);
+	assert.ok(decision.reason.includes("git status"), decision.reason);
+	assert.ok(!decision.reason.includes("git log"), decision.reason);
+	assert.equal(shippedVerdict("orchestrator", "bash", probe), "allow");
 });
