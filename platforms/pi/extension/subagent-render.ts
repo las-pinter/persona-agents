@@ -10,6 +10,7 @@ import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { formatDuration } from "./duration.ts";
+import { SHELL_PROBES } from "./shell-tools.ts";
 import { SubagentParams } from "./subagent-schema.ts";
 import { roundMark } from "./subagent-marks.ts";
 import {
@@ -55,12 +56,15 @@ function formatToolCall(
 		return p.startsWith(home) ? `~${p.slice(home.length)}` : p;
 	};
 
+	// The shell field comes from the shell-tool owner, so a new shell tool paints once.
+	const shellField = SHELL_PROBES.get(toolName);
+	if (shellField !== undefined) {
+		const command = (args[shellField] as string) || "...";
+		const preview = command.length > 60 ? `${command.slice(0, 60)}...` : command;
+		return themeFg("muted", "$ ") + themeFg("toolOutput", preview) + suffix;
+	}
+
 	switch (toolName) {
-		case "bash": {
-			const command = (args.command as string) || "...";
-			const preview = command.length > 60 ? `${command.slice(0, 60)}...` : command;
-			return themeFg("muted", "$ ") + themeFg("toolOutput", preview) + suffix;
-		}
 		case "read": {
 			const rawPath = (args.file_path || args.path || "...") as string;
 			const filePath = shortenPath(rawPath);

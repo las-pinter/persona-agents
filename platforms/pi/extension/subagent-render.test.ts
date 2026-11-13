@@ -92,6 +92,22 @@ test("an inner tool line shows the paired command duration", () => {
 	assert.ok(out.split("\n").some((line) => line === "→ $ ls  1.5s"));
 });
 
+test("a powershell call paints the same line as a bash call with the same command", () => {
+	const paint = (name: string, command: string): string | undefined => {
+		const tool = captureTool();
+		const messages = [toolCallMessage("t1", name, { command }), toolResultMessage("t1", 1_500)];
+		const out = render(tool, makeResult(makeDetails("single", [makeSingle({ messages })])), false, {});
+		return out.split("\n").find((line) => line.startsWith("→ "));
+	};
+
+	for (const command of ["ls", "x".repeat(80)]) {
+		const preview = command.length > 60 ? `${command.slice(0, 60)}...` : command;
+		const bash = paint("bash", command);
+		assert.equal(bash, `→ $ ${preview}  1.5s`, `the bash line stays: ${command}`);
+		assert.equal(paint("powershell", command), bash, `the shell tool name must not change the line: ${command}`);
+	}
+});
+
 test("inner tool lines pair durations by toolCallId, not by position", () => {
 	const tool = captureTool();
 	const messages = [
