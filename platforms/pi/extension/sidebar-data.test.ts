@@ -22,7 +22,8 @@ import { ENV_TREE_LOG } from "./depth.ts";
 import { appendEvent, createRootLogPath, MAX_EVENTS_READ } from "./tree-log.ts";
 import { findNode } from "./tree-model.ts";
 import { renderStatusPanel } from "./sidebar-panels.ts";
-import { renderTreeLines, statusGlyph } from "./sidebar-render.ts";
+import { renderTreeLines } from "./sidebar-render.ts";
+import { stateGlyph } from "./sidebar-theme.ts";
 import type {
 	McpSnapshot,
 	SessionSnapshot,
@@ -696,7 +697,7 @@ test("an old root start keeps a fresh child on its branch after a clear", (t) =>
 			line.includes("implementer"),
 		);
 		assert.ok(childLine?.startsWith("└─ "), "the child line starts with the branch glyph");
-		assert.notEqual(statusGlyph(theme, child, 0), "?", "the child icon is not the orphan mark");
+		assert.notEqual(stateGlyph(theme, child.status, 0), "?", "the child icon is not the orphan mark");
 	} finally {
 		data.dispose();
 		t.mock.timers.reset();

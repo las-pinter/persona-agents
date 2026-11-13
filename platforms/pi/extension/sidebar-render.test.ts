@@ -18,21 +18,19 @@ import {
 	renderSidebarPanel,
 	renderTodosPanel,
 	renderWorkspacePanel,
-} from "./sidebar-panels.ts";
-import {
-	type SidebarTheme,
-	CONTEXT_BAR_CELLS,
 	SESSION_LABEL_WIDTH,
 	TODOS_ROWS_SHOWN,
 	TREE_ROWS_SHOWN,
+} from "./sidebar-panels.ts";
+import {
+	CONTEXT_BAR_CELLS,
 	contextBar,
 	contextBarColor,
-	formatCount,
-	formatElapsed,
 	hasRunningNode,
 	renderTreeLines,
 	shortenHome,
 } from "./sidebar-render.ts";
+import { formatCount, formatElapsed, type SidebarTheme } from "./sidebar-theme.ts";
 import type { McpSnapshot, TodoSnapshot } from "./sidebar-types.ts";
 import {
 	assertFits,

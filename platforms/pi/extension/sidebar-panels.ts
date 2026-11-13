@@ -3,9 +3,11 @@
  *
  * The seven right-column panels: AGENTS (tree), STUDY STATUS, SESSION,
  * WORKSPACE, MCP, TODOS, LOG, plus the node detail overlay. Every function is
- * pure: no fs, no timers, no pi runtime import. The clip comes from
- * `sidebar-line.ts`, the theme and the formatters from `sidebar-render.ts`, and
- * the snapshot shapes from `sidebar-types.ts`.
+ * pure: no fs, no timers, no pi runtime import. The panel caps live here with
+ * their only readers, next to the panel stack. The clip comes from
+ * `sidebar-line.ts`, the theme, the glyphs, and the formatters from
+ * `sidebar-theme.ts`, the row code from `sidebar-render.ts`, and the snapshot
+ * shapes from `sidebar-types.ts`.
  *
  * `sidebar-render.test.ts` runs under plain Node (type stripping).
  */
@@ -14,30 +16,23 @@ import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { lookupMcpCount, totalMcpCount } from "./mcp-usage.ts";
 import { clipLine } from "./sidebar-line.ts";
 import {
-	type SidebarTheme,
-	AGENTS_PAD_MIN,
-	DETAIL_PREVIEW_LINES,
-	LOG_PANEL_LINES,
-	MCP_SERVERS_SHOWN,
-	SESSION_LABEL_WIDTH,
-	STUDY_STATUS_SHOWN,
-	TODOS_ROWS_SHOWN,
-	TREE_ROWS_SHOWN,
-	WORKSPACE_FILES_SHOWN,
-	color,
-	composePanels,
 	contextBar,
 	contextBarColor,
-	formatCount,
-	formatElapsed,
 	formatRow,
 	header,
 	oneLine,
 	overflowMark,
 	renderTreeLines,
 	shortenHome,
-	styleDim,
 } from "./sidebar-render.ts";
+import {
+	color,
+	formatCount,
+	formatElapsed,
+	stateGlyph,
+	styleDim,
+	type SidebarTheme,
+} from "./sidebar-theme.ts";
 import type {
 	AskLogRow,
 	McpServerStatus,
@@ -52,6 +47,39 @@ import type {
 	WorkspaceSnapshot,
 } from "./sidebar-types.ts";
 import { flattenTreeKeeping, type TreeNode } from "./tree-model.ts";
+
+/** Per-file diff lines shown in WORKSPACE before the `… +N more` mark. */
+export const WORKSPACE_FILES_SHOWN = 4;
+/** Server lines shown in MCP before the `… +N more` mark. */
+export const MCP_SERVERS_SHOWN = 4;
+/** Output-preview lines kept in the node detail overlay. */
+export const DETAIL_PREVIEW_LINES = 20;
+/** Width of the SESSION stats label column. Fits sidebar width 45. */
+export const SESSION_LABEL_WIDTH = 11;
+/** Study rows shown in STUDY STATUS before the `… +N more` marker. */
+export const STUDY_STATUS_SHOWN = 4;
+/**
+ * Minimum AGENTS panel lines, header included. A short tree pads with blank
+ * lines so the panels below stay put.
+ */
+export const AGENTS_PAD_MIN = 4; // blank lines buy a stable footprint, so lower panels do not jump
+/**
+ * Tree node rows painted in AGENTS before the dim `… +N more` mark. One screen
+ * of agent lines: a common terminal has room for about this many tree rows in
+ * the top slot. The cap stops a runaway tree from painting thousands of lines.
+ */
+export const TREE_ROWS_SHOWN = 20;
+/**
+ * Todo rows painted in TODOS before the dim `… +N more` mark. Six rows plus the
+ * header and the progress line is the eight-line TODOS block a tall column
+ * paints today.
+ */
+export const TODOS_ROWS_SHOWN = 6;
+/**
+ * Fixed LOG panel lines, header included: one header and 4 text lines. The
+ * newest rows wrap at the panel width and the panel stops at four text lines.
+ */
+export const LOG_PANEL_LINES = 5;
 
 /**
  * The AGENTS panel: header plus one indented line per node. The rows stop at
@@ -85,22 +113,6 @@ export function renderAgentTreePanel(
 	return lines.map((line) => clipLine(line, width));
 }
 
-/** The glyph and theme token for one study stage. An unknown stage is a `?`. */
-function stageMark(stage: string | null): { glyph: string; token: string } {
-	switch ((stage ?? "").toLowerCase()) {
-		case "active":
-			return { glyph: "●", token: "accent" };
-		case "blocked":
-			return { glyph: "⚠", token: "warning" };
-		case "done":
-			return { glyph: "✓", token: "success" };
-		case "abandoned":
-			return { glyph: "✗", token: "dim" };
-		default:
-			return { glyph: "?", token: "dim" };
-	}
-}
-
 /** One study row: stage glyph, study name, brief count, and age. */
 function studyRow(
 	row: StudyRowSnapshot,
@@ -108,13 +120,9 @@ function studyRow(
 	theme: SidebarTheme,
 	now: number,
 ): string {
-	const { glyph, token } = stageMark(row.stage);
+	const glyph = stateGlyph(theme, (row.stage ?? "").toLowerCase());
 	const age = row.updated === null ? null : formatElapsed(now - Date.parse(row.updated));
-	return formatRow(
-		`${color(theme, token, glyph)} ${oneLine(row.name)}`,
-		[String(row.briefs), age],
-		width,
-	);
+	return formatRow(`${glyph} ${oneLine(row.name)}`, [String(row.briefs), age], width);
 }
 
 /**
@@ -292,15 +300,13 @@ export function renderWorkspacePanel(
 }
 
 /**
- * The dot glyph and theme token for one MCP status. A missing or unrecognized
- * status falls back to `unknown`, so a stale snapshot never throws.
+ * The dot glyph for one MCP status. A missing or unrecognized status falls back
+ * to `unknown`, so a stale snapshot never throws.
  */
-function mcpStatusDot(status: McpServerStatus | undefined): { glyph: string; token: string } {
+function mcpStatusDot(theme: SidebarTheme, status: McpServerStatus | undefined): string {
 	const resolved: McpServerStatus =
-		status === "connected" || status === "disconnected" || status === "unknown" ? status : "unknown";
-	if (resolved === "connected") return { glyph: "●", token: "success" };
-	if (resolved === "disconnected") return { glyph: "○", token: "error" };
-	return { glyph: "◐", token: "warning" };
+		status === "connected" || status === "disconnected" ? status : "unknown";
+	return stateGlyph(theme, resolved);
 }
 
 /** The MCP panel: header plus a summary line, server rows, and a usage total. */
@@ -323,10 +329,10 @@ export function renderMcpPanel(
 	} else {
 		const shown = servers.slice(0, MCP_SERVERS_SHOWN);
 		for (const server of shown) {
-			const { glyph, token } = mcpStatusDot(server.status);
+			const glyph = mcpStatusDot(theme, server.status);
 			// An absent usage map means the caller does not track usage at all.
 			const badge = usage !== undefined ? ` ${styleDim(theme, `x${lookupMcpCount(usage, server.name)}`)}` : "";
-			lines.push(`${color(theme, token, glyph)} ${server.name}${badge}`);
+			lines.push(`${glyph} ${server.name}${badge}`);
 		}
 		if (servers.length > shown.length) {
 			const mark = overflowMark(servers.length - shown.length);
@@ -410,6 +416,30 @@ export function renderNodeDetail(
 		if (mark) lines.push(styleDim(theme, mark));
 	}
 
+	return lines.map((line) => clipLine(line, width));
+}
+
+/** Glyph of the dim, full-width rule drawn between two panels. */
+export const SECTION_RULE_CHAR = "─";
+
+/** A dim, full-width rule drawn between two panels. Never wider than `width`. */
+function sectionRule(theme: SidebarTheme, width: number): string {
+	const cells = Math.max(0, Math.floor(width));
+	return styleDim(theme, SECTION_RULE_CHAR.repeat(cells));
+}
+
+/**
+ * Stack the panels in the declared order. A dim, full-width rule separates
+ * adjacent panels. The stack drops nothing and clips nothing to a viewport:
+ * the column is as tall as the panels it holds, and the paint layer takes one
+ * window of it.
+ */
+export function composePanels(width: number, panels: string[][], theme: SidebarTheme): string[] {
+	const lines: string[] = [];
+	panels.forEach((panel, index) => {
+		if (index > 0) lines.push(sectionRule(theme, width));
+		lines.push(...panel);
+	});
 	return lines.map((line) => clipLine(line, width));
 }
 

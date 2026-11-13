@@ -13,7 +13,7 @@
 import { Key, matchesKey, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import { clipLine } from "./sidebar-line.ts";
 import { renderNodeDetail } from "./sidebar-panels.ts";
-import { statusIcon, type SidebarTheme } from "./sidebar-render.ts";
+import { stateGlyph, type SidebarTheme } from "./sidebar-theme.ts";
 import type { AskLogRow, SidebarSnapshot } from "./sidebar-types.ts";
 import { findNode, flattenTree, type TreeNode } from "./tree-model.ts";
 import { selectNext, selectPrev } from "./tree-selection.ts";
@@ -30,6 +30,8 @@ const ASK_WRAP_MIN = 10;
 const ASK_RULE_MAX = 96;
 /** The key scroll step for PgUp and PgDn. */
 const ASK_PAGE_STEP = 15;
+/** The tree rows paint the glyph plain, so the glyph reads an empty theme. */
+const PLAIN_THEME: SidebarTheme = {};
 
 // --- /agents-tree overlay ---------------------------------------------------
 
@@ -97,7 +99,7 @@ export class TreeOverlayComponent implements Component {
 				for (const node of nodes) {
 					const mark = node.runId === this.selectedId ? "▶" : " ";
 					const indent = "  ".repeat(Math.max(0, node.depth));
-					const icon = statusIcon(node.status, this.getFrame());
+					const icon = stateGlyph(PLAIN_THEME, node.status, this.getFrame());
 					lines.push(` ${mark} ${indent}${icon} ${node.agent}  ${node.task}`);
 				}
 				lines.push("─".repeat(Math.max(0, Math.min(width - 1, 72))));

@@ -22,14 +22,13 @@ import {
 	renderWorkspacePanel,
 } from "./sidebar-panels.ts";
 import {
-	type SidebarTheme,
 	AGENTS_PAD_MIN,
 	SECTION_RULE_CHAR,
 	STUDY_STATUS_SHOWN,
 	TODOS_ROWS_SHOWN,
-	formatRow,
-	statusIcon,
-} from "./sidebar-render.ts";
+} from "./sidebar-panels.ts";
+import { formatRow } from "./sidebar-render.ts";
+import { stateGlyph, type SidebarTheme } from "./sidebar-theme.ts";
 import type { SidebarSnapshot, StatusSnapshot, StudyRowSnapshot } from "./sidebar-types.ts";
 import {
 	assertFits,
@@ -407,8 +406,8 @@ test("renderNodeDetail shows the no-output placeholder for a whitespace preview"
 	assert.equal(lines.filter((line) => line.includes("(no output)")).length, 1);
 });
 
-test("statusIcon returns the first spinner frame for a non-finite frame", () => {
-	assert.equal(statusIcon("running", Number.NaN), "⠋");
-	assert.equal(statusIcon("running", Number.POSITIVE_INFINITY), "⠋");
-	assert.equal(statusIcon("running", Number.NEGATIVE_INFINITY), "⠋");
+test("stateGlyph returns the first spinner frame for a non-finite frame", () => {
+	assert.equal(stateGlyph({}, "running", Number.NaN), "⠋");
+	assert.equal(stateGlyph({}, "running", Number.POSITIVE_INFINITY), "⠋");
+	assert.equal(stateGlyph({}, "running", Number.NEGATIVE_INFINITY), "⠋");
 });

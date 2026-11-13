@@ -48,7 +48,8 @@ import {
 } from "./sidebar.ts";
 import { clampScrollOffset, windowLines } from "./sidebar-window.ts";
 import { renderSidebarPanel } from "./sidebar-panels.ts";
-import { hasRunningNode, type SidebarTheme } from "./sidebar-render.ts";
+import { hasRunningNode } from "./sidebar-render.ts";
+import type { SidebarTheme } from "./sidebar-theme.ts";
 import type { SidebarSnapshot } from "./sidebar-types.ts";
 import { flattenTree, type TreeNode } from "./tree-model.ts";
 import { treeSignature } from "./tree-signature.ts";

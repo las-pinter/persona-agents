@@ -34,7 +34,7 @@ import {
 	writeSidebarConfig,
 } from "./sidebar.ts";
 import { renderSidebarPanel } from "./sidebar-panels.ts";
-import type { SidebarTheme } from "./sidebar-render.ts";
+import type { SidebarTheme } from "./sidebar-theme.ts";
 import type { SidebarSnapshot } from "./sidebar-types.ts";
 import { makeResizableTerminal, makeTerminal, makeTui } from "./sidebar-terminal-fixtures.ts";
 

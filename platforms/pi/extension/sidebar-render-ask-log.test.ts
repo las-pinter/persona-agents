@@ -7,8 +7,13 @@
 
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { askLogLines, renderAskLogPanel, renderSidebarPanel } from "./sidebar-panels.ts";
-import { LOG_PANEL_LINES, SECTION_RULE_CHAR } from "./sidebar-render.ts";
+import {
+	askLogLines,
+	renderAskLogPanel,
+	renderSidebarPanel,
+	LOG_PANEL_LINES,
+	SECTION_RULE_CHAR,
+} from "./sidebar-panels.ts";
 import {
 	assertFits,
 	makeAskLogRows,

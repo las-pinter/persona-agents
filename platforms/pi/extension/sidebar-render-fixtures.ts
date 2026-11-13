@@ -8,7 +8,7 @@
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AskPhase } from "./ask-record.ts";
-import type { SidebarTheme } from "./sidebar-render.ts";
+import type { SidebarTheme } from "./sidebar-theme.ts";
 import type {
 	AskLogRow,
 	SessionSnapshot,

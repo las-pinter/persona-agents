@@ -9,7 +9,7 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { renderMcpPanel } from "./sidebar-panels.ts";
-import type { SidebarTheme } from "./sidebar-render.ts";
+import type { SidebarTheme } from "./sidebar-theme.ts";
 import type {
 	McpServerSnapshot,
 	McpServerStatus,
