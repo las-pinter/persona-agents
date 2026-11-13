@@ -44,6 +44,7 @@ function shellModel(overrides: Partial<Parameters<typeof buildPromptModel>[0]> =
 		segment,
 		segmentStart: probe.indexOf(segment),
 		reason: REASON,
+		source: "global",
 		isSpanning: false,
 		...overrides,
 	});
@@ -69,6 +70,7 @@ function everyPromptKind(): PromptModel[] {
 			segment: "/etc/hosts",
 			segmentStart: -1,
 			reason: "reading system host files",
+			source: "global",
 			isSpanning: false,
 		}),
 	];
@@ -174,6 +176,7 @@ test("a non-bash tool shows the target and the three shared options", () => {
 		segment: "/etc/hosts",
 		segmentStart: -1,
 		reason: "reading system host files",
+		source: "global",
 		isSpanning: false,
 	});
 	assert.equal(model.kind, "target");
@@ -197,6 +200,7 @@ test("one shell predicate decides the prompt kind", () => {
 			segment: "git status",
 			segmentStart: 0,
 			reason: REASON,
+			source: "global",
 			isSpanning: false,
 		});
 		assert.equal(model.kind, "shell-segment");
@@ -219,7 +223,7 @@ test("a missing reason falls back without leaking the regex", () => {
 	const model = shellModel({ reason: undefined });
 	assert.equal(
 		model.remember,
-		"bash is gated by global policy, and the rule has no written reason of its own",
+		"bash is denied by global policy, and the rule has no written reason of its own",
 	);
 	assert.ok(!JSON.stringify(model).includes(REGEX));
 });

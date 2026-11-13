@@ -150,6 +150,7 @@ function shellModel() {
 		segment,
 		segmentStart: probe.indexOf(segment),
 		reason: "commit requires approval",
+		source: "global",
 		isSpanning: false,
 	});
 }

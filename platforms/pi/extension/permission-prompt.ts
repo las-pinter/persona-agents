@@ -69,12 +69,12 @@ export interface PromptInput {
 	segment: string;
 	/** Real start offset of `segment` in `probe`, or -1 when unknown/spanning. */
 	segmentStart: number;
-	/** The rule's human reason. Never the regex. */
+	/** The rule's human reason as written, trimmed. A reason equal to the regex is dropped. */
 	reason?: string;
 	/** The rule regex, read only to drop a reason that repeats it. Never shown. */
 	match?: string;
-	/** Which policy layer holds the rule. Defaults to the global layer. */
-	source?: "global" | "agent";
+	/** Which policy layer holds the rule. The caller names it. */
+	source: "global" | "agent";
 	/** The agent name, read only when the rule is an agent rule. */
 	agentName?: string | null;
 	/** True when the rule spans the whole command (no single segment matches). */
@@ -126,7 +126,7 @@ export function buildPromptModel(input: PromptInput): PromptModel {
 	// A reason equal to the rule regex is not human text, so the model drops it.
 	const remember =
 		humanReason(input.reason, input.match) ??
-		ruleReasonFallback(input.toolName, input.source ?? "global", input.agentName ?? null);
+		ruleReasonFallback(input.toolName, input.source, input.agentName ?? null);
 	const why = `Why: ${remember}`;
 	const lines: string[] = [];
 	let highlight: { start: number; end: number } | null = null;

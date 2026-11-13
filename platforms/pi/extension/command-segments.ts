@@ -351,7 +351,7 @@ export function ruleReasonFallback(
 	source: "global" | "agent",
 	agentName: string | null,
 ): string {
-	return `${toolName} is gated by ${policyLayer(source, agentName)}, and the rule has no written reason of its own`;
+	return `${toolName} is denied by ${policyLayer(source, agentName)}, and the rule has no written reason of its own`;
 }
 
 /**

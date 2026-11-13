@@ -407,7 +407,7 @@ test("an agent deny reason never embeds the rule regex", () => {
 	assert.ok(!decision.reason.includes(regex), `deny reason leaks the regex: ${decision.reason}`);
 	assert.equal(
 		decision.reason,
-		"bash is gated by test-agent policy, and the rule has no written reason of its own",
+		"bash is denied by test-agent policy, and the rule has no written reason of its own",
 	);
 });
 

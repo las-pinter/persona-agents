@@ -42,6 +42,7 @@ function publishModel(): PromptModel {
 		segment: "git push",
 		segmentStart: 0,
 		reason: REASON,
+		source: "global",
 		isSpanning: false,
 	});
 }
