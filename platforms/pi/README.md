@@ -12,7 +12,9 @@ module below lives in `extension/`, except the shipped table data file):
 | `permission-config.ts` | The layer loader: shipped default, user override, global overlay, layer stamp, fail-closed fence |
 | `permissions.table.ts` | A typed test view of the default rows; the gate never imports it |
 | `permission-class.ts` | The permission vocabulary: the class union, the class list, the role-to-class map, and one membership test for each |
-| `permission-table.ts` | The compiler: row to one anchored pattern, then the five rule sets the engine reads |
+| `permission-table.ts` | The row vocabulary and its validation: the row types, the field sets, the row-fault prefix, and the row checks |
+| `permission-table-pattern.ts` | The row pattern: the shared pattern pieces and the one anchored pattern per row |
+| `permission-table-groups.ts` | The rule sets and the counts: the rows for one class or profession, then the table totals |
 | `permission-prompt.ts` | Ask prompt model and renderer: highlighted panel in TUI mode, plain selector otherwise |
 | `command-segments.ts` | Pure (no pi imports) rule-decision core used by `permissions.ts`; testable under plain Node |
 | `shell-parse.ts` | Pure (no pi imports) shell splitter: one command line to segments, nested sub-commands, the leading `cd` fold, and the fail-closed constructs; testable under plain Node |
@@ -88,7 +90,7 @@ compiler writes the pattern. Translation notes:
 - opencode `action/resource/effect` triples became pi rule rows: one row per
   rule and class, with like-commands combined in one verb list (e.g. all read-only
   git variants, the python/tsc toolchain, the read-only viewers). The row
-  carries words, not a regex; `permission-table.ts` compiles the pattern.
+  carries words, not a regex; `permission-table-pattern.ts` compiles the pattern.
 - opencode's default `ask` for core actions (e.g. `edit` for implementer/tester)
   becomes `allow`: headless subagents block on confirm prompts, so their raison
   d'être would be unusable. `deny` rows keep the hard blocks (push/pull for

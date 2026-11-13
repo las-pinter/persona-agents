@@ -17,16 +17,18 @@ import {
 	FLAG_CLASSES,
 	ROLE_NOTES,
 	TAIL_ONLY_CLASSES,
+	validateRows,
+	type RuleRow,
+} from "./permission-table.ts";
+import {
 	compileClass,
 	compileRole,
 	compileTable,
 	countTable,
 	rowsForClass,
 	rowsForGroup,
-	roleZone,
-	validateRows,
-	type RuleRow,
-} from "./permission-table.ts";
+} from "./permission-table-groups.ts";
+import { roleZone } from "./permission-table-pattern.ts";
 import {
 	PERMISSION_CLASSES,
 	ROLE_CLASS,

@@ -26,7 +26,8 @@ import {
   type ConfigPaths,
   type PermissionConfig,
 } from "./permission-config.ts";
-import { compileClass, compileRole, countTable, type RuleRow } from "./permission-table.ts";
+import type { RuleRow } from "./permission-table.ts";
+import { compileClass, compileRole, countTable } from "./permission-table-groups.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 import { evaluateCommandRules, type RuleSets } from "./command-segments.ts";
 import { readAllEvents } from "./tree-log.ts";

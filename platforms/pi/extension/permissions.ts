@@ -72,8 +72,8 @@ import {
 import {
 	compileClass,
 	compileRole,
-	type RuleRow,
-} from "./permission-table.ts";
+} from "./permission-table-groups.ts";
+import type { RuleRow } from "./permission-table.ts";
 import {
 	PERMISSION_CLASSES,
 	READER_CLASS,

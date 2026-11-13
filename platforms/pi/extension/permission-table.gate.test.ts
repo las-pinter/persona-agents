@@ -15,16 +15,18 @@ import { GIT_DIFF_FAMILY, GIT_READ, RULE_ROWS } from "./permissions.table.ts";
 import {
 	LADDER,
 	PATH_VALUE,
-	ROLE_NOTES,
 	TAIL,
+	isPathValue,
+	roleZone,
+	rulesForRow,
+} from "./permission-table-pattern.ts";
+import { ROLE_NOTES } from "./permission-table.ts";
+import {
 	compileClass,
 	compileRole,
 	compileTable,
-	isPathValue,
-	roleZone,
 	rowsForRole,
-	rulesForRow,
-} from "./permission-table.ts";
+} from "./permission-table-groups.ts";
 import { PERMISSION_CLASSES, type PermissionClass, type Role } from "./permission-class.ts";
 import { FENCED, NARROWED } from "./permission-table.parity.ts";
 import {

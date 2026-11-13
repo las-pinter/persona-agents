@@ -6,7 +6,9 @@
  */
 
 import { evaluateCommandRules, type Decision, type PermissionMode, type RawRule, type RuleSets } from "./command-segments.ts";
-import { compileRole, roleZone, rulesForRow, type RuleRow } from "./permission-table.ts";
+import type { RuleRow } from "./permission-table.ts";
+import { compileRole } from "./permission-table-groups.ts";
+import { roleZone, rulesForRow } from "./permission-table-pattern.ts";
 import type { Role } from "./permission-class.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 

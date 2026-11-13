@@ -31,7 +31,8 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { evaluateCommandRules, type RawRule, type RuleSets } from "./command-segments.ts";
-import { compileRole, type RuleRow } from "./permission-table.ts";
+import type { RuleRow } from "./permission-table.ts";
+import { compileRole } from "./permission-table-groups.ts";
 import type { Role } from "./permission-class.ts";
 import { RULE_ROWS } from "./permissions.table.ts";
 import { CHANGE_RULINGS, DELETIONS, LEGACY, LEGACY_COUNTS, LEGACY_GLOBAL } from "./permission-table.parity.ts";
