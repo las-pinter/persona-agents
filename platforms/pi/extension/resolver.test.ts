@@ -288,6 +288,34 @@ test("a file persona and a theme persona with the same body yield the same confi
 	);
 });
 
+test("a frontmatter description wins over the heading in both layouts", (t) => {
+	const body = [
+		"---",
+		"name: grubnik",
+		"description: A frontmatter line",
+		"---",
+		"",
+		"# Grubnik the Tinkerer",
+		"",
+		"A practical goblin.",
+		"",
+	].join("\n");
+	const { dir, filePath, themePath } = personaRoot(t, body);
+
+	const personas = loadPersonasFromDir(dir);
+	assert.equal(personas.length, 2, `expected two personas, got: ${personas.length}`);
+
+	const filePersona = personas.find((p) => p.filePath === filePath);
+	const themePersona = personas.find((p) => p.filePath === themePath);
+	assert.ok(filePersona, "the bare file persona was not loaded");
+	assert.ok(themePersona, "the theme persona was not loaded");
+
+	assert.equal(filePersona.description, "A frontmatter line", "the bare persona lost its frontmatter description");
+	assert.equal(themePersona.description, "A frontmatter line", "the theme persona lost its frontmatter description");
+	assert.notEqual(filePersona.description, "Grubnik the Tinkerer", "the bare persona used its heading");
+	assert.notEqual(themePersona.description, "Grubnik the Tinkerer", "the theme persona used its heading");
+});
+
 // --- the gate survives a malformed agent file --------------------------------
 
 // An isolated (empty) global permissions file so the live repo file cannot
