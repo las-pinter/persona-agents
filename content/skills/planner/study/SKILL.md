@@ -24,7 +24,7 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 
 - One study folder per feature: `studies/YYYY-MM-DD-<slug>/`.
 - One study document: `studies/YYYY-MM-DD-<slug>/study.md`.
-- There is no quick stage. The **project-notes** skill owns the `status.md`
+- There is no shortcut. The **project-notes** skill owns the `status.md`
   stage rules.
 - Use the `date` command for the date. Use a plain kebab-case slug with no date
   inside it.
@@ -172,7 +172,8 @@ the `studies/index.md` format.
 
 ## Quality Gate
 
-A study is done only when every line is true:
+The planner hands a study over only when every line is true. The orchestrator
+then asks the owner to accept the study.
 
 - [ ] The title and date are set.
 - [ ] The goal states the problem, the users, and the success measures.

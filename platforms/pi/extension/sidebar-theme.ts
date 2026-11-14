@@ -82,13 +82,16 @@ const TREE_MARKS: Record<TreeNodeStatus, GlyphMark> = {
  * The one glyph table. The tree rows spread in first, keyed by the status type;
  * the orphan mark, the study stages, and the MCP dots follow, keyed by name.
  * The keys share one namespace: a study stage word that matches a tree or MCP
- * state borrows that glyph. One glyph is written once.
+ * state borrows that glyph. One glyph is written once. A blocked study paints
+ * no mark, because blocking is a field and not a stage.
  */
 const STATE_MARKS: Record<string, GlyphMark> = {
 	...TREE_MARKS,
 	orphan: { glyph: "?", token: "warning" },
-	active: { glyph: "●", token: "accent" },
-	blocked: { glyph: "⚠", token: "warning" },
+	// The draft mark is a pencil: the planner still writes the study.
+	draft: { glyph: "✎", token: "dim" },
+	ready: { glyph: "◇", token: "accent" },
+	"in-progress": { glyph: "◆", token: "accent" },
 	abandoned: { glyph: "✗", token: "dim" },
 	connected: { glyph: "●", token: "success" },
 	disconnected: { glyph: "○", token: "error" },

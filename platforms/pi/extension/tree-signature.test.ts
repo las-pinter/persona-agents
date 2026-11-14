@@ -27,13 +27,13 @@ test("treeSignature changes for every field the panels paint", () => {
 	const status = (overrides: Partial<StatusSnapshot> = {}) =>
 		makeSnapshot({
 			status: {
-				studies: [{ name: "study-a", stage: "active", briefs: 1, updated: "2026-01-05" }],
+				studies: [{ name: "study-a", stage: "in-progress", briefs: 1, updated: "2026-01-05" }],
 				...overrides,
 			},
 		});
 	const study = (overrides: Partial<StatusSnapshot["studies"][number]>) =>
 		status({
-			studies: [{ name: "study-a", stage: "active", briefs: 1, updated: "2026-01-05", ...overrides }],
+			studies: [{ name: "study-a", stage: "in-progress", briefs: 1, updated: "2026-01-05", ...overrides }],
 		});
 	const askLog = (text: string) =>
 		makeSnapshot({
@@ -79,7 +79,7 @@ test("treeSignature changes for every field the panels paint", () => {
 		],
 		["todos turn marker", makeSnapshot({ todosTurnMarker: false }), makeSnapshot({ todosTurnMarker: true })],
 		["status study name", study({}), study({ name: "study-b" })],
-		["status study stage", study({}), study({ stage: "blocked" })],
+		["status study stage", study({}), study({ stage: "done" })],
 		["status study briefs", study({}), study({ briefs: 2 })],
 		["status study updated", study({}), study({ updated: "2026-01-06" })],
 		["status study list", status(), status({ studies: [] })],

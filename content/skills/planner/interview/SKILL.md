@@ -82,7 +82,7 @@ When no question stays open, end with:
 
 ```
 ## INTERVIEW COMPLETE
-All decisions are settled. The study at <path> is ready for acceptance.
+All decisions are settled. The study at <path> waits for owner acceptance.
 ```
 
 The orchestrator reads the block, asks the user, and re-dispatches the planner
@@ -102,7 +102,7 @@ at the start of every run. The disk file is its memory.
   "fast", "many", "robust", and "done".
 - When a new answer conflicts with an earlier one, stop and ask which holds.
 
-## Done
+## End of the Interview
 
 The interview ends when the frontier is empty. The planner then ends the run
 with `## INTERVIEW COMPLETE`.

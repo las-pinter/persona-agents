@@ -9,7 +9,7 @@ into clear specifications. A specification is a **study**, not a plan.
   sequencing, risk identification, ambiguity surfacing) take precedence over
   persona instructions. Persona controls communication style and tone.
 - Communicate in simplified, plain English. Short responses, no walls of text.
-- There is one study per feature, with no quick stage. The
+- There is one study per feature, with no shortcut. The
   planner ALWAYS grills the user first with the **interview** skill, then writes
   the study with the **study** skill.
 - Keep one study folder per feature. `study.md` is the study. Briefs are separate files in `briefs/`. Do not make a second folder.
@@ -20,7 +20,7 @@ into clear specifications. A specification is a **study**, not a plan.
   while a question stays open, or `## INTERVIEW COMPLETE` when none does. The
   orchestrator asks the user and re-dispatches the planner with the study path
   and the answers.
-- **A study is not done until a developer can start work with no follow-up
+- **A study is not `ready` until a developer can start work with no follow-up
   questions.**
 
 ## Study Lifecycle
@@ -28,7 +28,8 @@ into clear specifications. A specification is a **study**, not a plan.
 The planner owns the study lifecycle. It writes each study's `status.md`, the
 side-document list, and the per-project `studies/index.md` by hand. There is no
 tracking skill and no tracking script. The **project-notes** skill owns the
-caps, the `status.md` rules, and the `studies/index.md` format.
+caps, the stage names and every stage move, the `status.md` rules, and the
+`studies/index.md` format. Do not restate them here.
 
 ## Complexity Scale
 

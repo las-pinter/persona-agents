@@ -67,14 +67,14 @@ the **journal-management-generic** skill for the exact rule and the fallback.
 
 | Path | Owner | When to write |
 |------|-------|---------------|
-| `summary.md` | orchestrator | On significant discovery or user correction. |
-| `features/`, `bugs/`, `tech/` | orchestrator | On significant discovery or user correction. |
+| `summary.md` | orchestrator | On significant discovery or owner correction. |
+| `features/`, `bugs/`, `tech/` | orchestrator | On significant discovery or owner correction. |
 | `releases/` | orchestrator | On each release, one note per version. |
 | `audit/` | orchestrator | On each audit, one note per audit. |
 | `rules/` | orchestrator | On rule create, update, or retire. The planner does not write it. |
 | `studies/index.md` | planner | On study creation and on every stage change. |
 | `studies/legacy_studies/` | orchestrator | When archiving an old study. |
-| `<study>/study.md` | planner | While the study is active. |
+| `<study>/study.md` | planner | On study creation, on every interview round, and when a decision changes. |
 | `<study>/status.md` | planner | On study creation and on every stage change. |
 | `<study>/<side-doc>.md` | planner | When detail must move out of the study. |
 
@@ -129,7 +129,8 @@ session that finds it. It records the reason in one journal line.
 Count the rules files. Count their total lines. Re-read each rule against the
 current tree. Record one journal line per breach, with the measured value and
 the limit. The orchestrator's startup report prints the summary and rule
-limits. The guard is a procedure: no repository test can read a user note tree.
+limits. The guard is a procedure: no repository test can read the notes tree in
+the home folder.
 
 ## Note Structure
 
@@ -176,12 +177,30 @@ No script writes these files. The planner writes them with the `write` and
 `edit` tools. The orchestrator reads them. The write policy leaves them to the
 planner.
 
+A study has five stages: `draft`, `ready`, `in-progress`, `done`, and
+`abandoned`. The stage names what the study is doing, not what the document
+contains.
+
+- **draft** — the planner still writes or revises the study, and the owner has
+  not accepted it.
+- **ready** — the owner accepted the study, and the decisions are settled. The
+  briefs are to be written and executed.
+- **in-progress** — the agents execute briefs for the study.
+- **done** — every brief is closed, and the work the study describes is
+  complete.
+- **abandoned** — the one terminal exception. It may replace any stage at any
+  time.
+
+`blocked` is not a stage. Blocking lives in the `Blocked by` field. The field
+is independent of the stage. A study can be `ready` and blocked at the same
+time.
+
 ### `status.md` format (one per study folder)
 
 ```markdown
 # <Study Title> — Status
 
-- **Stage:** active | done | blocked | abandoned
+- **Stage:** draft | ready | in-progress | done | abandoned
 - **Updated:** YYYY-MM-DD
 - **Owner:** planner
 - **Next action:** <one line>
@@ -192,21 +211,28 @@ planner.
 
 | Date | Stage | Note |
 |------|-------|------|
-| YYYY-MM-DD | active | folder created |
-| YYYY-MM-DD | done | user accepted the study |
+| YYYY-MM-DD | draft | folder created |
+| YYYY-MM-DD | ready | owner accepted the study |
+| YYYY-MM-DD | in-progress | first brief started |
 ```
 
 Rules:
 
 1. Create `status.md` in the same action that creates the study folder. A new
-   study starts at `active`.
-2. Move the stage `active` → `done`. The stage `blocked` or `abandoned` may
-   replace the current stage at any time. A study is `done` only on the user's
-   explicit acceptance.
-3. Append one History row on every stage change.
-4. Update the `Updated` field on every `status.md` write.
-5. List each side document in the `Side documents` field.
-6. Create `status.md` only for new studies. Do not backfill the archived plans.
+   study starts at `draft`.
+2. Move the stage in one order: `draft` → `ready` → `in-progress` → `done`. The
+   owner's acceptance moves the study from `draft` to `ready`. The start of the
+   first brief moves it from `ready` to `in-progress`. The close of the last
+   brief moves it from `in-progress` to `done`. The orchestrator re-dispatches
+   the planner when the first brief starts. It does the same when the last
+   brief closes. The planner writes `status.md`. The stage `abandoned` may
+   replace any stage at any time.
+3. Keep the `Blocked by` field independent of the stage. A study can be `ready`
+   and blocked at the same time.
+4. Append one History row on every stage change.
+5. Update the `Updated` field on every `status.md` write.
+6. List each side document in the `Side documents` field.
+7. Create `status.md` only for new studies. Do not backfill the archived plans.
 
 ### `studies/index.md` format (one per project)
 
@@ -217,7 +243,7 @@ Location: `studies/index.md` inside the project folder.
 
 | Study | Stage | Updated | Path |
 |-------|-------|---------|------|
-| <title> | active | YYYY-MM-DD | `studies/YYYY-MM-DD-<slug>/` |
+| <title> | draft | YYYY-MM-DD | `studies/YYYY-MM-DD-<slug>/` |
 ```
 
 Rules:
@@ -246,14 +272,14 @@ project folder and `summary.md`. Create subfolders only as needed.
 
 - Significant discovery during work → add to "Lessons Learned" or create a
   `tech/` note.
-- User corrects something or gives new info → update the relevant section.
+- Owner corrects something or gives new info → update the relevant section.
 - Architecture changes → update the "Architecture" section.
 
 Do not update on every commit. Read the note, make targeted changes, write the
 file with `write`, and do not expand it unnecessarily.
 
 **Bug and feature completion** — a bug note lives in `bugs/` only while the bug
-is active. When the bug is resolved, remove the note; the journals hold the
+is open. When the bug is resolved, remove the note; the journals hold the
 history. When a feature ships, its note may be removed or consolidated.
 
 ## Integration with Journals

@@ -128,28 +128,28 @@ test("renderStatusPanel paints the empty line for a missing status", () => {
 
 test("renderStatusPanel paints one row per study with glyph, name, brief count, and age", () => {
 	const status: StatusSnapshot = {
-		studies: [{ name: "gate-status-surface", stage: "active", briefs: 4, updated: "2026-01-05" }],
+		studies: [{ name: "gate-status-surface", stage: "draft", briefs: 4, updated: "2026-01-05" }],
 	};
 	const now = Date.parse("2026-01-05T01:00:00.000Z");
 	const lines = renderStatusPanel(status, 80, theme, now);
 	assert.equal(lines[0], " STUDY STATUS ", "the title paints once");
-	assert.equal(lines[1], "● gate-status-surface · 4 · 1h00m");
+	assert.equal(lines[1], "✎ gate-status-surface · 4 · 1h00m");
 	assertFits(renderStatusPanel(status, 20, theme, now), 20);
 });
 
-test("renderStatusPanel tells a blocked study apart with the warning glyph", () => {
+test("renderStatusPanel paints a ready study with its own glyph", () => {
 	const status: StatusSnapshot = {
-		studies: [{ name: "held-study", stage: "blocked", briefs: 0, updated: null }],
+		studies: [{ name: "held-study", stage: "ready", briefs: 0, updated: null }],
 	};
 	const lines = renderStatusPanel(status, 80, theme);
-	assert.equal(lines[1], "⚠ held-study · 0 · -", "a missing value prints the fallback word");
+	assert.equal(lines[1], "◇ held-study · 0 · -", "a missing value prints the fallback word");
 });
 
 test("renderStatusPanel caps the list at four studies and marks the overflow", () => {
 	assert.equal(STUDY_STATUS_SHOWN, 4, "the cap is four studies");
 	const studies = Array.from({ length: 6 }, (_value, index) => ({
 		name: `study-${index}`,
-		stage: "active",
+		stage: "draft",
 		briefs: index,
 		updated: `2026-01-0${index + 1}`,
 	}));
@@ -165,7 +165,7 @@ test("renderStatusPanel caps the list at four studies and marks the overflow", (
 
 test("renderStatusPanel paints no ask row", () => {
 	const status: StatusSnapshot = {
-		studies: [{ name: "alpha", stage: "active", briefs: 1, updated: "2026-01-05" }],
+		studies: [{ name: "alpha", stage: "draft", briefs: 1, updated: "2026-01-05" }],
 	};
 	const lines = renderStatusPanel(status, 80, theme, Date.parse("2026-01-05T00:00:00.000Z"));
 	assert.equal(lines.length, 2, "the header and one study row only");
@@ -342,11 +342,14 @@ test("the column paints all seven panels in order with no height", () => {
 
 // --- the study list inside the composed column -------------------------------
 
+/** The open stages a study row can carry. */
+const OPEN_STAGES = ["draft", "ready", "in-progress"];
+
 /** Study rows in the panel order the data layer produces: newest first. */
 function makeStudies(count: number): StudyRowSnapshot[] {
 	return Array.from({ length: count }, (_value, index) => ({
 		name: `study-${index}`,
-		stage: index === 1 ? "blocked" : "active",
+		stage: OPEN_STAGES[index % OPEN_STAGES.length],
 		briefs: index,
 		updated: `2026-01-0${index + 1}`,
 	}));
