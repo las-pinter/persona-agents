@@ -16,7 +16,8 @@ import { join } from "node:path";
 import type { ExecResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { flushPendingLogEvents, recordAsk, recordLogLine } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
+import { createSidebarData } from "./sidebar-data.ts";
+import { TREE_POLL_MS } from "./sidebar-data-tree.ts";
 
 /** A fake pi: no git output, no MCP server, no tool list. */
 function fakePi(): ExtensionAPI {

@@ -2,11 +2,17 @@
  * Sidebar data collector — impure.
  *
  * Subscribes once to the pi events that keep a `SidebarSnapshot` fresh, owns the
- * tree/MCP/study polls and the TPS sliding window, and unsubscribes on dispose.
- * The git read lives in `git-workspace.ts`; this module owns its poll only. The
- * pure renderers in `sidebar-panels.ts` read the snapshot; this module imports
- * their view TYPES from `sidebar-types.ts` only (never the compositor or the
- * render functions).
+ * shared state, and clears every listener and timer on dispose. The snapshot
+ * areas live in five source modules, one source each: `sidebar-data-session.ts`
+ * (session, TPS, TODOS), `sidebar-data-tree.ts` (tree rows and ask log),
+ * `sidebar-data-git.ts` (workspace fields and git poll), `sidebar-data-mcp.ts`
+ * (MCP list and usage), and `sidebar-data-study.ts` (STUDY STATUS).
+ * `sidebar-data-guard.ts` holds the two error guards. Each source module starts
+ * its own poll; this module calls the starters and clears them in `teardown`.
+ *
+ * The pure renderers in `sidebar-panels.ts` read the snapshot; this module
+ * imports their view TYPES from `sidebar-types.ts` only (never the compositor or
+ * the render functions).
  *
  * Every callback and timer body is wrapped in `try/catch`. Missing data yields a
  * defined default. A bad API call must never crash the TUI.
@@ -15,53 +21,34 @@
  * process's data only. The tree log is the only cross-process source.
  */
 
-import { homedir } from "node:os";
-import { basename, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createAskLog, pendingLogEvents, type AskLog } from "./ask-record.ts";
-import { ENV_TREE_LOG } from "./depth.ts";
+import { createAskLog, type AskLog } from "./ask-record.ts";
+import { createMcpTally, type McpTally } from "./mcp-usage.ts";
+import { guard, guardAsync } from "./sidebar-data-guard.ts";
+import { refreshGit, startGitPoll } from "./sidebar-data-git.ts";
 import {
-	GIT_TIMEOUT_MS,
-	readGitWorkspace,
-	unavailableGitWorkspace,
-	type GitExec,
-	type GitWorkspaceRead,
-} from "./git-workspace.ts";
-import { countMcpTool, createMcpTally, mergeMcpUsage, type McpTally } from "./mcp-usage.ts";
-import { readEvents, type RunEvent } from "./tree-log.ts";
-import { assembleTree } from "./tree-model.ts";
-import { TODOS_EVENT_CHANNEL, reconstructTodosFromEntries } from "./todo-tool.ts";
-import { visibleStudies } from "./study-status.ts";
+	noteRootToolCall,
+	refreshMcpFromDisk,
+	resetMcpUsage,
+	startMcpPoll,
+} from "./sidebar-data-mcp.ts";
 import {
-	isSafeName,
-	readMcpJsonServers,
-	readStudies,
-	resolveMcpJsonPath,
-} from "./sidebar-sources.ts";
+	applyTodoPayload,
+	feedTps,
+	refreshSession,
+	refreshTodosFromEntries,
+	resetOutputTokens,
+} from "./sidebar-data-session.ts";
+import { emptyStatus, refreshStudy, startStudyPoll } from "./sidebar-data-study.ts";
+import { refreshTree, startTreePoll } from "./sidebar-data-tree.ts";
+import { resolveMcpJsonPath } from "./sidebar-sources.ts";
 import type {
-	McpServerSnapshot,
-	McpServerStatus,
 	SessionSnapshot,
 	SidebarSnapshot,
-	StatusSnapshot,
 	WorkspaceFileSnapshot,
 	WorkspaceSnapshot,
 } from "./sidebar-types.ts";
-
-/** Tree-log poll cadence. */
-export const TREE_POLL_MS = 500;
-/** Git poll cadence. One interval drives every git read. */
-export const GIT_POLL_MS = 2000;
-/** MCP poll cadence. */
-export const MCP_POLL_MS = 5000;
-/** Study status poll cadence. */
-export const STUDY_POLL_MS = 5000;
-/** TPS sliding window. */
-export const TPS_WINDOW_MS = 2000;
-/** A running node with no log record for this long is stale. */
-export const STALE_MS = 5 * 60 * 1000;
-// The git timeout belongs to the git read; the poll tests still import it here.
-export { GIT_TIMEOUT_MS } from "./git-workspace.ts";
+import { TODOS_EVENT_CHANNEL } from "./todo-tool.ts";
 
 /** The public handle returned by `createSidebarData`. */
 export interface SidebarData {
@@ -82,8 +69,8 @@ interface TpsSample {
 	tokens: number;
 }
 
-/** Mutable state held inside the `createSidebarData` closure. */
-interface InternalState {
+/** Mutable state the collector holds and passes to the duty modules. */
+export interface InternalState {
 	snapshot: SidebarSnapshot;
 	branch: string | null;
 	changed: string[];
@@ -110,11 +97,9 @@ interface InternalState {
 	seenStudies: Set<string>;
 	unsubs: Array<() => void>;
 	timers: Array<ReturnType<typeof setInterval>>;
-}
-
-/** A fully defined STUDY STATUS snapshot before the first read. */
-function emptyStatus(): StatusSnapshot {
-	return { studies: [] };
+	// Bumped on every subscribe and dispose. A stale unsubscribe must not tear
+	// down a newer subscription.
+	generation: number;
 }
 
 /** A fully defined snapshot before the first event. */
@@ -153,28 +138,6 @@ function emptySnapshot(): SidebarSnapshot {
 	};
 }
 
-/** A raw MCP record. `status` may be absent when only the legacy flag is set. */
-interface McpServerInput {
-	name: string;
-	configured?: boolean;
-	connected?: boolean;
-	status?: McpServerStatus;
-}
-
-/**
- * Resolve one MCP record to one truth: `status`. The legacy `connected` flag is
- * read here only, so a record that carries it alone still gets a status.
- */
-export function normalizeMcpStatus(server: McpServerInput): McpServerSnapshot {
-	const status: McpServerStatus = server.status ?? (server.connected === true ? "connected" : "disconnected");
-	return {
-		name: server.name,
-		configured: server.configured === true,
-		connected: status === "connected",
-		status,
-	};
-}
-
 /** Build the data module. */
 export function createSidebarData(pi: ExtensionAPI): SidebarData {
 	const state: InternalState = {
@@ -195,30 +158,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		seenStudies: new Set<string>(),
 		unsubs: [],
 		timers: [],
+		generation: 0,
 	};
-	// Bumped on every subscribe and dispose. A stale unsubscribe must not tear
-	// down a newer subscription.
-	let generation = 0;
-
-	/** Run a callback and swallow every error. */
-	function guard(fn: () => void): void {
-		try {
-			fn();
-		} catch {
-			/* a panel must never crash pi */
-		}
-	}
-
-	/** Run an async callback and swallow every error. */
-	function guardAsync(fn: () => Promise<void>): void {
-		void (async () => {
-			try {
-				await fn();
-			} catch {
-				/* a panel must never crash pi */
-			}
-		})();
-	}
 
 	/** Subscribe to one pi event. An unknown event is skipped, never fatal. */
 	function onPi(subscribeToEvent: () => () => void): void {
@@ -228,339 +169,6 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		} catch {
 			/* this pi version has no such event; skip it */
 		}
-	}
-
-	/** Push the current git branch, changed list, and file stats into the workspace. */
-	function applyWorkspace(): void {
-		state.snapshot.workspace = {
-			cwd: state.snapshot.workspace.cwd,
-			branch: state.branch,
-			changed: state.changed.slice(),
-			changedCount: state.changedCount,
-			files: state.files.slice(),
-		};
-	}
-
-	/** Run one git command through pi, or `undefined` when pi has no exec. */
-	function gitExec(): GitExec | undefined {
-		if (typeof pi.exec !== "function") return undefined;
-		return (command, args, options) => pi.exec(command, args, options);
-	}
-
-	/** Sum assistant `usage` over a session branch and find the branch start. */
-	function sumBranchUsage(ctx: ExtensionContext): {
-		cost: number;
-		tokensIn: number;
-		tokensOut: number;
-		turns: number;
-		sessionStartMs: number | null;
-	} {
-		try {
-			const entries = ctx.sessionManager.getBranch();
-			let cost = 0;
-			let tokensIn = 0;
-			let tokensOut = 0;
-			let turns = 0;
-			let sessionStartMs: number | null = null;
-			for (const entry of entries) {
-				const parsed = Date.parse(entry.timestamp);
-				if (Number.isFinite(parsed) && (sessionStartMs === null || parsed < sessionStartMs)) {
-					sessionStartMs = parsed;
-				}
-				if (entry.type !== "message") continue;
-				const message = entry.message as {
-					role?: string;
-					usage?: {
-						input?: number;
-						output?: number;
-						cost?: { total?: number };
-					};
-				};
-				if (message?.role !== "assistant") continue;
-				turns += 1;
-				const total = message.usage?.cost?.total;
-				if (typeof total === "number" && Number.isFinite(total)) cost += total;
-				const input = message.usage?.input;
-				if (typeof input === "number" && Number.isFinite(input)) tokensIn += input;
-				const output = message.usage?.output;
-				if (typeof output === "number" && Number.isFinite(output)) tokensOut += output;
-			}
-			return { cost, tokensIn, tokensOut, turns, sessionStartMs };
-		} catch {
-			return { cost: 0, tokensIn: 0, tokensOut: 0, turns: 0, sessionStartMs: null };
-		}
-	}
-
-	/** Recompute the TPS sliding window and write it into the snapshot. */
-	function updateTps(now: number): void {
-		const cutoff = now - TPS_WINDOW_MS;
-		state.tpsSamples = state.tpsSamples.filter((sample) => sample.at >= cutoff);
-		let tps = 0;
-		if (state.tpsSamples.length > 0) {
-			const total = state.tpsSamples.reduce((sum, sample) => sum + sample.tokens, 0);
-			const oldest = state.tpsSamples[0].at;
-			const seconds = Math.max(1, (now - oldest) / 1000);
-			tps = total / seconds;
-		}
-		state.snapshot.tps = tps;
-		state.snapshot.session.tps = tps;
-	}
-
-	/** Read one context into the session snapshot. */
-	function refreshSession(ctx: ExtensionContext): void {
-		const session = { ...state.snapshot.session };
-		try {
-			session.model = ctx.model?.id ?? null;
-		} catch {
-			session.model = null;
-		}
-		session.thinkingLevel = ctx.thinkingLevel ?? null;
-
-		let usage: { tokens: number | null; contextWindow: number; percent: number | null } | undefined;
-		try {
-			usage = ctx.getContextUsage();
-		} catch {
-			usage = undefined;
-		}
-		session.contextTokens = usage?.tokens ?? null;
-		session.contextWindow = usage?.contextWindow ?? null;
-		session.contextPercent = usage?.percent ?? null;
-		const branchUsage = sumBranchUsage(ctx);
-		session.cost = branchUsage.cost;
-		session.tokensIn = branchUsage.tokensIn;
-		session.tokensOut = branchUsage.tokensOut;
-		session.turns = branchUsage.turns;
-		session.sessionStartMs = branchUsage.sessionStartMs;
-
-		state.snapshot.session = session;
-		const cwd = typeof ctx.cwd === "string" ? ctx.cwd : "";
-		// A new directory invalidates the old branch name; the next poll reads it.
-		if (cwd !== state.snapshot.workspace.cwd) state.branch = null;
-		state.snapshot.cwd = cwd;
-		state.snapshot.workspace.cwd = cwd;
-		updateTps(Date.now());
-		applyWorkspace();
-	}
-
-	/** Rebuild the MCP usage map from the root count plus the session tally. */
-	function applyMcpUsage(): void {
-		state.snapshot.mcpUsage = mergeMcpUsage(state.rootMcpUsage, state.mcpTally.usage());
-	}
-
-	/** Adopt the current log as already counted, then zero the session tally. */
-	function resetMcpUsage(): void {
-		const logPath = process.env[ENV_TREE_LOG];
-		if (logPath) {
-			for (const event of readEvents(logPath)) state.mcpTally.observe(event.runId, event.mcpUsage);
-		}
-		state.mcpTally.reset();
-		state.rootMcpUsage = {};
-		state.rootCallIds.clear();
-		applyMcpUsage();
-	}
-
-	/**
-	 * Rebuild the ring from the held lines and the log tail, newest first. A line
-	 * written before the log path existed is held in the writer, so it folds here
-	 * and paints with the first frame of the panel.
-	 */
-	function applyAskLog(events: RunEvent[]): void {
-		state.askLog.reset();
-		for (const event of pendingLogEvents()) state.askLog.observe(event);
-		for (const event of events) state.askLog.observe(event);
-		state.snapshot.askLog = state.askLog.rows().reverse();
-	}
-
-	/** Read the shared tree log into the snapshot. */
-	function refreshTree(): void {
-		const logPath = process.env[ENV_TREE_LOG];
-		if (!logPath) {
-			state.snapshot.tree = [];
-			applyAskLog([]);
-			applyMcpUsage();
-			return;
-		}
-		// readEvents keeps each run's start and end record and the newest clear,
-		// so an old root start keeps its children attached through this refresh.
-		const events = readEvents(logPath);
-		state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
-		for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);
-		applyMcpUsage();
-		// This read returns the whole kept tail, so the ring is rebuilt not appended.
-		applyAskLog(events);
-	}
-
-	/**
-	 * Read the current project's studies and write the STUDY STATUS list. A
-	 * closed study keeps its row for the life of the process, and a restart
-	 * drops it. A missing tree paints the empty list.
-	 */
-	function refreshStudy(): void {
-		const cwd = state.snapshot.cwd || state.snapshot.workspace.cwd;
-		const project = cwd ? basename(cwd) : "";
-		const rows =
-			project && isSafeName(project)
-				? readStudies(join(homedir(), "agent-notes", "project-notes", project, "studies"))
-				: [];
-		state.snapshot.status = {
-			...(state.snapshot.status ?? emptyStatus()),
-			studies: visibleStudies(rows, state.seenStudies),
-		};
-	}
-
-	/** Poll git for the workspace panel. A failure marks it unavailable. */
-	async function refreshGit(): Promise<void> {
-		const myGeneration = generation;
-		const cwd = state.snapshot.workspace.cwd || state.snapshot.cwd;
-		if (!cwd) return;
-		const exec = gitExec();
-		// A pi without exec paints the marker now, not one microtask later.
-		if (!exec) {
-			applyGitRead(unavailableGitWorkspace());
-			return;
-		}
-		const read = await readGitWorkspace(exec, cwd, GIT_TIMEOUT_MS);
-		// dispose() bumps the generation; drop a stale write after the await.
-		if (myGeneration !== generation) return;
-		applyGitRead(read);
-	}
-
-	/** Copy one git read into the workspace fields, then repaint the panel. */
-	function applyGitRead(read: GitWorkspaceRead): void {
-		// An `undefined` name keeps the last one, so the panel does not flicker.
-		if (read.branch !== undefined) state.branch = read.branch;
-		state.changed = read.changed;
-		state.changedCount = read.changedCount;
-		state.files = read.files;
-		applyWorkspace();
-	}
-
-	/** Read `mcp.json` once per refresh, then paint the MCP list from it. */
-	function refreshMcpFromDisk(): void {
-		// A new server must appear without a reload, so the read is per refresh.
-		refreshMcp(readMcpJsonServers(state.mcpJsonPath));
-	}
-
-	/** Refresh the MCP list from one parsed `mcp.json` read and pi's servers. */
-	function refreshMcp(jsonServers: string[]): void {
-		state.mcpJsonServers = jsonServers;
-		const configured = new Set<string>(jsonServers);
-		try {
-			if (typeof pi.getMcpServers === "function") {
-				for (const server of pi.getMcpServers() ?? []) {
-					if (server && typeof server.name === "string") configured.add(server.name);
-				}
-			}
-		} catch {
-			/* keep the configured set from mcp.json */
-		}
-
-		const connected = new Set<string>();
-		// True only when the MCP tool list was read successfully. A missing or
-		// throwing `getAllTools` leaves this false, so a configured server becomes
-		// `unknown` instead of a false `disconnected`.
-		let toolsReadable = false;
-		try {
-			if (typeof pi.getAllTools === "function") {
-				const tools = pi.getAllTools();
-				// Only an array carries tool entries. A bare string would iterate its
-				// characters and wrongly turn `unknown` into `disconnected`.
-				if (Array.isArray(tools)) {
-					for (const tool of tools) {
-						const match = /^mcp__(.+?)__/.exec(tool?.name ?? "");
-						if (match) connected.add(match[1]);
-					}
-					toolsReadable = true;
-				}
-			}
-		} catch {
-			/* the tool list is unavailable; every configured server is unknown */
-		}
-
-		state.snapshot.mcp = [...configured].sort().map((name) => {
-			// pi sanitizes non `[A-Za-z0-9_]` characters in a tool name to `_`, so
-			// `my-server` appears as `my_server`. Match the raw name first, then the
-			// sanitized name, so a connected server is not painted red.
-			const sanitized = name.replace(/[^A-Za-z0-9_]/g, "_");
-			const isConnected = toolsReadable && (connected.has(name) || connected.has(sanitized));
-			const status: McpServerStatus = !toolsReadable
-				? "unknown"
-				: isConnected
-					? "connected"
-					: "disconnected";
-			return normalizeMcpStatus({ name, configured: true, status });
-		});
-	}
-
-	/** Apply one `persona-agents/todos/v1` payload. Bad data is ignored. */
-	function applyTodoPayload(data: unknown): void {
-		if (typeof data !== "object" || data === null) return;
-		const payload = data as { todos?: unknown; nextId?: unknown; showTurnMarker?: unknown };
-		if (!Array.isArray(payload.todos)) return;
-		const todos: Array<{ id: string; text: string; done: boolean }> = [];
-		for (const item of payload.todos) {
-			if (typeof item !== "object" || item === null) continue;
-			const candidate = item as { id?: unknown; text?: unknown; done?: unknown };
-			if (candidate.id === undefined || candidate.text === undefined) continue;
-			todos.push({
-				id: String(candidate.id),
-				text: String(candidate.text),
-				done: candidate.done === true,
-			});
-		}
-		state.snapshot.todos = todos;
-		state.snapshot.todosTurnMarker = payload.showTurnMarker === true;
-		if (typeof payload.nextId === "number" && Number.isFinite(payload.nextId)) {
-			state.todosNextId = payload.nextId;
-		}
-	}
-
-	/** Rebuild TODOS from session entries, for `/reload` and resume. */
-	function refreshTodosFromEntries(ctx: ExtensionContext): void {
-		try {
-			const reconstructed = reconstructTodosFromEntries(ctx.sessionManager.getBranch());
-			state.snapshot.todos = reconstructed.todos.map((todo) => ({
-				id: todo.id,
-				text: todo.text,
-				done: todo.done,
-			}));
-			state.snapshot.todosTurnMarker = reconstructed.showTurnMarker;
-			state.todosNextId = reconstructed.nextId;
-		} catch {
-			state.snapshot.todos = [];
-			state.snapshot.todosTurnMarker = false;
-		}
-	}
-
-	/** Feed one `message_update` into the TPS window. */
-	function feedTps(event: { assistantMessageEvent?: unknown }): void {
-		const evt = event?.assistantMessageEvent as
-			| { type?: string; delta?: unknown; partial?: { usage?: { output?: unknown } } }
-			| undefined;
-		let deltaTokens = 0;
-		const output = evt?.partial?.usage?.output;
-		if (typeof output === "number" && Number.isFinite(output)) {
-			const diff = output - state.lastOutputTokens;
-			if (diff > 0) {
-				deltaTokens = diff;
-				state.lastOutputTokens = output;
-			}
-		}
-		if (deltaTokens === 0) {
-			// Char/4 fallback when usage is absent or not yet streaming.
-			if (
-				(evt?.type === "text_delta" ||
-					evt?.type === "thinking_delta" ||
-					evt?.type === "toolcall_delta") &&
-				typeof evt.delta === "string"
-			) {
-				deltaTokens = evt.delta.length / 4;
-			}
-		}
-		if (deltaTokens > 0) {
-			state.tpsSamples.push({ at: Date.now(), tokens: deltaTokens });
-		}
-		updateTps(Date.now());
 	}
 
 	/** Clear every timer and unsubscribe every listener. */
@@ -586,103 +194,112 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 	/** Register the pi listeners and start the polls. Idempotent. */
 	function subscribe(ctx: ExtensionContext): () => void {
 		teardown();
-		const myGeneration = (generation += 1);
+		const myGeneration = (state.generation += 1);
 
 		// Initial reads so the first paint has real data.
-		resetMcpUsage();
-		guard(() => refreshSession(ctx));
-		guard(() => refreshTodosFromEntries(ctx));
-		guard(() => refreshMcpFromDisk());
-		guard(() => refreshTree());
-		guard(() => refreshStudy());
-		guardAsync(() => refreshGit());
+		resetMcpUsage(state);
+		guard(() => refreshSession(state, ctx));
+		guard(() => refreshTodosFromEntries(state, ctx));
+		guard(() => refreshMcpFromDisk(state, pi));
+		guard(() => refreshTree(state));
+		guard(() => refreshStudy(state));
+		guardAsync(() => refreshGit(state, pi));
 
 		// Session freshness. One listener per event; a missing event is skipped.
 		onPi(() =>
 			pi.on("session_start", (_event, eventCtx) =>
 				guard(() => {
 					// A new session zeroes the tally; the current log counts as seen.
-					resetMcpUsage();
-					refreshTodosFromEntries(eventCtx);
-					refreshSession(eventCtx);
+					resetMcpUsage(state);
+					refreshTodosFromEntries(state, eventCtx);
+					refreshSession(state, eventCtx);
 				}),
 			),
 		);
 		onPi(() =>
-			pi.on("session_info_changed", (_event, eventCtx) => guard(() => refreshSession(eventCtx))),
+			pi.on("session_info_changed", (_event, eventCtx) =>
+				guard(() => refreshSession(state, eventCtx)),
+			),
 		);
 		onPi(() =>
 			pi.on("session_tree", (_event, eventCtx) =>
-				guard(() => refreshTodosFromEntries(eventCtx)),
+				guard(() => refreshTodosFromEntries(state, eventCtx)),
 			),
 		);
 		onPi(() =>
-			pi.on("model_select", (_event, eventCtx) => guard(() => refreshSession(eventCtx))),
+			pi.on("model_select", (_event, eventCtx) => guard(() => refreshSession(state, eventCtx))),
 		);
 		onPi(() =>
 			pi.on("thinking_level_select", (_event, eventCtx) =>
-				guard(() => refreshSession(eventCtx)),
+				guard(() => refreshSession(state, eventCtx)),
 			),
 		);
-		onPi(() => pi.on("turn_start", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
-		onPi(() => pi.on("turn_end", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
+		onPi(() =>
+			pi.on("turn_start", (_event, eventCtx) => guard(() => refreshSession(state, eventCtx))),
+		);
+		onPi(() =>
+			pi.on("turn_end", (_event, eventCtx) => guard(() => refreshSession(state, eventCtx))),
+		);
 		onPi(() =>
 			pi.on("message_start", (_event, eventCtx) =>
 				guard(() => {
-					state.lastOutputTokens = 0;
-					refreshSession(eventCtx);
+					resetOutputTokens(state);
+					refreshSession(state, eventCtx);
 				}),
 			),
 		);
 		onPi(() =>
-			pi.on("message_update", (event, _eventCtx) => guard(() => feedTps(event))),
+			pi.on("message_update", (event, _eventCtx) => guard(() => feedTps(state, event))),
 		);
-		onPi(() => pi.on("message_end", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
-		onPi(() => pi.on("agent_start", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
-		onPi(() => pi.on("agent_end", (_event, eventCtx) => guard(() => refreshSession(eventCtx))));
+		onPi(() =>
+			pi.on("message_end", (_event, eventCtx) => guard(() => refreshSession(state, eventCtx))),
+		);
+		onPi(() =>
+			pi.on("agent_start", (_event, eventCtx) => guard(() => refreshSession(state, eventCtx))),
+		);
+		onPi(() =>
+			pi.on("agent_end", (_event, eventCtx) => guard(() => refreshSession(state, eventCtx))),
+		);
 		onPi(() =>
 			pi.on("tool_execution_start", (event, eventCtx) =>
 				guard(() => {
-					if (typeof event.toolCallId === "string") {
-						if (state.rootCallIds.has(event.toolCallId)) return;
-						state.rootCallIds.add(event.toolCallId);
-					}
-					state.rootMcpUsage = countMcpTool(state.rootMcpUsage, event.toolName);
-					applyMcpUsage();
-					refreshSession(eventCtx);
+					// A repeated call id counts once; the refresh stays skipped.
+					if (noteRootToolCall(state, event)) refreshSession(state, eventCtx);
 				}),
 			),
 		);
 		onPi(() =>
 			pi.on("tool_execution_update", (_event, eventCtx) =>
-				guard(() => refreshSession(eventCtx)),
+				guard(() => refreshSession(state, eventCtx)),
 			),
 		);
 		onPi(() =>
-			pi.on("tool_execution_end", (_event, eventCtx) => guard(() => refreshSession(eventCtx))),
+			pi.on("tool_execution_end", (_event, eventCtx) =>
+				guard(() => refreshSession(state, eventCtx)),
+			),
 		);
 		onPi(() =>
-			pi.on("mcp_servers_change", () => guard(() => refreshMcpFromDisk())),
+			pi.on("mcp_servers_change", () => guard(() => refreshMcpFromDisk(state, pi))),
 		);
 
 		// TODOS channel: process-local. A bad payload is ignored.
 		try {
 			const unsub = pi.events.on(TODOS_EVENT_CHANNEL, (data) =>
-				guard(() => applyTodoPayload(data)),
+				guard(() => applyTodoPayload(state, data)),
 			);
 			if (typeof unsub === "function") state.unsubs.push(unsub);
 		} catch {
 			/* the event bus is unavailable; TODOS stays empty */
 		}
 
-		// Polls. Each body is guarded.
-		state.timers.push(setInterval(() => guard(() => refreshTree()), TREE_POLL_MS));
-		state.timers.push(setInterval(() => guardAsync(() => refreshGit()), GIT_POLL_MS));
-		state.timers.push(setInterval(() => guard(() => refreshMcpFromDisk()), MCP_POLL_MS));
-		state.timers.push(setInterval(() => guard(() => refreshStudy()), STUDY_POLL_MS));
+		// Polls. One timer per source module; each body is guarded there.
+		startTreePoll(state);
+		startGitPoll(state, pi);
+		startMcpPoll(state, pi);
+		startStudyPoll(state);
 
 		return () => {
-			if (myGeneration === generation) teardown();
+			if (myGeneration === state.generation) teardown();
 		};
 	}
 
@@ -691,7 +308,7 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		snapshot: () => ({ ...state.snapshot }),
 		subscribe,
 		dispose: () => {
-			generation += 1;
+			state.generation += 1;
 			teardown();
 		},
 	};

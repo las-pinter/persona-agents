@@ -9,7 +9,8 @@ import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { STUDY_POLL_MS, createSidebarData } from "./sidebar-data.ts";
+import { createSidebarData } from "./sidebar-data.ts";
+import { STUDY_POLL_MS } from "./sidebar-data-study.ts";
 import {
 	NOTES_STUDIES,
 	makeFakeCtx,

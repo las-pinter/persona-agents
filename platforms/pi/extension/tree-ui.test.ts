@@ -21,7 +21,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
 import { SIDEBAR_DEFAULT_WIDTH, getSidebarCompositor } from "./sidebar.ts";
-import { GIT_POLL_MS, GIT_TIMEOUT_MS, TREE_POLL_MS } from "./sidebar-data.ts";
+import { GIT_TIMEOUT_MS } from "./git-workspace.ts";
+import { GIT_POLL_MS } from "./sidebar-data-git.ts";
+import { TREE_POLL_MS } from "./sidebar-data-tree.ts";
 import { ASK_FRAME_ROWS, MAX_ASK_VIEW_ROWS, TreeOverlayComponent } from "./overlays.ts";
 import {
 	RPC_MAX_LINES,

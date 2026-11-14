@@ -30,11 +30,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key, type Component, type KeyId, type TUI } from "@earendil-works/pi-tui";
 import { AskLogOverlayComponent, NodeDetailComponent, TreeOverlayComponent } from "./overlays.ts";
-import {
-	TREE_POLL_MS,
-	createSidebarData,
-	type SidebarData,
-} from "./sidebar-data.ts";
+import { createSidebarData, type SidebarData } from "./sidebar-data.ts";
+import { TREE_POLL_MS } from "./sidebar-data-tree.ts";
 import {
 	SIDEBAR_DEFAULT_ROWS,
 	SIDEBAR_DEFAULT_WIDTH,

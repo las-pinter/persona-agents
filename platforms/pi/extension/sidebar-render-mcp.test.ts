@@ -16,7 +16,7 @@ import type {
 	McpSnapshot,
 	SidebarSnapshot,
 } from "./sidebar-types.ts";
-import { normalizeMcpStatus } from "./sidebar-data.ts";
+import { normalizeMcpStatus } from "./sidebar-data-mcp.ts";
 import {
 	countMcpTool,
 	createMcpTally,

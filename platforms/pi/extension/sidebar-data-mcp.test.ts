@@ -10,7 +10,9 @@ import * as assert from "node:assert/strict";
 import { syncBuiltinESMExports } from "node:module";
 import fs from "node:fs";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { MCP_POLL_MS, TREE_POLL_MS, createSidebarData } from "./sidebar-data.ts";
+import { createSidebarData } from "./sidebar-data.ts";
+import { MCP_POLL_MS } from "./sidebar-data-mcp.ts";
+import { TREE_POLL_MS } from "./sidebar-data-tree.ts";
 import {
 	makeCapturingPi,
 	makeFakeCtx,
