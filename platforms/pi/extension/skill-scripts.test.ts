@@ -21,7 +21,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { discoverSkills, matchSkills, skillScriptsDirs } from "./skill-discovery.ts";
+import { discoverSkills, matchSkills, skillScriptsDirs, type SkillRef } from "./skill-discovery.ts";
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import {
 	allSegmentsAreSkillScripts,
@@ -355,6 +355,31 @@ describe("skill scripts: real repo integration", () => {
 			),
 			false,
 		);
+	});
+});
+
+describe("skill scripts: shared scripts dir dedupe on the temp root", () => {
+	test("two skills that share one real scripts dir yield one entry", () => {
+		const alphaDir = path.join(tmpRoot, "skills", "dedupe-alpha");
+		const betaDir = path.join(tmpRoot, "skills", "dedupe-beta");
+		fs.mkdirSync(alphaDir, { recursive: true });
+		fs.mkdirSync(betaDir, { recursive: true });
+		const alphaScripts = path.join(alphaDir, "scripts");
+		fs.mkdirSync(alphaScripts);
+		fs.writeFileSync(path.join(alphaScripts, "alpha.sh"), "#!/bin/sh\nexit 0\n");
+		fs.symlinkSync(alphaScripts, path.join(betaDir, "scripts"));
+		assert.equal(
+			fs.realpathSync(path.join(betaDir, "scripts")),
+			fs.realpathSync(alphaScripts),
+			"the beta scripts symlink must resolve to alpha's scripts dir",
+		);
+		const skills: SkillRef[] = [
+			{ name: "dedupe-alpha", path: path.join(alphaDir, "SKILL.md"), body: "" },
+			{ name: "dedupe-beta", path: path.join(betaDir, "SKILL.md"), body: "" },
+		];
+		const resolved = skillScriptsDirs(skills);
+		assert.equal(resolved.length, 1, resolved.join(", "));
+		assert.equal(resolved[0], fs.realpathSync(alphaScripts));
 	});
 });
 
