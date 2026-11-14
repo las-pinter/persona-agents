@@ -402,7 +402,11 @@ fs.writeFileSync(isolatedGlobalFile, JSON.stringify({ deny: [], ask: [] }));
 process.env.PI_PERMISSIONS_FILE = isolatedGlobalFile;
 
 type ToolCallEvent = { toolName: string; input: Record<string, unknown> };
-type ToolCallContext = { cwd: string; hasUI: boolean };
+type ToolCallContext = {
+	cwd: string;
+	hasUI: boolean;
+	ui?: { select(title: string, options: string[]): Promise<string | undefined> };
+};
 type ToolCallResult = { block?: boolean; reason?: string } | undefined;
 type ToolCallHandler = (
 	event: ToolCallEvent,
@@ -410,7 +414,11 @@ type ToolCallHandler = (
 ) => ToolCallResult | Promise<ToolCallResult>;
 
 /** Install the real gate and return its captured `tool_call` handler. */
-function installGateHandler(allow: PermissionRule[], deny: PermissionRule[] = []): ToolCallHandler {
+function installGateHandler(
+	allow: PermissionRule[],
+	deny: PermissionRule[] = [],
+	ask: PermissionRule[] = [],
+): ToolCallHandler {
 	let captured: ToolCallHandler | null = null;
 	const pi = {
 		on(name: string, handler: ToolCallHandler): void {
@@ -434,7 +442,7 @@ function installGateHandler(allow: PermissionRule[], deny: PermissionRule[] = []
 			globalDeny: [],
 			agentDeny: deny,
 			globalAsk: [],
-			agentAsk: [],
+			agentAsk: ask,
 			agentAllow: allow,
 		},
 		mode: "deny-by-default",
@@ -523,5 +531,28 @@ describe("skill scripts: real gate handler", () => {
 		const handler = installGateHandler([gitAllow], [{ tool: "bash", match: "\\brm\\s+-rf\\b" }]);
 		const result = await runHandler(handler, `rm -rf /tmp/x && bash ${realFixtureList}`);
 		assert.equal(result?.block, true, JSON.stringify(result));
+	});
+
+	test("an approved segment carries a mixed command past the skill-script rescue", async () => {
+		const handler = installGateHandler([gitAllow, mkdirAllow], [], [
+			{ tool: "bash", match: "^printf\\b" },
+			{ tool: "bash", match: "^printf\\s+hi$" },
+		]);
+		const prompts: string[] = [];
+		const result = await handler(
+			{ toolName: "bash", input: { command: `printf hi && bash ${realFixtureList}` } },
+			{
+				cwd: fixtureRoot,
+				hasUI: true,
+				ui: {
+					async select(title: string): Promise<string | undefined> {
+						prompts.push(title);
+						return "Always allow this rule (session)";
+					},
+				},
+			},
+		);
+		assert.notEqual(result?.block, true, JSON.stringify(result));
+		assert.equal(prompts.length, 1);
 	});
 });

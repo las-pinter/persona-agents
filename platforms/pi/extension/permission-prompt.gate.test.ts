@@ -215,6 +215,32 @@ test("a spanning always-allow that covers only part of the command runs once the
 	assert.equal(prompts.length, 1, "the remembered rule suppresses the spanning ask");
 });
 
+test("an approved segment carries a mixed command past a second ask rule", async () => {
+	const { handler } = installGate({
+		mode: "deny-by-default",
+		ask: [
+			{ tool: "bash", match: "foo\\s*&&\\s*bar" },
+			{ tool: "bash", match: "^foo\\b" },
+			{ tool: "bash", match: "\\bfoo\\b" },
+			{ tool: "bash", match: "^baz\\b" },
+		],
+		allow: [{ tool: "bash", match: "^bar\\b" }],
+	});
+	const prompts: string[] = [];
+	const ctx = selectContextQueue(
+		["Always allow this rule (session)", "Always allow this rule (session)", "Allow once"],
+		prompts,
+	);
+
+	const first = await handler({ toolName: "bash", input: { command: "foo && bar && baz" } }, ctx);
+	const second = await handler({ toolName: "bash", input: { command: "foo && bar && baz" } }, ctx);
+
+	assert.equal(first, undefined);
+	assert.equal(second, undefined);
+	assert.equal(prompts.length, 3, "the approved set keeps the re-run at three prompts");
+	assert.ok(prompts[2].includes("[baz]"), `the last prompt must highlight baz: ${prompts[2]}`);
+});
+
 test("a target always-allow runs now and is remembered", async () => {
 	const { handler } = installGate({
 		mode: "allow-unless-matched",
