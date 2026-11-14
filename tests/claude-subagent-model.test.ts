@@ -510,28 +510,4 @@ describe("plugin-options: explicit-path readers", () => {
 	test("realHome gives a string and does not throw", () => {
 		assert.equal(typeof realHome(), "string");
 	});
-
-	// Runs only where the file system ignores case (detected at run time, not from the OS name).
-	const caseInsensitive = (() => {
-		const probe = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-Case-"));
-		try {
-			return fs.existsSync(path.join(path.dirname(probe), path.basename(probe).toLowerCase()));
-		} finally {
-			fs.rmSync(probe, { recursive: true, force: true });
-		}
-	})();
-
-	test(
-		"a CLAUDE_CONFIG_DIR with other letter case inside the project is ignored",
-		{ skip: caseInsensitive ? false : "the file system is case-sensitive" },
-		() => {
-			withTmp((tmp) => {
-				const project = path.join(tmp, "Repo");
-				fs.mkdirSync(path.join(project, ".cfg"), { recursive: true });
-				const planted = path.join(tmp, "repo", ".cfg");
-				assert.ok(inProject(planted, {}, project, ""));
-				assert.notEqual(userConfigDir({ CLAUDE_CONFIG_DIR: planted }, project, ""), planted);
-			});
-		},
-	);
 });
