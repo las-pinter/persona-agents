@@ -188,12 +188,11 @@ contains.
 - **in-progress** — the agents execute briefs for the study.
 - **done** — every brief is closed, and the work the study describes is
   complete.
-- **abandoned** — the one terminal exception. It may replace any stage at any
+- **abandoned** — the owner stopped the study. It may replace any stage at any
   time.
 
-`blocked` is not a stage. Blocking lives in the `Blocked by` field. The field
-is independent of the stage. A study can be `ready` and blocked at the same
-time.
+`blocked` is not a stage. Blocking lives in the `Blocked by` field, which is
+independent of the stage. A study can be `ready` and blocked at the same time.
 
 ### `status.md` format (one per study folder)
 
@@ -220,15 +219,18 @@ Rules:
 
 1. Create `status.md` in the same action that creates the study folder. A new
    study starts at `draft`.
-2. Move the stage in one order: `draft` → `ready` → `in-progress` → `done`. The
-   owner's acceptance moves the study from `draft` to `ready`. The start of the
-   first brief moves it from `ready` to `in-progress`. The close of the last
+2. Move the stage in order: `draft` → `ready` → `in-progress` → `done`. The
+   owner's acceptance moves it from `draft` to `ready`. The start of the next
+   open brief moves it from `ready` to `in-progress`. On a reopened study, that
+   is the next open brief that starts after the reopen. The close of the last
    brief moves it from `in-progress` to `done`. The orchestrator re-dispatches
-   the planner when the first brief starts. It does the same when the last
-   brief closes. The planner writes `status.md`. The stage `abandoned` may
-   replace any stage at any time.
-3. Keep the `Blocked by` field independent of the stage. A study can be `ready`
-   and blocked at the same time.
+   the planner on every stage move, including the reopen. The planner writes
+   `status.md`. The stage `abandoned` may replace any stage at any time.
+3. Reopen a `done` or `abandoned` study to `ready` when the owner orders more
+   work on it. This is the only edge into a closed stage's past, and it lands
+   on `ready` alone. The normal order then carries the study forward. The
+   reopen writes one History row that quotes the owner's reason. It also
+   rewrites the `Next action` field.
 4. Append one History row on every stage change.
 5. Update the `Updated` field on every `status.md` write.
 6. List each side document in the `Side documents` field.

@@ -24,8 +24,8 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 
 - One study folder per feature: `studies/YYYY-MM-DD-<slug>/`.
 - One study document: `studies/YYYY-MM-DD-<slug>/study.md`.
-- There is no shortcut. The **project-notes** skill owns the `status.md`
-  stage rules.
+- The **project-notes** skill owns the `status.md` stage rules, including the
+  reopen.
 - Use the `date` command for the date. Use a plain kebab-case slug with no date
   inside it.
 

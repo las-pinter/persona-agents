@@ -83,6 +83,9 @@ verdict.
   study path and the acceptance. The **project-notes** skill owns the
   `status.md` stage rules.
 - If the user does not accept, re-dispatch the planner with the user's changes.
+- If the user orders more work on a `done` or `abandoned` study, re-dispatch
+  the planner to record the reopen. The planner stays the only writer of
+  `status.md`. The **project-notes** skill owns the reopen rule.
 - Never let a planner block waiting for input.
 
 ## Relaying Subagent Results

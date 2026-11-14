@@ -108,7 +108,7 @@ The interview ends when the frontier is empty. The planner then ends the run
 with `## INTERVIEW COMPLETE`.
 
 Study acceptance is a separate, later step. The **project-notes** skill owns the
-`status.md` stage rules.
+`status.md` stage rules and the reopen.
 
 ## Self-Check
 
