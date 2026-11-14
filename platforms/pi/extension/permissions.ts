@@ -27,28 +27,13 @@
  *
  * `installPermissionGate` compiles the table once at factory time; the returned
  * factory never builds a pattern per call. `gate-call.ts` owns one call: the
- * caller checks, the verdict order, the ask path, and the one retry step.
+ * caller checks, the verdict order, and the one retry step.
  *
- * Ask rows prompt with plain-language options (`permission-prompt.ts`). A root
- * session renders its own ask inline. A child session has no UI, so it enqueues
- * the request on the root queue (`child-ask.ts`), and the root renders one
- * prompt at a time on the surface the root gate captured. The grant key carries
- * the session id, so a child answer stays with its own session. Every tool shows
- * the same three choices:
- *   - Allow once                       → grant THIS single call
- *   - Always allow this rule (session) → remember the rule for the session
- *                                        (session|role|tool|rule key, in-memory
- *                                        only, nothing persisted to disk)
- *   - Deny                             → block this call ("Denied by user")
- * A shell segment also approves the matching segment and re-evaluates the
- * remaining segments. A spanning rule runs the whole call once and approves no
- * segment. The prompt shows the full command, highlights the blocked part, and
- * shows the rule's human `reason`, never a pattern.
+ * `gate-call.ts` states the ask path. `permission-prompt.ts` owns the three
+ * choice labels and the prompt text.
  *
  * Compound shell commands are split into segments by `shell-parse.ts`; every
  * segment must pass. `command-segments.ts` owns the decision core.
- * Headless runs (no UI) treat ask as a hard block — undefined (no prompt) never
- * auto-allows.
  *
  * The overlay file `~/.pi/agent/permissions.json` keeps the shape
  *   { "deny": [ { "tool": "bash", "match": "...", "reason": "..." } ], "ask": [ ... ] }

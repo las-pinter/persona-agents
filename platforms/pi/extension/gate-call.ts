@@ -2,9 +2,14 @@
  * One tool call for the pi permission gate.
  *
  * `permissions.ts` owns the compiled rule sources and the install wiring. This
- * module owns one call: the caller checks, the verdict order, the ask path, and
- * the single approve-and-retry step both ask paths share. The verdict order is
- * fixed: deny, ask, allow, the skill-script rescue, then the mode default.
+ * module owns one call: the caller checks, the verdict order, the ask branch,
+ * and the single approve-and-retry step both ask paths share. The verdict order
+ * is fixed: deny, ask, allow, the skill-script rescue, then the mode default.
+ *
+ * This module decides the ask branch: a root renders inline, a child goes to
+ * the root queue that child-ask.ts owns. The grant key, kept in memory, is
+ * described in child-ask.ts. permission-prompt.ts owns the prompt text and
+ * the three labels.
  */
 
 import type { ExtensionContext, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
@@ -53,7 +58,6 @@ export interface GateCallInput {
 }
 
 /**
- * The grant key. One answer covers one session, role, tool, and rule.
  * A key that lacks one part would lend the grant to a sibling or the root.
  */
 function grantKey(sessionId: string, role: string, toolName: string, ruleId: string): string {
@@ -95,10 +99,8 @@ function childAgentOf(record: Readonly<RunRecord>): AgentConfig {
 	};
 }
 
-/**
- * Approve the matched segment and evaluate the rest of the call again. A
- * spanning ask approves no segment, so the call runs now.
- */
+/** Add the approved segment, then re-evaluate the rest. A spanning ask runs the
+ * whole call now. */
 function retryAfterApproval(args: {
 	approvedSegments: Set<number>;
 	evaluateRound: () => Promise<ToolCallEventResult | undefined>;
@@ -180,8 +182,7 @@ export async function evaluateCall(call: GateCallInput): Promise<ToolCallEventRe
 	// User-approved segments ("Always allow" on a segment) for THIS call.
 	const approvedSegments = new Set<number>();
 
-	// Resolve asks round by round: a segment "Always allow" approves exactly
-	// one segment, then the remaining segments are re-evaluated.
+	// Re-evaluate after each segment approval, so a later ask can still fire.
 	const evaluateRound = async (): Promise<ToolCallEventResult | undefined> => {
 		const decision = evaluateCommandRules(probe, isShell, ruleSets, mode, toolName, agent?.name ?? null, {
 			approvedSegmentIndices: approvedSegments,
@@ -231,10 +232,8 @@ export async function evaluateCall(call: GateCallInput): Promise<ToolCallEventRe
 			isSpanning: decision.segmentIndex === -1,
 		});
 
-		// A child ask has no UI of its own, so it goes to the root queue and waits
-		// for the owner. The captured root surface renders the shared prompt, and
-		// the answer becomes the child verdict. Depth 0 is the caller itself, so a
-		// root ask stays on the inline path below.
+		// A child ask goes to the root queue. Depth 0 is this caller, so a root
+		// ask stays on the inline path below.
 		if (routing && record && sessionId && depth !== 0) {
 			const outcome = await routing.enqueue({
 				sessionId,
@@ -257,7 +256,7 @@ export async function evaluateCall(call: GateCallInput): Promise<ToolCallEventRe
 		}
 
 		if (!ctx.hasUI) {
-			// Fail closed. The label is stable and never the rule regex.
+			// Fail closed; the label is stable and never the rule regex.
 			return {
 				block: true,
 				reason: blockedLabel(toolName, decision.source, agent?.name ?? null, rule.reason, rule.match),
