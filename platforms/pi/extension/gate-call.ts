@@ -25,8 +25,9 @@ import { sessionIdOf } from "./session-id.ts";
 import type { GateRuleSourceFactory } from "./permissions.ts";
 
 /**
- * The structural rescue `permissions.ts` hands in: it is exported and tested
- * there, so the gate call receives it rather than importing it back.
+ * The structural rescue `permissions.ts` hands in: it is exported and tested in
+ * `skill-script-rescue.ts`, so the gate call receives it rather than importing
+ * it back.
  */
 export type SkillScriptRescue = (
 	command: string,

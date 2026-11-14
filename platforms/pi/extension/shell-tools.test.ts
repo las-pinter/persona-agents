@@ -48,7 +48,7 @@ const EXEMPT: readonly Exemption[] = [
 	{ file: "permission-table.ts", lines: "384", reason: "the row refusal for a bash row" },
 	{ file: "permission-table.parity.ts", lines: "77 to 100", reason: "the legacy row ledger of shipped patterns" },
 	{ file: "permission-table.test-helpers.ts", lines: "141, 155", reason: "the test path's row keys" },
-	{ file: "permissions.ts", lines: "94", reason: "names the script interpreter program, not a tool" },
+	{ file: "skill-script-rescue.ts", lines: "20", reason: "names the script interpreter program, not a tool" },
 	{ file: "gate-child-ask-fixture.ts", lines: "166, 167, 171, 260, 266, 270", reason: "child ask test data" },
 	{ file: "tree-ui-fixtures.ts", lines: "154", reason: "tree render test data" },
 	{ file: "subagent-render-fixtures.ts", lines: "105", reason: "subagent render test data" },

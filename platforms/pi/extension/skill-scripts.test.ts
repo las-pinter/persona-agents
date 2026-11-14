@@ -25,9 +25,9 @@ import { discoverSkills, matchSkills, skillScriptsDirs, type SkillRef } from "./
 import type { AgentConfig, PermissionRule } from "./resolver.ts";
 import {
 	allSegmentsAreSkillScripts,
-	installToolCallGate,
 	isAllowedSkillScript,
-} from "./permissions.ts";
+} from "./skill-script-rescue.ts";
+import { installToolCallGate } from "./permissions.ts";
 import { evaluateCommandRules, type Decision, type RawRule, type RuleSets } from "./command-segments.ts";
 import { RunRegistry } from "./run-registry.ts";
 
@@ -290,6 +290,13 @@ describe("skill scripts: mixed regex-allowed and skill-script segments", () => {
 				"bash",
 				() => false,
 			),
+			false,
+		);
+	});
+
+	test("the empty-list guard rejects an empty command before the structural check", () => {
+		assert.equal(
+			allSegmentsAreSkillScripts("", new Set<number>(), dirs, tmpRoot, NO_RULES, "bash"),
 			false,
 		);
 	});
