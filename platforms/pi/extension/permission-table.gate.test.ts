@@ -266,13 +266,17 @@ test("each option ladder has one home and the tails compose it", () => {
 		const tail = tailFor[name];
 		assert.ok(tail !== null && tail !== undefined && tail.includes(ladder), `${name} is not composed from its ladder`);
 	}
-	// No row spells a ladder: the shipped data file holds no ladder text.
+	// No row spells a ladder: the shipped data file holds no ladder text. The
+	// match is whole-word, so a future verb word that starts with a ladder word
+	// stays free.
 	const table = readFileSync(new URL("../permissions.table.json", import.meta.url), "utf8");
 	const rows = (JSON.parse(table) as { rows?: unknown[] }).rows;
 	assert.ok(table.length > 0, "the guard must read the shipped data file, not an empty file");
 	assert.ok(Array.isArray(rows) && rows.length > 0, "the shipped data file must hold rows");
 	for (const [name, ladder] of Object.entries(LADDER)) {
-		assert.equal(table.includes(ladder), false, `the table spells the ${name} ladder`);
+		const escaped = ladder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const spelled = new RegExp(`(?<![A-Za-z0-9_-])${escaped}(?![A-Za-z0-9_-])`);
+		assert.equal(spelled.test(table), false, `the table spells the ${name} ladder`);
 	}
 });
 
@@ -715,6 +719,69 @@ test("a narrowed form stays blocked until a fence row lands", () => {
 test("each named verification script allows for the orchestrator", () => {
 	for (const probe of ORCH_SCRIPTS) {
 		assert.equal(shippedVerdict("orchestrator", "bash", probe), "allow", probe);
+	}
+});
+
+test("a prefixed package folder allows one token and refuses every other form", () => {
+	// One path token sits between the flag and the script, so a second npm
+	// subcommand cannot ride the row. The `noCd` field withholds the cd fold.
+	for (const probe of [
+		"npm --prefix /home/example/repo test",
+		"npm --prefix /home/example/repo run typecheck",
+		"npm --prefix /home/example/repo run lint",
+		'npm --prefix "/home/example/some repo" test',
+		"npm --prefix '/home/example/some repo' run lint",
+	]) {
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "allow", probe);
+	}
+	for (const probe of [
+		// The row ends at the script word, so a trailing argument refuses.
+		"npm --prefix /x test extra",
+		"npm --prefix /x exec test",
+		"npm --prefix /x run build test",
+		"npm --prefix /x test --watch",
+		"npm --prefix --global test",
+		"npm --prefix '-x' run lint",
+		"cd x && npm --prefix /x test",
+	]) {
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "default", probe);
+	}
+	// A bare path token refuses the nine shell expansion characters, because bash
+	// expands a brace, a glob, or a parenthesis word before it runs the command.
+	// A variable form passes the row; the shared expansion guard refuses it, so
+	// the last probe pins that dependency.
+	for (const probe of [
+		"npm --prefix {/x,exec} test",
+		"npm --prefix /x* test",
+		"npm --prefix (/x) test",
+		"npm --prefix /x[ab] test",
+		"npm --prefix /x\\y test",
+		"npm --prefix $HOME test",
+	]) {
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "default", probe);
+	}
+	// One bare token cannot hold a space, and the row ends at the script word, so
+	// a spaced bare path, a substitution, and a quoted dash refuse.
+	for (const probe of [
+		"npm --prefix /some repo test",
+		"npm --prefix $(echo /x) test",
+		'npm --prefix "--global" test',
+	]) {
+		assert.equal(shippedVerdict("orchestrator", "bash", probe), "default", probe);
+	}
+	// A redirect is a write, so the redirect row denies it.
+	assert.equal(shippedVerdict("orchestrator", "bash", "npm --prefix /x test > out.txt"), "deny");
+	// The shipped `pkg.publish` ask row still catches a prefixed publish form, so
+	// the segment asks.
+	assert.equal(shippedVerdict("orchestrator", "bash", "npm --prefix /x publish test"), "ask");
+	for (const role of ["implementer", "tester", "reviewer", "planner", "researcher", "mascot"] as Role[]) {
+		for (const probe of [
+			"npm --prefix /x test",
+			"npm --prefix /x run typecheck",
+			"npm --prefix /x run lint",
+		]) {
+			assert.notEqual(shippedVerdict(role, "bash", probe), "allow", `${role}: ${probe}`);
+		}
 	}
 });
 

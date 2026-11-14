@@ -93,20 +93,20 @@ const ANALYSIS_TOOLS = [
 
 // --- row counts -------------------------------------------------------------
 
-test("the table holds 87 rows: 22 global, 15 reader, 22 worker, 28 orchestrator", () => {
+test("the table holds 88 rows: 22 global, 15 reader, 22 worker, 29 orchestrator", () => {
 	const counts = countTable(RULE_ROWS);
-	assert.equal(counts.total, 87);
+	assert.equal(counts.total, 88);
 	assert.equal(counts.byGroup.global, 22);
 	assert.equal(counts.byGroup.reader, 15);
 	assert.equal(counts.byGroup.worker, 22);
-	assert.equal(counts.byGroup.orchestrator, 28);
+	assert.equal(counts.byGroup.orchestrator, 29);
 });
 
-test("every class resolves to 36, 44, and 50 rows", () => {
+test("every class resolves to 36, 44, and 51 rows", () => {
 	const counts = countTable(RULE_ROWS);
 	assert.equal(counts.byClass.reader, 36);
 	assert.equal(counts.byClass.worker, 44);
-	assert.equal(counts.byClass.orchestrator, 50);
+	assert.equal(counts.byClass.orchestrator, 51);
 	// One filter decides a class row set: the three ask rows widen to an unnamed
 	// worker, so the worker class holds every worker-group row.
 	assert.deepEqual(
@@ -125,10 +125,10 @@ test("only the three ask rows widen to an unnamed agent", () => {
 	assert.deepEqual(widened, ["file.move.ask", "file.remove.ask", "git.remove.ask"]);
 });
 
-test("the 87 rows carry 62 ids: a shared rule is one row per class", () => {
+test("the 88 rows carry 63 ids: a shared rule is one row per class", () => {
 	// One id is one rule. A rule that three classes share is three rows with one
 	// id, so the id count is the number of distinct rules, not of rows.
-	assert.equal(countTable(RULE_ROWS).uniqueIds, 62);
+	assert.equal(countTable(RULE_ROWS).uniqueIds, 63);
 	const shared = new Map<string, number>();
 	for (const row of RULE_ROWS) shared.set(row.id, (shared.get(row.id) ?? 0) + 1);
 	assert.equal(shared.get("read.any"), 3);
@@ -148,7 +148,7 @@ test("every row reaches a class set and every flag class is used", () => {
 	const { classes } = compileTable(RULE_ROWS);
 	// One rule per tool name a row lists. These counts are pinned literals, so a
 	// fault in the `rowsForClass` filter cannot agree with itself here.
-	const pinned: Record<PermissionClass, number> = { reader: 51, worker: 61, orchestrator: 67 };
+	const pinned: Record<PermissionClass, number> = { reader: 51, worker: 61, orchestrator: 68 };
 	for (const cls of PERMISSION_CLASSES) {
 		assert.equal(ruleCount(classes[cls]), pinned[cls], cls);
 	}

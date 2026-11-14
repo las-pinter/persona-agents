@@ -160,6 +160,8 @@ export const ROW_RATIONALE: Record<string, string> = {
 		"The retired worker list allowed npm run with any script name, so one row names the verb and leaves the script word free.",
 	"shell.verify.reader":
 		"The reviewer runs the three verification scripts, so one reader-class row narrows to that profession and leaves the planner, the researcher, and the mascot denied.",
+	"shell.verify.prefix":
+		"A prefixed run reads one token, so one orchestrator row names the three scripts and no second subcommand rides it.",
 };
 
 /** A form the table blocks, with the reason and the sample the test checks. */

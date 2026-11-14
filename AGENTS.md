@@ -116,10 +116,13 @@ platform:
   question mark words also ask. Tag delete is a DENY on pi, opencode, and
   Kiro, and an ASK on Claude Code.
 - Accepted risks: `rebase --exec` and `rebase -i` are allowed. On pi, the
-  orchestrator may run the three verification scripts, and the test script
-  covers test files it can write, so a self-graded run is possible. The reviewer
-  may run them too; **code-review-checklist** owns the run count and the
-  evidence rule. The install step is the barrier. On Claude Code and pi,
+  orchestrator may run the three verification scripts, and each one also as
+  `npm --prefix <one quoted or bare token>`; the path-slot refusal set is in
+  `platforms/pi/README.md`. The prefixed form names any folder, so that
+  folder's test script runs under the verification allow. The test script
+  covers test files it can write, so a self-graded run is possible. The
+  reviewer may run them too; **code-review-checklist** owns the run count and
+  the evidence rule. The install step is the barrier. On Claude Code and pi,
   `git -C` to another repository is allowed, and the hooks and config of that
   repository run. On opencode, a bare star or question mark in an
   allowed command can expand to an option name from a planted file. On Claude

@@ -169,6 +169,8 @@ export const TAIL: Record<FlagClass, string | null> = {
 	fs: null,
 	prefixed: null,
 	bare: null,
+	// A path-arg row carries its path token in the separator, so it has no tail.
+	"path-arg": null,
 	// A named-form row owns the plain form only, so it carries no tail; the
 	// pattern builder appends its guard instead.
 	named: null,
@@ -403,12 +405,24 @@ export function patternFor(row: RuleRow, zone: NotesZone | null = null): string 
 
 	let body = head;
 	if (row.sub) {
-		const sep = row.span ? "[^\\n]*\\s" : "\\s+";
+		// A path-arg row reads exactly one token between the head and the
+		// subcommand, so a second npm subcommand cannot ride it. The token is
+		// single-quoted, double-quoted, or bare. A bare token refuses the nine
+		// shell expansion characters, because bash expands a brace, a glob, or a
+		// parenthesis word before it execs the command. A quote suppresses that
+		// expansion, so the quoted branches keep the wider token shape. A
+		// dash-led token is an option, not a path.
+		const sep =
+			row.flags === "path-arg"
+				? "\\s+(?:'(?!-)[^']*'|\"(?!-)[^\"]*\"|(?!-)[^\\s'\"*?\\[\\]{}()\\\\]+)\\s"
+				: row.span
+					? "[^\\n]*\\s"
+					: "\\s+";
 		body += `${slot}${sep}(?:${alternation(row.sub)})(?=\\s|$)`;
 	}
 
 	const tail = TAIL[row.flags ?? "none"];
-	if (row.flags === "bare") {
+	if (row.flags === "bare" || row.flags === "path-arg") {
 		// The row ends at the matched words: a trailing argument is not covered.
 		body += "(?=\\s*$)";
 	} else if (row.flags === "branch-read") {

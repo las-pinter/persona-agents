@@ -69,6 +69,7 @@ export type FlagClass =
 	| "prefixed"
 	| "exception"
 	| "bare"
+	| "path-arg"
 	| "named"
 	| "branch-read"
 	| "subshell"
@@ -194,6 +195,7 @@ const FLAGS = new Set<string>([
 	"prefixed",
 	"exception",
 	"bare",
+	"path-arg",
 	"named",
 	"branch-read",
 	"subshell",

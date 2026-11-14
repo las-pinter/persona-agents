@@ -107,11 +107,15 @@ compiler writes the pattern. Translation notes:
   folded into the allow regexes so delegates don't get stuck on command
   prefixes. The verification and build rows carry no fold, so a moved test or
   build command falls to the mode default. The orchestrator, the implementer,
-  the tester, and the reviewer hold a verification allow. The reviewer row names
-  that profession only, so the planner, the researcher, and the mascot keep the
-  mode default. A row with `roles` applies only when the agent names a shipped
-  profession, so an unnamed class-compiled agent gets the mode default, unless
-  the row sets `unnamed` (see `### Table doctrine`).
+  the tester, and the reviewer hold a verification allow. The orchestrator also
+  holds `npm --prefix <one path>` for the same three scripts. The path slot
+  takes one quoted or bare token. The slot refuses a dash-led token, a glob
+  word, a brace word, a bracket word, a parenthesis word, and a backslash word.
+  The shared expansion guard refuses a `$` variable in the same slot. The
+  reviewer row names that profession only, so the planner, the researcher, and
+  the mascot keep the mode default. A row with `roles` applies only when the
+  agent names a shipped profession, so an unnamed class-compiled agent gets the
+  mode default, unless the row sets `unnamed` (see `### Table doctrine`).
   The `-C` value must be a path: a value with a quote, a backslash, no slash and
   no `.git` ending, or an equals sign and no leading `/`, `./`, `../`, or `~` is
   not a path, and the form asks
@@ -228,10 +232,10 @@ again.
 
 ### Table doctrine
 
-- **Row groups.** The shipped file holds 87 rows: 22 global, 15 reader, 22
-  worker, and 28 orchestrator. A class compile drops a `roles` row unless the
+- **Row groups.** The shipped file holds 88 rows: 22 global, 15 reader, 22
+  worker, and 29 orchestrator. A class compile drops a `roles` row unless the
   row sets `unnamed`, so only the reader class drops a row. The compile yields
-  51 reader, 61 worker, or 67 orchestrator rules, one rule per tool name a kept
+  51 reader, 61 worker, or 68 orchestrator rules, one rule per tool name a kept
   row lists.
 - **Unnamed agents.** A row that sets `unnamed` joins its class compile, so an
   agent with a non-shipped name and that class gets the row. A false value is

@@ -353,6 +353,12 @@
       "reason": "A named project verification script is allowed"
     },
     {
+      "id": "shell.verify.prefix", "tool": "bash", "verdict": "allow", "classes": ["orchestrator"],
+      "verb": ["npm --prefix"], "sub": ["test", "run typecheck", "run lint"],
+      "flags": "path-arg", "noCd": true, "arg": "any",
+      "reason": "A verification script in one prefixed package folder is allowed"
+    },
+    {
       "id": "shell.verify.reader", "tool": "bash", "verdict": "allow", "classes": ["reader"], "roles": ["reviewer"],
       "verb": ["npm test", "npm run typecheck", "npm run lint"], "flags": "bare", "noCd": true, "arg": "any",
       "reason": "The reviewer holds the three verification scripts and no other reader role does"
