@@ -16,7 +16,8 @@ import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-ag
 import extension from "./extension.ts";
 import { registerCommands } from "./commands.ts";
 import { dimText } from "./status-text.ts";
-import type { AgentConfig, PersonaConfig } from "./resolver.ts";
+import type { AgentConfig } from "./resolver.ts";
+import type { PersonaConfig } from "./persona-loader.ts";
 import { setActiveAgent, setActivePersona } from "./state.ts";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;

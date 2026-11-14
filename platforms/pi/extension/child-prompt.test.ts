@@ -22,7 +22,8 @@ import { childRoleText, childTaskPrompt } from "./child-prompt.ts";
 import extension from "./extension.ts";
 import { PERSONA_HEADING, formatPersonaId, personaBlock, personaLabel } from "./persona-text.ts";
 import { makePi, promptFor } from "./pi-fixture.ts";
-import { type AgentConfig, type PersonaConfig } from "./resolver.ts";
+import type { AgentConfig } from "./resolver.ts";
+import type { PersonaConfig } from "./persona-loader.ts";
 import { discoverSkills, matchSkills } from "./skill-discovery.ts";
 import { setActiveAgent, setActivePersona } from "./state.ts";
 

@@ -30,8 +30,6 @@ import { findNearestConfigDir, isDirectory } from "./path-glob.ts";
 import { getPackageRoot, PACKAGE_LAYOUT } from "./package-layout.ts";
 import { loadPersonasFromDir, type PersonaConfig } from "./persona-loader.ts";
 
-export type { PersonaConfig } from "./persona-loader.ts";
-
 // Never import `skill-discovery.ts` here: it imports this module, so the edge closes a cycle.
 
 export type AgentScope = "user" | "project" | "both";

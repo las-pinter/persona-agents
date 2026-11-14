@@ -12,7 +12,8 @@
  * No pi runtime import: the caller resolves the skills and the persona.
  */
 
-import { type AgentConfig, type PersonaConfig } from "./resolver.ts";
+import type { AgentConfig } from "./resolver.ts";
+import type { PersonaConfig } from "./persona-loader.ts";
 import { type SkillRef, skillScriptsDir } from "./skill-discovery.ts";
 import { personaBlock } from "./persona-text.ts";
 

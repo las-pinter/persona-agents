@@ -16,9 +16,9 @@ import {
 import {
 	type AgentConfig,
 	type AgentScope,
-	type PersonaConfig,
 	discoverAgents,
 } from "./resolver.ts";
+import type { PersonaConfig } from "./persona-loader.ts";
 import { personaForThemeProfession, resolveAgentAlias, resolvePersonaForAgent } from "./persona-lookup.ts";
 import { getActiveAgent, getActivePersona } from "./state.ts";
 import { SPAWN_TOOL_NAME } from "./depth.ts";

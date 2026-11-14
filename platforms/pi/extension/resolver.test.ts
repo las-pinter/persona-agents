@@ -18,8 +18,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
 import { readAllEvents } from "./tree-log.ts";
-import { loadAgentsFromDir, loadTemplateAgents, type AgentConfig, type PersonaConfig } from "./resolver.ts";
-import { loadPersonasFromDir } from "./persona-loader.ts";
+import { loadAgentsFromDir, loadTemplateAgents, type AgentConfig } from "./resolver.ts";
+import { loadPersonasFromDir, type PersonaConfig } from "./persona-loader.ts";
 import type { PermissionClass } from "./permission-class.ts";
 
 const ROLE_CLASS: Record<string, PermissionClass> = {
