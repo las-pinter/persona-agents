@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { globToRegExp, isDirectory } from "./path-glob.ts";
+import { globToRegExp } from "./path-glob.ts";
 
 // ---------------------------------------------------------------------------
 // Resources (file globs attached to the agent context)
@@ -74,7 +74,7 @@ export function resolveResources(
 	maxTotalBytes = MAX_TOTAL_RESOURCE_BYTES,
 ): ResourcesResult {
 	const result: ResourcesResult = { inlined: [], paths: [] };
-	if (!patterns || patterns.length === 0 || !isDirectory(cwd)) return result;
+	if (!patterns || patterns.length === 0) return result;
 
 	const all: string[] = [];
 	walkFiles(cwd, "", 0, all);
