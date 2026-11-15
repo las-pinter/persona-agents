@@ -14,6 +14,7 @@ import * as path from "node:path";
 import {
 	AGENT,
 	SESSION,
+	claimNames,
 	fixedClockShim,
 	lockPath,
 	makeHome,
@@ -116,5 +117,36 @@ describe("E — refresh", () => {
 		assert.equal(lost.status, 5, lost.stderr);
 		assert.equal(rowOf(lost.stderr, "lock lost"), lockPath(home));
 		assert.equal(fs.existsSync(lockPath(home)), true);
+	});
+
+	test("a refresh whose claim holds another record restores it and exits 4", () => {
+		const home = makeHome();
+		plantLock(home, recordText(SESSION, `${SESSION}-1`, nowSeconds()));
+		const swap = path.join(home, "swap-record");
+		fs.writeFileSync(swap, recordText("other-session", "other-session-1", 1000000000));
+		// The shim writes the other record to the claim, then frees the name.
+		const shim = makeShimDir({
+			mv: [
+				"#!/usr/bin/env bash",
+				'args=("$@")',
+				'cp -- "$SWAP_RECORD" "${args[2]}"',
+				'rm -f -- "${args[1]}"',
+				"exit 0",
+			].join("\n"),
+		});
+
+		const result = run(home, ["hold", "--agent", AGENT, "--session", SESSION], {
+			...shimPath(shim),
+			SWAP_RECORD: swap,
+		});
+
+		assert.equal(result.status, 4, result.stderr);
+		assert.equal(result.stdout, "");
+		assert.match(result.stderr, /^held .* by other-session since /m);
+		assert.equal(rows(result.stderr).length, 1, result.stderr);
+		const record = recordOf(home);
+		assert.equal(record.session, "other-session");
+		assert.equal(record.token, "other-session-1");
+		assert.deepEqual(claimNames(home), []);
 	});
 });
