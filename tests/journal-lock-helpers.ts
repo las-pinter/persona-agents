@@ -187,12 +187,11 @@ export async function settle(ms: number): Promise<void> {
  * the mark, then waits for a release file the case touches after the other
  * process returns. A race window never depends on a sleep width. The wait is
  * bounded, so a case that never releases fails instead of hanging. An unset
- * release variable means no wait at all. The skip keeps the first reads
- * ungated, so a case can open the window on a later read. The wait calls the
- * real sleep, so a sleep shim records only the script polls. A set wait-log
- * variable records every wait turn, so a case can prove that no wait ran.
+ * release variable means no wait at all. The wait calls the real sleep, so a
+ * sleep shim records only the script polls. A set wait-log variable records
+ * every wait turn, so a case can prove that no wait ran.
  */
-export function makeDateShim(skipReads = 0): string {
+export function makeDateShim(): string {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "journal-date-"));
 	trees.push(dir);
 	const realDate = (spawnSync("bash", ["-c", "command -v date"], { encoding: "utf8" }).stdout ?? "").trim();
@@ -208,17 +207,15 @@ export function makeDateShim(skipReads = 0): string {
 		'    if [ -f "$count" ]; then reads=$(cat "$count"); fi',
 		"    reads=$((reads + 1))",
 		'    printf "%s\\n" "$reads" >"$count"',
-		`    if [ "$reads" -gt ${skipReads} ]; then`,
-		'      if [ -n "${JOURNAL_GATE_MARK:-}" ]; then : >"$JOURNAL_GATE_MARK"; fi',
-		'      if [ -n "${JOURNAL_GATE_RELEASE:-}" ]; then',
-		"        waited=0",
-		'        while [ ! -e "$JOURNAL_GATE_RELEASE" ]; do',
-		'          if [ -n "${JOURNAL_GATE_WAIT_LOG:-}" ]; then printf "%s\\n" "$reads" >>"$JOURNAL_GATE_WAIT_LOG"; fi',
-		`          ${realSleep} 0.01`,
-		"          waited=$((waited + 1))",
-		'          if [ "$waited" -ge 2000 ]; then break; fi',
-		"        done",
-		"      fi",
+		'    if [ -n "${JOURNAL_GATE_MARK:-}" ]; then : >"$JOURNAL_GATE_MARK"; fi',
+		'    if [ -n "${JOURNAL_GATE_RELEASE:-}" ]; then',
+		"      waited=0",
+		'      while [ ! -e "$JOURNAL_GATE_RELEASE" ]; do',
+		'        if [ -n "${JOURNAL_GATE_WAIT_LOG:-}" ]; then printf "%s\\n" "$reads" >>"$JOURNAL_GATE_WAIT_LOG"; fi',
+		`        ${realSleep} 0.01`,
+		"        waited=$((waited + 1))",
+		'        if [ "$waited" -ge 2000 ]; then break; fi',
+		"      done",
 		"    fi",
 		"    break",
 		"  fi",
