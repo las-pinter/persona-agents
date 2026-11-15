@@ -37,7 +37,7 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 │           └── YYYY-MM-DD-<slug>/
 │               ├── study.md           (planner, max 500 lines)
 │               ├── status.md          (planner)
-│               ├── briefs/NN-<slug>.md (planner, one file per brief, max 100 lines each)
+│               ├── briefs/NN-<slug>.md (planner, one file per brief)
 │               ├── <side-doc>.md      (planner, max 300 lines each)
 │               └── reverse_engineering/  (planner)
 └── researcher/
@@ -166,9 +166,9 @@ Rules:
   exceeds the cap.
 - Each side document: maximum 300 lines (hard ceiling). Split the topic before
   it exceeds the cap.
-- Each brief file: maximum 100 lines (hard ceiling). The reviewer counts the
-  lines of a brief file it reviews. File length only. The size of the work is in
-  **task-routing**. `NN` is a two-digit order number.
+- Each brief file: maximum 100 lines (hard ceiling). Aim for 90 lines or less.
+  The reviewer counts the lines of a brief file it reviews. File length only.
+  The size of the work is in **task-routing**. `NN` is a two-digit order number.
 - Omit a section when it has nothing notable.
 
 ## Study Lifecycle (planner-owned, manual)
