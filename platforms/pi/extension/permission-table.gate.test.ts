@@ -2,9 +2,10 @@
  * The gate verdict cases for the permission rule table.
  *
  * Every case here runs a probe through the compiled rows for one class or role;
- * the table shape, the compiler refusals, and the parity ledger stay in
- * permission-table.test.ts, and the history and release verdicts stay in
- * permission-table.gate-history.test.ts.
+ * the table shape, the compiler refusals, the parity ledger, and the gate source
+ * stay in permission-table.shape.test.ts, permission-table.validation.test.ts,
+ * permission-table.ledger.test.ts, and permission-table.gate-source.test.ts, and
+ * the history and release verdicts stay in permission-table.gate-history.test.ts.
  */
 
 import { test } from "node:test";
