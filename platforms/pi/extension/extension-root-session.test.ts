@@ -15,8 +15,8 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
+import { makePi, type Harness } from "./pi-fixture.ts";
 import type { AgentConfig } from "./resolver.ts";
 import { newRunRecord, type RunRegistry } from "./run-registry.ts";
 import { getRunRegistry } from "./subagent-run.ts";
@@ -26,38 +26,6 @@ const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ext-root-session-"));
 const overlayFile = path.join(tmpRoot, "permissions.json");
 fs.writeFileSync(overlayFile, JSON.stringify({ deny: [], ask: [] }));
 process.env.PI_PERMISSIONS_FILE = overlayFile;
-
-type Handler = (event: unknown, ctx: unknown) => unknown;
-
-interface Harness {
-	pi: ExtensionAPI;
-	handlers: Map<string, Handler[]>;
-}
-
-/** A fake pi that records `on` handlers; every other method is a no-op. */
-function makePi(): Harness {
-	const handlers = new Map<string, Handler[]>();
-	const noop = (): void => {};
-	const pi: Record<string, unknown> = {
-		on: (event: string, handler: Handler) => {
-			const list = handlers.get(event) ?? [];
-			list.push(handler);
-			handlers.set(event, list);
-			return () => {};
-		},
-		registerCommand: noop,
-		registerTool: noop,
-		registerFlag: noop,
-		getFlag: () => undefined,
-		getSettings: () => ({}),
-		appendEntry: noop,
-		exec: async () => ({ code: 0, stdout: "", stderr: "" }),
-		getAllTools: () => [],
-		getMcpServers: () => [],
-		events: { on: () => () => {}, emit: noop },
-	};
-	return { pi: pi as unknown as ExtensionAPI, handlers };
-}
 
 /** The root agent. A `git status` read is allowed for its class. */
 const ROOT_AGENT: AgentConfig = {

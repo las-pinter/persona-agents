@@ -14,9 +14,9 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
 import { ENV_RUN_ID, ENV_TREE_LOG } from "./depth.ts";
+import { makePi } from "./pi-fixture.ts";
 import { readAllEvents } from "./tree-log.ts";
 import { loadAgentsFromDir, loadTemplateAgents, type AgentConfig } from "./resolver.ts";
 import { loadPersonasFromDir, type PersonaConfig } from "./persona-loader.ts";
@@ -330,33 +330,6 @@ fs.writeFileSync(
 );
 process.env.PI_PERMISSIONS_FILE = isolatedGlobalFile;
 after(() => fs.rmSync(path.dirname(isolatedGlobalFile), { recursive: true, force: true }));
-
-type Handler = (event: unknown, ctx: unknown) => unknown;
-
-/** A fake pi that records `on` handlers; every other method is a no-op. */
-function makePi(): { pi: ExtensionAPI; handlers: Map<string, Handler[]> } {
-	const handlers = new Map<string, Handler[]>();
-	const noop = (): void => {};
-	const pi: Record<string, unknown> = {
-		on: (event: string, handler: Handler) => {
-			const list = handlers.get(event) ?? [];
-			list.push(handler);
-			handlers.set(event, list);
-			return () => {};
-		},
-		registerCommand: noop,
-		registerTool: noop,
-		registerFlag: noop,
-		getFlag: () => undefined,
-		getSettings: () => ({}),
-		appendEntry: noop,
-		exec: async () => ({ code: 0, stdout: "", stderr: "" }),
-		getAllTools: () => [],
-		getMcpServers: () => [],
-		events: { on: () => () => {}, emit: noop },
-	};
-	return { pi: pi as unknown as ExtensionAPI, handlers };
-}
 
 test("a malformed agent file does not stop the gate from installing", async (t) => {
 	const project = fs.mkdtempSync(path.join(os.tmpdir(), "resolver-gate-project-"));

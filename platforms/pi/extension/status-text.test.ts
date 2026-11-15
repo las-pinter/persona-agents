@@ -12,52 +12,14 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import extension from "./extension.ts";
 import { registerCommands } from "./commands.ts";
+import { makePi } from "./pi-fixture.ts";
 import { dimText } from "./status-text.ts";
 import type { AgentConfig } from "./resolver.ts";
 import type { PersonaConfig } from "./persona-loader.ts";
 import { setActiveAgent, setActivePersona } from "./state.ts";
-
-type Handler = (event: unknown, ctx: unknown) => unknown;
-
-interface CommandOptions {
-	handler: (args: string, ctx: unknown) => Promise<void>;
-}
-
-interface Harness {
-	pi: ExtensionAPI;
-	handlers: Map<string, Handler[]>;
-	commands: Map<string, CommandOptions>;
-}
-
-/** A fake pi that records handlers and commands; every other method is a no-op. */
-function makePi(): Harness {
-	const handlers = new Map<string, Handler[]>();
-	const commands = new Map<string, CommandOptions>();
-	const noop = (): void => {};
-	const pi: Record<string, unknown> = {
-		on: (event: string, handler: Handler) => {
-			const list = handlers.get(event) ?? [];
-			list.push(handler);
-			handlers.set(event, list);
-			return () => {};
-		},
-		registerCommand: (name: string, options: CommandOptions) => {
-			commands.set(name, options);
-		},
-		registerTool: noop,
-		registerFlag: noop,
-		getFlag: () => undefined,
-		appendEntry: noop,
-		exec: async () => ({ code: 0, stdout: "", stderr: "" }),
-		getAllTools: () => [],
-		getMcpServers: () => [],
-		events: { on: () => () => {}, emit: noop },
-	};
-	return { pi: pi as unknown as ExtensionAPI, handlers, commands };
-}
 
 /** A fake theme that marks the token it received. */
 function markingTheme(): { fg: (token: string, text: string) => string } {
