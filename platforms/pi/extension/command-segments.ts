@@ -24,7 +24,7 @@ export interface RawRule {
  */
 export type Layer = "default" | "override" | "overlay";
 
-export interface CompiledRule {
+interface CompiledRule {
 	tool: string;
 	re: RegExp;
 	rule: RawRule;
@@ -57,7 +57,7 @@ export interface RuleSets {
 
 export type PermissionMode = "deny-by-default" | "allow-unless-matched";
 
-export interface EvaluateOptions {
+interface EvaluateOptions {
 	/**
 	 * Segment indices the user approved with "Always allow" on a segment.
 	 * Session-allowed segments are folded in here too. Approved segments skip the

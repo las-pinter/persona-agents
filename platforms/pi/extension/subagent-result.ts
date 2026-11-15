@@ -70,7 +70,7 @@ export function getFinalOutput(messages: Message[]): string {
 }
 
 /** The fields that decide a failed run. `SingleResult` and `ResultTextSource` both fit. */
-export interface FailureSource {
+interface FailureSource {
 	exitCode: number;
 	stopReason?: string;
 }
@@ -131,7 +131,7 @@ export function toInspectTask(r: SingleResult): InspectTask {
 }
 
 /** The fields the run-text rule reads. `SingleResult` and `InspectTask` both fit. */
-export interface ResultTextSource {
+interface ResultTextSource {
 	messages: Message[];
 	exitCode: number;
 	stderr?: string;

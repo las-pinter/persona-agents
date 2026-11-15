@@ -105,16 +105,16 @@ export function compileRole(rows: readonly RuleRow[], role: Role): RuleSets {
 	return sets;
 }
 
-export type RowGroup = "global" | PermissionClass;
+type RowGroup = "global" | PermissionClass;
 
-export interface TableCounts {
+interface TableCounts {
 	total: number;
 	uniqueIds: number;
 	byGroup: Record<RowGroup, number>;
 	byClass: Record<PermissionClass, number>;
 }
 
-export interface CompiledTable {
+interface CompiledTable {
 	counts: TableCounts;
 	classes: Record<PermissionClass, RuleSets>;
 }

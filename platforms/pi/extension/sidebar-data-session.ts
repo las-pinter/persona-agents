@@ -12,7 +12,7 @@ import { applyWorkspace } from "./sidebar-data-git.ts";
 import { reconstructTodosFromEntries } from "./todo-tool.ts";
 
 /** TPS sliding window. */
-export const TPS_WINDOW_MS = 2000;
+const TPS_WINDOW_MS = 2000;
 
 /** Sum assistant `usage` over a session branch and find the branch start. */
 function sumBranchUsage(ctx: ExtensionContext): {

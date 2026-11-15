@@ -34,7 +34,7 @@ import type { GateRuleSourceFactory } from "./permissions.ts";
  * `skill-script-rescue.ts`, so the gate call receives it rather than importing
  * it back.
  */
-export type SkillScriptRescue = (
+type SkillScriptRescue = (
 	command: string,
 	approvedSegmentIndices: ReadonlySet<number>,
 	skillScriptsDirs: string[],
@@ -45,7 +45,7 @@ export type SkillScriptRescue = (
 ) => boolean;
 
 /** Everything one call reads, built once per installed gate. */
-export interface GateCallInput {
+interface GateCallInput {
 	event: ToolCallEvent;
 	ctx: ExtensionContext;
 	getActiveAgent: () => AgentConfig | null;

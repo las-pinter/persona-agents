@@ -11,10 +11,10 @@
  */
 
 /** Hands the slot to the next ask. Safe to call more than once. */
-export type AskPanelRelease = () => void;
+type AskPanelRelease = () => void;
 
 /** A first-in-first-out queue of asks behind one held slot. */
-export class AskPanelSlot {
+class AskPanelSlot {
 	private held = false;
 	private generation = 0;
 	private readonly waiters: Array<() => void> = [];

@@ -24,13 +24,13 @@ const PERSONA_RULES = [
 ].join("\n");
 
 /** The identity fields of a persona: what a label reads. */
-export interface PersonaIdentity {
+interface PersonaIdentity {
 	readonly name: string;
 	readonly theme?: string;
 }
 
 /** The identity fields plus the body: what a block reads. */
-export interface PersonaText extends PersonaIdentity {
+interface PersonaText extends PersonaIdentity {
 	readonly body: string;
 }
 

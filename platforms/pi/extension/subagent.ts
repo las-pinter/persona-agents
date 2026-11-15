@@ -54,7 +54,7 @@ export function sessionParamOf(params: { session?: string }): string | undefined
 	return params.session || undefined;
 }
 /** One step of a chain or parallel call. */
-export interface StepInput {
+interface StepInput {
 	agent: string;
 	task: string;
 	cwd?: string;

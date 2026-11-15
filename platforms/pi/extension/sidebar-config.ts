@@ -22,7 +22,7 @@ export const SIDEBAR_MAX_WIDTH = 120;
 // --- config -----------------------------------------------------------------
 
 /** Extension-owned toggle file. This is never `settings.json`. */
-export const SIDEBAR_CONFIG_FILENAME = "persona-agents-sidebar.json";
+const SIDEBAR_CONFIG_FILENAME = "persona-agents-sidebar.json";
 /** Env override for the toggle file path. The tests use it. */
 export const SIDEBAR_CONFIG_ENV = "PI_PERSONA_AGENTS_SIDEBAR_CONFIG";
 
@@ -37,14 +37,14 @@ export function clampWidth(width: number): number {
 // --- toggle config -----------------------------------------------------------
 
 /** Persisted toggle shape. */
-export interface SidebarConfig {
+interface SidebarConfig {
 	enabled: boolean;
 	/** Optional clamped right-column width. Absent means the default. */
 	width?: number;
 }
 
 /** Result of one atomic config write. */
-export interface SidebarConfigWrite {
+interface SidebarConfigWrite {
 	ok: boolean;
 	enabled: boolean;
 	/** The written width, when a width was requested. */
@@ -162,7 +162,7 @@ export function writeSidebarConfig(
 }
 
 /** What the glue must do for a requested enable state. Pure. */
-export interface SidebarTogglePlan {
+interface SidebarTogglePlan {
 	enabled: boolean;
 	/** True when the column can be shown: enabled and in TUI mode. */
 	canCompose: boolean;
@@ -191,7 +191,7 @@ export function toggleSidebarState(
 }
 
 /** Result of parsing a `/sidebar width <n>` argument. Pure. */
-export type SidebarWidthParse =
+type SidebarWidthParse =
 	| { ok: true; width: number }
 	| { ok: false; message: string };
 
@@ -221,7 +221,7 @@ export function parseSidebarWidth(raw: string | undefined): SidebarWidthParse {
 }
 
 /** What the glue must do for a requested width change. Pure. */
-export type SidebarWidthPlan =
+type SidebarWidthPlan =
 	| { ok: true; width: number; shouldReinstall: boolean }
 	| { ok: false; message: string };
 

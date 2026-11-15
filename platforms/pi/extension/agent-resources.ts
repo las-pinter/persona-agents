@@ -13,7 +13,7 @@ import { globToRegExp, isDirectory } from "./path-glob.ts";
 // Resources (file globs attached to the agent context)
 // ---------------------------------------------------------------------------
 
-export interface ResourcesResult {
+interface ResourcesResult {
 	/** File contents inlined into the prompt (small files). */
 	inlined: { path: string; content: string }[];
 	/** Larger matched files; only paths are listed so the agent can read them. */

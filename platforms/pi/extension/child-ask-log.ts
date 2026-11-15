@@ -19,7 +19,7 @@ export function shortId(sessionId: string): string {
 }
 
 /** The `shown` values: the named request's own panel, another panel, or none. */
-export type ShownValue = "this" | "other" | "none";
+type ShownValue = "this" | "other" | "none";
 
 /**
  * The `shown` value of an arrival line: never `this`, because `enqueue` writes
@@ -28,7 +28,7 @@ export type ShownValue = "this" | "other" | "none";
 export type ArrivalShownValue = Exclude<ShownValue, "this">;
 
 /** The `place` values: the mount began, or the request never left the queue. */
-export type PlaceValue = "slot" | "queue";
+type PlaceValue = "slot" | "queue";
 
 /**
  * Which request the panel shows: `other` for a different visible request and

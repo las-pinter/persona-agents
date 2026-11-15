@@ -5,7 +5,7 @@
  */
 
 /** The two fields a mark source carries. Both are optional on the tree node. */
-export interface MarkSource {
+interface MarkSource {
 	round?: number;
 	resumed?: boolean;
 }

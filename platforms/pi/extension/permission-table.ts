@@ -76,7 +76,7 @@ export type FlagClass =
 	| "process-sub";
 
 /** What may follow the matched head: nothing, a path zone, or any words. */
-export type Arg = "none" | "path" | "any";
+type Arg = "none" | "path" | "any";
 
 export interface RuleRow {
 	/** Stable rule name, shared by every class that gets the rule. */

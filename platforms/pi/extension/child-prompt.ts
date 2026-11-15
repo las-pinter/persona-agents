@@ -18,7 +18,7 @@ import { type SkillRef, skillScriptsDir } from "./skill-discovery.ts";
 import { personaBlock } from "./persona-text.ts";
 
 /** Everything the child role text reads. */
-export interface ChildRoleInput {
+interface ChildRoleInput {
 	/** The resolved agent: its name and its profession body. */
 	agent: AgentConfig;
 	/** The resolved persona, or null when the caller named none. */

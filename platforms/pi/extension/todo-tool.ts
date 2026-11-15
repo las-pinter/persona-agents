@@ -24,7 +24,7 @@ export interface Todo {
 }
 
 /** Todo tool actions. Operations, not a replace-list. */
-export type TodoAction = "list" | "add" | "toggle" | "remove" | "clear";
+type TodoAction = "list" | "add" | "toggle" | "remove" | "clear";
 
 /** The tool result `details` payload. */
 export interface TodoDetails {
@@ -45,21 +45,21 @@ export interface TodoState {
 }
 
 /** Input for one pure operation. */
-export interface TodoOperationInput {
+interface TodoOperationInput {
 	action: TodoAction;
 	text?: string;
 	id?: string;
 }
 
 /** A model-facing result of one pure operation. */
-export interface TodoOperationResult {
+interface TodoOperationResult {
 	content: string;
 	details: TodoDetails;
 	isError: boolean;
 }
 
 /** Outcome of one pure operation: the next state, the result, and whether the list changed. */
-export interface TodoOperationOutcome {
+interface TodoOperationOutcome {
 	state: TodoState;
 	result: TodoOperationResult;
 	mutated: boolean;
@@ -91,7 +91,7 @@ export const TODOS_EVENT_CHANNEL = "persona-agents/todos/v1";
 export const TODOS_TURN_ENTRY = "persona-agents/todos-turn/v1";
 
 /** TypeBox schema for the `todo` tool input. */
-export const TodoParams = Type.Object({
+const TodoParams = Type.Object({
 	action: StringEnum(["list", "add", "toggle", "remove", "clear"] as const),
 	text: Type.Optional(Type.String({ description: "Todo text (for add)" })),
 	id: Type.Optional(Type.String({ description: "Todo id (for toggle and remove)" })),

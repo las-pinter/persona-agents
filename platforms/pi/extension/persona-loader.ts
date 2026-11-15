@@ -49,7 +49,7 @@ export function fileNameStem(filePath: string): string {
  *
  * A bare file and a theme file call this same path: only the theme differs.
  */
-export function readPersona(filePath: string, theme?: string): PersonaConfig | null {
+function readPersona(filePath: string, theme?: string): PersonaConfig | null {
 	let content: string;
 	try {
 		content = fs.readFileSync(filePath, "utf-8");

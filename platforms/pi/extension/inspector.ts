@@ -37,7 +37,7 @@ export interface InspectTask {
 	errorMessage?: string;
 }
 
-export interface InspectRun {
+interface InspectRun {
 	at: string;
 	mode: "single" | "parallel" | "chain";
 	agentScope: string;

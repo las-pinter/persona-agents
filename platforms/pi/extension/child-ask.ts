@@ -79,7 +79,7 @@ export interface ChildAskOptions {
 }
 
 /** FIFO queue plus the single visible prompt, one state per registry. */
-export class ChildAskQueue {
+class ChildAskQueue {
 	private readonly states = new WeakMap<RunRegistry, RegistryState>();
 	/** Every state this queue built, so a clear can reach them. */
 	private readonly live = new Set<RegistryState>();

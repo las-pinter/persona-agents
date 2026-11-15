@@ -76,7 +76,7 @@ export { loadGlobalRules } from "./permission-config.ts";
  * What one evaluation reads: the five rule sets and the mode default. The gate
  * builds this from the compiled table; a test may pass its own source.
  */
-export interface GateRuleSource {
+interface GateRuleSource {
 	ruleSets: RuleSets;
 	mode: PermissionMode;
 }

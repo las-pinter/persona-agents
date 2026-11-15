@@ -44,7 +44,7 @@ export const CHILD_ABORTED_REASON = "Child session aborted: the parent signal fi
 export const CHILD_ABORTED_ERROR_NAME = "ChildSessionAborted";
 
 /** Build the abort error. The name carries the kind, the message carries the reason. */
-export function childAbortedError(): Error {
+function childAbortedError(): Error {
 	const error = new Error(CHILD_ABORTED_REASON);
 	error.name = CHILD_ABORTED_ERROR_NAME;
 	return error;
@@ -54,7 +54,7 @@ export function childAbortedError(): Error {
 export const CHILD_DEPTH_CAP_ERROR_NAME = "ChildSessionDepthCap";
 
 /** Build the cap refusal. The name tells a refusal from a failed build. */
-export function childDepthCapError(): Error {
+function childDepthCapError(): Error {
 	const error = new Error(DEPTH_CAP_REASON);
 	error.name = CHILD_DEPTH_CAP_ERROR_NAME;
 	return error;
@@ -64,7 +64,7 @@ export function childDepthCapError(): Error {
 export const CHILD_WILDCARD_ERROR_NAME = "ChildSessionWildcardLoadout";
 
 /** Build the wildcard refusal. The name tells a refusal from a failed build. */
-export function childWildcardLoadoutError(entries: readonly string[]): Error {
+function childWildcardLoadoutError(entries: readonly string[]): Error {
 	const error = new Error(wildcardLoadoutReason(entries));
 	error.name = CHILD_WILDCARD_ERROR_NAME;
 	return error;
@@ -110,7 +110,7 @@ type SessionOptions = CreateAgentSessionOptions;
 /** The resolved model object. The build field takes an object, not an id. */
 export type ChildModel = NonNullable<SessionOptions["model"]>;
 /** One in-process tool the child loadout names. */
-export type ChildTool = NonNullable<SessionOptions["customTools"]>[number];
+type ChildTool = NonNullable<SessionOptions["customTools"]>[number];
 /** The thinking level the caller resolved. pi clamps it to the model. */
 export type ChildThinking = SessionOptions["thinkingLevel"];
 
@@ -157,7 +157,7 @@ export interface BuildChildInput {
 }
 
 /** The single exit path. A second call does nothing. */
-export type ChildDispose = (exit: RunExit) => void;
+type ChildDispose = (exit: RunExit) => void;
 
 /** A built child: the live session, its record view, and its exit path. */
 export interface BuiltChild {

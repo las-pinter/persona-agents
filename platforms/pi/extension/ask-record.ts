@@ -39,7 +39,7 @@ export interface AskRecord {
  * @internal The record-line tests supply every field. Production code calls
  * `recordAsk`.
  */
-export interface AskLineInput {
+interface AskLineInput {
 	tool: string;
 	role: string;
 	verdict: AskVerdict;
@@ -56,7 +56,7 @@ export interface AskLineInput {
 }
 
 /** The caller fields of one write. Every other field has a default. */
-export interface RecordAskInput {
+interface RecordAskInput {
 	tool: string;
 	role: string;
 	verdict: AskVerdict;
@@ -154,7 +154,7 @@ export function recordAsk(input: RecordAskInput): void {
 }
 
 /** The caller fields of one plain log line. */
-export interface RecordLogInput {
+interface RecordLogInput {
 	/** The finished line. Whitespace collapses, so one message stays one line. */
 	text: string;
 	/** Defaults to `ASK_ROOT_RUN_ID`. */

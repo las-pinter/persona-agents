@@ -28,7 +28,7 @@ export type PermissionChoice = "deny" | "allow-once" | "always-allow";
 export const DENIED_BY_USER_REASON = "Denied by user";
 
 /** A selectable option: display label plus the decision it maps to. */
-export interface PromptOption {
+interface PromptOption {
 	label: string;
 	decision: PermissionChoice;
 }
@@ -58,10 +58,10 @@ export function promptOptions(): PromptOption[] {
 }
 
 /** How the prompt treats the tool call. */
-export type PromptKind = "shell-segment" | "shell-spanning" | "target";
+type PromptKind = "shell-segment" | "shell-spanning" | "target";
 
 /** Everything `buildPromptModel` needs. Plain data only, no pi types. */
-export interface PromptInput {
+interface PromptInput {
 	toolName: string;
 	/** Whole command (shell) or path/pattern (other tools). */
 	probe: string;
@@ -371,7 +371,7 @@ function askRole(sessionId: string | null, judgedRole: string | null | undefined
 }
 
 /** What the root renderer needs from its caller. */
-export interface RootAskOptions {
+interface RootAskOptions {
 	/** Aborts the ask. The host select dialog is not closed by it. */
 	signal?: AbortSignal;
 	/** The role the gate judged, recorded at settle when no run record names one. */

@@ -282,7 +282,7 @@ function optionSlot(flags: FlagClass | undefined): string {
  * that role's segments from `ROLE_NOTES` itself, so no caller can pass another
  * role's segments or a union of two roles.
  */
-export interface NotesZone {
+interface NotesZone {
 	readonly role: Role;
 }
 
@@ -305,7 +305,7 @@ function notesZones(zones: readonly string[] | null): string | null {
  * The path pattern of a zone. `notes:own` and `path:ask` take the resolved
  * notes zones of the role or class that owns the row.
  */
-export function zonePattern(zone: Zone, family: string | undefined, notes: readonly string[] | null): string {
+function zonePattern(zone: Zone, family: string | undefined, notes: readonly string[] | null): string {
 	const own = notesZones(notes);
 	const noParent = "(?!(?:.*/)?\\.\\.(?:/|$))";
 	switch (zone) {
@@ -333,7 +333,7 @@ export function zonePattern(zone: Zone, family: string | undefined, notes: reado
 }
 
 /** One pattern for one row. The pattern is built here, never in the table. */
-export function patternFor(row: RuleRow, zone: NotesZone | null = null): string {
+function patternFor(row: RuleRow, zone: NotesZone | null = null): string {
 	if (row.arg === "path") {
 		const notes = zone ? zoneSegments(zone) : null;
 		return zonePattern(row.zone as Zone, row.verb?.[0], notes);

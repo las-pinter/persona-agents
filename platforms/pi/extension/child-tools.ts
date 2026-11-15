@@ -54,7 +54,7 @@ export function missingChildToolReason(entries: readonly string[]): string {
 }
 
 /** The refusal a child gets when it tries to ask the user directly. */
-export const CHILD_ASK_REFUSAL_REASON =
+const CHILD_ASK_REFUSAL_REASON =
 	"Blocked: a child cannot ask the user; return the questions for the caller to put";
 
 /**
@@ -88,7 +88,7 @@ export function clearChildToolImplementations(): void {
 }
 
 /** The names a builtin definition covers. The set reads no settings. */
-export const BUILTIN_CHILD_TOOL_NAMES: readonly string[] = [
+const BUILTIN_CHILD_TOOL_NAMES: readonly string[] = [
 	"read",
 	"bash",
 	"powershell",
@@ -100,7 +100,7 @@ export const BUILTIN_CHILD_TOOL_NAMES: readonly string[] = [
 ];
 
 /** True when this process can build an implementation for `name`. */
-export function hasChildImplementation(name: string): boolean {
+function hasChildImplementation(name: string): boolean {
 	return keptTools.has(name) || BUILTIN_CHILD_TOOL_NAMES.includes(name);
 }
 
@@ -143,7 +143,7 @@ export function captureRegisteredTools(pi: ExtensionAPI): ExtensionAPI {
  * server or an extension namespace. Such a name is not a tool, so it gets no
  * wrapper and stays out of the equality check.
  */
-export function isUngatedChildTool(name: string): boolean {
+function isUngatedChildTool(name: string): boolean {
 	return name.startsWith("mcp__") || name.includes(".");
 }
 
@@ -167,13 +167,13 @@ export function wildcardLoadoutReason(entries: readonly string[]): string {
 }
 
 /** The event one wrapper hands the parent gate. */
-export interface ChildToolCallEvent {
+interface ChildToolCallEvent {
 	toolName: string;
 	input?: Record<string, unknown>;
 }
 
 /** What the parent gate answers: a block with a reason, or no verdict. */
-export type ChildToolVerdict = { block?: boolean; reason?: string } | undefined;
+type ChildToolVerdict = { block?: boolean; reason?: string } | undefined;
 
 /** The parent gate handler the wrapper reuses. */
 export type ParentGateHandler = (event: ChildToolCallEvent, ctx: ExtensionToolContext) => Promise<ChildToolVerdict>;
@@ -191,7 +191,7 @@ export function parentGateHandler(): ParentGateHandler | null {
 }
 
 /** What one wrapper list is built from. */
-export interface WrapChildToolsInput {
+interface WrapChildToolsInput {
 	/** The child loadout: the tool names the child may call. */
 	names: readonly string[];
 	/** In-process tools the loadout names, for example `todo`. */

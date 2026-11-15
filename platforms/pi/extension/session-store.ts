@@ -65,7 +65,7 @@ export interface SidecarRecord {
 }
 
 /** A saved session file, its age source, and the header cwd. */
-export interface SessionFileHit {
+interface SessionFileHit {
 	/** The absolute path of the `.jsonl` file. */
 	path: string;
 	/** The file mtime in epoch milliseconds, the age source. */
@@ -75,7 +75,7 @@ export interface SessionFileHit {
 }
 
 /** What the plan entry point needs from the caller. */
-export interface PlanSessionInput {
+interface PlanSessionInput {
 	/** The agent directory that holds the store. */
 	agentDir: string;
 	/** The caller-named session id, prefixed with the agent name. */
@@ -91,7 +91,7 @@ export interface PlanSessionInput {
 }
 
 /** A round that resumes the saved session. */
-export interface ResumePlan {
+interface ResumePlan {
 	kind: "resume";
 	id: string;
 	agent: string;
@@ -107,7 +107,7 @@ export interface ResumePlan {
 }
 
 /** A round that starts cold because nothing usable is saved. */
-export interface ColdPlan {
+interface ColdPlan {
 	kind: "cold";
 	/** `missing` for no usable sidecar or file, `stale` for age or cwd. */
 	reason: "missing" | "stale";
@@ -128,7 +128,7 @@ export interface ColdPlan {
 }
 
 /** A round that refuses before a session is built. */
-export interface RefusalPlan {
+interface RefusalPlan {
 	kind: "refuse";
 	reason: "round-cap" | "foreign-agent" | "prefix" | "bad-id";
 	message: string;
@@ -145,7 +145,7 @@ export interface RefusalPlan {
 }
 
 /** The one discriminated plan. The runner switches on `kind`. */
-export type SessionPlan = ResumePlan | ColdPlan | RefusalPlan;
+type SessionPlan = ResumePlan | ColdPlan | RefusalPlan;
 
 /** The store folder for one agent directory. */
 export function sessionStoreDir(agentDir: string): string {

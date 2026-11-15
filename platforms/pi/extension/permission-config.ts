@@ -40,11 +40,11 @@ import { recordLogLine } from "./ask-record.ts";
 import { compileRegex, type RawRule } from "./command-segments.ts";
 
 /** The environment variable that sets the shipped table path. */
-export const TABLE_ENV = "PI_PERMISSIONS_TABLE";
+const TABLE_ENV = "PI_PERMISSIONS_TABLE";
 /** The environment variable that sets the user override path. */
-export const OVERRIDE_ENV = "PI_PERMISSIONS_TABLE_OVERRIDE";
+const OVERRIDE_ENV = "PI_PERMISSIONS_TABLE_OVERRIDE";
 /** The environment variable that sets the global overlay path. */
-export const OVERLAY_ENV = "PI_PERMISSIONS_FILE";
+const OVERLAY_ENV = "PI_PERMISSIONS_FILE";
 
 /** The shipped default table, resolved from this module, never from the cwd. */
 export const DEFAULT_TABLE_FILE = fileURLToPath(new URL("../permissions.table.json", import.meta.url));
@@ -75,18 +75,13 @@ export interface ConfigPaths {
 	overlay?: string;
 }
 
-/** The shipped default table path. */
-export function defaultTableFile(): string {
-	return DEFAULT_TABLE_FILE;
-}
-
 /** The table path: the test hook first, then the shipped default. */
-export function tableFile(): string {
+function tableFile(): string {
 	return process.env[TABLE_ENV] || DEFAULT_TABLE_FILE;
 }
 
 /** The override path: the test hook first, then the home agent folder. */
-export function overrideFile(): string {
+function overrideFile(): string {
 	return process.env[OVERRIDE_ENV] || path.join(getAgentDir(), "permissions.table.json");
 }
 
@@ -100,7 +95,7 @@ export function overlayFile(): string {
  * folder or any folder above it. A marker is a directory or a file, so a linked
  * worktree counts.
  */
-export function isInsideRepository(file: string): boolean {
+function isInsideRepository(file: string): boolean {
 	let dir = path.dirname(path.resolve(file));
 	for (;;) {
 		if (fs.existsSync(path.join(dir, ".git"))) return true;
@@ -111,7 +106,7 @@ export function isInsideRepository(file: string): boolean {
 }
 
 /** The top-level shape of a permission JSON file: one object. */
-export type JsonDocument = Record<string, unknown>;
+type JsonDocument = Record<string, unknown>;
 
 function fault(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -253,7 +248,7 @@ function applyEntry(rows: RuleRow[], raw: unknown): RuleRow[] {
  * id, or supplies a complete row. A supplied id that is absent adds one row; a
  * supplied id that is present replaces every row of that id.
  */
-export function applyOverrideFile(rows: readonly RuleRow[], file: string): RuleRow[] {
+function applyOverrideFile(rows: readonly RuleRow[], file: string): RuleRow[] {
 	const doc = readJson(file);
 	rejectUnknownKeys(doc, OVERRIDE_KEYS, "the override document");
 	if (doc.version !== 1) throw new Error(`unsupported version ${JSON.stringify(doc.version)}`);

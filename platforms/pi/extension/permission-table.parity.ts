@@ -25,7 +25,7 @@
 
 import type { PermissionClass } from "./permission-class.ts";
 
-export interface LegacyRecord {
+interface LegacyRecord {
 	/** `<role>/<section>/<ordinal>` or `global/<section>/<ordinal>`. */
 	entry: string;
 	/** The row that now carries the rule. */
@@ -65,7 +65,7 @@ export const DELETIONS: Record<string, string> = {
  * the differential test reads this copy and the live file is only a cross-check
  * under the opt-in variable.
  */
-export interface GlobalLegacyRule {
+interface GlobalLegacyRule {
 	section: "deny" | "ask";
 	tool: string;
 	match: string;
@@ -165,7 +165,7 @@ export const ROW_RATIONALE: Record<string, string> = {
 };
 
 /** A form the table blocks, with the reason and the sample the test checks. */
-export interface GapRecord {
+interface GapRecord {
 	form: string;
 	sample: string;
 	row: string;

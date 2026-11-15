@@ -16,8 +16,6 @@ export const DEPTH_CAP_REASON = `Depth cap reached (level ${MAX_AGENT_DEPTH}): s
 /** The spawn tool name. The registration and the strip both read it. */
 export const SPAWN_TOOL_NAME = "subagent";
 
-/** Env var for the agent nesting depth. */
-export const ENV_AGENT_DEPTH = "PI_AGENT_DEPTH";
 /** Env var for a run's own run id. */
 export const ENV_RUN_ID = "PI_AGENT_RUN_ID";
 /** Env var for a run's parent run id. */
@@ -86,7 +84,7 @@ export function stripSpawnTool(tools: string[], depth: number): string[] {
 }
 
 /** The result of planning one spawn from the current depth. */
-export interface SpawnPlan {
+interface SpawnPlan {
 	allowed: boolean;
 	childDepth: number;
 	tools: string[];

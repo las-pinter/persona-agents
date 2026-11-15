@@ -7,7 +7,7 @@
  */
 
 /** What the reader needs from a context: an optional manager with an optional read. */
-export interface SessionIdContext {
+interface SessionIdContext {
 	sessionManager?: { getSessionId?: () => string } | undefined;
 }
 

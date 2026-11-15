@@ -51,11 +51,11 @@ import type { TreeNode } from "./tree-model.ts";
 import { treeSignature } from "./tree-signature.ts";
 
 /** Spinner tick cadence while a node runs. */
-export const SPINNER_MS = 90;
+const SPINNER_MS = 90;
 /** Bounded RPC summary height: RPC mode gets a string list, never a full column. */
 export const RPC_MAX_LINES = 10;
 /** RPC summary render width. */
-export const RPC_WIDTH = 60;
+const RPC_WIDTH = 60;
 
 /** Widget key. Holds the TUI anchor component or the RPC `string[]` summary. */
 const WIDGET_KEY = "persona-agents-tree";

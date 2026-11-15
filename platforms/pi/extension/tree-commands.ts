@@ -25,7 +25,7 @@ import type { SidebarSnapshot } from "./sidebar-types.ts";
 import { flattenTree, type TreeNode } from "./tree-model.ts";
 
 /** The glue a command drives: the bind, the paint, and the three overlays. */
-export interface TreeCommandHost {
+interface TreeCommandHost {
 	/** The live snapshot, or null before the bind. */
 	readonly snapshot: () => SidebarSnapshot | null;
 	/** The column width the paint layer reads. */

@@ -73,17 +73,17 @@ import type { RunEvent } from "./tree-log.ts";
 const RUN_TICK_MS = 250;
 
 /** The refusal when no parent session id exists, so a child would walk to depth 0. */
-export const NO_PARENT_SESSION_REASON =
+const NO_PARENT_SESSION_REASON =
 	"Refused: no parent session id, so the child record would sit at depth 0 as the root";
 
 export type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 /** The model lookup a child named model needs. An unknown name returns undefined. */
-export interface ModelLookup {
+interface ModelLookup {
 	find(provider: string, modelId: string): ChildModel | undefined;
 }
 
-export interface DispatchDefaults {
+interface DispatchDefaults {
 	/** The parent model id, `provider/model`, for display. */
 	model?: string;
 	/** The parent model object. A child uses it when the agent names no model. */
@@ -142,7 +142,7 @@ function callerDepthOf(runtime: ChildRuntime): number {
 }
 
 /** The loader factory a test may replace, so no real extension file is read. */
-export type ChildLoaderFactory = (
+type ChildLoaderFactory = (
 	cwd: string,
 	agentDir: string,
 	settingsManager: SettingsManager,

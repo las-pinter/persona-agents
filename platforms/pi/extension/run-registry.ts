@@ -36,7 +36,7 @@ export const UNKNOWN_RUN_REASON = "Blocked: no permission record for this sessio
 export const UNKNOWN_RUN_ROLE = "unknown";
 
 /** Lifecycle state of one run. A run is `running` until its exit path marks it. */
-export type RunStatus = "running" | "done" | "failed";
+type RunStatus = "running" | "done" | "failed";
 
 /** The two exit states. Only the runner writes one, after `dispose()`. */
 export type RunExit = "done" | "failed";
@@ -92,18 +92,18 @@ export interface RunStart {
  * The unknown branch carries no class. A lookup that found no record cannot
  * hand back a class that a reader takes for an earned one.
  */
-export type RunResolution =
+type RunResolution =
 	| { known: true; role: string; class: PermissionClass }
 	| { known: false };
 
 /** Why a parent walk stopped short of a root. */
-export type WalkFailure = "unknown-session" | "missing-parent" | "loop" | "unbounded";
+type WalkFailure = "unknown-session" | "missing-parent" | "loop" | "unbounded";
 
 /** The result of walking `parentSessionId` from one record up to its root. */
-export type RootWalk = RootWalkSuccess | RootWalkFailure;
+type RootWalk = RootWalkSuccess | RootWalkFailure;
 
 /** A walk that reached a record with no parent. */
-export interface RootWalkSuccess {
+interface RootWalkSuccess {
 	ok: true;
 	/** The root session id. */
 	rootSessionId: string;
@@ -122,7 +122,7 @@ export interface RootWalkSuccess {
  * check cannot read a dead walk as a spawnable one. The fields are absent
  * from this branch.
  */
-export interface RootWalkFailure {
+interface RootWalkFailure {
 	ok: false;
 	/** The kind of failure. */
 	failure: WalkFailure;

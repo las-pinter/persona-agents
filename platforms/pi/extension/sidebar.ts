@@ -65,7 +65,7 @@ export interface SidebarTerminal {
  * Minimal TUI surface. `doRender` is `protected` on the real `TuiBase`, so it
  * is optional here; the glue casts at the call site.
  */
-export interface SidebarTui {
+interface SidebarTui {
 	terminal?: SidebarTerminal;
 	doRender?: (...args: unknown[]) => void;
 }
@@ -78,7 +78,7 @@ function positiveInt(value: unknown, fallback: number): number {
 }
 
 /** The scroll state the glue hands to the paint layer. */
-export interface SidebarScrollOptions {
+interface SidebarScrollOptions {
 	/** The shared column scroll offset. Read at paint time, never cached. */
 	getOffset?: () => number;
 	/** The dim style of the hide marks. */

@@ -16,7 +16,7 @@ import { assembleTree } from "./tree-model.ts";
 export const TREE_POLL_MS = 500;
 
 /** A running node with no log record for this long is stale. */
-export const STALE_MS = 5 * 60 * 1000;
+const STALE_MS = 5 * 60 * 1000;
 
 /**
  * Rebuild the ring from the held lines and the log tail, newest first. A line

@@ -10,7 +10,7 @@
  */
 
 /** An inner command found by `extractSubstitutions`, with its start offset. */
-export interface Substitution {
+interface Substitution {
 	text: string;
 	/** Offset of `text` inside the input to `extractSubstitutions`. */
 	offset: number;
