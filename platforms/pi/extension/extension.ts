@@ -443,7 +443,7 @@ export default function (pi: ExtensionAPI): void {
 			const seen = new Set<string>();
 			const discoveredSkills = discoverSkills(ctx.cwd);
 
-			// P3: bind the agent's `alwaysLoad:` globs. A missing mandatory skill
+			// Bind the agent's `alwaysLoad:` globs. A missing mandatory skill
 			// warns loudly and leaves a marker — never drop a steering skill silently.
 			const mandatory = matchSkills(agent.alwaysLoad ?? [], discoveredSkills);
 			if (agent.alwaysLoad && agent.alwaysLoad.length > 0) {
@@ -475,7 +475,7 @@ export default function (pi: ExtensionAPI): void {
 				debugLog("alwaysLoad injected:", Array.from(seen).join(","));
 			}
 
-			// P3: bind the agent's `skills:` globs (package + user + project) as an
+			// Bind the agent's `skills:` globs (package + user + project) as an
 			// on-demand index. Only name, description, and path are injected; the
 			// agent reads the SKILL.md when the task matches. Full bodies stay out
 			// of the startup prompt, so this branch has no body budget.
@@ -502,7 +502,7 @@ export default function (pi: ExtensionAPI): void {
 			}
 			if (indexed.length + userInvoked.length > 0) debugLog("skills indexed:", Array.from(seen).join(","));
 
-			// P3: bind the agent's `resources:` globs relative to the cwd.
+			// Bind the agent's `resources:` globs relative to the cwd.
 			const resources = resolveResources(agent.resources, ctx.cwd);
 			if (resources.inlined.length > 0 || resources.paths.length > 0) {
 				extra += `\n\n## Agent resources for "${agent.name}"`;

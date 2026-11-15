@@ -48,11 +48,11 @@ export interface AgentConfig {
 	model?: string;
 	/** Default persona reference: "theme/name", "name", or a theme ("goblin"). */
 	persona?: string;
-	/** Regex-bound skills this agent may load (glob style, resolves in a later phase). */
+	/** Regex-bound skills this agent may load, in glob style. */
 	skills?: string[];
 	/** Skills guaranteed injected into the system prompt at startup (glob style). */
 	alwaysLoad?: string[];
-	/** Regex-bound file resources attached to this agent's context (later phase). */
+	/** Regex-bound file resources attached to this agent's context. */
 	resources?: string[];
 	/**
 	 * Permission class from frontmatter. Every file this package ships must name

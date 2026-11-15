@@ -25,7 +25,7 @@ function statusFile(stage: string, updated: string, blockedBy: string = "none"):
 		`- **Stage:** ${stage}`,
 		`- **Updated:** ${updated}`,
 		"- **Owner:** planner",
-		"- **Next action:** Write brief 03",
+		"- **Next action:** Run the suite",
 		`- **Blocked by:** ${blockedBy}`,
 		"",
 		"## History",
