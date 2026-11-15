@@ -24,21 +24,21 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 <USER_HOME>/agent-notes/
 ├── project-notes/
 │   └── <project>/
-│       ├── summary.md                 (orchestrator, max 30 lines)
-│       ├── features/<slug>.md         (orchestrator, max 300 lines)
-│       ├── bugs/<slug>.md             (orchestrator, max 300 lines)
-│       ├── tech/<slug>.md             (orchestrator, max 300 lines)
-│       ├── releases/<version>.md      (orchestrator, one note per release, max 300 lines)
-│       ├── audit/<slug>.md            (orchestrator, one note per audit, max 300 lines)
+│       ├── summary.md                 (orchestrator)
+│       ├── features/<slug>.md         (orchestrator)
+│       ├── bugs/<slug>.md             (orchestrator)
+│       ├── tech/<slug>.md             (orchestrator)
+│       ├── releases/<version>.md      (orchestrator, one note per release)
+│       ├── audit/<slug>.md            (orchestrator, one note per audit)
 │       ├── rules/<slug>.md            (orchestrator, one rule per file)
 │       └── studies/
 │           ├── index.md               (planner)
 │           ├── legacy_studies/        (orchestrator)
 │           └── YYYY-MM-DD-<slug>/
-│               ├── study.md           (planner, max 500 lines)
+│               ├── study.md           (planner)
 │               ├── status.md          (planner)
 │               ├── briefs/NN-<slug>.md (planner, one file per brief)
-│               ├── <side-doc>.md      (planner, max 300 lines each)
+│               ├── <side-doc>.md      (planner)
 │               └── reverse_engineering/  (planner)
 └── researcher/
     ├── index.md                       (researcher)
