@@ -18,8 +18,8 @@ const MARK_PREFIX = "… +";
 /**
  * The fewest rows a marked window needs. Mid-window, two rows carry the top
  * mark and the bottom mark and no body row. At either end one body row shows
- * between the single mark and the edge. A one-row window paints one mark and
- * no body, so it is below the floor and `windowLines` paints nothing there.
+ * between the single mark and the edge. A one-row window cannot hold a mark on
+ * each side and a body row, so it is below the floor and nothing paints there.
  */
 export const MIN_WINDOW_ROWS = 2;
 
@@ -98,7 +98,7 @@ export function windowLines(
 	const above = start > 0 ? 1 : 0;
 	let body = rows - above;
 	let end = Math.min(start + body, total);
-	const below = end < total && body >= 1 ? 1 : 0;
+	const below = end < total ? 1 : 0;
 	body -= below;
 	end = start + body;
 

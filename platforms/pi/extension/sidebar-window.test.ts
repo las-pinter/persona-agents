@@ -184,6 +184,19 @@ test("the dim style wraps each mark and nothing else", () => {
 	assert.deepEqual(window, ["<dim>… +4 above</dim>", "line 4", "line 5", "<dim>… +14 below</dim>"]);
 });
 
+test("every line is painted or counted by a mark", () => {
+	const lines = column(9);
+	for (const rows of [2, 3, 4, 5, 6]) {
+		for (const offset of [0, 2, scrollLimit(lines.length, rows)]) {
+			const window = windowLines(lines, offset, rows);
+			const shown = window.filter((line) => markCount(line) === null).length;
+			const hidden = window.reduce((sum, line) => sum + (markCount(line)?.count ?? 0), 0);
+			assert.equal(shown + hidden, lines.length, `rows ${rows} at offset ${offset}`);
+			assert.ok(window.length <= rows, `rows ${rows} at offset ${offset} overflows`);
+		}
+	}
+});
+
 test("the marks name the hidden counts on each side", () => {
 	assert.equal(aboveMark(3), "… +3 above");
 	assert.equal(belowMark(9), "… +9 below");
