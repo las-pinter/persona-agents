@@ -117,7 +117,7 @@ export function resetOutputTokens(state: InternalState): void {
 /** Apply one `persona-agents/todos/v1` payload. Bad data is ignored. */
 export function applyTodoPayload(state: InternalState, data: unknown): void {
 	if (typeof data !== "object" || data === null) return;
-	const payload = data as { todos?: unknown; nextId?: unknown; showTurnMarker?: unknown };
+	const payload = data as { todos?: unknown; showTurnMarker?: unknown };
 	if (!Array.isArray(payload.todos)) return;
 	const todos: Array<{ id: string; text: string; done: boolean }> = [];
 	for (const item of payload.todos) {
@@ -132,9 +132,6 @@ export function applyTodoPayload(state: InternalState, data: unknown): void {
 	}
 	state.snapshot.todos = todos;
 	state.snapshot.todosTurnMarker = payload.showTurnMarker === true;
-	if (typeof payload.nextId === "number" && Number.isFinite(payload.nextId)) {
-		state.todosNextId = payload.nextId;
-	}
 }
 
 /** Rebuild TODOS from session entries, for `/reload` and resume. */
@@ -147,7 +144,6 @@ export function refreshTodosFromEntries(state: InternalState, ctx: ExtensionCont
 			done: todo.done,
 		}));
 		state.snapshot.todosTurnMarker = reconstructed.showTurnMarker;
-		state.todosNextId = reconstructed.nextId;
 	} catch {
 		state.snapshot.todos = [];
 		state.snapshot.todosTurnMarker = false;

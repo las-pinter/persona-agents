@@ -64,7 +64,6 @@ export function refreshMcpFromDisk(state: InternalState, pi: ExtensionAPI): void
 
 /** Refresh the MCP list from one parsed `mcp.json` read and pi's servers. */
 function refreshMcp(state: InternalState, pi: ExtensionAPI, jsonServers: string[]): void {
-	state.mcpJsonServers = jsonServers;
 	const configured = new Set<string>(jsonServers);
 	try {
 		if (typeof pi.getMcpServers === "function") {

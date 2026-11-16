@@ -76,10 +76,8 @@ export interface InternalState {
 	changed: string[];
 	changedCount: number;
 	files: WorkspaceFileSnapshot[];
-	todosNextId: number;
 	tpsSamples: TpsSample[];
 	lastOutputTokens: number;
-	mcpJsonServers: string[];
 	mcpJsonPath: string;
 	/** Root MCP tool starts, counted in this process. */
 	rootMcpUsage: Record<string, number>;
@@ -146,10 +144,8 @@ export function createSidebarData(pi: ExtensionAPI): SidebarData {
 		changed: [],
 		changedCount: 0,
 		files: [],
-		todosNextId: 1,
 		tpsSamples: [],
 		lastOutputTokens: 0,
-		mcpJsonServers: [],
 		mcpJsonPath: resolveMcpJsonPath(),
 		rootMcpUsage: {},
 		rootCallIds: new Set<string>(),
