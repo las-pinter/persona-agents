@@ -8,7 +8,7 @@ import { pendingLogEvents } from "./ask-record.ts";
 import { ENV_TREE_LOG } from "./depth.ts";
 import type { InternalState } from "./sidebar-data.ts";
 import { guard } from "./sidebar-data-guard.ts";
-import { applyMcpUsage } from "./sidebar-data-mcp.ts";
+import { applyMcpUsage, observeMcpUsage } from "./sidebar-data-mcp.ts";
 import { readEvents, type RunEvent } from "./tree-log.ts";
 import { assembleTree } from "./tree-model.ts";
 
@@ -43,8 +43,7 @@ export function refreshTree(state: InternalState): void {
 	// so an old root start keeps its children attached through this refresh.
 	const events = readEvents(logPath);
 	state.snapshot.tree = assembleTree(events, Date.now(), STALE_MS);
-	for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);
-	applyMcpUsage(state);
+	observeMcpUsage(state, events);
 	// This read returns the whole kept tail, so the ring is rebuilt not appended.
 	applyAskLog(state, events);
 }

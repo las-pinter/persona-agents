@@ -10,8 +10,9 @@ import * as assert from "node:assert/strict";
 import { syncBuiltinESMExports } from "node:module";
 import fs from "node:fs";
 import { ENV_TREE_LOG } from "./depth.ts";
-import { createSidebarData } from "./sidebar-data.ts";
-import { MCP_POLL_MS } from "./sidebar-data-mcp.ts";
+import { createMcpTally } from "./mcp-usage.ts";
+import { createSidebarData, type InternalState } from "./sidebar-data.ts";
+import { MCP_POLL_MS, observeMcpUsage } from "./sidebar-data-mcp.ts";
 import { TREE_POLL_MS } from "./sidebar-data-tree.ts";
 import {
 	makeCapturingPi,
@@ -248,4 +249,14 @@ test("a session start stays at zero through a later tree refresh", (t) => {
 		restoreTreeLogEnv(previous);
 		removeLog(logPath);
 	}
+});
+
+test("two run events fold their mcp usage into the snapshot tally", () => {
+	const state = { snapshot: { mcpUsage: {} }, rootMcpUsage: {}, mcpTally: createMcpTally() } as unknown as InternalState;
+	const events = [
+		{ runId: "a", mcpUsage: { context7: 2 } },
+		{ runId: "b", mcpUsage: { context7: 3 } },
+	];
+	observeMcpUsage(state, events);
+	assert.deepEqual(state.snapshot.mcpUsage, { context7: 5 });
 });

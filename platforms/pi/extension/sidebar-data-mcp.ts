@@ -12,7 +12,7 @@ import type { InternalState } from "./sidebar-data.ts";
 import { guard } from "./sidebar-data-guard.ts";
 import { readMcpJsonServers } from "./sidebar-sources.ts";
 import type { McpServerSnapshot, McpServerStatus } from "./sidebar-types.ts";
-import { readEvents } from "./tree-log.ts";
+import { readEvents, type RunEvent } from "./tree-log.ts";
 
 /** MCP poll cadence. */
 export const MCP_POLL_MS = 5000;
@@ -43,11 +43,20 @@ export function applyMcpUsage(state: InternalState): void {
 	state.snapshot.mcpUsage = mergeMcpUsage(state.rootMcpUsage, state.mcpTally.usage());
 }
 
+/** Fold each run event's MCP usage into the tally, then repaint the count. */
+export function observeMcpUsage(
+	state: InternalState,
+	events: ReadonlyArray<Pick<RunEvent, "runId" | "mcpUsage">>,
+): void {
+	for (const event of events) state.mcpTally.observe(event.runId, event.mcpUsage);
+	applyMcpUsage(state);
+}
+
 /** Adopt the current log as already counted, then zero the session tally. */
 export function resetMcpUsage(state: InternalState): void {
 	const logPath = process.env[ENV_TREE_LOG];
 	if (logPath) {
-		for (const event of readEvents(logPath)) state.mcpTally.observe(event.runId, event.mcpUsage);
+		observeMcpUsage(state, readEvents(logPath));
 	}
 	state.mcpTally.reset();
 	state.rootMcpUsage = {};
