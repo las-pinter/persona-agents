@@ -174,7 +174,7 @@ test("a record with only the legacy flag normalizes to one green dot and a count
 	assert.ok(lines.some((line) => line.includes("● context7")));
 });
 
-test("the dot paints no mark for a record with no status", () => {
+test("the dot paints no green dot for a record with no status", () => {
 	// Models a raw pre-normalizer record that carries no status.
 	const legacyOnly = { name: "a", configured: true } as unknown as McpServerSnapshot;
 	const lines = renderMcpPanel([legacyOnly], 60, theme);

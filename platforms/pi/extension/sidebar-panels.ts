@@ -302,6 +302,7 @@ export function renderWorkspacePanel(
  * to `unknown`, so a stale snapshot never throws.
  */
 function mcpStatusDot(theme: SidebarTheme, status: McpServerStatus | undefined): string {
+	// `renderMcpPanel` is exported, so a cast record can reach this arm with no status.
 	const resolved: McpServerStatus =
 		status === "connected" || status === "disconnected" ? status : "unknown";
 	return stateGlyph(theme, resolved);
