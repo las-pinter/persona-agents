@@ -5,7 +5,8 @@
  * shape stays in permission-table.shape.test.ts, the refused rows in
  * permission-table.validation.test.ts, the gate source in
  * permission-table.gate-source.test.ts, and the gate verdict cases in
- * permission-table.gate.test.ts and permission-table.gate-history.test.ts.
+ * permission-table.gate.test.ts and permission-table.gate-history.test.ts. The
+ * legacy replay lives in permission-table.differential.test.ts.
  */
 
 import { test } from "node:test";
