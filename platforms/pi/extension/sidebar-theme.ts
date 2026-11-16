@@ -66,13 +66,12 @@ interface GlyphMark {
 }
 
 /**
- * The mark for each tree node status. The record is keyed by the status type,
- * so a new status fails the typecheck until it has a glyph. The running glyph
- * here is the first spinner frame; `stateGlyph` steps the frame instead.
+ * The mark for each tree node status but `running`. A new status still fails
+ * the typecheck until it has a glyph. `stateGlyph` steps the frame for a
+ * running state, so the table holds no running glyph.
  */
-const TREE_MARKS: Record<TreeNodeStatus, GlyphMark> = {
+const TREE_MARKS: Record<Exclude<TreeNodeStatus, "running">, GlyphMark> = {
 	idle: { glyph: "○", token: "dim" },
-	running: { glyph: SPINNER_FRAMES[0], token: "accent" },
 	done: { glyph: "✓", token: "success" },
 	failed: { glyph: "✗", token: "error" },
 	stale: { glyph: "⚠", token: "warning" },
