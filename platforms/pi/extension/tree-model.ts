@@ -18,13 +18,10 @@ export interface TreeNode {
 	parentRunId: string | null;
 	depth: number;
 	agent: string;
-	persona: string | null;
 	status: TreeNodeStatus;
 	startedAt: string;
 	endedAt: string | null;
 	task: string;
-	bytesIn: number;
-	bytesOut: number;
 	usage: RunUsage | undefined;
 	/** Tool calls this run started. `0` when the log has no count. */
 	toolCount: number;
@@ -104,13 +101,10 @@ function buildNode(runId: string, records: RunEvent[], now: number, staleMs: num
 		parentRunId: primary.parentRunId ?? null,
 		depth: primary.depth ?? 0,
 		agent: primary.agent ?? "unknown",
-		persona: primary.persona ?? null,
 		status: resolveStatus(start, end, latest, startedAt, now, staleMs),
 		startedAt,
 		endedAt: end?.at ?? null,
 		task: latest.task ?? start?.task ?? "",
-		bytesIn: latest.bytesIn ?? 0,
-		bytesOut: latest.bytesOut ?? 0,
 		usage: latest.usage ?? start?.usage,
 		toolCount: latest.toolCount ?? start?.toolCount ?? 0,
 		round: latest.round ?? start?.round,

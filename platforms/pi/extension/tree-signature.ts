@@ -14,9 +14,9 @@ import { flattenTreeKeeping } from "./tree-model.ts";
  *
  * Serializes every field a panel or the node-detail view paints, with
  * `JSON.stringify`. `null` and `""` stay distinct, and no field is sliced.
- * Tasks are already capped at append time, so the full value is safe. Node
- * fields no view paints (`bytesIn`, `bytesOut`, `children`) stay out, so
- * they cannot trigger a needless repaint.
+ * Tasks are already capped at append time, so the full value is safe. The
+ * node field no view paints (`children`) stays out, so it cannot trigger a
+ * needless repaint.
  */
 export function treeSignature(snapshot: SidebarSnapshot): string {
 	const tree = flattenTreeKeeping(snapshot.tree ?? []).map((node) => ({
