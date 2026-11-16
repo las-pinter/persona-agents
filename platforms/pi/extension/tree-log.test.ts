@@ -103,6 +103,33 @@ test("a malformed line is skipped silently", () => {
 	);
 });
 
+test("a record with no at is not a run event", () => {
+	const path = logPath();
+	const { at: _at, ...record } = makeEvent();
+	writeFileSync(path, `${JSON.stringify(record)}\n`, "utf8");
+
+	const events = readAllEvents(path);
+	assert.equal(events.length, 0);
+});
+
+test("a record with no depth is not a run event", () => {
+	const path = logPath();
+	const { depth: _depth, ...record } = makeEvent();
+	writeFileSync(path, `${JSON.stringify(record)}\n`, "utf8");
+
+	const events = readAllEvents(path);
+	assert.equal(events.length, 0);
+});
+
+test("a record with no agent is not a run event", () => {
+	const path = logPath();
+	const { agent: _agent, ...record } = makeEvent();
+	writeFileSync(path, `${JSON.stringify(record)}\n`, "utf8");
+
+	const events = readAllEvents(path);
+	assert.equal(events.length, 0);
+});
+
 test("an oversized task is truncated to the byte cap", () => {
 	const path = logPath();
 	appendEvent(path, makeEvent({ task: "a".repeat(10000) }));

@@ -164,7 +164,10 @@ function isRunEvent(value: unknown): value is RunEvent {
 	return (
 		typeof record.runId === "string" &&
 		typeof record.type === "string" &&
-		typeof record.status === "string"
+		typeof record.status === "string" &&
+		typeof record.at === "string" &&
+		typeof record.depth === "number" &&
+		typeof record.agent === "string"
 	);
 }
 
