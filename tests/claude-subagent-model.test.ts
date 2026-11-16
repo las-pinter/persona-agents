@@ -510,4 +510,21 @@ describe("plugin-options: explicit-path readers", () => {
 	test("realHome gives a string and does not throw", () => {
 		assert.equal(typeof realHome(), "string");
 	});
+
+	test("a CLAUDE_CONFIG_DIR inside the project with another letter case is ignored", () => {
+		withTmp((tmp) => {
+			const project = path.join(tmp, "Repo");
+			const planted = path.join(tmp, "repo", ".cfg");
+			fs.mkdirSync(path.join(project, ".cfg"), { recursive: true });
+			// A case-folding disk supplies this fold on macOS; this stub supplies it here.
+			const native = fs.realpathSync.native;
+			try {
+				fs.realpathSync.native = ((p) => native(String(p).replace(`${path.sep}repo${path.sep}`, `${path.sep}Repo${path.sep}`))) as typeof native;
+				assert.ok(inProject(planted, {}, project, ""));
+				assert.notEqual(userConfigDir({ CLAUDE_CONFIG_DIR: planted }, project, ""), planted);
+			} finally {
+				fs.realpathSync.native = native;
+			}
+		});
+	});
 });
