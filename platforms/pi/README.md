@@ -29,7 +29,7 @@ module below lives in `extension/`, except the shipped table data file):
 | `subagent-thinking.ts` | Per-run thinking timing and the thinking indicator lines |
 | `subagent-tree.ts` | Writes each child run's start, update, and end records to the tree log |
 | `inspector.ts` | Subagent run archive + `/runs` + full-screen `/inspect` |
-| `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), env parse, parent tool strip, run-id allocation |
+| `depth.ts` | Pure nesting-depth helpers: 3-level cap (0, 1, 2), registry walk, parent tool strip, run-id allocation |
 | `tree-log.ts` | Shared append-only NDJSON tree log: byte cap, tolerant reader, root-only rotation |
 | `ask-record.ts` | The one extension log ring: ask events and plain lines, one file, one cap, one order |
 | `tree-model.ts` | Pure fold of tree-log records into a `TreeNode` forest (links, orphans, stale marks) |
@@ -432,15 +432,15 @@ agent cannot spawn.
 The primary control is the parent tool strip. When a child would be at the
 cap, the parent removes `subagent` from the child's resolved tool list. The
 child session builds with that list, so the child never receives the tool.
-The child depth comes from the run record walk; `PI_AGENT_DEPTH` covers a
-launch that an outer process started. A caller at the cap is refused, so no
-child session is built.
+The child depth comes from the run registry walk. A caller at the cap is
+refused, so no child session is built.
 
 The cap is NOT a security boundary. All pi processes have the same OS privilege.
-A child with an allowed interpreter can run `pi -ne …` with a forged
-`PI_AGENT_DEPTH`. That bypasses every in-process guard. Only OS isolation — a
-separate user, a container, or a sandbox — is a true boundary. OS isolation is
-OUT OF SCOPE for this feature. The tool strip stops the normal path only.
+A child with an allowed interpreter can run `pi -ne …`. That new process is
+outside this process's run registry, so the tool strip does not reach it.
+Only OS isolation — a separate user, a container, or a sandbox — is a true
+boundary. OS isolation is OUT OF SCOPE for this feature. The tool strip stops
+the normal path only.
 
 The sidebar owns the right column. It paints SEVEN panels:
 

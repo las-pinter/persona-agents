@@ -1,8 +1,8 @@
 /**
  * Agent nesting depth — pure helpers.
  *
- * A child runs in this process, so its depth comes from the run record walk.
- * The process env carries the depth of a launch that an outer process started.
+ * A child runs in this process, so its depth comes from the run registry walk.
+ * No environment read sets the depth.
  *
  * No pi import: this module is pure so `depth.test.ts` needs no runtime.
  */
