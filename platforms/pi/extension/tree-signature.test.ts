@@ -17,8 +17,8 @@ test("treeSignature changes for every field the panels paint", () => {
 	const n = (overrides: Partial<Parameters<typeof makeNode>[0]>) =>
 		makeSnapshot({ tree: [makeNode({ runId: "n1", ...overrides })] });
 	const long = "t".repeat(80);
-	const mcp = (connected: boolean, status: "connected" | "disconnected" | "unknown") =>
-		makeSnapshot({ mcp: [{ name: "exa", configured: true, connected, status }] });
+	const mcp = (status: "connected" | "disconnected" | "unknown") =>
+		makeSnapshot({ mcp: [{ name: "exa", configured: true, status }] });
 	const file = (added: number) =>
 		makeSnapshot({
 			workspace: makeWorkspace({ files: [{ path: "a.ts", added, removed: 0, untracked: false }] }),
@@ -65,8 +65,8 @@ test("treeSignature changes for every field the panels paint", () => {
 			makeSnapshot({ workspace: makeWorkspace({ branch: "main" }) }),
 		],
 		["workspace file stat", file(1), file(2)],
-		["MCP connected", mcp(false, "disconnected"), mcp(true, "connected")],
-		["MCP status only", mcp(false, "unknown"), mcp(false, "disconnected")],
+		["MCP status connected", mcp("disconnected"), mcp("connected")],
+		["MCP unrecognized status", mcp("unknown"), mcp("disconnected")],
 		[
 			"todo done flag",
 			makeSnapshot({ todos: [{ id: "1", text: "a", done: false }] }),

@@ -34,21 +34,18 @@ test("an mcp__<server>__ tool marks the server connected", () => {
 	const mcp = readMcp({ mcpServers: ["context7"], tools: ["mcp__context7__search"] });
 	const server = mcp.find((entry) => entry.name === "context7");
 	assert.equal(server?.status, "connected");
-	assert.equal(server?.connected, true);
 });
 
 test("a readable tool list with no matching tool marks the server disconnected", () => {
 	const mcp = readMcp({ mcpServers: ["exa"], tools: ["mcp__other__search"] });
 	const server = mcp.find((entry) => entry.name === "exa");
 	assert.equal(server?.status, "disconnected");
-	assert.equal(server?.connected, false);
 });
 
 test("a hyphenated server matches its sanitized tool name and is connected", () => {
 	const mcp = readMcp({ mcpServers: ["my-server"], tools: ["mcp__my_server__search"] });
 	const server = mcp.find((entry) => entry.name === "my-server");
 	assert.equal(server?.status, "connected");
-	assert.equal(server?.connected, true);
 });
 
 test("a non-array tool list marks every server unknown", () => {
@@ -61,7 +58,6 @@ test("an errored tool list marks the server unknown", () => {
 	const mcp = readMcp({ mcpServers: ["exa"], toolsError: true });
 	const server = mcp.find((entry) => entry.name === "exa");
 	assert.equal(server?.status, "unknown");
-	assert.equal(server?.connected, false);
 });
 
 test("an absent getAllTools marks the server unknown", () => {

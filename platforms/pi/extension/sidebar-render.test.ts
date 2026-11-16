@@ -479,8 +479,8 @@ test("a changed list with no file row paints the joined names and no mark", () =
 
 test("MCP renders a configured/connected summary and server dots", () => {
 	const mcp: McpSnapshot = [
-		{ name: "context7", configured: true, connected: true, status: "connected" },
-		{ name: "exa", configured: true, connected: false, status: "disconnected" },
+		{ name: "context7", configured: true, status: "connected" },
+		{ name: "exa", configured: true, status: "disconnected" },
 	];
 	const lines = renderMcpPanel(mcp, 60, theme);
 	assert.equal(lines[0]?.trimEnd(), " MCP");
@@ -489,21 +489,20 @@ test("MCP renders a configured/connected summary and server dots", () => {
 	assert.ok(lines.some((line) => line.includes("○ exa")));
 });
 
-test("MCP summary counts the status, not the connected flag", () => {
+test("MCP summary counts the connected status of each server", () => {
 	const mcp: McpSnapshot = [
-		{ name: "a", configured: true, connected: false, status: "connected" },
-		{ name: "b", configured: true, connected: false, status: "connected" },
-		{ name: "c", configured: true, connected: true, status: "disconnected" },
+		{ name: "a", configured: true, status: "connected" },
+		{ name: "b", configured: true, status: "connected" },
+		{ name: "c", configured: true, status: "disconnected" },
 	];
 	const lines = renderMcpPanel(mcp, 60, theme);
-	// Status-derived count is 2; the flag-derived count is 1.
 	assert.ok(lines.includes("configured: 3, connected: 2"));
 });
 
 test("MCP dots stay plain text when the theme has no colors", () => {
 	const mcp: McpSnapshot = [
-		{ name: "a", configured: true, connected: true, status: "connected" },
-		{ name: "b", configured: true, connected: false, status: "unknown" },
+		{ name: "a", configured: true, status: "connected" },
+		{ name: "b", configured: true, status: "unknown" },
 	];
 	const lines = renderMcpPanel(mcp, 60, {});
 	assert.ok(lines.some((line) => line.includes("● a")));

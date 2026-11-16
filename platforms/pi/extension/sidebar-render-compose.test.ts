@@ -236,7 +236,7 @@ test("every composed line fits the width", () => {
 	const snapshot = makeSnapshot({
 		tree,
 		workspace: makeWorkspace({ changed: ["a/very/long/path.ts", "b.ts"], changedCount: 2 }),
-		mcp: [{ name: "a-very-long-server-name", configured: true, connected: false, status: "disconnected" }],
+		mcp: [{ name: "a-very-long-server-name", configured: true, status: "disconnected" }],
 		todos: [{ id: "1", text: "a very long todo text that overflows", done: false }],
 	});
 	const lines = renderSidebarPanel(snapshot, 18, theme, 0);
@@ -264,13 +264,13 @@ for (const width of [0, 1, 10, 20, 45, 120]) {
 			renderAgentTreePanel([node], width, theme, 0),
 			renderSessionPanel(makeSession(), width, theme),
 			renderWorkspacePanel(makeWorkspace(), width, theme),
-			renderMcpPanel([{ name: "context7", configured: true, connected: true, status: "connected" }], width, theme),
+			renderMcpPanel([{ name: "context7", configured: true, status: "connected" }], width, theme),
 			renderTodosPanel([{ id: "1", text: "do it", done: false }], width, theme),
 			renderSidebarPanel(
 				makeSnapshot({
 					tree: [node],
 					askLog: makeAskLogRows(),
-					mcp: [{ name: "context7", configured: true, connected: true, status: "connected" }],
+					mcp: [{ name: "context7", configured: true, status: "connected" }],
 					todos: [{ id: "1", text: "do it", done: false }],
 				}),
 				width,

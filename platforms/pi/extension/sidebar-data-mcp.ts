@@ -34,7 +34,6 @@ export function normalizeMcpStatus(server: McpServerInput): McpServerSnapshot {
 	return {
 		name: server.name,
 		configured: server.configured === true,
-		connected: status === "connected",
 		status,
 	};
 }

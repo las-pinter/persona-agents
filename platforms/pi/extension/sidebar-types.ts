@@ -22,11 +22,6 @@ export type McpServerStatus = "connected" | "disconnected" | "unknown";
 export interface McpServerSnapshot {
 	name: string;
 	configured: boolean;
-	/**
-	 * @deprecated Legacy flag. The producer derives it from `status` and no
-	 * renderer reads it. Read `status` instead.
-	 */
-	connected: boolean;
 	/** Tri-state connection status. The one truth for the dot and the count. */
 	status: McpServerStatus;
 }

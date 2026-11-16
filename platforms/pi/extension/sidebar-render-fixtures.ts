@@ -128,8 +128,8 @@ export function makeFullSnapshot(): SidebarSnapshot {
 			],
 		}),
 		mcp: [
-			{ name: "context7", configured: true, connected: true, status: "connected" },
-			{ name: "exa", configured: true, connected: false, status: "disconnected" },
+			{ name: "context7", configured: true, status: "connected" },
+			{ name: "exa", configured: true, status: "disconnected" },
 		],
 		todos: Array.from({ length: 4 }, (_value, index) => ({
 			id: String(index),

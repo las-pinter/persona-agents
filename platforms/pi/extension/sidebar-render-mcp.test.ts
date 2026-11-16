@@ -175,24 +175,24 @@ test("a record with only the legacy flag normalizes to one green dot and a count
 	assert.ok(lines.some((line) => line.includes("● context7")));
 });
 
-test("the dot ignores a legacy flag that carries no status", () => {
-	// Models a raw pre-normalizer record: the legacy flag only, with no status.
-	const legacyOnly = { name: "a", configured: true, connected: true } as unknown as McpServerSnapshot;
+test("the dot paints no mark for a record with no status", () => {
+	// Models a raw pre-normalizer record that carries no status.
+	const legacyOnly = { name: "a", configured: true } as unknown as McpServerSnapshot;
 	const lines = renderMcpPanel([legacyOnly], 60, theme);
 	assert.ok(lines.includes("configured: 1, connected: 0"));
-	assert.ok(!lines.some((line) => line.includes("● a")), "the flag alone paints no green dot");
+	assert.ok(!lines.some((line) => line.includes("● a")), "no status paints no green dot");
 });
 
-test("the dot ignores a legacy flag that disagrees with a status", () => {
-	const mcp: McpSnapshot = [{ name: "b", configured: true, connected: true, status: "disconnected" }];
+test("the dot paints the disconnected status of a record with no flag", () => {
+	const mcp: McpSnapshot = [{ name: "b", configured: true, status: "disconnected" }];
 	const lines = renderMcpPanel(mcp, 60, theme);
 	assert.ok(lines.includes("configured: 1, connected: 0"));
-	assert.ok(lines.some((line) => line.includes("○ b")), "the flag cannot overrule a status");
+	assert.ok(lines.some((line) => line.includes("○ b")));
 });
 
 test("an unrecognized status paints the unknown mark and is not counted", () => {
 	const mcp: McpSnapshot = [
-		{ name: "a", configured: true, connected: false, status: "failed" as McpServerStatus },
+		{ name: "a", configured: true, status: "failed" as McpServerStatus },
 	];
 	const lines = renderMcpPanel(mcp, 60, theme);
 	assert.ok(lines.includes("configured: 1, connected: 0"));
@@ -203,7 +203,7 @@ test("an unrecognized status paints the unknown mark and is not counted", () => 
 
 test("an MCP server row shows an x-prefixed usage badge", () => {
 	const mcp: McpSnapshot = [
-		{ name: "context7", configured: true, connected: true, status: "connected" },
+		{ name: "context7", configured: true, status: "connected" },
 	];
 	const lines = renderMcpPanel(mcp, 60, theme, { context7: 12 });
 	assert.ok(lines.some((line) => line.includes("● context7 x12")));
@@ -211,7 +211,7 @@ test("an MCP server row shows an x-prefixed usage badge", () => {
 
 test("an MCP server row shows x0 when it has no usage", () => {
 	const mcp: McpSnapshot = [
-		{ name: "exa", configured: true, connected: false, status: "disconnected" },
+		{ name: "exa", configured: true, status: "disconnected" },
 	];
 	const lines = renderMcpPanel(mcp, 60, theme, {});
 	assert.ok(lines.some((line) => line.includes("○ exa x0")));
@@ -221,7 +221,6 @@ test("the MCP total sums every server, including rows beyond the visible cap", (
 	const mcp: McpSnapshot = Array.from({ length: 5 }, (_, index) => ({
 		name: `s${index}`,
 		configured: true,
-		connected: true,
 		status: "connected" as const,
 	}));
 	const usage = { s0: 1, s1: 2, s2: 3, s3: 4, s4: 5 };
@@ -234,7 +233,7 @@ test("the MCP total sums every server, including rows beyond the visible cap", (
 });
 
 test("the MCP total row fits the column width", () => {
-	const mcp: McpSnapshot = [{ name: "context7", configured: true, connected: true, status: "connected" }];
+	const mcp: McpSnapshot = [{ name: "context7", configured: true, status: "connected" }];
 	const lines = renderMcpPanel(mcp, 20, theme, { context7: 12345 });
 	for (const line of lines) {
 		assert.ok(visibleWidth(line) <= 20, `line exceeds 20: ${JSON.stringify(line)}`);
@@ -244,7 +243,7 @@ test("the MCP total row fits the column width", () => {
 
 test("a long server name and a large count clip cleanly to a narrow width", () => {
 	const name = "a-very-long-server-name-that-will-not-fit";
-	const mcp: McpSnapshot = [{ name, configured: true, connected: true, status: "connected" }];
+	const mcp: McpSnapshot = [{ name, configured: true, status: "connected" }];
 	const width = 24;
 	const lines = renderMcpPanel(mcp, width, theme, { [name]: 123456789 });
 
@@ -260,7 +259,6 @@ test("the total counts usage that belongs only to hidden servers", () => {
 	const mcp: McpSnapshot = Array.from({ length: 6 }, (_, index) => ({
 		name: `s${index}`,
 		configured: true,
-		connected: true,
 		status: "connected" as const,
 	}));
 	const lines = renderMcpPanel(mcp, 60, theme, { s4: 7, s5: 2 });
@@ -272,7 +270,7 @@ test("the total counts usage that belongs only to hidden servers", () => {
 });
 
 test("the total includes usage for a server with no configured row", () => {
-	const mcp: McpSnapshot = [{ name: "exa", configured: true, connected: true, status: "connected" }];
+	const mcp: McpSnapshot = [{ name: "exa", configured: true, status: "connected" }];
 	const lines = renderMcpPanel(mcp, 60, theme, { exa: 1, orphan: 4 });
 	assert.ok(lines.includes("total x5"));
 });
