@@ -35,16 +35,6 @@ export function isRootProcessEnv(env: NodeJS.ProcessEnv): boolean {
 	return !env[ENV_PARENT_RUN_ID];
 }
 
-/**
- * Parse a depth value. Absent or non-numeric input gives 0.
- * A negative value clamps to 0.
- */
-export function parseDepth(value: string | undefined): number {
-	const parsed = Number.parseInt(value ?? "", 10);
-	if (!Number.isFinite(parsed) || parsed < 0) return 0;
-	return parsed;
-}
-
 /** True when an agent at `depth` may spawn a child. */
 export function canSpawn(depth: number): boolean {
 	return depth < MAX_AGENT_DEPTH;

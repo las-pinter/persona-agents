@@ -4,8 +4,8 @@
  * Runs under plain Node (type stripping) with no dependencies:
  *   node --experimental-strip-types --test platforms/pi/extension/depth.test.ts
  *
- * Covers the depth cases: env parsing, the spawn gate, the loadout strip, and
- * the refusal at the cap.
+ * Covers the depth cases: the spawn gate, the loadout strip, the cap refusal,
+ * the record walk, and the root check.
  */
 
 import { test } from "node:test";
@@ -17,30 +17,11 @@ import {
 	canSpawn,
 	childDepth,
 	isRootProcessEnv,
-	parseDepth,
 	planSpawn,
 	resolvedDepth,
 	stripSpawnTool,
 	type DepthWalkSource,
 } from "./depth.ts";
-
-// --- env parsing -------------------------------------------------------------
-
-test("parseDepth treats an absent value as 0", () => {
-	assert.equal(parseDepth(undefined), 0);
-});
-
-test("parseDepth parses a numeric string", () => {
-	assert.equal(parseDepth("2"), 2);
-});
-
-test("parseDepth treats a non-numeric value as 0", () => {
-	assert.equal(parseDepth("x"), 0);
-});
-
-test("parseDepth clamps a negative value to 0", () => {
-	assert.equal(parseDepth("-1"), 0);
-});
 
 // --- spawn gate --------------------------------------------------------------
 
