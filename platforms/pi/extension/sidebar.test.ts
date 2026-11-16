@@ -197,7 +197,7 @@ test("a shorter terminal repaints every row from the new content", () => {
 	terminal.writes.length = 0;
 	compositor.paint();
 	const output = terminal.writes.join("");
-	for (const row of [1, 7]) assert.ok(output.includes(`\x1b[${row};81Hline ${row - 1}`), output);
+	for (let row = 1; row <= 8; row++) assert.ok(output.includes(`\x1b[${row};81Hline ${row - 1}`), output);
 	assert.ok(!output.includes("\x1b[9;"), "a row past the new height was painted");
 	compositor.dispose();
 });

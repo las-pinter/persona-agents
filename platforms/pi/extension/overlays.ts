@@ -43,7 +43,7 @@ export class TreeOverlayComponent implements Component {
 	private readonly getSnapshot: () => SidebarSnapshot;
 	private readonly getFrame: () => number;
 	private readonly done: () => void;
-	private selectedId: string | null;
+	private selectedId: string | null = null;
 
 	constructor(
 		tui: TUI,
@@ -57,7 +57,6 @@ export class TreeOverlayComponent implements Component {
 		this.getSnapshot = getSnapshot;
 		this.done = done;
 		this.getFrame = getFrame;
-		this.selectedId = null;
 	}
 
 	handleInput(input: string): void {

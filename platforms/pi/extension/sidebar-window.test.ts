@@ -195,6 +195,7 @@ test("every line is painted or counted by a mark", () => {
 			assert.ok(window.length <= rows, `rows ${rows} at offset ${offset} overflows`);
 		}
 	}
+	assert.deepEqual(windowLines(column(9), scrollLimit(9, 3), 3), ["… +7 above", "line 7", "line 8"]);
 });
 
 test("the marks name the hidden counts on each side", () => {
