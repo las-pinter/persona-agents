@@ -130,7 +130,6 @@ function emptySnapshot(): SidebarSnapshot {
 		mcp: [],
 		todos: [],
 		todosTurnMarker: false,
-		tps: 0,
 		status: emptyStatus(),
 		askLog: [],
 	};

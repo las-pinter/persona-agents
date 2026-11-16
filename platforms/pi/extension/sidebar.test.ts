@@ -520,7 +520,6 @@ test("a live width change keeps the renderer and compositor widths equal", () =>
 		workspace: { cwd: "/tmp", branch: null, changed: [], changedCount: 0, files: [] },
 		mcp: [],
 		todos: [],
-		tps: 0,
 	};
 	const theme: SidebarTheme = { bold: (text) => text, dim: (text) => text };
 	let width = 80;

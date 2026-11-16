@@ -57,7 +57,6 @@ function snapshot(overrides: Partial<SidebarSnapshot> = {}): SidebarSnapshot {
 		workspace: { cwd: "/repo", branch: null, changed: [], changedCount: 0, files: [] },
 		mcp: [],
 		todos: [],
-		tps: 0,
 		...overrides,
 	};
 }

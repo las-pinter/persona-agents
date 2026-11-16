@@ -95,6 +95,5 @@ export function treeSignature(snapshot: SidebarSnapshot): string {
 		mcpUsage: snapshot.mcpUsage ?? {},
 		todos,
 		todosTurnMarker: snapshot.todosTurnMarker === true,
-		tps: snapshot.tps,
 	});
 }

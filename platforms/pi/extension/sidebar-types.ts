@@ -119,5 +119,4 @@ export interface SidebarSnapshot {
 	todos: TodoSnapshot;
 	/** True when the TODOS panel paints the last turn boundary. */
 	todosTurnMarker?: boolean;
-	tps: number;
 }

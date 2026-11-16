@@ -79,7 +79,6 @@ export function makeSnapshot(overrides: Partial<SidebarSnapshot> = {}): SidebarS
 		workspace: makeWorkspace(),
 		mcp: [],
 		todos: [],
-		tps: 0,
 		...overrides,
 	};
 }

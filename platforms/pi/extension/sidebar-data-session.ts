@@ -69,7 +69,6 @@ function updateTps(state: InternalState, now: number): void {
 		const seconds = Math.max(1, (now - oldest) / 1000);
 		tps = total / seconds;
 	}
-	state.snapshot.tps = tps;
 	state.snapshot.session.tps = tps;
 }
 
