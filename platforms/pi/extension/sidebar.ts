@@ -396,18 +396,17 @@ export class SidebarCompositor {
 				this.lastWidth = this.width;
 			}
 
-			const total = Math.min(rawRows, Math.max(formatted.length, this.rowCache.length));
+			const total = formatted.length;
 			const parts: string[] = [];
 			let changed = false;
 			for (let i = 0; i < total; i++) {
-				const next = i < formatted.length ? formatted[i] : "";
+				const next = formatted[i];
 				if (this.rowCache[i] === next) continue;
 				this.rowCache[i] = next;
 				changed = true;
 				const row = i + 1;
 				parts.push(`\x1b[${row};${sepCol}H`, SEPARATOR, `\x1b[${row};${sidebarCol}H`, next);
 			}
-			if (this.rowCache.length > total) this.rowCache.length = total;
 
 			if (!changed || parts.length === 0) return;
 			this.writeRaw(`${SAVE_CURSOR}${WRAP_OFF}${parts.join("")}${WRAP_ON}${RESTORE_CURSOR}`);

@@ -186,6 +186,22 @@ test("paint fills every terminal row with the separator and blanks the rest", ()
 	compositor.dispose();
 });
 
+test("a shorter terminal repaints every row from the new content", () => {
+	const terminal = makeTerminal(100, 10);
+	let lines = Array.from({ length: 10 }, (_value, index) => `line ${index}`);
+	const compositor = new SidebarCompositor(makeTui(terminal), () => lines, 20);
+	compositor.install();
+	compositor.paint();
+	terminal.rows = 8;
+	lines = lines.slice(0, 8);
+	terminal.writes.length = 0;
+	compositor.paint();
+	const output = terminal.writes.join("");
+	for (const row of [1, 7]) assert.ok(output.includes(`\x1b[${row};81Hline ${row - 1}`), output);
+	assert.ok(!output.includes("\x1b[9;"), "a row past the new height was painted");
+	compositor.dispose();
+});
+
 test("paint swallows a thrown getLines error", () => {
 	const terminal = makeTerminal(100, 30);
 	const tui = makeTui(terminal);
