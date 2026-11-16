@@ -51,14 +51,13 @@ export class TreeOverlayComponent implements Component {
 		getSnapshot: () => SidebarSnapshot,
 		done: () => void,
 		getFrame: () => number,
-		initialId: string | null = null,
 	) {
 		this.tui = tui;
 		this.theme = theme;
 		this.getSnapshot = getSnapshot;
 		this.done = done;
 		this.getFrame = getFrame;
-		this.selectedId = initialId;
+		this.selectedId = null;
 	}
 
 	handleInput(input: string): void {
