@@ -1,5 +1,5 @@
 {
-  "description": "Give the persona-agents companion its profession rules and the selected theme's persona, and enforce the commit and file doctrine",
+  "description": "Give the persona-agents companion its profession rules, the selected theme's persona, and its startup read list, and enforce the commit and file doctrine",
   "hooks": {
     "SessionStart": [
       {
@@ -19,6 +19,19 @@
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
               "persona"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/startup.mjs"
             ],
             "timeout": 10
           }

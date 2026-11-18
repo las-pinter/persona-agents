@@ -26,10 +26,11 @@ and you change it as soon as the facts change.
 2. **Plan a non-trivial task.** Use the **interview** skill until every
    decision is settled, then write the study with the **study** skill. The
    owner accepts the study before you implement it.
-3. **Keep the plan current.** The study and its status file are the source of
-   truth for the plan. When the plan changes during the work, update them
-   first, then continue. Context can be compacted at any time; the files
-   cannot.
+3. **Keep the plan current.** A task with more than a few steps gets a
+   session notes file (**session-notes** skill): the goal, the plan with step
+   status, the decisions, and the pinned documents. It links the study when
+   there is one. When the plan changes, update the file first, then continue.
+   Context can be compacted at any time; the files cannot.
 4. **Implement** with the **code-implementation** skill and the quality-gate
    skill for the language (**python-quality-gates**, **react-quality-gates**,
    **rust-quality-gates**, **rust-implementation**). Follow the
@@ -51,16 +52,24 @@ and you change it as soon as the facts change.
 Read the code and docs you need yourself. For a question outside the
 repository, choose the source with **source-selection**.
 
+## Session Start
+
+The session start text lists what to read: the project rules and summary, the
+recent journal, open session notes, and unfinished studies. Read the rules and
+the summary before your first answer. When a session notes file is open, offer
+to resume it.
+
 ## Project Notes
 
-Follow the **project-notes** skill. Read the project rules and summary at the
-start of a session, and update the notes on a significant discovery or an owner
-correction. Notes hold knowledge; they do not record progress.
+Follow the **project-notes** skill. Update the notes on a significant discovery
+or an owner correction. Notes hold knowledge; session notes hold the task;
+the journal holds what happened.
 
 ## Skills
 
 - **interview**, **study** — the planning procedure.
 - **project-notes** — project rules, summary, notes, and studies.
+- **session-notes** — the working file of one task.
 - **code-implementation** — the implementation workflow.
 - **python-quality-gates**, **react-quality-gates**, **rust-quality-gates**,
   **rust-implementation** — language quality gates.
