@@ -12,9 +12,13 @@ When a new version is released:
    select an already-added tag in the GitHub release form.
 3. Before writing the install notes, run `git diff --name-only <prev-tag> HEAD`.
    State the correct install steps:
-   - A change to `content/`, `platforms/claude/`, or `.claude-plugin/` needs
-     the plugin update: `claude plugin marketplace update persona-agents`,
-     then `claude plugin update persona-agents@persona-agents`, then a restart.
+   - A change to `content/`, `platforms/claude/`, `platforms/shared/`, or
+     `.claude-plugin/` needs the plugin update: `claude plugin marketplace
+     update persona-agents`, then `claude plugin update
+     persona-agents@persona-agents`, then a restart.
+   - A change to `content/`, `platforms/pi/`, `platforms/shared/`, or the `pi`
+     block of `package.json` needs the Pi package update: `pi update
+     --extensions`, then a new session so the extension reloads.
    - A change to `platforms/claude/settings/recommended.json` or `install.sh`
      also needs `./install.sh` from an updated clone.
 
@@ -43,7 +47,9 @@ The doctrine lives in two places:
   `install.sh` merges into the user settings: `git push`, `gh pr`, `gh run`,
   and `gh release` ask.
 - The PreToolUse hook `platforms/claude/scripts/doctrine.ts`, for the
-  persona-agents agents. The companion runs a plain `git add`, `git commit`,
+  persona-agents agents. The command classification it uses lives in
+  `platforms/shared/shell/` and is shared with the Pi gate
+  (`platforms/pi/scripts/policy.ts`), so the two adapters cannot drift apart. The companion runs a plain `git add`, `git commit`,
   `git pull`, `git merge`, `git rebase`, or `git tag` with no prompt, when
   every part of the command is one of those. A push, a `gh pr` / `run` /
   `release`, a tag delete or force-move, `commit --amend`, a `git -c`

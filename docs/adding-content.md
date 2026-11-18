@@ -18,6 +18,9 @@ A theme needs one `content/agents.json` entry and one persona file.
    file; `tests/claude-plugin.test.ts` checks that the persona part stays under
    the 10,000-character hook cap.
 
+The Pi adapter needs no step: it reads `content/agents.json` and the persona
+file at run time and takes its theme list from the registry.
+
 ## Adding or changing a persona
 
 A persona file sets how the companion talks. Put it at

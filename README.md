@@ -75,6 +75,31 @@ Change the theme any time in `/config` (**Persona theme**). A new session or
 Update with `claude plugin marketplace update persona-agents`, then
 `claude plugin update persona-agents@persona-agents`, and restart.
 
+## Install on Pi
+
+The same content runs on [Pi](https://pi.dev) through the adapter in
+[platforms/pi/](platforms/pi/README.md). Pi needs no settings merge: the
+extension carries its own permission gate.
+
+```bash
+pi install https://github.com/las-pinter/persona-agents
+pi --agent persona-agents:companion --persona goblin
+```
+
+- `--agent` selects the agent. Without it, Pi behaves exactly as before: no
+  prompt sections, no gate, no commands.
+- `--persona <theme>` picks the theme; `/persona <theme>` changes it in a
+  running session, and `/persona` alone lists the themes.
+- `/permissions` lists the effective rules with their source, `check` explains
+  why one command would be allowed, asked, or denied, and `allow|ask|deny`
+  appends a rule to the policy file. When Pi asks, the dialog can add the rule
+  for you: this session, this project, or every project.
+
+Policy lives in `~/.pi/agent/persona-agents/policy.json`, and per repository in
+`.pi/persona-agents/policy.json`. A built-in floor (credentials, destructive
+commands, writes to git hooks and the gate's own files) cannot be loosened from
+either file.
+
 ## How the companion works
 
 - **Session start.** A hook gives the companion its read list: the project
@@ -127,6 +152,7 @@ stay persona-free.
 
 ## Contributing
 
-The plugin internals are in [platforms/claude/README.md](platforms/claude/README.md).
+The plugin internals are in [platforms/claude/README.md](platforms/claude/README.md);
+the Pi adapter is in [platforms/pi/README.md](platforms/pi/README.md).
 The release ritual and the commit rule live in `AGENTS.md`. The steps to add a
 theme, a persona, or a skill live in [docs/adding-content.md](docs/adding-content.md).
