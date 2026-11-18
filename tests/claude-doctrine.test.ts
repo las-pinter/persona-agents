@@ -28,7 +28,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
-import { parseShellCommand } from "../platforms/pi/extension/shell-parse.ts";
+import { parseShellCommand } from "../platforms/claude/scripts/shell-parse.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");
@@ -450,7 +450,7 @@ describe("doctrine: fail closed", () => {
 	});
 });
 
-describe("doctrine: the pi parser contract", () => {
+describe("doctrine: the shell parser contract", () => {
 	test("an unreadable heredoc reaches the hook as unsupported", () => {
 		const command = "cat <<EOF\ngit push\nEOF";
 		assert.equal(parseShellCommand(command).unsupported, "heredoc");

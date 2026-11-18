@@ -7,10 +7,9 @@
  * It asserts the conditions of the doc-lint contract:
  *   1. every skill path named by a profession or a template resolves;
  *   2. each skills/ * /SKILL.md `name:` equals its folder name;
- *   4. every agents.json theme has the profession set of content/professions;
- *   5. pi `alwaysLoad` matches the profession Startup skill list.
+ *   4. every agents.json theme has the profession set of content/professions.
  *
- * Conditions 3, 6, and 7 are retired: this suite no longer checks doctrine prose.
+ * Conditions 3, 5, 6, and 7 are retired: this suite no longer checks doctrine prose.
  *
  * Condition 1 is hermetic: repo references must resolve under the repo tree,
  * and a missing optional common skill is skipped, not failed.
@@ -30,17 +29,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const skillsRoot = path.join(repoRoot, "content", "skills");
 const professionsDir = path.join(repoRoot, "content", "professions");
 const HOME = process.env.HOME ?? os.homedir();
-const piFrontmattersDir = path.join(repoRoot, "platforms", "pi", "frontmatters");
-
-/**
- * Agents whose pi `alwaysLoad` must equal the profession Startup skill list.
- *
- * Exact list parity applies only to a list-style Startup. The orchestrator's
- * Startup is one sentence of bold skill names, so its alwaysLoad and Startup
- * list must match one-for-one.
- */
-const STARTUP_PARITY_AGENTS = ["orchestrator"];
-
 /**
  * The character that opens the home expansion marker, built from a code so this
  * lint file never carries the literal token it forbids.
@@ -94,23 +82,6 @@ function parseScalar(text: string, key: string): string | undefined {
 		value = value.slice(1, -1);
 	}
 	return value.length > 0 ? value : undefined;
-}
-
-/** Read an inline YAML array `key: ["a", "b"]`. Only the documented forms. */
-function parseInlineArray(text: string, key: string): string[] | undefined {
-	const match = text.match(new RegExp(`^${key}:\\s*(\\[.*?\\])\\s*$`, "m"));
-	if (!match) return undefined;
-	try {
-		const parsed: unknown = JSON.parse(match[1]);
-		if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === "string");
-	} catch {
-		// Fall through to a permissive split for unquoted or single-quoted lists.
-	}
-	return match[1]
-		.slice(1, -1)
-		.split(",")
-		.map((part) => part.trim().replace(/^["']|["']$/g, ""))
-		.filter(Boolean);
 }
 
 /** Text between a heading matching `heading` and the next `## ` heading. */
@@ -310,33 +281,6 @@ function startupSkillNames(text: string): string[] {
 	return boldNamesInSection(text, /^##\s+Startup\s*$/m);
 }
 
-interface TemplateSkillParse {
-	refs: string[];
-	/** Keys present in the frontmatter whose value is not a parseable inline array. */
-	unparsable: string[];
-}
-
-/**
- * Top-level `skills` and `alwaysLoad` arrays in a pi YAML template.
- * A present key whose value is not an inline array (for example a block-style
- * YAML list) is reported in `unparsable` and fails the check instead of
- * silently yielding an empty list.
- */
-function templateSkillRefs(text: string): TemplateSkillParse {
-	const refs = new Set<string>();
-	const unparsable: string[] = [];
-	for (const key of ["skills", "alwaysLoad"]) {
-		if (!new RegExp(`^${key}:`, "m").test(text)) continue;
-		const parsed = parseInlineArray(text, key);
-		if (parsed === undefined) {
-			unparsable.push(key);
-			continue;
-		}
-		for (const ref of parsed) refs.add(ref);
-	}
-	return { refs: [...refs], unparsable };
-}
-
 describe("condition 1: named skill paths resolve", () => {
 	for (const file of fs.readdirSync(professionsDir).filter((name) => name.endsWith(".md")).sort()) {
 		test(`profession ${file}`, () => {
@@ -357,38 +301,6 @@ describe("condition 1: named skill paths resolve", () => {
 		});
 	}
 
-	for (const file of fs.readdirSync(piFrontmattersDir).filter((name) => name.endsWith(".yaml")).sort()) {
-		test(`pi frontmatter ${file}`, () => {
-			const { refs, unparsable } = templateSkillRefs(readText(path.join(piFrontmattersDir, file)));
-			const failures = [
-				...unparsable.map((key) => `${key}: present but not an inline array (use [\"...\"] )`),
-				...refs
-					.map((ref) => ({ ref, result: resolveSkillRef(ref) }))
-					.filter((entry) => !entry.result.ok)
-					.map((entry) => `${entry.ref}: ${entry.result.detail}`),
-			];
-			assert.deepEqual(failures, [], `${file} names dead skills`);
-		});
-	}
-
-});
-
-// --- condition 1: strict frontmatter list parse -------------------------------
-
-describe("condition 1: frontmatter skill list parse", () => {
-	test("a present but block-style list is reported as unparsable", () => {
-		const block = 'skills:\n  - "a/*"\nalwaysLoad: ["common/simplified-technical-english"]\n';
-		const parsed = templateSkillRefs(block);
-		assert.deepEqual(parsed.unparsable, ["skills"], "a block-style skills list must not pass silently");
-		assert.deepEqual(parsed.refs, ["common/simplified-technical-english"]);
-	});
-
-	test("inline arrays parse and report no error", () => {
-		const inline = 'skills: ["a/*", "common/ste"]\nalwaysLoad: ["common/ste"]\n';
-		const parsed = templateSkillRefs(inline);
-		assert.deepEqual(parsed.unparsable, []);
-		assert.deepEqual(parsed.refs, ["a/*", "common/ste"]);
-	});
 });
 
 // --- condition 2: SKILL.md name equals its folder -----------------------------
@@ -432,32 +344,3 @@ describe("condition 4: agents.json professions match content/professions", () =>
 	});
 });
 
-// --- condition 5: alwaysLoad matches the profession Startup list --------------
-
-describe("condition 5: pi alwaysLoad matches the profession Startup list", () => {
-	for (const agent of STARTUP_PARITY_AGENTS) {
-		test(`pi ${agent} alwaysLoad equals its Startup skills`, () => {
-			const professionFile = path.join(professionsDir, `${agent}.md`);
-			assert.ok(fs.existsSync(professionFile), `missing professions/${agent}.md`);
-			const startup = sectionAfterHeading(readText(professionFile), /^##\s+Startup\s*$/m);
-			const startupNames = new Set<string>();
-			const nameRe = /\*\*([a-z0-9-]+)\*\*/g;
-			let match: RegExpExecArray | null;
-			while ((match = nameRe.exec(startup)) !== null) startupNames.add(match[1]);
-			assert.ok(startupNames.size > 0, `no Startup skills found in professions/${agent}.md`);
-
-			const frontmatterFile = path.join(piFrontmattersDir, `${agent}.yaml`);
-			assert.ok(fs.existsSync(frontmatterFile), `missing pi frontmatter for ${agent}`);
-			const alwaysLoad = parseInlineArray(readText(frontmatterFile), "alwaysLoad") ?? [];
-			const alwaysNames = new Set(alwaysLoad.map((ref) => ref.split("/").pop() ?? ref));
-
-			const onlyStartup = [...startupNames].filter((name) => !alwaysNames.has(name)).sort();
-			const onlyAlways = [...alwaysNames].filter((name) => !startupNames.has(name)).sort();
-			assert.deepEqual(
-				{ onlyStartup, onlyAlways },
-				{ onlyStartup: [], onlyAlways: [] },
-				`pi ${agent} alwaysLoad differs from the Startup list`,
-			);
-		});
-	}
-});

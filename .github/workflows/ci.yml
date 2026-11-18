@@ -23,7 +23,7 @@ jobs:
           node-version: 22
 
       - name: Install system tools
-        run: sudo apt-get install -y jq shellcheck
+        run: sudo apt-get install -y jq
 
       - name: Install npm dependencies
         run: npm install --no-audit --no-fund
@@ -42,13 +42,3 @@ jobs:
             jq empty "$f" && echo "✅ $f" || { echo "❌ $f is invalid"; exit 1; }
           done
 
-      # Lint all shell scripts
-      - name: Lint shell scripts
-        run: |
-          echo "Linting shell scripts..."
-          shellcheck install.sh
-
-      # Make sure install.sh is executable
-      - name: Check script permissions
-        run: |
-          [ -x install.sh ] && echo "✅ install.sh is executable" || { echo "❌ install.sh is not executable"; exit 1; }

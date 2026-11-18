@@ -54,7 +54,7 @@
 // `/tmp`, `/etc`, `/usr`, `/var`, or `/home`. A leading `~` expands to the home
 // folder before the test.
 //
-// A shell command is split into segments by the pi gate's parser; each segment
+// A shell command is split into segments by the shell parser; each segment
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
 // before it is classified. A command the parser cannot read (a heredoc, an
 // unbalanced quote) that holds a gated form counts as a hit: fail closed. A gated
@@ -75,7 +75,7 @@ import { appendFileSync, lstatSync, mkdirSync, readFileSync, realpathSync } from
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseShellCommand } from "../../pi/extension/shell-parse.ts";
+import { parseShellCommand } from "./shell-parse.ts";
 
 const PREFIX = "persona-agents:";
 
