@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Print-only blameless retrospective of the current session with the AAR spine, a 15-dimension sweep, and routed actions. Runs on pi, kiro, OpenCode, and Claude Code.
+description: Print-only blameless retrospective of the current companion session - the AAR spine, a 15-dimension sweep, and routed actions. Run it with /persona-agents:retro.
 disable-model-invocation: true
 ---
 
@@ -23,59 +23,33 @@ condition to change, not a person to blame.
 
 ## When to Run
 
-Run this skill when the user starts the retro command, or when the user asks
-for a session retrospective. The command name depends on the platform:
-
-| Platform | Command |
-|----------|---------|
-| pi | `/retro` |
-| kiro | `/retro` |
-| OpenCode | `/retro` |
-| Claude Code | `/persona-agents:retro` |
-
-The agent that the user talks to runs the retro. Do not hand it to a
+Run this skill when the owner types `/persona-agents:retro` or asks for a
+session retrospective. Run it yourself, in this session; do not hand it to a
 subagent.
 
-## Step 0: Find the Platform
+## Session Facts
 
-Find the platform that runs this session. Check the signals in order. The
-first signal that matches wins:
-
-| Signal | Platform |
-|--------|----------|
-| This `SKILL.md` is under `~/.kiro/skills/` | kiro |
-| This `SKILL.md` is under `~/.config/opencode/skills/` | OpenCode |
-| The user typed `/persona-agents:retro`, or this `SKILL.md` is under `~/.claude/plugins/` | Claude Code |
-| This `SKILL.md` is under a pi package, or in a skills tree that is not another platform root | pi |
-
-If no signal matches, ask the user which platform runs the session.
-
-Then read the one reference file for that platform. The file is in the
-`references/` folder next to this `SKILL.md`:
-
-| Platform | Reference file |
-|----------|----------------|
-| pi | `references/pi.md` |
-| kiro | `references/kiro.md` |
-| OpenCode | `references/opencode.md` |
-| Claude Code | `references/claude.md` |
-
-Do not read the reference files of the other platforms. The reference file
-gives the session transcript, the permission rules, the audit log status, and
-the cost source.
+| Item | Value |
+|------|-------|
+| Session id | `${CLAUDE_SESSION_ID}` |
+| Transcript | `~/.claude/projects/<cwd-slug>/${CLAUDE_SESSION_ID}.jsonl`. The slug is the working directory with each character that is not a letter or a digit changed to `-` (`/home/dev/project` → `-home-dev-project`). Subagent transcripts (the review runs) are in `~/.claude/projects/<cwd-slug>/${CLAUDE_SESSION_ID}/subagents/*.jsonl`. |
+| Transcript format | JSON Lines. Each line is one message or event. Tool results hold the permission denials. Each assistant message holds a `message.usage` object. A `system` line with `subtype: "compact_boundary"` marks a compaction and carries `compactMetadata` (`trigger`, `preTokens`, `postTokens`). |
+| Permission rules | The `permissions` block of `~/.claude/settings.json`, `.claude/settings.json`, and `.claude/settings.local.json`, and the persona-agents PreToolUse hook (`platforms/claude/scripts/doctrine.ts` in the plugin folder). |
+| Permission audit log | None. The hook writes `doctrine.log` in the plugin data folder only when `PERSONA_AGENTS_DEBUG` is set. Use it as evidence only if it exists. |
+| Cost source | The `message.usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`, in the session and subagent transcripts. They give token counts, not money. Report the totals. |
 
 ## Review Scope
 
 Review these sources only:
 
 - The current session.
-- The three most recent daily journal files of the agent that runs the
-  retro, when three exist.
+- The session notes files this session worked on.
+- The project journal entries of the three most recent days.
 - The project `summary.md`.
 - The project `rules/` folder.
 
-Do not scan earlier sessions. For a repeated-mistake check, use this agent's
-journal files named above and the git history in reach.
+Do not scan earlier sessions. For a repeated-mistake check, use the journal
+entries named above and the git history in reach.
 
 ## Write Model (Print Only)
 
@@ -86,8 +60,8 @@ This retro writes no durable artifact:
 - No journal entry.
 - No permission rule.
 
-Do not dispatch an implementer, a reviewer, or a commit. The retro reports and
-proposes in chat only.
+Do not edit files, start a review, or commit. The retro reports and proposes
+in chat only.
 
 ## Step 1: Collect Evidence
 
@@ -96,16 +70,16 @@ Collect evidence from these sources:
 | Source | Location | Holds |
 |--------|----------|-------|
 | Session context | Live context | Messages, tool calls, denials, user turns |
-| Session transcript | See the platform reference file | Tool calls, timestamps, and usage where the platform records it |
-| Journals | `~/agent-notes/<agent-type>/journals/daily/` | Work log, decisions, issues, lessons |
-| Project notes | `~/agent-notes/project-notes/<project>/` | `summary.md`, `rules/`, studies |
+| Session transcript | See Session Facts | Tool calls, timestamps, usage, compactions |
+| Session notes | `<project notes>/sessions/` | Plan, decisions, pins, compaction log lines |
+| Journal | `<project notes>/journal/<day>/` | Earlier sessions: work, decisions, open items |
+| Project notes | `<project notes>/` | `summary.md`, `rules/`, studies |
 | Git history | Repo working tree | `git log`, `git diff`, `git status` |
-| Permission rules | See the platform reference file | Current allow, ask, and deny rules |
-| Permission audit log | See the platform reference file | Recorded permission decisions, only where the platform has a log |
-| Dispatch histogram | Session transcript | Tool calls by name, denials by reason, and dispatches by agent type |
+| Permission rules | See Session Facts | Current allow, ask, and deny rules |
+| Tool histogram | Session transcript | Tool calls by name, denials by reason, review runs |
 
-The permissions, tooling, delegation, and dispatch efficiency dimensions use
-those counts.
+The session start text names the project notes folder. The permissions,
+tooling, and plan dimensions use those counts.
 
 The repeated-mistake check reads the journal files named in Review Scope.
 
@@ -124,7 +98,7 @@ sweep internal. Print only a dimension with evidence.
 | 3 | Tooling and workflow | Which tool calls repeated, failed, or used a workaround? |
 | 4 | Prompt and steering quality | Which user instruction was ambiguous or caused a wrong turn? |
 | 5 | Context management | What context was missing, stale, or too large? |
-| 6 | Cost and latency | What did the session cost, and which turn or dispatch dominated? |
+| 6 | Cost and latency | What did the session cost, and which turn or review run dominated? |
 | 7 | Error handling and recovery | Which error was handled well, and which recovery was slow? |
 | 8 | Testing and verification | Was the change verified by an external signal, or only by the agent? |
 | 9 | Communication and reporting | Was the final report clear, complete, and free of false claims? |
@@ -132,14 +106,13 @@ sweep internal. Print only a dimension with evidence.
 | 11 | Knowledge and skill gaps | What did the agent not know that it needed? |
 | 12 | Repeated mistakes | Which mistake appeared before in journals or git history? |
 | 13 | Update-surface routing | For each lesson, which surface should change? |
-| 14 | Delegation and routing | Which task went to the wrong agent type, and why? |
-| 15 | Dispatch efficiency | Did this task need this many agents, and which dispatch added no value? |
+| 14 | Plan upkeep | Did the session notes or the study change before the work changed, or after? |
+| 15 | Compaction and recovery | Did a compaction lose something the reload did not bring back? |
 
 ### Cost Data
 
-Use cost data if the platform records it. The platform reference file names
-the cost source. If the platform has no cost source, skip dimension 6. Then
-state in the output that the platform records no cost data for the session.
+Use the token totals from the Cost source in Session Facts. When the
+transcript cannot be read, skip dimension 6 and say so in the output.
 
 ## Step 3: Print Findings
 
@@ -189,7 +162,7 @@ Route each finding to one surface from this set:
 | Surface | Holds |
 |---------|-------|
 | skill | A reusable procedure. |
-| memory/journal | A stored fact, decision, or lesson. |
+| notes | A project note, a rule, or a journal entry: a stored fact, decision, or lesson. |
 | prompt | A user instruction or a steering message. |
 | permission | A permission rule. |
 | tool/workflow | A tool call or a workflow step. |
@@ -201,12 +174,9 @@ route every lesson to a skill.
 
 ### Permissions Evidence Limit
 
-The permissions dimension uses the evidence that the platform reference file
-names. State this limit when the dimension prints.
-
-Claim a permission audit log only when the platform reference file says the
-platform has one. An audit log of one platform does not record the decisions
-of a different platform.
+The permissions dimension uses transcript denials, the settings files, and the
+hook rules. State this limit when the dimension prints. Do not claim a
+permission audit log.
 
 After the findings, print the dimension numbers that had no external evidence,
 or print `none`. This line is the blind-spot report.
@@ -227,8 +197,8 @@ lines, the printed action names the rule to retire or the two rules to merge.
 The same edit makes that change.
 
 When the session caused a lesson that no rule holds, the retro proposes the
-missing rule action as an action. The owner is the orchestrator, because only
-the orchestrator writes the rules folder.
+missing rule action as an action. The owner is the companion, in a later turn
+after the owner agrees.
 
 ## Output Shape
 
@@ -261,5 +231,5 @@ Blind spots: <the dimension numbers with no external evidence, or "none">
 Actions (1-3):
 1. Owner: ... - Next step: ...
 
-Cost: <the session cost or the token totals, or "no cost data on this platform">
+Cost: <the token totals, or "transcript not readable">
 ```
