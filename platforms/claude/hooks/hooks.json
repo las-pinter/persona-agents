@@ -1,5 +1,5 @@
 {
-  "description": "Give persona-agents agents their profession rules and the selected theme's persona, set the subagent model, and enforce the commit and file doctrine",
+  "description": "Give the persona-agents companion its profession rules, persona, startup read list, compaction recovery, and journal safety net, and enforce the commit doctrine",
   "hooks": {
     "SessionStart": [
       {
@@ -23,27 +23,29 @@
             "timeout": 10
           }
         ]
-      }
-    ],
-    "SubagentStart": [
+      },
       {
-        "matcher": "^persona-agents:",
+        "matcher": "startup|clear",
         "hooks": [
           {
             "type": "command",
             "command": "node",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
-              "profession"
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/startup.mjs"
             ],
             "timeout": 10
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
           {
             "type": "command",
             "command": "node",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
-              "persona"
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
+              "reload"
             ],
             "timeout": 10
           }
@@ -52,7 +54,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Edit|Write|NotebookEdit)$",
+        "matcher": "^Bash$",
         "hooks": [
           {
             "type": "command",
@@ -65,17 +67,49 @@
             "timeout": 10
           }
         ]
-      },
+      }
+    ],
+    "PreCompact": [
       {
-        "matcher": "^(Agent|Task)$",
         "hooks": [
           {
             "type": "command",
             "command": "node",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/subagent-model.mjs"
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
+              "pre"
             ],
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
+              "post"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/journal-end.mjs",
+              "hook"
+            ],
+            "timeout": 5
           }
         ]
       }

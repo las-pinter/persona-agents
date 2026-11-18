@@ -1,13 +1,11 @@
 /**
  * The Claude Code doctrine hook (platforms/claude/scripts/doctrine.ts).
  *
- * The commit and file doctrine from AGENTS.md, per persona-agents agent:
- * a plain git add/commit/pull/merge/rebase/tag is allowed for the
- * orchestrator; git push, gh pr/release, the ask exceptions, and wrapped
- * forms ask for the orchestrator; all of these deny the rest;
- * cp/mv/rsync ask for the orchestrator and the implementer and deny the rest;
- * edits outside an agent's notes zone ask (orchestrator) or deny (planner,
- * researcher, reviewer, mascot). Agents outside the plugin get no decision.
+ * Per persona-agents agent: a plain git add/commit/pull/merge/rebase/tag is
+ * allowed for the companion; git push, gh pr/release/run, the ask exceptions,
+ * and wrapped forms ask for the companion; every other agent (the reviewer)
+ * is denied all of these and every shell write it can see. Agents outside the
+ * plugin get no decision.
  *
  * Run: node --experimental-strip-types --test tests/claude-doctrine.test.ts
  */
@@ -18,23 +16,19 @@ import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
+import { parseShellCommand } from "../platforms/claude/scripts/shell-parse.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");
 
-const PROFESSIONS = ["orchestrator", "planner", "researcher", "implementer", "reviewer", "tester", "mascot"];
+const PROFESSIONS = ["companion", "reviewer"];
 
 /** The verdict for one agent running one shell command ("none" for no decision). */
 function bash(profession: string, command: string): string {
 	return decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.verdict ?? "none";
 }
 
-function edit(profession: string, filePath: string, tool = "Edit"): string {
-	const key = tool === "NotebookEdit" ? "notebook_path" : "file_path";
-	return decide({ agent_type: `persona-agents:${profession}`, tool_name: tool, tool_input: { [key]: filePath } })?.verdict ?? "none";
-}
-
-/** Plain history writes: the orchestrator runs them without a prompt. */
+/** Plain history writes: the companion runs them without a prompt. */
 const ALLOWED = [
 	"git add .",
 	"git commit -m 'ai: x'",
@@ -72,9 +66,15 @@ const ASKED = [
 	"git push origin main",
 	"gh pr create --fill",
 	"gh release create v1.0.0",
-	// AGENTS.md gates every gh pr and gh release command, reads included.
+	// AGENTS.md gates every gh pr, gh release, and gh run command, reads included.
 	"gh pr list",
 	"gh release list",
+	"gh run list",
+	"gh run delete 3",
+	// A gh global option before the subcommand does not hide the gate.
+	"gh -R owner/repo run list",
+	"gh --repo owner/repo run list",
+	"gh --repo=owner/repo run delete 1",
 	"git tag -d v1",
 	"git tag --delete v1",
 	"git tag -f v1",
@@ -171,19 +171,19 @@ function nestShell(command: string, levels: number): string {
 describe("doctrine: plain git history", () => {
 	for (const command of ALLOWED) {
 		test(command, () => {
-			assert.equal(bash("orchestrator", command), "allow");
-			for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash("companion", command), "allow");
+			for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 				assert.equal(bash(profession, command), "deny", profession);
 			}
 		});
 	}
 });
 
-describe("doctrine: git push, gh pr/release, ask exceptions, wrapped forms", () => {
+describe("doctrine: git push, gh pr/release/run, ask exceptions, wrapped forms", () => {
 	for (const command of [...ASKED, ...DISGUISED_HISTORY]) {
 		test(command, () => {
-			assert.equal(bash("orchestrator", command), "ask");
-			for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash("companion", command), "ask");
+			for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 				assert.equal(bash(profession, command), "deny", profession);
 			}
 		});
@@ -204,8 +204,8 @@ describe("doctrine: an allow covers every segment or none", () => {
 	];
 	for (const command of MIXED) {
 		test(command, () => {
-			assert.equal(bash("orchestrator", command), "none");
-			for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash("companion", command), "none");
+			for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 				assert.equal(bash(profession, command), "deny", profession);
 			}
 		});
@@ -214,18 +214,16 @@ describe("doctrine: an allow covers every segment or none", () => {
 	test("a nested shell never allows, at any depth", () => {
 		for (const levels of [1, 3, 4, 5, 7]) {
 			const command = nestShell("git add .", levels);
-			assert.equal(bash("orchestrator", command), "ask", command);
-			assert.equal(bash("implementer", command), "deny", command);
+			assert.equal(bash("companion", command), "ask", command);
+			assert.equal(bash("reviewer", command), "deny", command);
 		}
 	});
 
 	test("an ask segment beats an allow segment", () => {
-		assert.equal(bash("orchestrator", "git status && git push"), "ask");
-		assert.equal(bash("orchestrator", "git commit -m m && cp a b"), "ask");
+		assert.equal(bash("companion", "git status && git push"), "ask");
+		assert.equal(bash("companion", "git commit -m m && git push"), "ask");
 	});
 });
-
-const COPY = ["cp a b", "mv a b", "rsync -a src/ dst/", "sudo cp a /etc/b", "bash -c 'mv a b'"];
 
 /** Reads that must never be gated. */
 const READS = [
@@ -244,17 +242,6 @@ const READS = [
 	"npm test",
 ];
 
-describe("doctrine: cp, mv, rsync", () => {
-	for (const command of COPY) {
-		test(command, () => {
-			for (const profession of PROFESSIONS) {
-				const expected = profession === "orchestrator" || profession === "implementer" ? "ask" : "deny";
-				assert.equal(bash(profession, command), expected, profession);
-			}
-		});
-	}
-});
-
 describe("doctrine: reads stay untouched", () => {
 	for (const command of READS) {
 		test(command, () => {
@@ -266,13 +253,58 @@ describe("doctrine: reads stay untouched", () => {
 describe("doctrine: fail closed", () => {
 	test("an unreadable command that names git is a hit", () => {
 		const heredoc = "cat <<EOF\ngit push\nEOF";
-		assert.equal(bash("orchestrator", heredoc), "ask");
-		assert.equal(bash("implementer", heredoc), "deny");
+		assert.equal(bash("companion", heredoc), "ask");
+		assert.equal(bash("reviewer", heredoc), "deny");
 	});
 
-	test("an unreadable command that names no gated program is left alone", () => {
-		assert.equal(bash("implementer", "cat <<EOF > notes.txt\nhello\nEOF"), "none");
+	test("an unreadable command that names no gated program and writes no file is left alone", () => {
+		assert.equal(bash("reviewer", "cat <<EOF\nhello\nEOF"), "none");
 	});
+
+	test("an unreadable command that redirects into a file is a write", () => {
+		assert.equal(bash("reviewer", "cat <<EOF > notes.txt\nhello\nEOF"), "deny");
+		assert.equal(bash("companion", "cat <<EOF > notes.txt\nhello\nEOF"), "none");
+	});
+
+	test("an unreadable command with only a git read is left alone", () => {
+		const command = "git status && python3 - <<EOF\nprint(1)\nEOF";
+		assert.equal(bash("reviewer", command), "none");
+		assert.equal(bash("companion", command), "none");
+	});
+
+	/** Unreadable commands whose raw text holds a gated form or a form the scan cannot read. */
+	const FAIL_CLOSED_TEXT = [
+		"git status && python3 - <<EOF\nprint(1)\nEOF\ngit commit -m x",
+		"git status && python3 - <<EOF\nprint(1)\nEOF\ngit push",
+		"git status && python3 - <<EOF\nprint(1)\nEOF\ngh pr create",
+		"git -c x=y status && python3 - <<EOF\nprint(1)\nEOF",
+		"git status && python3 - <<EOF\ngit commit -m x\nEOF",
+		"git $(echo commit) && python3 - <<EOF\nprint(1)\nEOF",
+		"git --no-pager -C /x commit && python3 - <<EOF\nprint(1)\nEOF",
+		// A quoted option value with a space must not leak its second half as a word.
+		'git -C "a b" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		"git -C 'a b' commit\npython3 - <<EOF\nprint(1)\nEOF",
+		'git --git-dir "a b" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		'git -C "$(echo a b)" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		'git -C "a  b" push\npython3 - <<EOF\nprint(1)\nEOF',
+		'gh -R "o r" pr create\npython3 - <<EOF\nprint(1)\nEOF',
+		'git --git-dir="a b" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		"git --git-dir=x commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"gh --repo=o/r pr\npython3 - <<EOF\nprint(1)\nEOF",
+		"command git commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"env git commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"/usr/bin/git commit\npython3 - <<EOF\nprint(1)\nEOF",
+		"git -ccore.x=y commit\npython3 - <<EOF\nprint(1)\nEOF",
+		// A quoted program name is still found.
+		'"git" commit\npython3 - <<EOF\nprint(1)\nEOF',
+		"'git' commit\npython3 - <<EOF\nprint(1)\nEOF",
+	];
+	for (const command of FAIL_CLOSED_TEXT) {
+		test(`an unreadable command with a gated form stays a hit: ${JSON.stringify(command)}`, () => {
+			assert.equal(bash("companion", command), "ask");
+			assert.equal(bash("reviewer", command), "deny");
+		});
+	}
 
 	/** Quoted heredoc bodies that the shell passes as plain data. */
 	const DATA_HEREDOCS = [
@@ -288,9 +320,10 @@ describe("doctrine: fail closed", () => {
 	];
 	for (const command of DATA_HEREDOCS) {
 		test(`a quoted heredoc body is data: ${JSON.stringify(command)}`, () => {
-			for (const profession of ["implementer", "orchestrator", "tester"]) {
-				assert.equal(bash(profession, command), "none", profession);
-			}
+			assert.equal(bash("companion", command), "none");
+			// A body is data, but a redirect or tee in the header still writes a file.
+			const writes = /^(?:cat[^\n]*>|tee )/.test(command);
+			assert.equal(bash("reviewer", command), writes ? "deny" : "none");
 		});
 	}
 
@@ -336,9 +369,9 @@ describe("doctrine: fail closed", () => {
 	];
 	for (const command of GATED_HEREDOCS) {
 		test(`a heredoc stays gated: ${JSON.stringify(command)}`, () => {
-			assert.equal(bash("orchestrator", command), "ask");
-			assert.equal(bash("implementer", command), "deny");
-			assert.equal(bash("tester", command), "deny");
+			assert.equal(bash("companion", command), "ask");
+			assert.equal(bash("reviewer", command), "deny");
+			assert.equal(bash("reviewer", command), "deny");
 		});
 	}
 
@@ -346,32 +379,28 @@ describe("doctrine: fail closed", () => {
 		const command = "python3 - <<EOF\nmv a b\nEOF";
 		const reason = (profession: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
-		assert.equal(bash("orchestrator", command), "ask");
-		assert.equal(bash("implementer", command), "ask");
-		assert.equal(bash("tester", command), "deny");
-		assert.match(reason("implementer"), /cp, mv, and rsync need your approval/);
-		assert.match(reason("tester"), /for the orchestrator and the implementer only/);
-		assert.doesNotMatch(reason("tester"), /git history/);
+		assert.equal(bash("companion", command), "none");
+		assert.equal(bash("reviewer", command), "deny");
+		assert.match(reason("reviewer"), /read-only/);
+		assert.doesNotMatch(reason("reviewer"), /git history/);
 	});
 
 	test("an ask explains the approval; a deny names who may run it", () => {
 		const reason = (profession: string, command: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
-		assert.match(reason("orchestrator", "git push"), /needs your approval/);
-		assert.match(reason("orchestrator", "git commit --amend"), /needs your approval/);
-		assert.match(reason("orchestrator", "git commit -m m"), /without a prompt/);
-		assert.match(reason("implementer", "git push"), /only the orchestrator/);
-		assert.match(reason("implementer", "git commit -m m"), /only the orchestrator/);
-		assert.match(reason("implementer", "cp a b"), /need your approval/);
-		assert.match(reason("tester", "cp a b"), /for the orchestrator and the implementer only/);
+		assert.match(reason("companion", "git push"), /needs your approval/);
+		assert.match(reason("companion", "git commit --amend"), /needs your approval/);
+		assert.match(reason("companion", "git commit -m m"), /without a prompt/);
+		assert.match(reason("reviewer", "git push"), /only the companion/);
+		assert.match(reason("reviewer", "git commit -m m"), /only the companion/);
+		assert.match(reason("reviewer", "cp a b"), /read-only/);
 	});
 
 	test("a mixed compound takes the strongest verdict", () => {
-		// The implementer may ask for cp, but the commit in the same call denies it.
-		assert.equal(bash("implementer", "cp a b && git commit -m x"), "deny");
-		// For the orchestrator, the cp ask beats the commit allow.
-		assert.equal(bash("orchestrator", "cp a b && git commit -m x"), "ask");
-		assert.equal(bash("orchestrator", "git commit -m x && git push && cp a b"), "ask");
+		assert.equal(bash("reviewer", "cp a b && git commit -m x"), "deny");
+		// For the companion, cp is ungated, so the commit allow does not cover the call.
+		assert.equal(bash("companion", "cp a b && git commit -m x"), "none");
+		assert.equal(bash("companion", "git commit -m x && git push && cp a b"), "ask");
 	});
 
 	test("a commit message from a heredoc asks, never allows", () => {
@@ -380,44 +409,18 @@ describe("doctrine: fail closed", () => {
 			"git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\"",
 			"cat <<'EOF' | git commit -F -\nmsg\nEOF",
 		]) {
-			assert.equal(bash("orchestrator", command), "ask", command);
-			assert.equal(bash("implementer", command), "deny", command);
+			assert.equal(bash("companion", command), "ask", command);
+			assert.equal(bash("reviewer", command), "deny", command);
 		}
 	});
 });
 
-describe("doctrine: file writes", () => {
-	const home = "/home/u/agent-notes";
-	test("implementer and tester write anywhere", () => {
-		for (const profession of ["implementer", "tester"]) {
-			assert.equal(edit(profession, "/repo/src/main.ts"), "none", profession);
-			assert.equal(edit(profession, "/repo/src/main.ts", "Write"), "none", profession);
-		}
-	});
-
-	test("the orchestrator writes its notes freely and asks elsewhere", () => {
-		assert.equal(edit("orchestrator", `${home}/orchestrator/journal.md`), "none");
-		assert.equal(edit("orchestrator", `${home}/project-notes/repo/study.md`, "Write"), "none");
-		assert.equal(edit("orchestrator", "/repo/README.md"), "ask");
-	});
-
-	test("the planner and researcher write only their own zone", () => {
-		assert.equal(edit("planner", `${home}/project-notes/repo/study.md`), "none");
-		assert.equal(edit("planner", `${home}/researcher/x.md`), "deny");
-		assert.equal(edit("researcher", `${home}/researcher/findings.md`, "Write"), "none");
-		assert.equal(edit("researcher", "/repo/src/main.ts"), "deny");
-		assert.equal(edit("researcher", "/repo/a.ipynb", "NotebookEdit"), "deny");
-	});
-
-	test("the reviewer and the mascot never write", () => {
-		for (const profession of ["reviewer", "mascot"]) {
-			assert.equal(edit(profession, `${home}/project-notes/x.md`), "deny", profession);
-			assert.equal(edit(profession, "/repo/src/main.ts", "Write"), "deny", profession);
-		}
-	});
-
-	test("a zone name inside another path does not count", () => {
-		assert.equal(edit("planner", "/repo/not-agent-notes/project-notes/x.md"), "deny");
+describe("doctrine: the shell parser contract", () => {
+	test("an unreadable heredoc reaches the hook as unsupported", () => {
+		const command = "cat <<EOF\ngit push\nEOF";
+		assert.equal(parseShellCommand(command).unsupported, "heredoc");
+		assert.equal(bash("companion", command), "ask");
+		assert.equal(bash("reviewer", command), "deny");
 	});
 });
 
@@ -454,21 +457,58 @@ describe("doctrine: hook wiring", () => {
 
 	test("a hit prints a PreToolUse permission decision", () => {
 		const out = JSON.parse(
-			run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git push" } }),
+			run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git push" } }),
 		) as { hookSpecificOutput: Record<string, string> };
 		assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
 		assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
-		assert.match(out.hookSpecificOutput.permissionDecisionReason, /persona-agents doctrine \(tester\)/);
+		assert.match(out.hookSpecificOutput.permissionDecisionReason, /persona-agents doctrine \(reviewer\)/);
 	});
 
-	test("a plain commit prints an allow for the orchestrator", () => {
+	test("a plain commit prints an allow for the companion", () => {
 		const out = JSON.parse(
-			run({ agent_type: "persona-agents:orchestrator", tool_name: "Bash", tool_input: { command: "git commit -m m" } }),
+			run({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command: "git commit -m m" } }),
 		) as { hookSpecificOutput: Record<string, string> };
 		assert.equal(out.hookSpecificOutput.permissionDecision, "allow");
 	});
 
 	test("no hit prints nothing", () => {
-		assert.equal(run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git status" } }), "");
+		assert.equal(run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git status" } }), "");
+	});
+
+
+});
+
+/** Shell writes: the reviewer is denied, the companion gets no decision. */
+const WRITES = [
+	"rm -rf build",
+	"echo x > out.txt",
+	"npm test > /tmp/log.txt",
+	"sed -i s/a/b/ file.ts",
+	"perl -pi -e s/a/b/ file.ts",
+	"cp a b",
+	"bash -c 'mv a b'",
+	"tee log.txt < input",
+	"git checkout -- file.ts",
+	"git stash",
+	"git reset --hard",
+	"git branch -D topic",
+	"gh issue create -t x",
+	"curl -o x https://example.com",
+	"cat <<EOF > notes.txt\nhello\nEOF",
+];
+
+describe("doctrine: shell writes", () => {
+	for (const command of WRITES) {
+		test(command, () => {
+			assert.equal(bash("reviewer", command), "deny");
+			assert.equal(bash("companion", command), "none");
+		});
+	}
+
+	test("reads with a harmless redirect stay untouched", () => {
+		for (const command of ["npm test 2>&1", "git diff > /dev/null", "git branch", "git branch -a", "git branch --show-current", "gh pr view 1"]) {
+			const expected = command.startsWith("gh pr") ? "deny" : "none";
+			assert.equal(bash("reviewer", command), expected, command);
+		}
 	});
 });

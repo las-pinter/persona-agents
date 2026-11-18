@@ -1,0 +1,10 @@
+{
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "40"
+  },
+  "permissions": {
+    "additionalDirectories": ["~/agent-notes"],
+    "allow": ["Read(~/agent-notes/**)", "Edit(~/agent-notes/**)"],
+    "ask": ["Bash(git push:*)", "Bash(gh pr:*)", "Bash(gh run:*)", "Bash(gh release:*)"]
+  }
+}

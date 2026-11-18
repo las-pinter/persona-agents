@@ -1,7 +1,7 @@
 {
   "name": "persona-agents",
   "displayName": "Persona Agents",
-  "description": "Profession agents (orchestrator, implementer, and more) that speak in the voice of a switchable persona theme",
+  "description": "A companion agent that plans, builds, tests, and commits with you, in the voice of a switchable persona theme",
   "author": {
     "name": "Las Pinter"
   },
@@ -10,49 +10,41 @@
   "keywords": [
     "agents",
     "personas",
-    "orchestration"
+    "companion"
   ],
   "agents": [
-    "./platforms/claude/agents/orchestrator.md",
-    "./platforms/claude/agents/planner.md",
-    "./platforms/claude/agents/researcher.md",
-    "./platforms/claude/agents/implementer.md",
-    "./platforms/claude/agents/reviewer.md",
-    "./platforms/claude/agents/tester.md",
-    "./platforms/claude/agents/mascot.md"
+    "./platforms/claude/agents/companion.md",
+    "./platforms/claude/agents/reviewer.md"
   ],
   "skills": [
-    "./content/skills/common/file-length-policy/",
-    "./content/skills/common/journal-management-generic/",
-    "./content/skills/common/persona-free-documents/",
-    "./content/skills/common/project-notes/",
-    "./content/skills/common/retro/",
-    "./content/skills/common/shell-discipline/",
-    "./content/skills/common/simplified-technical-english/",
-    "./content/skills/common/skill-resolution/",
-    "./content/skills/implementer/code-implementation/",
-    "./content/skills/implementer/python-quality-gates/",
-    "./content/skills/implementer/react-quality-gates/",
-    "./content/skills/implementer/rust-implementation/",
-    "./content/skills/implementer/rust-quality-gates/",
-    "./content/skills/orchestrator/commit-hygiene/",
-    "./content/skills/orchestrator/journal-management/",
-    "./content/skills/orchestrator/task-routing/",
-    "./content/skills/planner/interview/",
-    "./content/skills/planner/study/",
-    "./content/skills/researcher/source-selection/",
-    "./content/skills/reviewer/code-review-checklist/",
-    "./content/skills/tester/production-issue-flagging/",
-    "./content/skills/tester/regression-identification/",
-    "./content/skills/tester/test-case-structure/",
-    "./content/skills/tester/test-strategy-selection/"
+    "./content/skills/code-implementation/",
+    "./content/skills/code-review-checklist/",
+    "./content/skills/commit-hygiene/",
+    "./content/skills/file-length-policy/",
+    "./content/skills/interview/",
+    "./content/skills/persona-free-documents/",
+    "./content/skills/production-issue-flagging/",
+    "./content/skills/project-notes/",
+    "./content/skills/python-quality-gates/",
+    "./content/skills/react-quality-gates/",
+    "./content/skills/regression-identification/",
+    "./content/skills/retro/",
+    "./content/skills/review/",
+    "./content/skills/rust-implementation/",
+    "./content/skills/rust-quality-gates/",
+    "./content/skills/session-notes/",
+    "./content/skills/source-selection/",
+    "./content/skills/study/",
+    "./content/skills/test-case-structure/",
+    "./content/skills/test-strategy-selection/",
+    "./content/skills/wrap-up/"
   ],
   "hooks": "./platforms/claude/hooks/hooks.json",
   "userConfig": {
     "theme": {
       "type": "string",
       "title": "Persona theme",
-      "description": "The crew whose personas the profession agents speak as",
+      "description": "The theme whose persona the companion speaks as",
       "options": [
         "catcrew",
         "caveman",
@@ -64,18 +56,6 @@
         "wh40kOrk"
       ],
       "default": "goblin"
-    },
-    "subagent_model": {
-      "type": "string",
-      "title": "Subagent model",
-      "description": "The model for the implementer, researcher, tester, reviewer, planner, and mascot",
-      "options": [
-        "sonnet",
-        "opus",
-        "haiku",
-        "inherit"
-      ],
-      "default": "sonnet"
     }
   }
 }

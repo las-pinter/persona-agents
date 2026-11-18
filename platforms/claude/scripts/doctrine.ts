@@ -1,47 +1,49 @@
 #!/usr/bin/env node
-// doctrine — Claude Code PreToolUse hook for persona-agents.
+// doctrine — Claude Code PreToolUse hook (Bash) for persona-agents.
 //
-// Enforces the commit and file doctrine from AGENTS.md for the persona-agents
-// agents (agent type `persona-agents:<profession>`), whether they run as the
-// main session (`claude --agent`) or as a subagent:
+// The settings snippet (platforms/claude/settings/recommended.json) holds the
+// base permission rules. This hook adds what settings rules cannot express,
+// for the persona-agents agents (agent type `persona-agents:<name>`):
 //
 //   plain git add/commit/pull/merge/rebase/tag
-//                     orchestrator: allow; every other agent: deny
-//   git push, gh pr, gh release, git tag -d/--delete/-f/--force,
+//                     companion: allow; every other agent: deny
+//   git push, gh pr, gh release, gh run, git tag -d/--delete/-f/--force,
 //   any git global option outside GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS
 //   (-c, --config-env, --exec-path, --attr-source, ...), git commit --amend,
 //   git pull --upload-pack, git pull/merge with a `::` transport URL or a
 //   merge strategy (-s, --strategy), and any wrapped or runtime-shaped
 //   history command
-//                     orchestrator: ask; every other agent: deny
-//   cp, mv, rsync     orchestrator and implementer: ask; the rest: deny
+//                     companion: ask; every other agent: deny
+//   a write: a file-changing command (cp, mv, rm, tee, sed -i, ...), a git
+//   verb outside the read list, a gh command that is not a read, or an
+//   output redirect to a file
+//                     companion: no decision; every other agent: deny
+//
+// The reviewer is read-only: it has no Edit or Write tool (its agent file),
+// and this hook denies it every shell write it can see.
 //
 // Allow is given only when every segment of the command is a plain history
 // command. A command that mixes an allowed segment with an ungated one
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
 // `$(...)` or backtick substitution, an env assignment, a path to git, the
-// unwrap depth limit, the fail-closed scan) or a runtime-shaped one (a `$`
-// expansion, a glob, an output redirect to a file) is raised to ask.
-// Claude Code still applies settings deny and ask rules after a hook allow,
-// and an allow from this hook never overrides an ask or deny from another
-// hook (precedence deny > defer > ask > allow; see the PreToolUse decision
-// control section of the Claude Code hooks documentation).
+// unwrap depth limit) or a runtime-shaped one (a `$` expansion, a glob, an
+// output redirect to a file) is raised to ask. Claude Code still applies
+// settings deny and ask rules after a hook allow, and an allow from this hook
+// never overrides an ask or deny from another hook.
 //
 // Accepted risks (owner choice), allowed without a prompt:
 //   git rebase --exec '<cmd>' runs <cmd>; its payload is not inspected.
 //   git -C / --git-dir / --work-tree to another path runs that repository's
 //   hooks and core.* config.
-//   Edit/Write/NotebookEdit outside the agent's notes zone (FILE_ZONES)
-//                     orchestrator: ask; planner, researcher, reviewer, mascot: deny
 //
-// A shell command is split into segments by the pi gate's parser; each segment
+// A shell command is split into segments by the shell parser; each segment
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
 // before it is classified. A command the parser cannot read (a heredoc, an
-// unbalanced quote) that names a gated command counts as a hit: fail closed.
-// The fail-closed hit is ask, never allow. One exception: a single quoted
-// heredoc fed to a data reader (cat, tee, python3 -, node -) is checked by its
-// header only (safeHeredocHeader).
+// unbalanced quote) that holds a gated form counts as a hit: fail closed.
+// Unreadable text with only git read verbs (status, diff, log) is not a hit.
+// One exception: a single quoted heredoc fed to a data reader (cat, tee,
+// python3 -, node -) is checked by its header only (safeHeredocHeader).
 //
 // Any other agent, or a session without one, gets no decision, so Claude
 // Code's own permission flow runs unchanged.
@@ -52,7 +54,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseShellCommand } from "../../pi/extension/command-segments.ts";
+import { parseShellCommand } from "./shell-parse.ts";
 
 const PREFIX = "persona-agents:";
 
@@ -71,61 +73,50 @@ export interface HookInput {
 
 /**
  * history: a plain git add/commit/pull/merge/rebase/tag.
- * publish: git push, gh pr, gh release, and every history command that is an
- * ask exception or comes wrapped (see the header).
+ * publish: git push, and gh pr, gh release, or gh run, also when a gh global option
+ * comes first, plus every history command that is an ask exception or comes
+ * wrapped (see the header).
+ * write: a command that changes files or remote state (see the header).
  */
-type Gate = "history" | "publish" | "copy";
+type Gate = "history" | "publish" | "write";
 /** A segment that runs a command no gate covers. */
 const UNGATED = "ungated";
 type Hit = Gate | typeof UNGATED;
 
-/** Verdict per gated command class; a profession missing here is denied. */
-const COMMAND_RULES: Record<Gate, Record<string, Verdict>> = {
-	history: { orchestrator: "allow" },
-	publish: { orchestrator: "ask" },
-	copy: { orchestrator: "ask", implementer: "ask" },
+/** The companion's verdict per gate; null leaves the call to Claude Code. Every other agent is denied. */
+const COMPANION_RULES: Record<Gate, Verdict | null> = {
+	history: "allow",
+	publish: "ask",
+	write: null,
 };
 
-const HISTORY_DENY = "only the orchestrator writes git history or runs gh pr / gh release; suggest a commit instead";
+const HISTORY_DENY = "only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 const PUBLISH_ASK =
-	"git push, gh pr, gh release, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
+	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 	history: {
-		allow: "a plain git add, commit, pull, merge, rebase, or tag runs without a prompt for the orchestrator",
+		allow: "a plain git add, commit, pull, merge, rebase, or tag runs without a prompt for the companion",
 		ask: PUBLISH_ASK,
 		deny: HISTORY_DENY,
 	},
 	publish: { allow: PUBLISH_ASK, ask: PUBLISH_ASK, deny: HISTORY_DENY },
-	copy: {
-		allow: "cp, mv, and rsync need your approval",
-		ask: "cp, mv, and rsync need your approval",
-		deny: "cp, mv, and rsync are for the orchestrator and the implementer only",
+	write: {
+		allow: "this agent is read-only",
+		ask: "this agent is read-only",
+		deny: "this agent is read-only: it may not change files or remote state from the shell",
 	},
 };
 
-/**
- * Where each profession may write with Edit/Write/NotebookEdit. A profession
- * missing here writes freely. `verdict` applies outside the allowed zones.
- */
-const FILE_ZONES: Record<string, { zones: RegExp[]; verdict: Verdict }> = {
-	orchestrator: { zones: [/(^|\/)agent-notes\/(orchestrator|project-notes)\//], verdict: "ask" },
-	planner: { zones: [/(^|\/)agent-notes\/project-notes\//], verdict: "deny" },
-	researcher: { zones: [/(^|\/)agent-notes\/researcher\//], verdict: "deny" },
-	reviewer: { zones: [], verdict: "deny" },
-	mascot: { zones: [], verdict: "deny" },
-};
-
-const FILE_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
-
 const GIT_HISTORY = new Set(["add", "commit", "pull", "merge", "rebase", "tag"]);
 const GIT_PUBLISH = new Set(["push"]);
+const GH_PUBLISH = new Set(["pr", "release", "run"]);
 /**
  * The only git global options a history command may carry and still get its
  * verdict by subcommand. Any other leading option (-c, --config-env,
  * --exec-path, --attr-source, an option git adds later) makes the command
- * publish: ask for the orchestrator, deny for the rest.
+ * publish: ask for the companion, deny for the rest.
  */
 const GIT_PLAIN_OPTIONS = new Set([
 	"--no-pager", "-p", "--paginate", "-P", "--bare", "--no-replace-objects", "--literal-pathspecs",
@@ -137,7 +128,22 @@ const GIT_PATH_OPTIONS = new Set(["-C", "--git-dir", "--work-tree", "--namespace
 const GIT_INFO_OPTIONS = new Set(["--version", "--help"]);
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);
-const COPY_COMMANDS = new Set(["cp", "mv", "rsync"]);
+/** Commands that change files; a read-only agent may not run them. */
+const WRITE_COMMANDS = new Set([
+	"cp", "mv", "rsync", "rm", "rmdir", "tee", "dd", "truncate", "install", "ln", "mkdir", "touch",
+	"chmod", "chown", "chgrp", "patch", "shred", "unlink", "scp", "curl", "wget",
+]);
+/** Commands that change files only with an in-place flag (`sed -i`, `perl -pi`). */
+const IN_PLACE_COMMANDS = new Set(["sed", "perl", "ruby"]);
+/** Git verbs that only read; any other verb is a write for a read-only agent. */
+const GIT_READ = new Set([
+	"status", "diff", "log", "show", "blame", "rev-parse", "ls-files", "ls-tree", "grep", "describe",
+	"shortlog", "cat-file", "merge-base", "rev-list", "show-ref", "reflog", "version", "help", "range-diff",
+	"whatchanged", "name-rev", "for-each-ref", "check-ignore", "check-attr", "var",
+]);
+/** gh actions that only read (`gh issue list`, `gh repo view`). */
+const GH_READ_ACTIONS = new Set(["list", "view", "status", "diff", "checks", "search"]);
+const GH_READ_COMMANDS = new Set(["status", "search", "help", "version", "browse"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 /** Prefix commands that run the rest of the line, with options to skip. */
 const PREFIX_COMMANDS = new Set(["!", "sudo", "env", "command", "nice", "nohup", "time", "exec", "xargs", "eval", "timeout", "stdbuf", "doas"]);
@@ -151,7 +157,7 @@ const PREFIX_VALUE_OPTIONS: Record<string, Set<string>> = {
 	xargs: new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"]),
 };
 /** Names a fail-closed scan looks for in a command the parser cannot read. */
-const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync)(?=\s|$)/;
+const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync|rm|tee)(?=\s|$|['"])/;
 /** A plain file path in a heredoc header: no quotes, expansions, or operators. */
 const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
 const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;
@@ -232,6 +238,25 @@ function runtimeShaped(segment: string): boolean {
 		}
 		if (ch === "'" || ch === '"') quote = ch;
 		else if ("*?[{".includes(ch)) return true;
+	}
+	return writesFile(segment);
+}
+
+/** True when the segment redirects output to a file (`2>&1` and `>/dev/null` stay plain). */
+function writesFile(segment: string): boolean {
+	let quote: "'" | '"' | null = null;
+	for (let i = 0; i < segment.length; i++) {
+		const ch = segment[i];
+		if (quote) {
+			if (ch === quote) quote = null;
+			else if (ch === "\\" && quote === '"') i++;
+			continue;
+		}
+		if (ch === "\\") {
+			i++;
+			continue;
+		}
+		if (ch === "'" || ch === '"') quote = ch;
 		else if (ch === "<" && segment[i + 1] === ">") return true;
 		else if (ch === ">") {
 			let j = i + 1;
@@ -244,6 +269,12 @@ function runtimeShaped(segment: string): boolean {
 		}
 	}
 	return false;
+}
+
+/** True when `git branch` arguments only list branches. */
+function isBranchListing(rest: string[]): boolean {
+	const LIST = new Set(["-a", "--all", "-r", "--remotes", "-l", "--list", "-v", "-vv", "--verbose", "--show-current", "--merged", "--no-merged", "--contains", "--no-contains", "--sort", "--format", "--column", "--no-column", "--points-at"]);
+	return rest.length === 0 || rest.includes("--show-current") || rest.includes("-l") || rest.includes("--list") || rest.every((arg) => !arg.startsWith("-") ? false : LIST.has(arg.split("=")[0]));
 }
 
 /** True when the command runs a `$(...)`, backtick, or `<(...)` substitution. */
@@ -300,13 +331,16 @@ function segmentGates(segment: string, depth: number): Hit[] {
 		}
 		if (SHELLS.has(command)) {
 			const flag = words.findIndex((word) => /^-[a-z]*c[a-z]*$/.test(word));
-			if (flag < 0 || flag + 1 >= words.length) return [UNGATED];
+			if (flag < 0 || flag + 1 >= words.length) {
+				return [UNGATED];
+			}
 			// Never allow through a shell: the payload's history hits ask.
-			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "copy"] as Hit[]) : raise(commandGates(words[flag + 1], depth + 1));
+			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "write"] as Hit[]) : raise(commandGates(words[flag + 1], depth + 1));
 			return [...hits, ...extra];
 		}
 		let hits = classify(command, words.slice(1));
 		if (wrapped || (hits.includes("history") && runtimeShaped(inner))) hits = raise(hits);
+		if (writesFile(inner)) hits = [...hits, "write"];
 		return [...hits, ...extra];
 	}
 }
@@ -319,8 +353,19 @@ function longOption(arg: string, long: string, min: number): boolean {
 
 /** The hits of one plain command (no prefixes). */
 function classify(command: string, args: string[]): Hit[] {
-	if (COPY_COMMANDS.has(command)) return ["copy"];
-	if (command === "gh") return args[0] === "pr" || args[0] === "release" ? ["publish"] : [UNGATED];
+	if (WRITE_COMMANDS.has(command)) return ["write"];
+	if (IN_PLACE_COMMANDS.has(command) && args.some((arg) => /^-[a-zA-Z]*i/.test(arg) || arg.startsWith("--in-place"))) return ["write"];
+	if (command === "gh") {
+		// A global option before the subcommand (`gh -R owner/repo run list`) moves the
+		// word the gate reads, so skip the options first. `-R` and `--repo` take the
+		// next word as their value; a `--long=value` token carries its own value.
+		let g = 0;
+		while (g < args.length && args[g].startsWith("-")) g += args[g] === "-R" || args[g] === "--repo" ? 2 : 1;
+		const sub = args[g];
+		if (sub !== undefined && GH_PUBLISH.has(sub)) return ["publish"];
+		if (sub === undefined || GH_READ_COMMANDS.has(sub) || GH_READ_ACTIONS.has(args[g + 1] ?? "")) return [UNGATED];
+		return ["write"];
+	}
 	if (command !== "git") return [UNGATED];
 	let i = 0;
 	while (i < args.length && args[i].startsWith("-")) {
@@ -334,7 +379,8 @@ function classify(command: string, args: string[]): Hit[] {
 	}
 	const sub = args[i];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
-	if (!sub || !GIT_HISTORY.has(sub)) return [UNGATED];
+	if (!sub) return [UNGATED];
+	if (!GIT_HISTORY.has(sub)) return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(args.slice(i + 1))) ? [UNGATED] : ["write"];
 	const rest = args.slice(i + 1);
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
@@ -362,6 +408,36 @@ function classify(command: string, args: string[]): Hit[] {
 	return ["history"];
 }
 
+/**
+ * True when the text after an unreadable command's `git` or `gh` word may
+ * start a gated form. It skips the global options it knows. It answers true
+ * for anything it cannot read (unknown option, substitution, odd quoting),
+ * because a false deny is safe and a false allow is not.
+ */
+function gatedFormFollows(program: "git" | "gh", after: string): boolean {
+	// A closing quote of a quoted program name (`"git" commit`) is not a word.
+	const tokens = after.replace(/^['"]/, "").split(/\s+/).filter((token) => token !== "");
+	// An option value is trusted only as one clean token. A quoted value with a
+	// space splits into two tokens, and the second would read as the subcommand.
+	const cleanValue = (value: string | undefined): boolean => value !== undefined && /^[^\s'"`$\\]+$/.test(value);
+	for (let i = 0; i < tokens.length; i++) {
+		// A separator or quote glued to the word does not change the word.
+		const word = tokens[i].replace(/[;&|)'"]+$/, "");
+		if (word.startsWith("-")) {
+			const eq = tokens[i].indexOf("=");
+			const name = eq < 0 ? tokens[i] : tokens[i].slice(0, eq);
+			const takesValue = program === "gh" ? name === "-R" || name === "--repo" : GIT_PATH_OPTIONS.has(name);
+			if (takesValue) {
+				if (eq >= 0 ? !cleanValue(tokens[i].slice(eq + 1)) : !cleanValue(tokens[++i])) return true;
+			} else if (program === "git" && !GIT_PLAIN_OPTIONS.has(word)) return true;
+			continue;
+		}
+		const gated = program === "git" ? GIT_HISTORY.has(word) || GIT_PUBLISH.has(word) : GH_PUBLISH.has(word);
+		return gated || !/^[a-z][a-z0-9-]*$/.test(word);
+	}
+	return false;
+}
+
 /** Every hit a whole shell command makes. */
 function commandGates(command: string, depth = 0): Hit[] {
 	const parsed = parseShellCommand(command);
@@ -372,8 +448,14 @@ function commandGates(command: string, depth = 0): Hit[] {
 		// hit, and never an allow.
 		const gates = new Set<Hit>();
 		for (const match of command.matchAll(new RegExp(GATED_WORD.source, "g"))) {
-			gates.add(match[1] === "git" || match[1] === "gh" ? "publish" : "copy");
+			const program = match[1];
+			if (program === "git" || program === "gh") {
+				// A read such as `git status` stays ungated; only a gated form fires.
+				if (gatedFormFollows(program, command.slice(match.index + program.length))) gates.add("publish");
+			} else gates.add("write");
 		}
+		// The first line of an unreadable command (a heredoc header) may redirect into a file.
+		if (writesFile(command.split("\n")[0])) gates.add("write");
 		return [...gates];
 	}
 	const hits = [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, depth)))];
@@ -408,35 +490,23 @@ export function decide(input: HookInput): Decision | null {
 	const agentType = typeof input.agent_type === "string" ? input.agent_type : "";
 	if (!agentType.startsWith(PREFIX)) return null;
 	const profession = agentType.slice(PREFIX.length);
-	const tool = typeof input.tool_name === "string" ? input.tool_name : "";
-	const toolInput = input.tool_input ?? {};
-
-	if (tool === "Bash") {
-		const command = typeof toolInput.command === "string" ? toolInput.command : "";
-		const hits = commandGates(command);
-		const decisions = hits
-			.filter((hit): hit is Gate => hit !== UNGATED)
-			.map((gate) => {
-				const verdict = COMMAND_RULES[gate][profession] ?? "deny";
-				return { verdict, reason: GATE_REASON[gate][verdict] };
-			});
-		const decision = strongest(decisions, profession);
-		// A hook allow skips Claude Code's prompt for the whole command, so allow
-		// only when every segment is an allowed history command. An ungated
-		// segment next to it leaves the decision to Claude Code.
-		if (decision?.verdict === "allow" && hits.includes(UNGATED)) return null;
-		return decision;
-	}
-
-	if (FILE_TOOLS.has(tool)) {
-		const rule = FILE_ZONES[profession];
-		if (!rule) return null;
-		const target = String(toolInput.file_path ?? toolInput.notebook_path ?? "");
-		if (rule.zones.some((zone) => zone.test(target))) return null;
-		const where = rule.zones.length > 0 ? "outside its agent-notes zone" : "at all";
-		return { verdict: rule.verdict, reason: `persona-agents doctrine: the ${profession} does not edit files ${where}` };
-	}
-	return null;
+	if (input.tool_name !== "Bash") return null;
+	const command = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
+	let hits = commandGates(command);
+	// The companion may write; a write segment is an ungated segment for it.
+	if (profession === "companion") hits = hits.map((hit) => (hit === "write" ? UNGATED : hit));
+	const decisions = hits
+		.filter((hit): hit is Gate => hit !== UNGATED)
+		.map((gate) => {
+			const verdict = profession === "companion" ? (COMPANION_RULES[gate] ?? "deny") : "deny";
+			return { verdict, reason: GATE_REASON[gate][verdict] };
+		});
+	const decision = strongest(decisions, profession);
+	// A hook allow skips Claude Code's prompt for the whole command, so allow
+	// only when every segment is an allowed history command. An ungated
+	// segment next to it leaves the decision to Claude Code.
+	if (decision?.verdict === "allow" && hits.includes(UNGATED)) return null;
+	return decision;
 }
 
 /** Deny beats ask, ask beats allow; no hit means no decision. */

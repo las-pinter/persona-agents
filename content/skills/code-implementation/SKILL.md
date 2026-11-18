@@ -1,0 +1,179 @@
+---
+name: code-implementation
+description: Language-agnostic code implementation workflow for features, bugs, refactors, and tests.
+---
+
+# Code Implementation
+
+## Quick Reference
+
+```
+1. ORIENT    → Read configs, trace a similar feature
+2. PLAN      → Read full files, consider edge cases, identify changes
+3. IMPLEMENT → Follow patterns, handle all states, comment WHY not WHAT
+4. VERIFY    → Run the project language gate (see Phase 4)
+5. DELIVER   → Self-review, update docs, get the review, commit
+```
+
+---
+
+## Phase 1: Orient
+
+Before touching a single line:
+
+- Read project configs (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`) — identify language, framework, test runner, linter.
+- Read convention docs: `CLAUDE.md`, `README.md`, `.editorconfig`.
+- The previous green commit is the evidence of the starting state. If the
+  previous commit is not green, report it before the first edit. Do not run the
+  test suite before the first edit. Run the suite only after a change.
+- Trace an existing similar feature end-to-end to understand the patterns and conventions expected.
+
+---
+
+## Phase 2: Plan
+
+- If requirements are ambiguous, **stop and ask**. Building the wrong thing correctly is still wrong.
+- **Read the complete file before editing anything.** The #1 cause of hallucinated code is editing a file you haven't fully read.
+- Identify: which files change, which functions/classes, whether new files are needed, whether interfaces change.
+- Consider edge cases: null/empty input, unexpected state, dependency failures, concurrency, permissions, resource exhaustion.
+- For complex work, write a 3-5 bullet plan before implementing.
+
+---
+
+## Phase 3: Implement
+
+- Cite the reference file and line before the first draft.
+- Name the source: the reference implementation file, the vendored source file, or the design document.
+- Quote the exact reference line.
+- State how the draft uses the line.
+- Follow existing code patterns and conventions — match the project's style, not your preference.
+- Handle ALL states, not just the happy path: success, error, empty, and edge cases.
+- Single responsibility — if a function name contains "and", split it.
+- Handle errors properly: meaningful messages, enforce contracts at boundaries.
+- Search for existing helpers before writing new code (DRY).
+- Make minimal changes — do not refactor unrelated code in the same change.
+- Comment WHY, not WHAT. The code already says what it does.
+- Keep comments brief. Prefer code that explains itself; a long comment shows the code needs a
+  rewrite.
+- Follow **persona-free-documents** for repository artifacts.
+
+**By task type:**
+
+| Task Type | Pattern |
+|-----------|---------|
+| New feature | Write tests alongside the feature |
+| Bug fix | Write a failing test that reproduces the bug FIRST, then fix |
+| Refactor | Keep tests passing after every change — small, safe steps |
+
+---
+
+## Phase 4: Verify
+
+Run the quality gate for the project's language. Fix each new issue or warning
+before delivering. Report an issue or warning that predates the change to the
+owner; when an old warning blocks a gate, the owner decides.
+
+The three language gate skills (`python-quality-gates`, `rust-quality-gates`,
+`react-quality-gates`) own the gate order and the language tools. Follow the gate
+for the project language. When the project language has no gate skill, use this
+order: type check, lint, tests, build.
+
+**Prove each test can fail.** Do this for each acceptance test the study names,
+and for each new test. A compile check, a lint, or a type check is a gate, not a
+test. Skip this step for it.
+
+1. Break the code under test by hand.
+2. Run the test. See it fail.
+3. Restore the code. Run the test again. See it pass.
+4. Record one result line: the test name, a one-line description of the break, and `fail` or `pass`.
+
+- One break run can cover several tests that share one guard. Each of those
+  tests still gets its own break-fail-restore line. That line names the shared
+  break.
+- If the test still passes with the code broken, the test is wrong. Fix the test
+  before you deliver.
+- A bug-fix test that failed before the fix already shows step 2. Record that
+  run as the fail result, and the run after the fix as the pass result. Still do step 1 for any other new test.
+- Check `git diff` after the restore. The break must not be in the final diff.
+- A prose or config change with no test is exempt. Say so in the report.
+
+---
+
+## Phase 5: Deliver
+
+- Review your own diff first: correctness, edge cases, naming, comments, dead code, security.
+- Update docs affected by the change: README, API docs, inline docs, changelog.
+- For a non-trivial change, get the independent review (see the companion
+  profession) and fix its findings before the commit.
+- Commit in the repository's commit form. A push, a pull request, or a release
+  asks the owner.
+
+## Scope Discipline
+
+- Implement the accepted plan, not more. An improvement you see nearby goes to
+  the owner as a suggestion, not into the diff.
+- When the code contradicts the plan, stop and update the plan (and ask the
+  owner when the change alters the outcome) before you continue.
+- Surface an ambiguity; do not resolve it silently with an assumption.
+- Flag a security-sensitive change (auth, crypto, input validation, secrets)
+  to the reviewer and in the report.
+- Report a quality problem in existing code you did not change; do not fix it
+  unrequested.
+
+---
+
+## Universal Code Standards
+
+### Type Safety
+- Use the type system fully. No `any`, no casts without justification.
+- Prefer specific types over generic: `EmailAddress` over `string`.
+- Use exhaustive pattern matching for enum-like types.
+
+### Error Handling
+- Fail fast — detect invalid state early, report clearly.
+- Never swallow errors (no empty `catch`/`except` blocks).
+- Use idiomatic error types for the language (Rust `Result`, Go `if err != nil`, etc.).
+- Error messages include context: what failed, why, what was expected.
+
+### Security
+- Validate ALL inputs at trust boundaries.
+- Parameterize ALL queries — no string concatenation in SQL or shell.
+- Never hardcode secrets.
+
+### Performance
+- Be aware of algorithmic complexity. O(n²) over user data is a bug.
+- Avoid N+1 queries. Batch related data fetches.
+- Clean up resources: close files, release connections.
+- Profile before optimizing — if you haven't measured, you're guessing.
+
+### Naming
+- Names reveal intent: `calculateInvoiceTotal()` not `calc()`.
+- Booleans read naturally: `isActive`, `hasPermission`, `canDelete`.
+- No magic numbers — extract to named constants.
+- Functions under ~40 lines. Follow the **file-length-policy** skill for file length.
+
+---
+
+## Testing Standards
+
+Write tests for ALL new functionality, following Arrange → Act → Assert with one Act per test. Structure and naming conventions live in the **test-case-structure** skill.
+
+| Scenario | Test |
+|----------|------|
+| Happy path | Does expected behavior work? |
+| Failure cases | What happens when something goes wrong? |
+| Edge cases | Boundaries, empty input, special values |
+| Error messages | Helpful and accurate? |
+| Permissions | Unauthorized actions rejected? |
+
+---
+
+## Anti-Patterns
+
+| Anti-Pattern | Do This Instead |
+|---|---|
+| Editing without reading the full file | Read first, always |
+| Skipping tests for "small" changes | Run the full suite after the change |
+| Leaving TODOs/FIXMEs | Implement properly or create a tracked task |
+| Refactoring while adding features | Separate tasks |
+| Writing clever code | Write clear, obvious code |

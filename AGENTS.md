@@ -9,26 +9,19 @@ When a new version is released:
 1. Bump the version in `package.json`, line 3 (`"version"`). This file is the
    source of truth for the package version.
 2. Tag the release `v<new-version>`. Create the tag before the release, or
-   select an already-added tag in the GitHub release form. Pi installs resolve
-   by tag, so a release without the tag does not install.
+   select an already-added tag in the GitHub release form.
 3. Before writing the install notes, run `git diff --name-only <prev-tag> HEAD`.
-   Check whether the kiro, opencode, or pi templates (`platforms/kiro/`,
-   `platforms/opencode/`, `platforms/pi/`) or the shared professions, personas,
-   skills, or commands (`content/`) changed. State the correct install step:
-   reinstall (`./install.sh --force`) for changed kiro or opencode templates,
-   professions, personas, skills, or commands; `/reload` for pi-only changes. A
-   command change (`content/commands/`) needs both a reinstall for kiro and
-   opencode and a `/reload` for pi. A change that touches both pi and kiro or
-   opencode needs both a reinstall and a `/reload`. A change to
-   `content/`, `platforms/claude/`, or `.claude-plugin/` also needs the Claude
-   Code update: `claude plugin marketplace update persona-agents`, then
-   `claude plugin update persona-agents@persona-agents`, then a restart.
+   State the correct install steps:
+   - A change to `content/`, `platforms/claude/`, or `.claude-plugin/` needs
+     the plugin update: `claude plugin marketplace update persona-agents`,
+     then `claude plugin update persona-agents@persona-agents`, then a restart.
+   - A change to `platforms/claude/settings/recommended.json` or `install.sh`
+     also needs `./install.sh` from an updated clone.
 
 Files that carry a version number but do NOT track the package release:
 
-- `package.json` dependency pins (the `devDependencies` and `overrides`
-  blocks) — dependency versions, not the package version. Do not touch them
-  on release.
+- `package.json` dependency pins (the `devDependencies` block) — dependency
+  versions, not the package version. Do not touch them on release.
 - `package.json` `engines.node` — the minimum Node.js version, not the package
   version. Do not touch it on release.
 
@@ -36,45 +29,46 @@ No other file carries the package version number.
 
 Rules:
 
-- No `README.md` in this repository may contain the package version number. A release
-  must never need a README edit.
+- No `README.md` in this repository may contain the package version number. A
+  release must never need a README edit.
 
 ## Commit rule
 
-Only the orchestrator writes git history. Every commit it makes starts with
-the prefix `ai:`. The implementer never commits. It suggests a commit.
+Only the companion writes git history. Every commit it makes starts with the
+prefix `ai:`. The reviewer never commits.
 
-The doctrine lives in the permission templates, the live global file
-`~/.pi/agent/permissions.json`, and, for Claude Code, the PreToolUse hook
-`platforms/claude/scripts/doctrine.ts`. On Claude Code and pi, the orchestrator
-runs a plain `git add`, `git commit`, `git pull`, `git merge`, `git rebase`, or
-`git tag` with no prompt. On every platform, it gets an ASK verdict for
-`git push` and every `gh pr` and `gh release` command. Coverage differs per
-platform:
+The doctrine lives in two places:
 
-- Claude Code allows a command only when every part of it is a plain history
-  command. A command with another part gets no hook decision, so Claude Code
-  decides.
-- pi allows the six commands also with `git -C <path>`, `--no-pager`, `-p`,
-  and a leading `cd x &&`.
-- opencode allows only a plain `git add`, `git commit`, `git merge`, and
-  `git rebase`. `git pull` and `git tag` ask, because a bare star can expand
-  to a planted `--upload-pack` or `-d` file. `git -C` forms ask, because a
-  quoted space in the directory can hide a second verb.
-- Kiro has no ask tier, so every git history command stays unlisted and asks.
-- On every platform, some forms still ask: tag force-move, `git -c` overrides
-  and unknown global options, `commit --amend`, upload-pack and transport
-  helper URLs, merge strategies, wrapped or substituted forms, and brace,
-  bracket, and extglob words. On Claude Code and pi, star and question mark
-  words also ask. Tag delete is a DENY on pi, opencode, and Kiro, and an ASK
-  on Claude Code.
-- Accepted risks: `rebase --exec` and `rebase -i` are allowed. On Claude Code
-  and pi, `git -C` to another repository is allowed, and the hooks and config
-  of that repository run. On opencode, a bare star or question mark in an
-  allowed command can expand to an option name from a planted file.
+- The settings snippet `platforms/claude/settings/recommended.json`, which
+  `install.sh` merges into the user settings: `git push`, `gh pr`, `gh run`,
+  and `gh release` ask.
+- The PreToolUse hook `platforms/claude/scripts/doctrine.ts`, for the
+  persona-agents agents. The companion runs a plain `git add`, `git commit`,
+  `git pull`, `git merge`, `git rebase`, or `git tag` with no prompt, when
+  every part of the command is one of those. A push, a `gh pr` / `run` /
+  `release`, a tag delete or force-move, `commit --amend`, a `git -c`
+  override, an unknown git global option, an upload-pack or transport helper
+  URL, a merge strategy, and any wrapped or substituted history command ask.
+  Every other plugin agent is denied all of these and every shell write the
+  hook can see.
 
-Every other agent gets a DENY for `git add`, `git commit`, `git push`,
-`git pull`, `git merge`, `git rebase`, `git tag`, and every `gh pr` and
-`gh release` command. `cp`, `mv`, and `rsync` ASK for the orchestrator and the
-implementer, and are denied to the rest. The global file asks for `git push`
-and `gh pr` for every agent. It is live and unversioned.
+`platforms/claude/README.md` holds the hook details.
+
+Accepted risks: `rebase --exec` and `rebase -i` are allowed. `git -C` to
+another repository is allowed, and the hooks and config of that repository
+run. `gh workflow run` and `gh api` carry no gate entry by owner choice, so
+Claude Code's own permission flow decides them.
+
+## Adding content
+
+It is rare to add a theme, a persona, or a skill. The steps live in
+`docs/adding-content.md` and are read when a task names one of them.
+
+## Tests
+
+Test the code this repository runs: the Claude Code hooks and scripts,
+`install.sh`, and the content tree structure. Do not write a test that
+restates doctrine prose. A local imitation of Claude Code's own rule engine
+proves nothing about Claude Code. A hook test never starts a real `claude`
+process and never reads the owner's real notes folder; use the `--home` and
+`--claude` argument seams.
