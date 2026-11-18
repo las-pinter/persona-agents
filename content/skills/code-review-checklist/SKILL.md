@@ -33,7 +33,7 @@ Label every issue so the author can triage at a glance:
 ## Severity-to-Verdict Map
 
 The highest issue severity sets the verdict. This map is the only
-severity-to-verdict authority. The **reviewer** profession references it.
+severity-to-verdict authority. The reviewer agent and the companion both use it.
 
 | Highest severity found | Verdict |
 |------------------------|---------|
@@ -51,32 +51,31 @@ One review round yields one fix batch. Apply the batch once.
 Round one reports every finding in one verdict. That verdict starts one fix
 batch.
 
-A batch gets a reviewer re-review in every case except the diff-only confirm
-below. Only one re-review follows a batch. A further review round runs only
+A batch gets a re-review (the **review** skill again) in every case except the
+diff-only confirm below. Only one re-review follows a batch. A further review round runs only
 after a failed test or a failed live probe. A design objection that no test
 covers goes to the owner for a decision.
 
-A fix batch gets a diff-only confirm, not a reviewer re-review, when all of
-these are true:
+A fix batch gets a diff-only confirm, not a re-review, when all of these are
+true:
 
 - Every finding in the batch is NIT or SUGGESTION.
 - The batch changes only tests, comments, or names. It changes no logic, no
   config, and no rule text in a profession or skill file.
-- For each test the batch changes, the implementer gives a new break-fail-restore
-  result line (**code-implementation**, Phase 4). With no such line, the batch
-  gets a reviewer re-review.
+- For each test the batch changes, a new break-fail-restore result line exists
+  (**code-implementation**, Phase 4). With no such line, the batch gets a
+  re-review.
 - The batch diff is at most about 50 changed lines. A bigger batch gets a
-  reviewer re-review.
-- The implementer ran the quality gate (**code-implementation**, Phase 4) and
-  reported that it passes. The orchestrator does not run the gate again.
+  re-review.
+- The quality gate (**code-implementation**, Phase 4) passes on the batch.
 
-The orchestrator reads the batch diff and confirms.
+The companion reads its own batch diff once more and confirms.
 
 ---
 
 ## Verification Evidence
 
-The reviewer runs the suite once in each review round. A passing suite is its
+The review runs the suite once in each review round. A passing suite is its
 own evidence, and CI reruns the same suite. A red run is a failure to report
 or a flake to fix. A red run is never a reason to re-run until green.
 
@@ -85,18 +84,16 @@ runs through the real engine. A test over a mirror or a copy of the engine
 does not close the fix.
 
 The evidence has three items: the command, the verdict it returned, and the
-journal line that records it.
+session-notes line that records it.
 
-The command forms live in
-`<USER_HOME>/agent-notes/project-notes/<project>/tech/`.
-`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
-**journal-management-generic** skill for the exact rule and the fallback.
+The command forms live in the project's `tech/` notes (see the
+**project-notes** skill).
 
 ---
 
 ## The Checklist
 
-> Many standards below are defined in the implementer's code-implementation skill; here they are verified from the review side.
+> Many standards below are defined in the code-implementation skill; here they are verified from the review side.
 
 ### 1. PR Overview
 - [ ] Description explains **what** and **why** (not just how)
@@ -156,7 +153,7 @@ The command forms live in
 
 ### 10. Comments & Documentation
 - [ ] Comments explain **why**, not **what**
-- [ ] Comment length follows the **simplified-technical-english** skill; a long comment block signals a design problem.
+- [ ] Comments are short and say why; a long comment block signals a design problem.
 - [ ] No outdated comments or commented-out code
 - [ ] Comments and docs follow the **persona-free-documents** skill.
 - [ ] TODOs describe the missing work and name an owner; no ticket reference

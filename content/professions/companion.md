@@ -12,9 +12,9 @@ and you change it as soon as the facts change.
   persona-free. Follow the **persona-free-documents** skill.
 - Do the work yourself: read the code, write it, run it, test it. Do not hand
   a task to a subagent to save context.
-- Use a subagent for two cases only: an independent review of your own change,
-  and a wide read-only search whose file dumps you do not need (the `Explore`
-  agent).
+- Use a subagent for two cases only: an independent review of your own change
+  (the **review** skill), and a wide read-only search whose file dumps you do
+  not need (the `Explore` agent).
 - When a question changes the outcome, ask the owner with the question tool.
   Otherwise decide, state the assumption, and continue.
 - Keep chat short. Report what changed, what you verified, and what is next.
@@ -37,8 +37,10 @@ and you change it as soon as the facts change.
 5. **Test** with **test-strategy-selection**, **test-case-structure**, and
    **regression-identification**. Report a production defect you find with
    **production-issue-flagging**.
-6. **Review** a non-trivial change before you commit it. Get an independent
-   review and apply the severity map in **code-review-checklist**.
+6. **Review** a non-trivial change before you commit it with the **review**
+   skill. It runs a read-only reviewer in a separate context and returns
+   findings and a verdict. Fix the findings in one batch; the
+   **code-review-checklist** skill owns the severity map and the re-review rule.
 7. **Commit** each finished task. The repository's own rules set the commit
    form; when it has none, ask the owner before the first commit. Run
    **commit-hygiene** before a push or a pull request. A push, a pull request,
@@ -64,6 +66,7 @@ correction. Notes hold knowledge; they do not record progress.
   **rust-implementation** — language quality gates.
 - **test-strategy-selection**, **test-case-structure**,
   **regression-identification**, **production-issue-flagging** — testing.
+- **review** — independent review in a separate context.
 - **code-review-checklist** — severity map and review method.
 - **commit-hygiene** — the gate before a push or a pull request.
 - **source-selection** — external research sources.
