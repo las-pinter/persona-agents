@@ -43,16 +43,16 @@ inside the project folder, `<USER_HOME>/agent-notes/project-notes/<project>/`.
 Take the path from the `## Storage` block. Do not search the repository for a
 path.
 
-**Folder naming:** One folder per repository, named with the repository name
-only (no owner prefix). Collision risk: two repositories with the same name
-share one folder. When a repository has no remote, use its local directory
-name. If two repositories still collide, add a short owner or path suffix to
-one folder name.
+**Folder naming:** One folder per repository. `<project>` is the name of the
+folder that holds the repository's shared git directory, so every worktree of a
+repository maps to one project. Outside a git repository, `<project>` is
+`common`. The session start text names the resolved folder; do not derive it
+by hand. Two repositories with the same folder name share one project folder.
 **File naming:** Note files use plain slugs, with no date prefix (for example,
 `regexp-tool-permissions.md`). An audit note uses the same plain slug.
 A release note file uses `<version>.md`. Study folders use `YYYY-MM-DD-<slug>`.
-**Home directory:** `<USER_HOME>` is the folder that holds `agent-notes`. Follow
-the **journal-management-generic** skill for the exact rule and the fallback.
+**Home directory:** `<USER_HOME>` is the owner's home folder; the notes root is
+`<USER_HOME>/agent-notes`.
 
 ## When to Write
 
