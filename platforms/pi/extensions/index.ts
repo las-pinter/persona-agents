@@ -22,6 +22,7 @@
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
+import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../scripts/notes.ts";
 import { projectDir, projectName } from "../scripts/notes-paths.ts";
@@ -46,6 +47,8 @@ import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.
 
 /** The message type of the read list, so a renderer can find it later. */
 const READ_LIST = "persona-agents:read-list";
+/** The message type of the reload list sent after a compaction. */
+const RELOAD_LIST = "persona-agents:reload-list";
 /** The section names this extension owns in the system prompt. */
 const SECTIONS = ["profession", "persona", "platform"] as const;
 
@@ -59,6 +62,8 @@ interface Session {
 	/** The read list is sent on the first run, and again after a compaction. */
 	startupSent: boolean;
 	reloadPending: boolean;
+	/** The manifest saved before a compaction, sent once the summary lands. */
+	manifest: Manifest | null;
 }
 
 function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
@@ -131,6 +136,7 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 		refs,
 		startupSent: false,
 		reloadPending: false,
+		manifest: null,
 	};
 
 	// Tools: add what the profile needs, remove what it must not hold, keep the
@@ -247,6 +253,77 @@ function checkReport(session: Session, command: string): string {
 	].join("\n");
 }
 
+/** `/permissions` for a live session: list, explain, or edit the policy. */
+function permissionsCommand(pi: ExtensionAPI, session: Session, args: string, ctx: ExtensionContext): void {
+	const parsed = parsePermissionsArgs(args);
+	if (parsed.action === "invalid") {
+		ctx.ui.notify(parsed.message, "warning");
+		return;
+	}
+	if (parsed.action === "list") {
+		pi.sendMessage({ customType: "persona-agents:permissions", content: permissionsReport(session), display: true });
+		return;
+	}
+	if (parsed.action === "check") {
+		if (!parsed.command) {
+			ctx.ui.notify("usage: /permissions check <shell command>", "warning");
+			return;
+		}
+		pi.sendMessage({ customType: "persona-agents:permissions", content: checkReport(session, parsed.command), display: true });
+		return;
+	}
+	if (parsed.action === "edit") {
+		ctx.ui.notify(session.refs.map((ref) => `${ref.scope}: ${ref.path}`).join("\n"), "info");
+		return;
+	}
+	if (parsed.action === "init") {
+		const ref = session.refs.find((candidate) => candidate.scope === "user") ?? session.refs[0];
+		initPolicyFile(ref);
+		reloadPolicy(session);
+		ctx.ui.notify(`persona-agents: policy file ready at ${ref.path}`, "info");
+		return;
+	}
+	if (parsed.action !== "rule") {
+		ctx.ui.notify("usage: /permissions allow|ask|deny <tool> <regex> [--project]", "warning");
+		return;
+	}
+	const rule = parsed.rule;
+	const ref = session.refs.find((candidate) => candidate.scope === (rule.project ? "project" : "user")) ?? session.refs[0];
+	if (!ref) {
+		ctx.ui.notify("persona-agents: no policy file to write", "warning");
+		return;
+	}
+	try {
+		addRule(ref, session.profile.name, { tool: rule.tool, match: rule.match, verdict: rule.verdict, reason: rule.reason });
+		reloadPolicy(session);
+		const errors = session.policy.errors.map((error) => error.message);
+		ctx.ui.notify(
+			errors.length > 0 ? `persona-agents: rule added, but the policy does not load: ${errors[0]}` : `persona-agents: ${rule.verdict} rule added to ${ref.path}`,
+			errors.length > 0 ? "error" : "info",
+		);
+	} catch (error) {
+		ctx.ui.notify(`persona-agents: ${(error as Error).message}`, "error");
+	}
+}
+
+/** `/persona` for a live session: show or switch the theme. */
+function personaCommand(pi: ExtensionAPI, session: Session, args: string, ctx: ExtensionContext): void {
+	const wanted = args.trim();
+	if (wanted === "") {
+		ctx.ui.notify(`persona-agents: theme ${session.theme}; available: ${themeNames(session.registry).join(", ")}`, "info");
+		return;
+	}
+	try {
+		session.theme = resolveTheme(session.registry, wanted);
+	} catch (error) {
+		ctx.ui.notify((error as Error).message, "error");
+		return;
+	}
+	pi.appendEntry("persona-agents:theme", { theme: session.theme });
+	ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
+	ctx.ui.notify(`persona-agents: theme ${session.theme} applies from your next message`, "info");
+}
+
 export default function personaAgents(pi: ExtensionAPI): void {
 	let session: Session | null = null;
 
@@ -297,10 +374,59 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		return { message: { customType: READ_LIST, content: text, display: true } };
 	});
 
-	pi.on("session_compact", () => {
+	pi.on("session_before_compact", async (event, ctx) => {
+		if (!session) return undefined;
+		// Record what must survive, then let Pi's own summarizer run with our
+		// focus. A model or auth failure here falls back to Pi's default summary;
+		// the reload list still recovers the plan from the files.
+		const manifest = buildManifest((event.branchEntries ?? []) as EntryLike[], session.env.notesDir);
+		session.manifest = manifest;
+		const own = summaryInstructions(manifest);
+		const instructions = event.customInstructions ? `${event.customInstructions}\n\n${own}` : own;
+		const model = ctx.model;
+		if (!model) return undefined;
+		try {
+			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+			// Pi supplies this module at runtime; importing it lazily keeps the
+			// extension loadable (and testable) without Pi present.
+			const { compact } = await import("@earendil-works/pi-coding-agent");
+			const compaction = await compact(
+				event.preparation,
+				model,
+				auth.apiKey,
+				auth.headers,
+				instructions,
+				event.signal,
+				ctx.thinkingLevel,
+			);
+			return { compaction };
+		} catch (error) {
+			// A cancelled compaction is not a failure worth a notice; Pi handles it.
+			if (!event.signal.aborted) {
+				ctx.ui.notify(`persona-agents: keeping Pi's default summary: ${(error as Error).message}`, "warning");
+			}
+			return undefined;
+		}
+	});
+
+	pi.on("session_compact", (event, ctx) => {
 		if (!session) return;
-		session.reloadPending = true;
-		pi.appendEntry("persona-agents:compacted", { at: new Date().toISOString() });
+		const manifest = session.manifest ?? buildManifest(ctx.sessionManager.getEntries() as EntryLike[], session.env.notesDir);
+		session.manifest = null;
+		pi.appendEntry("persona-agents:compacted", {
+			at: new Date().toISOString(),
+			reason: event.reason,
+			skills: manifest.skills.length,
+			docs: manifest.docs.length,
+		});
+		// Deliver now: steer mid-run, store when idle. The next run then does
+		// not send the startup list again.
+		pi.sendMessage(
+			{ customType: RELOAD_LIST, content: reloadContext(manifest), display: true },
+			ctx.isIdle() ? {} : { deliverAs: "steer" },
+		);
+		session.startupSent = true;
+		session.reloadPending = false;
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
@@ -323,53 +449,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				ctx.ui.notify("persona-agents: not running as a persona-agents agent (start with --agent persona-agents:companion)", "warning");
 				return;
 			}
-			const parsed = parsePermissionsArgs(args);
-			if (parsed.action === "invalid") {
-				ctx.ui.notify(parsed.message, "warning");
-				return;
-			}
-			if (parsed.action === "list") {
-				pi.sendMessage({ customType: "persona-agents:permissions", content: permissionsReport(session), display: true });
-				return;
-			}
-			if (parsed.action === "check") {
-				if (!parsed.command) {
-					ctx.ui.notify("usage: /permissions check <shell command>", "warning");
-					return;
-				}
-				const report = checkReport(session, parsed.command);
-				pi.sendMessage({ customType: "persona-agents:permissions", content: report, display: true });
-				return;
-			}
-			if (parsed.action === "edit") {
-				ctx.ui.notify(session.refs.map((ref) => `${ref.scope}: ${ref.path}`).join("\n"), "info");
-				return;
-			}
-			if (parsed.action === "init") {
-				const ref = session.refs.find((candidate) => candidate.scope === "user") ?? session.refs[0];
-				initPolicyFile(ref);
-				reloadPolicy(session);
-				ctx.ui.notify(`persona-agents: policy file ready at ${ref.path}`, "info");
-				return;
-			}
-			if (parsed.action !== "rule") {
-				ctx.ui.notify("usage: /permissions allow|ask|deny <tool> <regex> [--project]", "warning");
-				return;
-			}
-			const rule = parsed.rule;
-			const ref = session.refs.find((candidate) => candidate.scope === (rule.project ? "project" : "user")) ?? session.refs[0];
-			if (!ref) {
-				ctx.ui.notify("persona-agents: no policy file to write", "warning");
-				return;
-			}
-			try {
-				addRule(ref, session.profile.name, { tool: rule.tool, match: rule.match, verdict: rule.verdict, reason: rule.reason });
-				reloadPolicy(session);
-				const errors = session.policy.errors.map((error) => error.message);
-				ctx.ui.notify(errors.length > 0 ? `persona-agents: rule added, but the policy does not load: ${errors[0]}` : `persona-agents: ${rule.verdict} rule added to ${ref.path}`, errors.length > 0 ? "error" : "info");
-			} catch (error) {
-				ctx.ui.notify(`persona-agents: ${(error as Error).message}`, "error");
-			}
+			permissionsCommand(pi, session, args, ctx);
 		},
 	});
 
@@ -380,22 +460,10 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
 				return;
 			}
-			const wanted = args.trim();
-			if (wanted === "") {
-				ctx.ui.notify(`persona-agents: theme ${session.theme}; available: ${themeNames(session.registry).join(", ")}`, "info");
-				return;
-			}
-			try {
-				session.theme = resolveTheme(session.registry, wanted);
-			} catch (error) {
-				ctx.ui.notify((error as Error).message, "error");
-				return;
-			}
-			pi.appendEntry("persona-agents:theme", { theme: session.theme });
-			ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
-			ctx.ui.notify(`persona-agents: theme ${session.theme} applies from your next message`, "info");
+			personaCommand(pi, session, args, ctx);
 		},
 	});
+
 }
 
 /** The decisions log: `<pi agent dir>/persona-agents/decisions.ndjson`. */

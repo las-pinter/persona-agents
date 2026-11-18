@@ -55,12 +55,42 @@ user enabled (MCP, other extensions) stay enabled.
 | `session_start` | Resolve the profile, the theme, and the notes folder; set the tools; load the policy; show the footer. A bad theme or an unreadable policy refuses the agent and says why. |
 | `before_agent_start` | Set the `profession`, `persona`, and `platform` prompt sections (Pi diffs them, so the cached prefix survives), and send the read list as one message on the first run and after a compaction. |
 | `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. |
-| `session_compact` | Queue the read list for the next run. |
+| `session_before_compact` | Build the reload manifest from the branch and save it, then let Pi summarize with the manifest's focus. |
+| `session_compact` | Record the compaction, and send the reload list at once: steered mid-run, stored when idle. |
 
 The read list is paths and short facts, never contents: the companion reads
 the files itself. `notes.ts` builds it from the project rules, the summary,
 the last three journal days, the open session notes, and the unfinished
 studies.
+
+## Compaction
+
+A summary is lossy; the files are not. Before Pi compacts, the companion
+records what must survive, and after the summary lands it says what to read
+again:
+
+1. **`session_before_compact`** builds a manifest from Pi's structured branch
+   entries — never by scraping a transcript: the skills the session read or
+   named (`…/skills/<name>/SKILL.md`, `/skill:<name>`), the session notes file
+   it wrote last, and the documents to reload (project rules and summary, the
+   notes it read, the linked study, the pinned paths).
+2. The same call adds a **focus to Pi's own summarizer**: keep the current
+   task, the plan step, and the open decisions, and name the session notes path
+   verbatim. Pi's `session_before_compact` cannot append instructions, so the
+   extension calls the exported
+   `compact(preparation, model, apiKey, headers, instructions, signal)` instead
+   of the default path. A missing model, missing auth, or any failure falls
+   back to Pi's default summary — the reload list still recovers the plan from
+   the files.
+3. **`session_compact`** sends the reload list immediately: `deliverAs:
+   "steer"` when a turn is running, a stored message when the session is idle.
+   The list is ordered (session notes, skills, documents) and ends with "do not
+   re-read working source files".
+
+The manifest follows the branch: it is built from the entries that are actually
+in context, so `/tree` navigation and `/fork` cannot point the reload at
+another branch's plan. The profession, persona, and platform note are prompt
+sections rebuilt every run, so they are never part of what compaction replaces.
 
 ## Permissions
 

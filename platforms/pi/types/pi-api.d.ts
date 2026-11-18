@@ -10,10 +10,41 @@
 declare module "@earendil-works/pi-coding-agent" {
 	export type UiLevel = "info" | "warning" | "error";
 
+	export interface ResolvedRequestAuth {
+		apiKey?: string;
+		headers?: Record<string, string>;
+	}
+
+	export interface ModelInfo {
+		contextWindow?: number;
+		id?: string;
+		provider?: string;
+	}
+
+	export interface EntryLike {
+		type?: string;
+		message?: { role?: string; content?: unknown };
+		customType?: string;
+		data?: unknown;
+	}
+
+	export interface CompactionResult {
+		summary: string;
+		firstKeptEntryId: string;
+		tokensBefore: number;
+		usage?: unknown;
+	}
+
 	export interface ExtensionContext {
 		cwd: string;
 		hasUI: boolean;
 		isProjectTrusted(): boolean;
+		isIdle(): boolean;
+		model?: ModelInfo;
+		thinkingLevel: string;
+		modelRegistry: {
+			getApiKeyAndHeaders(model: ModelInfo): Promise<ResolvedRequestAuth>;
+		};
 		ui: {
 			notify(text: string, level?: UiLevel): void;
 			select(title: string, options: string[]): Promise<string | undefined>;
@@ -21,7 +52,7 @@ declare module "@earendil-works/pi-coding-agent" {
 			setStatus(key: string, text: string | undefined): void;
 		};
 		sessionManager: {
-			getEntries(): { type: string; customType?: string; data?: unknown }[];
+			getEntries(): EntryLike[];
 			getSessionFile(): string | undefined;
 		};
 	}
@@ -52,6 +83,15 @@ declare module "@earendil-works/pi-coding-agent" {
 		willRetry: boolean;
 	}
 
+	export interface SessionBeforeCompactEvent {
+		preparation: unknown;
+		branchEntries: EntryLike[];
+		customInstructions?: string;
+		reason: "manual" | "threshold" | "overflow";
+		willRetry: boolean;
+		signal: AbortSignal;
+	}
+
 	export interface BlockResult {
 		block: true;
 		reason?: string;
@@ -63,6 +103,7 @@ declare module "@earendil-works/pi-coding-agent" {
 		on(event: "session_start", handler: (event: SessionStartEvent, ctx: ExtensionContext) => unknown): void;
 		on(event: "before_agent_start", handler: (event: BeforeAgentStartEvent, ctx: ExtensionContext) => unknown): void;
 		on(event: "tool_call", handler: (event: ToolCallEvent, ctx: ExtensionContext) => unknown): void;
+		on(event: "session_before_compact", handler: (event: SessionBeforeCompactEvent, ctx: ExtensionContext) => unknown): void;
 		on(event: "session_compact", handler: (event: SessionCompactEvent, ctx: ExtensionContext) => unknown): void;
 		registerCommand(name: string, options: { description: string; handler: (args: string, ctx: ExtensionContext) => unknown }): void;
 		setActiveTools(names: string[]): void;
@@ -73,4 +114,15 @@ declare module "@earendil-works/pi-coding-agent" {
 		): void;
 		appendEntry(customType: string, data?: unknown): void;
 	}
+
+	/** Pi's own summarizer, used to add a focus to the compaction summary. */
+	export function compact(
+		preparation: unknown,
+		model: ModelInfo,
+		apiKey: string | undefined,
+		headers: Record<string, string> | undefined,
+		customInstructions?: string,
+		signal?: AbortSignal,
+		thinkingLevel?: string,
+	): Promise<CompactionResult>;
 }

@@ -115,10 +115,10 @@ either file.
   reviewer in a separate context. It cannot edit files or run shell writes.
 - **Commits.** The companion commits finished tasks without a prompt. A push, a
   pull request, or a release always asks you.
-- **Compaction.** Before a compaction, a hook records the skills the session
-  used, the session notes, and the pinned documents. After it, the companion
-  reloads them before it continues — so the plan, the skills, and the key
-  documents survive.
+- **Compaction.** Before a compaction, the adapter records the skills the
+  session used, the session notes, and the pinned documents. After it, the
+  companion reloads them before it continues — so the plan, the skills, and the
+  key documents survive.
 - **Wrap-up.** `/persona-agents:wrap-up` writes this session's journal entry.
   Each session writes its own file, so parallel sessions never collide. If you
   exit without a wrap-up, a background writer creates a shorter entry for you.
