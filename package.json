@@ -17,6 +17,10 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {},
+  "pi": {
+    "extensions": ["./platforms/pi/extensions/index.ts"],
+    "skills": ["./content/skills"]
+  },
   "engines": {
     "node": ">=22.6"
   }
