@@ -92,6 +92,31 @@ describe("pi package: the manifest", () => {
 	});
 });
 
+describe("pi package: the reviewer agent", () => {
+	const read = (file: string): string => fs.readFileSync(path.join(repoRoot, file), "utf8");
+	/** The body after the leading `---` frontmatter block. */
+	const bodyOf = (text: string): string => {
+		const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
+		return (match ? text.slice(match[0].length) : text).trim();
+	};
+
+	test("the agent file exists with the reviewer's tool list", () => {
+		const text = read("platforms/pi/agents/reviewer.md");
+		assert.match(text, /^---\nname: reviewer\n/);
+		const tools = /^tools:\s*(.+)$/m.exec(text)?.[1] ?? "";
+		const names = tools.split(",").map((tool) => tool.trim());
+		assert.ok(names.includes("bash"), "the reviewer runs the test suite once");
+		assert.equal(names.includes("edit"), false, "read-only: no edit");
+		assert.equal(names.includes("write"), false, "read-only: no write");
+	});
+
+	test("the prompt body is the Claude reviewer's body, byte for byte", () => {
+		// One prompt, two platforms. Editing it means editing both files, and
+		// this test is what tells you when they drift.
+		assert.equal(bodyOf(read("platforms/pi/agents/reviewer.md")), bodyOf(read("platforms/claude/agents/reviewer.md")));
+	});
+});
+
 describe("pi package: one parser, two platforms", () => {
 	test("the shell parser lives in platforms/shared and only there", () => {
 		for (const file of ["shell-parse.ts", "shell-grammar.ts", "gates.ts"]) {

@@ -97,6 +97,34 @@ declare module "@earendil-works/pi-coding-agent" {
 		reason?: string;
 	}
 
+	export interface ExecResult {
+		stdout: string;
+		stderr: string;
+		code: number | null;
+		killed?: boolean;
+		truncated?: boolean;
+	}
+
+	export interface ToolResult {
+		content: { type: "text"; text: string }[];
+		details?: unknown;
+		isError?: boolean;
+	}
+
+	export interface ToolDefinition {
+		name: string;
+		label?: string;
+		description: string;
+		parameters: object;
+		execute(
+			toolCallId: string,
+			params: Record<string, unknown>,
+			signal?: AbortSignal,
+			onUpdate?: unknown,
+			ctx?: ExtensionContext,
+		): Promise<ToolResult>;
+	}
+
 	export interface ExtensionAPI {
 		registerFlag(name: string, options: { description: string; type: "string" | "boolean"; default?: string | boolean }): void;
 		getFlag(name: string): string | boolean | undefined;
@@ -113,6 +141,12 @@ declare module "@earendil-works/pi-coding-agent" {
 			options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 		): void;
 		appendEntry(customType: string, data?: unknown): void;
+		exec(
+			command: string,
+			args: string[],
+			options?: { cwd?: string; timeout?: number; signal?: AbortSignal; maxBuffer?: number },
+		): Promise<ExecResult>;
+		registerTool(definition: ToolDefinition): void;
 	}
 
 	/** Pi's own summarizer, used to add a focus to the compaction summary. */

@@ -54,7 +54,7 @@ user enabled (MCP, other extensions) stay enabled.
 | --- | --- |
 | `session_start` | Resolve the profile, the theme, and the notes folder; set the tools; load the policy; show the footer. A bad theme or an unreadable policy refuses the agent and says why. |
 | `before_agent_start` | Set the `profession`, `persona`, and `platform` prompt sections (Pi diffs them, so the cached prefix survives), and send the read list as one message on the first run and after a compaction. |
-| `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. |
+| `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. An allowed `git commit` of an unreviewed, non-trivial change asks first. |
 | `session_before_compact` | Build the reload manifest from the branch and save it, then let Pi summarize with the manifest's focus. |
 | `session_compact` | Record the compaction, and send the reload list at once: steered mid-run, stored when idle. |
 
@@ -62,6 +62,35 @@ The read list is paths and short facts, never contents: the companion reads
 the files itself. `notes.ts` builds it from the project rules, the summary,
 the last three journal days, the open session notes, and the unfinished
 studies.
+
+## Review
+
+The reviewer is a separate Pi process with its own context, so it judges the
+code without the author's reasoning.
+
+- **`agents/reviewer.md`** holds the prompt body byte-for-byte as the Claude
+  agent file (`tests/pi-package.test.ts` fails when they drift) plus Pi
+  frontmatter: `tools: read, grep, find, ls, bash`. Bash stays because the
+  reviewer runs the test suite once; there is no Edit or Write tool at all.
+- **`scripts/review.ts`** is pure: it reads a diff and a status into a
+  `Change`, names it with a 16-character hash (`reviewKey`), parses the
+  verdict, and decides the gate.
+- The **`review` tool** and `/review` command spawn
+  `pi --extension <this file> -p --no-session --agent persona-agents:reviewer
+  --tools read,grep,find,ls,bash --append-system-prompt <body> <task>`. Passing
+  `--extension` means the reviewer profile and the policy apply even when the
+  package is not installed; the tool list is a second, structural guarantee.
+- The verdict is read from the reviewer's `## Verdict` line and **stored against
+  the key of the exact change** (a session entry, restored on reload), so a
+  review covers what it reviewed and nothing else. An untracked file edited
+  after its review changes the key.
+
+**The commit gate.** When the companion runs a `git commit` that policy allows,
+the extension reads the change and asks unless the change is trivial (at most
+two files and forty changed lines) or an `Approve` covers that exact key. The
+dialog offers: run the review now, commit anyway, stop asking for this session,
+or cancel. The gate never blocks a commit on its own tooling: if git fails, the
+commit proceeds.
 
 ## Compaction
 

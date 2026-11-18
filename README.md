@@ -111,8 +111,9 @@ either file.
 - **Session notes.** A task with more than a few steps gets a working file:
   the plan with step status, the decisions, and the pinned documents. The plan
   changes there first, then in the code.
-- **Review.** Before a non-trivial commit, the review skill runs a read-only
-  reviewer in a separate context. It cannot edit files or run shell writes.
+- **Review.** Before a non-trivial commit, the adapter runs a read-only
+  reviewer in a separate context. It cannot edit files or run shell writes. On
+  Pi, a commit of an unreviewed non-trivial change asks first.
 - **Commits.** The companion commits finished tasks without a prompt. A push, a
   pull request, or a release always asks you.
 - **Compaction.** Before a compaction, the adapter records the skills the

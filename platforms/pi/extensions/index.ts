@@ -19,14 +19,16 @@
  * than running half-configured.
  */
 
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
 import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../scripts/notes.ts";
 import { projectDir, projectName } from "../scripts/notes-paths.ts";
-import { contentDir, homeDir } from "../scripts/paths.ts";
+import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
 import {
 	addRule,
 	appendDecision,
@@ -44,6 +46,17 @@ import {
 	type Verdict,
 } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
+import {
+	commitGate,
+	isCommitCommand,
+	isTrivial,
+	makeChange,
+	parseVerdict,
+	reviewKey,
+	reviewerPrompt,
+	type Change,
+	type Verdict as ReviewVerdict,
+} from "../scripts/review.ts";
 
 /** The message type of the read list, so a renderer can find it later. */
 const READ_LIST = "persona-agents:read-list";
@@ -64,6 +77,10 @@ interface Session {
 	reloadPending: boolean;
 	/** The manifest saved before a compaction, sent once the summary lands. */
 	manifest: Manifest | null;
+	/** Review verdicts, by the key of the change they cover. */
+	reviews: Map<string, ReviewVerdict>;
+	/** Set when the owner chose to stop asking about commits this session. */
+	skipReview: boolean;
 }
 
 function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
@@ -137,6 +154,8 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 		startupSent: false,
 		reloadPending: false,
 		manifest: null,
+		reviews: new Map(),
+		skipReview: false,
 	};
 
 	// Tools: add what the profile needs, remove what it must not hold, keep the
@@ -324,6 +343,133 @@ function personaCommand(pi: ExtensionAPI, session: Session, args: string, ctx: E
 	ctx.ui.notify(`persona-agents: theme ${session.theme} applies from your next message`, "info");
 }
 
+/** The command and arguments that start another Pi process. */
+function piInvocation(): { command: string; args: string[] } {
+	const script = process.argv[1];
+	if (script && existsSync(script)) return { command: process.execPath, args: [script] };
+	return { command: "pi", args: [] };
+}
+
+/** The reviewer's prompt: the agent file body, without its frontmatter. */
+function reviewerBody(dir: string = agentsDir()): string {
+	const file = join(dir, "reviewer.md");
+	const text = readFileSync(file, "utf8");
+	const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
+	return (match ? text.slice(match[0].length) : text).trim();
+}
+
+/** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
+async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
+	const status = await pi.exec("git", ["status", "--porcelain"], { cwd });
+	let diff = await pi.exec("git", ["diff", "HEAD"], { cwd });
+	if (diff.stdout.trim() === "") {
+		// A clean tree commits nothing, so review the last commit instead.
+		diff = await pi.exec("git", ["show", "HEAD", "--format="], { cwd });
+	}
+	const change = makeChange(diff.stdout, status.stdout);
+	const signature = change.untracked
+		.map((path) => {
+			try {
+				const stat = statSync(join(cwd, path));
+				return `${path}:${stat.size}:${stat.mtimeMs}`;
+			} catch {
+				return `${path}:missing`;
+			}
+		})
+		.join("\n");
+	return { ...change, signature };
+}
+
+/** Run the reviewer in its own process: read-only tools, its own profile, its own gate. */
+async function runReviewer(
+	pi: ExtensionAPI,
+	cwd: string,
+	scope: string,
+	signal?: AbortSignal,
+): Promise<{ text: string; verdict: ReviewVerdict | null }> {
+	const invocation = piInvocation();
+	const result = await pi.exec(
+		invocation.command,
+		[
+			...invocation.args,
+			// The child loads this extension explicitly, so the reviewer profile and
+			// its policy apply even when the package is not installed.
+			"--extension",
+			fileURLToPath(import.meta.url),
+			"-p",
+			"--no-session",
+			"--agent",
+			"persona-agents:reviewer",
+			"--tools",
+			"read,grep,find,ls,bash",
+			"--append-system-prompt",
+			reviewerBody(),
+			reviewerPrompt(scope),
+		],
+		{ cwd, timeout: 300_000, signal },
+	);
+	const text = result.stdout.trim();
+	return { text, verdict: parseVerdict(text) };
+}
+
+/** Run a review, remember its verdict for the exact change, and return the text. */
+async function executeReview(
+	pi: ExtensionAPI,
+	session: Session,
+	scope: string,
+	signal?: AbortSignal,
+): Promise<{ text: string; verdict: ReviewVerdict | null; key: string }> {
+	const change = await readChange(pi, session.env.cwd);
+	const key = reviewKey(change);
+	const { text, verdict } = await runReviewer(pi, session.env.cwd, scope, signal);
+	if (verdict) {
+		session.reviews.set(key, verdict);
+		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
+	}
+	return { text, verdict, key };
+}
+
+/** The ask when a commit has no covering review. */
+async function reviewGate(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	session: Session,
+): Promise<{ block: true; reason: string } | undefined> {
+	if (session.skipReview) return undefined;
+	let change: Change;
+	try {
+		change = await readChange(pi, session.env.cwd);
+	} catch {
+		// Git failed: never block a commit on the gate's own tooling problem.
+		return undefined;
+	}
+	const key = reviewKey(change);
+	const gate = commitGate({ trivial: isTrivial(change), reviewed: session.reviews.get(key) ?? null });
+	if (gate.verdict === "allow") return undefined;
+	if (!ctx.hasUI) return { block: true, reason: gate.reason };
+	const shape = `${change.files.length} files, +${change.addedLines} -${change.removedLines}`;
+	const choice = await ctx.ui.select(`${gate.reason}\n\n${shape}`, [
+		"Run the review now",
+		"Commit anyway",
+		"Always allow this session",
+		"Cancel",
+	]);
+	if (choice === "Commit anyway") return undefined;
+	if (choice === "Always allow this session") {
+		session.skipReview = true;
+		return undefined;
+	}
+	if (choice === "Run the review now") {
+		try {
+			const { text, verdict } = await executeReview(pi, session, "");
+			return { block: true, reason: `review finished: ${verdict ?? "no verdict"}. Fix what it asks, then commit again.\n\n${text}` };
+		} catch (error) {
+			return { block: true, reason: `the review could not run: ${(error as Error).message}` };
+		}
+	}
+	return { block: true, reason: gate.reason };
+}
+
 export default function personaAgents(pi: ExtensionAPI): void {
 	let session: Session | null = null;
 
@@ -348,6 +494,13 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			if (entry.type !== "custom" || entry.customType !== "persona-agents:theme") continue;
 			const theme = (entry.data as { theme?: unknown } | undefined)?.theme;
 			if (typeof theme === "string" && theme in session.registry) session.theme = theme;
+		}
+		for (const entry of ctx.sessionManager.getEntries()) {
+			if (entry.type !== "custom" || entry.customType !== "persona-agents:review") continue;
+			const data = entry.data as { key?: unknown; verdict?: unknown } | undefined;
+			if (typeof data?.key === "string" && typeof data.verdict === "string" && ["Approve", "Request Changes", "Reject"].includes(data.verdict)) {
+				session.reviews.set(data.key, data.verdict as ReviewVerdict);
+			}
 		}
 		ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
 	});
@@ -439,7 +592,12 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		}
 		appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: sessionId() }));
 		if (decision.verdict === "deny") return { block: true, reason: decision.reason };
-		return handleAsk(ctx, session, event.toolName, input, decision);
+		if (decision.verdict === "ask") return handleAsk(ctx, session, event.toolName, input, decision);
+		// Allowed by policy: the companion still needs a review for a real commit.
+		if (session.profile.name === "companion" && event.toolName === "bash" && typeof input.command === "string" && isCommitCommand(input.command)) {
+			return reviewGate(pi, ctx, session);
+		}
+		return undefined;
 	});
 
 	pi.registerCommand("permissions", {
@@ -450,6 +608,46 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				return;
 			}
 			permissionsCommand(pi, session, args, ctx);
+		},
+	});
+
+	pi.registerTool({
+		name: "review",
+		label: "Review",
+		description:
+			"Run an independent, read-only review of the current change in a separate context. Returns findings with severity and location, and a verdict. Use it before committing a non-trivial change.",
+		parameters: {
+			type: "object",
+			properties: { scope: { type: "string", description: "Optional: a base ref, commit range, or paths to review." } },
+			additionalProperties: false,
+		},
+		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }] };
+			const scope = typeof params.scope === "string" ? params.scope : "";
+			try {
+				const { text, verdict, key } = await executeReview(pi, session, scope, signal);
+				return {
+					content: [{ type: "text", text: `${text}\n\nreview key: ${key}` }],
+					details: { verdict, key },
+				};
+			} catch (error) {
+				return { content: [{ type: "text", text: `the review could not run: ${(error as Error).message}` }], isError: true };
+			}
+		},
+	});
+
+	pi.registerCommand("review", {
+		description: "Run an independent review of the current change",
+		handler: (args, ctx) => {
+			if (!session) {
+				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
+				return;
+			}
+			executeReview(pi, session, args.trim())
+				.then(({ text, verdict }) => {
+					pi.sendMessage({ customType: "persona-agents:review", content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}`, display: true });
+				})
+				.catch((error: unknown) => ctx.ui.notify(`the review could not run: ${(error as Error).message}`, "error"));
 		},
 	});
 
