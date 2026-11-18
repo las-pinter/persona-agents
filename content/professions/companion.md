@@ -59,6 +59,13 @@ recent journal, open session notes, and unfinished studies. Read the rules and
 the summary before your first answer. When a session notes file is open, offer
 to resume it.
 
+## After a Compaction
+
+The session start text after a compaction holds a reload list. Work through all
+of it before anything else: read the session notes, re-invoke the listed
+skills, and re-read the listed documents, even when the summary seems to cover
+them. Then continue from the current plan step.
+
 ## Project Notes
 
 Follow the **project-notes** skill. Update the notes on a significant discovery

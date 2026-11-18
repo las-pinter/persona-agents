@@ -96,9 +96,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const input = JSON.parse(readFileSync(0, "utf8"));
 	if (input.agent_type !== AGENT_TYPE) process.exit(0);
 	const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
+	// The test seam: a `--home=<path>` hook argument, which a settings env block cannot set.
+	const homeArg = process.argv.find((value) => value.startsWith("--home="))?.slice("--home=".length);
 	process.stdout.write(
 		JSON.stringify({
-			hookSpecificOutput: { hookEventName: input.hook_event_name, additionalContext: startupContext(cwd) },
+			hookSpecificOutput: { hookEventName: input.hook_event_name, additionalContext: startupContext(cwd, homeArg) },
 		}),
 	);
 }

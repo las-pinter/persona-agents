@@ -105,16 +105,18 @@ describe("startup hook: read list", () => {
 });
 
 describe("startup hook: process", () => {
-	const run = (input: Record<string, unknown>) =>
-		spawnSync(process.execPath, [script], { input: JSON.stringify(input), encoding: "utf8" });
+	const run = (input: Record<string, unknown>, home = os.tmpdir()) =>
+		spawnSync(process.execPath, [script, `--home=${home}`], { input: JSON.stringify(input), encoding: "utf8" });
 
 	test("the companion gets SessionStart additional context under the cap", () => {
-		withNotes(({ cwd }) => {
-			const result = run({ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:companion", cwd });
+		withNotes(({ home, cwd, dir }) => {
+			write(path.join(dir, "summary.md"), "# s");
+			const result = run({ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:companion", cwd }, home);
 			assert.equal(result.status, 0, result.stderr);
 			const output = JSON.parse(result.stdout) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
 			assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
 			assert.match(output.hookSpecificOutput.additionalContext, /^# Session start: read list/);
+			assert.ok(output.hookSpecificOutput.additionalContext.includes(path.join(dir, "summary.md")));
 			assert.ok(output.hookSpecificOutput.additionalContext.length < 10_000);
 		});
 	});

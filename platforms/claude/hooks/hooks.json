@@ -1,5 +1,5 @@
 {
-  "description": "Give the persona-agents companion its profession rules, the selected theme's persona, and its startup read list, and enforce the commit and file doctrine",
+  "description": "Give the persona-agents companion its profession rules, persona, startup read list, and compaction recovery, and enforce the commit and file doctrine",
   "hooks": {
     "SessionStart": [
       {
@@ -36,6 +36,20 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
+              "reload"
+            ],
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -49,6 +63,36 @@
               "--experimental-strip-types",
               "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/doctrine.ts"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
+              "pre"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
+              "post"
             ],
             "timeout": 10
           }
