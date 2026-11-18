@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
-import { parseShellCommand } from "../platforms/claude/scripts/shell-parse.ts";
+import { parseShellCommand } from "../platforms/shared/shell/shell-parse.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");
