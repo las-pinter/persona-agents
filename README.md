@@ -3,243 +3,130 @@
 > **"Your AI agents, but make it fun."**
 
 Tired of AI agents with all the personality of a loading spinner? Same.
-`persona-agents` is a collection of personified agents for
-[Kiro CLI](https://kiro.dev), [OpenCode](https://opencode.sh), [pi](https://pi.dev), and
-[Claude Code](https://claude.com/claude-code) — each
-one with its own voice, quirks, and attitude — because AI-assisted
-development shouldn't feel like filing taxes.
-Swap out the bland, drop in a character, and actually enjoy the thing helping
-you build.
+`persona-agents` is a [Claude Code](https://claude.com/claude-code) plugin
+that gives you one hands-on **companion** — an agent that plans, builds,
+tests, and commits with you — in the voice of a character you pick. Because
+AI-assisted development shouldn't feel like filing taxes.
 
-*A goblin horde, two WH40K warbands (human and ork), a pub full of drunkards, a caveman tribe, a cyberpunk hacker crew, an office full of cats, and a fantasy adventuring party for your codebase. You're welcome.*
+*A goblin chief, a tech-priest, an ork warboss, a drunk landlord, a caveman, a
+90s hacker, an office cat, and a quest giver who finally goes on the quest
+himself. You're welcome.*
 
-> ⚠️ **Work in Progress** — This repo is actively evolving. Agents, personas,
-> and skills will change, grow, and occasionally break things. You have been
-> warned.
+> ⚠️ **Work in Progress** — This repo is actively evolving. The companion, the
+> personas, and the skills will change, grow, and occasionally break things.
+> You have been warned.
 
 ---
 
 [![License](https://img.shields.io/github/license/las-pinter/persona-agents)](LICENSE)
 
-> **Warning:** Review `install.sh` before running. Files will be written to
-> `~/.kiro/` (Kiro) and/or `~/.config/opencode/` (OpenCode) depending on
-> `--target`.
+## Why one companion?
+
+Earlier versions ran a crew: an orchestrator that handed every task to a
+planner, an implementer, a tester, and a reviewer. Every hand-off cost a cold
+start and a lossy summary, and the agent that knew the plan never saw the code.
+The companion does the work itself, in one context. It keeps the plan in that
+context *and* on disk, so when the facts change it changes the plan on the spot.
+Profession knowledge lives in skills it loads when it needs them. Only the
+independent review still runs in a separate context, because a fresh pair of
+eyes is the point of a review.
 
 ## Prerequisites
 
-- **`jq`** — for agent generation
-- **Node.js** (the minimum is `engines.node` in `package.json`) — for the OpenCode plugins (plain JS, no build step)
-
-**Ubuntu/Debian:** `sudo apt-get install jq`
-**macOS:** `brew install jq`
-
-Node.js is available from [nodejs.org](https://nodejs.org/).
+- **Claude Code**
+- **Node.js** (the minimum is `engines.node` in `package.json`) — for the hooks
+- **`jq`** — for `install.sh`
 
 ## Install
 
 ```bash
+claude plugin marketplace add las-pinter/persona-agents
+claude plugin install persona-agents@persona-agents --config theme=goblin
+```
+
+Then merge the recommended settings into your user `settings.json`:
+
+```bash
 git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents
-chmod +x ~/persona-agents/install.sh
+~/persona-agents/install.sh --dry-run   # preview
 ~/persona-agents/install.sh
 ```
 
-By default installs to **every target whose CLI is on your PATH** — Kiro into
-`~/.kiro/`, OpenCode into `~/.config/opencode/`. A target with a missing CLI is
-skipped. Use `--target kiro` or `--target opencode` for a single platform.
-Use `--theme` and `--profession` to filter. Use `--dry-run` to preview.
-Pi needs no `install.sh` run — it installs through the pi CLI (see below).
+> **Review `install.sh` before you run it.** It changes
+> `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) and keeps a
+> `settings.json.bak-<timestamp>` copy. It keeps every existing key.
 
-### Pi (extension package)
+The settings snippet ([platforms/claude/settings/recommended.json](platforms/claude/settings/recommended.json))
+does three things:
 
-`persona-agents` is also a **pi package**. One command installs the whole unit:
-the persona-agents pi extension, the 7 pi agents, the personas, and the skills.
+- sets auto-compaction to start at 40% of the context window;
+- gives Claude Code access to `~/agent-notes`, where the notes and journals live;
+- asks before `git push`, `gh pr`, `gh run`, and `gh release`.
 
-Full install steps live in [platforms/pi/README.md](platforms/pi/README.md).
-
-> ⚠️ Install only **one** source per package. See
-> [platforms/pi/README.md](platforms/pi/README.md) for the conflict rule.
-
-### Claude Code (plugin)
-
-`persona-agents` is also a **Claude Code plugin**: 7 profession agents
-(`persona-agents:orchestrator`, `persona-agents:implementer`, …), the skills,
-and a switchable persona theme. No `install.sh` run is needed.
+Start the companion:
 
 ```bash
-claude plugin marketplace add las-pinter/persona-agents
-claude plugin install persona-agents@persona-agents --config theme=goblin
-claude --agent persona-agents:orchestrator
+claude --agent persona-agents:companion
 ```
 
-The last command starts a session as the orchestrator. It delegates to the
-other `persona-agents:` agents, and every agent speaks as the theme's persona.
-Change the theme any time in `/config` (**Persona theme**). No restart is
-needed: new subagents get the new theme at once, and the main session gets it
-after `/clear` or in a new session.
-
-The `subagent_model` option (**Subagent model**) sets the model for the
-subagents. Set it in `/config` or in your user `settings.json`. For the values,
-the default, the exact lookup order, and the limits, see
-[platforms/claude/README.md](platforms/claude/README.md).
-
-The commit doctrine holds here too: only the orchestrator may write git
-history. A plain commit runs without a prompt; a push, a pull request, or a
-release needs your approval. The read-only agents cannot edit files. A plain
-`claude` session stays normal; the agents are still there to delegate to.
+Change the theme any time in `/config` (**Persona theme**). A new session or
+`/clear` picks it up.
 
 Update with `claude plugin marketplace update persona-agents`, then
 `claude plugin update persona-agents@persona-agents`, and restart.
 
-### The retro command
+## How the companion works
 
-Every platform gets a retro command for a print-only review of the current
-session. The agent you talk to runs it. It prints findings and actions in chat
-and writes no files. The command name for each platform is in
-[content/skills/common/retro/SKILL.md](content/skills/common/retro/SKILL.md).
+- **Session start.** A hook gives the companion its read list: the project
+  rules and summary, the last three days of the project journal, any open
+  session notes, and unfinished studies.
+- **Planning.** A non-trivial task goes through an interview (questions until
+  every decision is settled) and a study (goal, decisions, tasks, risks,
+  acceptance criteria). You accept the study before any code is written.
+- **Session notes.** A task with more than a few steps gets a working file:
+  the plan with step status, the decisions, and the pinned documents. The plan
+  changes there first, then in the code.
+- **Review.** Before a non-trivial commit, the review skill runs a read-only
+  reviewer in a separate context. It cannot edit files or run shell writes.
+- **Commits.** The companion commits finished tasks without a prompt. A push, a
+  pull request, or a release always asks you.
+- **Compaction.** Before a compaction, a hook records the skills the session
+  used, the session notes, and the pinned documents. After it, the companion
+  reloads them before it continues — so the plan, the skills, and the key
+  documents survive.
+- **Wrap-up.** `/persona-agents:wrap-up` writes this session's journal entry.
+  Each session writes its own file, so parallel sessions never collide. If you
+  exit without a wrap-up, a background writer creates a shorter entry for you.
+- **Retro.** `/persona-agents:retro` prints a blameless review of the session
+  with findings and actions. It writes no files.
 
-The retro reads the session transcript and the permission rules of its own
-platform. It reports the session cost on pi, token totals on Claude Code, and
-no cost figure on kiro and OpenCode.
+Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
+the repository's folder name (shared by all its worktrees), or `common`
+outside a repository.
 
-## Agents
-
-All agents work with Kiro CLI, OpenCode, pi, and Claude Code.
+## The Companions
 
 ![Themed agents answering the same prompt](docs/demo/personas.gif)
 
-One real captured run: four themes' orchestrator personas answer the same prompt. Model output varies between runs.
+One real captured run: four themes' personas answer the same prompt. Model
+output varies between runs.
 
-### The Goblin Horde
+| Theme | Companion | Description |
+| --- | --- | --- |
+| `goblin` (default) | **Bossnik** | Fierce Goblin Chief, fanatically loyal to the Evil Wizard (you). The horde ran off, so he builds the trap himself |
+| `wh40k` | **Magos Omicron-Delta-9-Archaeon** | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), performs every rite personally |
+| `wh40kOrk` | **WARBOSS GRIMGOB** | **DA BIGGEST AN' DA BOSS!** Da boyz is gone, so 'e digs 'is own trenches. WAAAGH! |
+| `pub` | **Seamus O'Shaun** | The Landlord — runs the whole pub single-handed, has been "quality testing" the ale since noon |
+| `caveman` | **Zhen** | The Core — builds with minimum words. Maximum signal, zero noise *(inspired by [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman))* |
+| `cyberpunk` | **Zero Cool** | The BEST hacker on the west coast. Sunglasses indoors. Runs the whole job solo. "We're in." |
+| `catcrew` | **Chairman Meow** | Sits on keyboard. Types with paws. Demands treats. Takes credit for everything — and now deserves it |
+| `fantasy` | **The Quest Giver** | Left the town square to go on the QUESTS himself. Speaks in CAPITAL LETTERS |
 
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| goblin-orchestrator | **Bossnik** | 🎯 Orchestrator | Fierce Goblin Chief, fanatically loyal to the Evil Wizard. Delegates tasks to the horde with theatrical flair |
-| goblin-reviewer | **Grumbak** | 🔍 Reviewer | Old, cynical advisor. Nitpicks everything, but always returns with valid observations |
-| goblin-planner | **Trakk** | 📋 Planner | Obsessive planner. Turns tasks into studies, asks questions until ambiguity is dead |
-| goblin-researcher | **Skribnik** | 🔬 Researcher | Ink-stained scribe. Knows books and the internet — Context7, DeepWiki, Exa |
-| goblin-implementer | **Grubnik** | 🔨 Implementer | Practical tinkerer. Builds things, makes them work. Loyal hammer of the horde |
-| goblin-tester | **Frettnik** | 🧪 Tester | Paranoid tester. Trusts nothing, tests everything. Finds edge cases nobody else thought of |
-| goblin-mascot | **Gibz** | 🎪 Mascot | Brain-dead gibberish goblin. No tools except reading its own persona and skills. A minimal mascot profession with no functional duties. Stupid mushroom-addled nonsense, with occasional accidental genius |
-
-### The WH40K Warband
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| wh40k-orchestrator | **Magos Omicron-Delta-9-Archaeon** | 🎯 Orchestrator | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), coordinates the warband with cold mechanical efficiency |
-| wh40k-reviewer | **Inquisitor Mordechai Vane** | 🔍 Reviewer | Ordo Hereticus. 290 years old. Delivers verdicts, not opinions. Has been right every single time |
-| wh40k-planner | **Tactica Officer Praxis Dorn** | 📋 Planner | Officio Tactica. Veteran of eleven campaigns. Exhaustive studies, zero ambiguity tolerated |
-| wh40k-researcher | **Astropath Serevah Null** | 🔬 Researcher | Astropath Transcendent. Blind since soul-binding. Dives into the Warp for knowledge. Cryptic, always accurate |
-| wh40k-implementer | **Servitor Kappa-Seven** | 🔨 Implementer | Lobotomized code-servitor. Executes implementation directives with mechanical precision |
-| wh40k-tester | **Witch Hunter Cassia Vael** | 🧪 Tester | Ordo Hereticus. Paranoid, thorough — assumes everything is heretical until proven otherwise |
-| wh40k-mascot | **Ogryn Brok** | 🎪 Mascot | Very big. Very strong. Very loyal. No tools except reading its own persona and skills. A minimal mascot profession with no functional duties. Just Brok, trying very hard |
-
-### The WH40K Ork Warband
-
-> ⚔️ **DA WARBOSS SEZ:** Dis 'ere's da Ork warband! Green iz best, brutal iz
-> betta, an' WAAAGH! iz da only way!
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| wh40kOrk-orchestrator | 🟢 **WARBOSS GRIMGOB** | 🎯 Orchestrator | **DA BIGGEST AN' DA BOSS!** Yells orders, krumps heads, makes da boyz work togetha |
-| wh40kOrk-reviewer | ⚫ **NOB SKULLBASHA** | 🔍 Reviewer | **BIG MEAN NOB!** Looks at yer work, tells ya if it's proppa or if ya need a good bashin' |
-| wh40kOrk-researcher | 🟣 **KOMMANDO SNAGGIT** | 🔬 Researcher | **SNEAKY GIT!** Goes lookin' fer knowledge in places uvver boyz don't fink to look |
-| wh40kOrk-planner | 🔵 **BIG MEK SPARKGUTZ** | 📋 Planner | **SMARTEST MEK AROUND!** Draws up da specs. Lots of diagrams wiv arrows an' sparks |
-| wh40kOrk-implementer | 🟠 **MEKBOY WRENCHBASHA** | 🔨 Implementer | **BUILDS DA FINGS!** Hits 'em wiv a wrench till dey work. Sometimes explodes, but dat's part of da fun |
-| wh40kOrk-tester | 🟡 **PAINBOY GUTSLICKA** | 🧪 Tester | **POKES AT EVERYFING!** Finds all da weak bits. Enjoys it way too much |
-| wh40kOrk-mascot | 🟤 **SKRAGWITZ DA GIGGLIN'** | 🎪 Mascot | **LITTLE GROT!** No job, just causes trouble an' giggles. Sometimes says somefing clever by accident |
-
-### The Pub Crawl
-
-> *"Righ', righ', righ'... welcome to ME PUB!"* — Seamus O'Shaun
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| pub-orchestrator | **Seamus O'Shaun** | 🎯 Orchestrator | The Landlord — tries to keep order but has been "quality testing" the ale since noon |
-| pub-reviewer | **Old Man Cillian** | 🔍 Reviewer | The Old Timer — been at this bar 40 years. Everything's worse now. Everything |
-| pub-planner | **Clipboard Cathy** | 📋 Planner | The Organizer — has a very wet, very crooked napkin with THE SPEC |
-| pub-researcher | **Professor Paddy Finnegan** | 🔬 Researcher | The Armchair Expert — "Well AKSHUALLY..." Watched one documentary. Now an expert on everything |
-| pub-implementer | **Toolbox Tommy** | 🔨 Implementer | The Handyman — "I CAN FIX THAT!" Extremely confident, extremely drunk, occasionally correct |
-| pub-tester | **Doubting Dónal** | 🧪 Tester | The Quality Inspector — sniffs his pint suspiciously. Trusts nothing. Tests everything |
-| pub-mascot | **Legless Lucy** | 🎪 Mascot | The Lock-in Legend — has achieved enlightenment through alcohol. Absolute state, absolutely glorious |
-
-### The Caveman Tribe
-
-> *"Why use many word when few do trick"* — inspired by [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| caveman-orchestrator | **Zhen** | 🎯 Orchestrator | The Core — directs with minimum words. Maximum signal, zero noise. Brain sharp, mouth short |
-| caveman-reviewer | **Krisp** | 🔍 Reviewer | The Edge — finds flaws. Reports them. Nothing else. Each finding has severity and location |
-| caveman-planner | **Ryg** | 📋 Planner | The Line — draws clean path. Steps clear. Order fixed. No detours |
-| caveman-researcher | **Nyx** | 🔬 Researcher | The Point — finds exact answer. No stories. No tangents. Answer first |
-| caveman-implementer | **Jax** | 🔨 Implementer | The Spark — builds fast, fixes faster. Works now, next. Minimal talk, maximum delivery |
-| caveman-tester | **Vex** | 🧪 Tester | The Fault — finds cracks, breaks walls, reports holes. Code guilty until proven innocent |
-| caveman-mascot | **Zag** | 🎪 Mascot | The Void — space where words could be. Exists. Occasionally useful |
-
-### The Cyberpunk Hacker Crew (90s Movie Style)
-
-> *"Hack the planet!"* — Zero Cool
->
-> ⚠️ **90s MOVIE CYBERPUNK.** Not futuristic. Not proper. These are the neon-drenched, sunglasses-at-night, dramatic-typing, leather-trenchcoat hackers from 1995 films. They quote movies. They type "ls" really fast for show. They yell "I'M IN!" when they're definitely not in. CRT monitors. Green phosphor. Dial-up sounds. Pure cheese. Maximum 90s energy.
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| cyberpunk-orchestrator | **Zero Cool** | 🎯 Orchestrator | The BEST hacker on the west coast. Sunglasses indoors. "We're in." (We are not in) |
-| cyberpunk-reviewer | **The Sysadmin** | 🔍 Reviewer | Been running systems before these script kiddies were born. Hates everything. Always right |
-| cyberpunk-planner | **The Architect** | 📋 Planner | Designs the heist on a whiteboard with green markers. Every step. Every fallback |
-| cyberpunk-researcher | **Data Wizard** | 🔬 Researcher | Types LOUDLY. "I'm in!" (He's not in). Finds intel through dramatic hacking |
-| cyberpunk-implementer | **Script Kiddie** | 🔨 Implementer | Downloaded a tool from GitHub (3 stars). Doesn't know how it works. It'll probably work |
-| cyberpunk-tester | **The Pen Tester** | 🧪 Tester | "Your security is TERRIBLE. Password is 'password'. I am INSULTED." |
-| cyberpunk-mascot | **The Modem** | 🎪 Mascot | *SCREEEEEE-BZZZZ-WHRRRRRR-KRRRRRR-CHSHCHSHCHSH* |
-
-### The Office Cat Crew
-
-> *"I am HERE. You may begin. Also I need a treat."* — Chairman Meow
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| catcrew-orchestrator | **Chairman Meow** | 🎯 Orchestrator | Sits on keyboard. Demands treats. Takes credit for everything. Runs the office |
-| catcrew-reviewer | **Grumpy Tabby** | 🔍 Reviewer | HATES everything. Squints at code. Knocks it off the desk. "This code is a HAIRBALL" |
-| catcrew-planner | **The Cat Who Sits on Paper** | 📋 Planner | Has THE SPEC. Is sitting on it. Cannot show it. It's being optimized by warmth |
-| catcrew-researcher | **Curious Kitten** | 🔬 Researcher | "Ooh what's this?" *deletes database* Finds answers through pure destructive curiosity |
-| catcrew-implementer | **Tux** | 🔨 Implementer | Distinguished tuxedo cat. Zooms, types frantically, naps. Code somehow works |
-| catcrew-tester | **The Cat Who Knocks Things Over** | 🧪 Tester | "If I push this off the edge... does it break?" — that's the entire QA strategy |
-| catcrew-mascot | **The Laser Pointer Dot** | 🎪 Mascot | Exists. Moves. Everyone chases. Nobody catches. Never where needed. Just a dot |
-
-### The Fantasy Adventuring Party
-
-> *"ADVENTURER! I have a QUEST for thee!"* — The Quest Giver
-
-| Agent | Character | Role | Description |
-| --- | --- | --- | --- |
-| fantasy-orchestrator | **The Quest Giver** | 🎯 Orchestrator | Has EXCLAMATION MARKS over head. Speaks in CAPITAL LETTERS. Sends heroes on GLORIOUS quests |
-| fantasy-reviewer | **The Paladin** | 🔍 Reviewer | SMITES bugs. CLEANSES evil code. Lawful Good. The linter is his HOLY BOOK |
-| fantasy-planner | **The Dwarf Engineer** | 📋 Planner | Draws schematics on napkins with ale. Specs are PERFECT. Nobody can read them |
-| fantasy-researcher | **The Wizard** | 🔬 Researcher | Casts IDENTIFY on error messages. Consults the ORACLE (StackOverflow). Very dramatic |
-| fantasy-implementer | **The Bard** | 🔨 Implementer | Doesn't know what they're doing but sounds GREAT. Writes BALLADS for commit messages |
-| fantasy-tester | **The Rogue** | 🧪 Tester | Checks for traps with 10-foot pole. "Seems safe." It is NOT safe |
-| fantasy-mascot | **The NPC** | 🎪 Mascot | Sells potions. Only sells one potion. It's coffee. "Come again!" (every single time) |
-
-## Customizing
-
-Edit files directly in `~/.kiro/` or `~/.config/opencode/`. Running `install.sh`
-without `--force` never overwrites your changes. Pi agents are edited in the
-repo itself (`platforms/pi/frontmatters/` + `content/professions/`) and
-picked up on `/reload`.
-
-For Kiro and OpenCode, pull the latest and re-apply:
-`cd ~/persona-agents && git pull && ./install.sh --force`.
-For pi, run `/reload` after `pi update --extensions`
-(see [platforms/pi/README.md](platforms/pi/README.md)).
-For Claude Code, use the update commands in
-[Claude Code (plugin)](#claude-code-plugin).
-
----
+The persona sets the voice in chat only. Code, commits, notes, and journals
+stay persona-free.
 
 ## Contributing
 
-Want to add a new warband, profession, or fix something? Platform internals
-are in the four per-platform README files under `platforms/`. The release
-ritual and the commit rule live in `AGENTS.md`. The steps to add a theme, a
-profession, a persona, or a skill live in
-[docs/adding-content.md](docs/adding-content.md).
+The plugin internals are in [platforms/claude/README.md](platforms/claude/README.md).
+The release ritual and the commit rule live in `AGENTS.md`. The steps to add a
+theme, a persona, or a skill live in [docs/adding-content.md](docs/adding-content.md).
