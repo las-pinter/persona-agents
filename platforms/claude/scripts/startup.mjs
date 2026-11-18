@@ -12,12 +12,12 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { recentEntries } from "./journal.mjs";
 import { projectDir, projectName } from "./notes-paths.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
 const JOURNAL_DAYS = 3;
 const UNFINISHED = new Set(["draft", "ready", "in-progress"]);
-const DAY_FOLDER = /^\d{4}-\d{2}-\d{2}$/;
 
 /** The sorted names in a folder that pass `keep`, or [] when the folder is missing. */
 function list(dir, keep) {
@@ -28,7 +28,6 @@ function list(dir, keep) {
 }
 
 const isFile = (path) => statSync(path).isFile();
-const isDir = (path) => statSync(path).isDirectory();
 
 /** Session notes files whose Status line says open. */
 export function openSessionNotes(dir) {
@@ -51,17 +50,6 @@ export function unfinishedStudies(dir) {
 	return rows;
 }
 
-/** The journal entry files of the last `days` day folders, oldest first. */
-export function recentJournal(dir, days = JOURNAL_DAYS) {
-	const journal = join(dir, "journal");
-	const folders = list(journal, (name, path) => DAY_FOLDER.test(name) && isDir(path)).slice(-days);
-	return folders.flatMap((day) =>
-		list(join(journal, day), (name, path) => name.endsWith(".md") && isFile(path)).map((name) =>
-			join(journal, day, name),
-		),
-	);
-}
-
 /** The startup context text for a working directory. */
 export function startupContext(cwd, home) {
 	const dir = projectDir(cwd, home);
@@ -81,7 +69,7 @@ export function startupContext(cwd, home) {
 		...bullets([...rules, ...(existsSync(summary) ? [summary] : [])]),
 		"",
 		`Then read the journal of the last ${JOURNAL_DAYS} days with entries:`,
-		...bullets(recentJournal(dir)),
+		...bullets(recentEntries(dir, JOURNAL_DAYS)),
 		"",
 		"Open session notes (read each; offer to resume or close it):",
 		...bullets(openSessionNotes(dir)),

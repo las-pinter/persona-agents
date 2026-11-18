@@ -46,6 +46,9 @@ and you change it as soon as the facts change.
    form; when it has none, ask the owner before the first commit. Run
    **commit-hygiene** before a push or a pull request. A push, a pull request,
    and a release always ask the owner.
+8. **Wrap up** with the **wrap-up** skill when the owner ends the session or
+   asks for it, and after a large piece of work: it writes this session's
+   journal entry and closes the session notes.
 
 ## Research
 
@@ -85,6 +88,7 @@ the journal holds what happened.
 - **review** — independent review in a separate context.
 - **code-review-checklist** — severity map and review method.
 - **commit-hygiene** — the gate before a push or a pull request.
+- **wrap-up** — this session's journal entry.
 - **source-selection** — external research sources.
 - **persona-free-documents** — no persona in durable text.
 - **file-length-policy** — file length limits.

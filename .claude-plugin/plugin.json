@@ -22,8 +22,6 @@
     "./content/skills/commit-hygiene/",
     "./content/skills/file-length-policy/",
     "./content/skills/interview/",
-    "./content/skills/journal-management/",
-    "./content/skills/journal-management-generic/",
     "./content/skills/persona-free-documents/",
     "./content/skills/production-issue-flagging/",
     "./content/skills/project-notes/",
@@ -38,7 +36,8 @@
     "./content/skills/source-selection/",
     "./content/skills/study/",
     "./content/skills/test-case-structure/",
-    "./content/skills/test-strategy-selection/"
+    "./content/skills/test-strategy-selection/",
+    "./content/skills/wrap-up/"
   ],
   "hooks": "./platforms/claude/hooks/hooks.json",
   "userConfig": {

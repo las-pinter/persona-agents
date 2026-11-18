@@ -12,7 +12,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { openSessionNotes, recentJournal, startupContext, unfinishedStudies } from "../platforms/claude/scripts/startup.mjs";
+import { recentEntries } from "../platforms/claude/scripts/journal.mjs";
+import { openSessionNotes, startupContext, unfinishedStudies } from "../platforms/claude/scripts/startup.mjs";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "startup.mjs");
 
@@ -63,7 +64,7 @@ describe("startup hook: read list", () => {
 			}
 			write(path.join(dir, "journal", "2026-01-04", "1000-s2.md"), "x");
 			write(path.join(dir, "journal", "notes.txt"), "not a day");
-			const entries = recentJournal(dir).map((file) => path.relative(dir, file));
+			const entries = recentEntries(dir, 3).map((file) => path.relative(dir, file));
 			assert.deepEqual(entries, [
 				path.join("journal", "2026-01-02", "0900-s1.md"),
 				path.join("journal", "2026-01-03", "0900-s1.md"),

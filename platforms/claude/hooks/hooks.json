@@ -1,5 +1,5 @@
 {
-  "description": "Give the persona-agents companion its profession rules, persona, startup read list, and compaction recovery, and enforce the commit and file doctrine",
+  "description": "Give the persona-agents companion its profession rules, persona, startup read list, compaction recovery, and journal safety net, and enforce the commit doctrine",
   "hooks": {
     "SessionStart": [
       {
@@ -95,6 +95,21 @@
               "post"
             ],
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/journal-end.mjs",
+              "hook"
+            ],
+            "timeout": 5
           }
         ]
       }
