@@ -1,21 +1,11 @@
 /**
  * The Claude Code doctrine hook (platforms/claude/scripts/doctrine.ts).
  *
- * The commit and file doctrine from AGENTS.md, per persona-agents agent:
- * a plain git add/commit/pull/merge/rebase/tag is allowed for the
- * companion; git push, gh pr/release/run, the ask exceptions, and wrapped
- * forms ask for the companion; all of these deny the rest;
- * cp/mv/rsync ask for the companion and the implementer and deny the rest;
- * the installed journal write script is allowed for the companion;
- * the companion writes anywhere in the repository, anywhere in the
- * agent-notes tree under the home folder, and anywhere in the shared temporary
- * folder, and asks on every other path; the planner, researcher, reviewer, and
- * mascot deny an edit outside their own zone, the temporary folder included.
- * The agent-notes zone is anchored to the home folder, and a leading `~`
- * expands to it. A cwd places no repository when it holds the home folder or
- * sits at a system-wide folder such as `/tmp`. A path resolves through its
- * deepest existing ancestor before a parent segment folds, so a symlink that
- * leaves a zone asks. Agents outside the plugin get no decision.
+ * Per persona-agents agent: a plain git add/commit/pull/merge/rebase/tag is
+ * allowed for the companion; git push, gh pr/release/run, the ask exceptions,
+ * and wrapped forms ask for the companion; every other agent (the reviewer)
+ * is denied all of these and every shell write it can see. Agents outside the
+ * plugin get no decision.
  *
  * Run: node --experimental-strip-types --test tests/claude-doctrine.test.ts
  */
@@ -23,8 +13,6 @@
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
@@ -33,23 +21,11 @@ import { parseShellCommand } from "../platforms/claude/scripts/shell-parse.ts";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");
 
-const PROFESSIONS = ["companion", "planner", "researcher", "implementer", "reviewer", "tester", "mascot"];
+const PROFESSIONS = ["companion", "reviewer"];
 
 /** The verdict for one agent running one shell command ("none" for no decision). */
 function bash(profession: string, command: string): string {
 	return decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.verdict ?? "none";
-}
-
-function edit(profession: string, filePath: string, tool = "Edit", cwd?: string): string {
-	const key = tool === "NotebookEdit" ? "notebook_path" : "file_path";
-	return (
-		decide({
-			agent_type: `persona-agents:${profession}`,
-			tool_name: tool,
-			tool_input: { [key]: filePath },
-			...(cwd === undefined ? {} : { cwd }),
-		})?.verdict ?? "none"
-	);
 }
 
 /** Plain history writes: the companion runs them without a prompt. */
@@ -239,17 +215,15 @@ describe("doctrine: an allow covers every segment or none", () => {
 		for (const levels of [1, 3, 4, 5, 7]) {
 			const command = nestShell("git add .", levels);
 			assert.equal(bash("companion", command), "ask", command);
-			assert.equal(bash("implementer", command), "deny", command);
+			assert.equal(bash("reviewer", command), "deny", command);
 		}
 	});
 
 	test("an ask segment beats an allow segment", () => {
 		assert.equal(bash("companion", "git status && git push"), "ask");
-		assert.equal(bash("companion", "git commit -m m && cp a b"), "ask");
+		assert.equal(bash("companion", "git commit -m m && git push"), "ask");
 	});
 });
-
-const COPY = ["cp a b", "mv a b", "rsync -a src/ dst/", "sudo cp a /etc/b", "bash -c 'mv a b'"];
 
 /** Reads that must never be gated. */
 const READS = [
@@ -268,17 +242,6 @@ const READS = [
 	"npm test",
 ];
 
-describe("doctrine: cp, mv, rsync", () => {
-	for (const command of COPY) {
-		test(command, () => {
-			for (const profession of PROFESSIONS) {
-				const expected = profession === "companion" || profession === "implementer" ? "ask" : "deny";
-				assert.equal(bash(profession, command), expected, profession);
-			}
-		});
-	}
-});
-
 describe("doctrine: reads stay untouched", () => {
 	for (const command of READS) {
 		test(command, () => {
@@ -291,16 +254,21 @@ describe("doctrine: fail closed", () => {
 	test("an unreadable command that names git is a hit", () => {
 		const heredoc = "cat <<EOF\ngit push\nEOF";
 		assert.equal(bash("companion", heredoc), "ask");
-		assert.equal(bash("implementer", heredoc), "deny");
+		assert.equal(bash("reviewer", heredoc), "deny");
 	});
 
-	test("an unreadable command that names no gated program is left alone", () => {
-		assert.equal(bash("implementer", "cat <<EOF > notes.txt\nhello\nEOF"), "none");
+	test("an unreadable command that names no gated program and writes no file is left alone", () => {
+		assert.equal(bash("reviewer", "cat <<EOF\nhello\nEOF"), "none");
+	});
+
+	test("an unreadable command that redirects into a file is a write", () => {
+		assert.equal(bash("reviewer", "cat <<EOF > notes.txt\nhello\nEOF"), "deny");
+		assert.equal(bash("companion", "cat <<EOF > notes.txt\nhello\nEOF"), "none");
 	});
 
 	test("an unreadable command with only a git read is left alone", () => {
 		const command = "git status && python3 - <<EOF\nprint(1)\nEOF";
-		assert.equal(bash("implementer", command), "none");
+		assert.equal(bash("reviewer", command), "none");
 		assert.equal(bash("companion", command), "none");
 	});
 
@@ -334,7 +302,7 @@ describe("doctrine: fail closed", () => {
 	for (const command of FAIL_CLOSED_TEXT) {
 		test(`an unreadable command with a gated form stays a hit: ${JSON.stringify(command)}`, () => {
 			assert.equal(bash("companion", command), "ask");
-			assert.equal(bash("implementer", command), "deny");
+			assert.equal(bash("reviewer", command), "deny");
 		});
 	}
 
@@ -352,9 +320,10 @@ describe("doctrine: fail closed", () => {
 	];
 	for (const command of DATA_HEREDOCS) {
 		test(`a quoted heredoc body is data: ${JSON.stringify(command)}`, () => {
-			for (const profession of ["implementer", "companion", "tester"]) {
-				assert.equal(bash(profession, command), "none", profession);
-			}
+			assert.equal(bash("companion", command), "none");
+			// A body is data, but a redirect or tee in the header still writes a file.
+			const writes = /^(?:cat[^\n]*>|tee )/.test(command);
+			assert.equal(bash("reviewer", command), writes ? "deny" : "none");
 		});
 	}
 
@@ -401,8 +370,8 @@ describe("doctrine: fail closed", () => {
 	for (const command of GATED_HEREDOCS) {
 		test(`a heredoc stays gated: ${JSON.stringify(command)}`, () => {
 			assert.equal(bash("companion", command), "ask");
-			assert.equal(bash("implementer", command), "deny");
-			assert.equal(bash("tester", command), "deny");
+			assert.equal(bash("reviewer", command), "deny");
+			assert.equal(bash("reviewer", command), "deny");
 		});
 	}
 
@@ -410,12 +379,10 @@ describe("doctrine: fail closed", () => {
 		const command = "python3 - <<EOF\nmv a b\nEOF";
 		const reason = (profession: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
-		assert.equal(bash("companion", command), "ask");
-		assert.equal(bash("implementer", command), "ask");
-		assert.equal(bash("tester", command), "deny");
-		assert.match(reason("implementer"), /cp, mv, and rsync need your approval/);
-		assert.match(reason("tester"), /for the companion and the implementer only/);
-		assert.doesNotMatch(reason("tester"), /git history/);
+		assert.equal(bash("companion", command), "none");
+		assert.equal(bash("reviewer", command), "deny");
+		assert.match(reason("reviewer"), /read-only/);
+		assert.doesNotMatch(reason("reviewer"), /git history/);
 	});
 
 	test("an ask explains the approval; a deny names who may run it", () => {
@@ -424,17 +391,15 @@ describe("doctrine: fail closed", () => {
 		assert.match(reason("companion", "git push"), /needs your approval/);
 		assert.match(reason("companion", "git commit --amend"), /needs your approval/);
 		assert.match(reason("companion", "git commit -m m"), /without a prompt/);
-		assert.match(reason("implementer", "git push"), /only the companion/);
-		assert.match(reason("implementer", "git commit -m m"), /only the companion/);
-		assert.match(reason("implementer", "cp a b"), /need your approval/);
-		assert.match(reason("tester", "cp a b"), /for the companion and the implementer only/);
+		assert.match(reason("reviewer", "git push"), /only the companion/);
+		assert.match(reason("reviewer", "git commit -m m"), /only the companion/);
+		assert.match(reason("reviewer", "cp a b"), /read-only/);
 	});
 
 	test("a mixed compound takes the strongest verdict", () => {
-		// The implementer may ask for cp, but the commit in the same call denies it.
-		assert.equal(bash("implementer", "cp a b && git commit -m x"), "deny");
-		// For the companion, the cp ask beats the commit allow.
-		assert.equal(bash("companion", "cp a b && git commit -m x"), "ask");
+		assert.equal(bash("reviewer", "cp a b && git commit -m x"), "deny");
+		// For the companion, cp is ungated, so the commit allow does not cover the call.
+		assert.equal(bash("companion", "cp a b && git commit -m x"), "none");
 		assert.equal(bash("companion", "git commit -m x && git push && cp a b"), "ask");
 	});
 
@@ -445,7 +410,7 @@ describe("doctrine: fail closed", () => {
 			"cat <<'EOF' | git commit -F -\nmsg\nEOF",
 		]) {
 			assert.equal(bash("companion", command), "ask", command);
-			assert.equal(bash("implementer", command), "deny", command);
+			assert.equal(bash("reviewer", command), "deny", command);
 		}
 	});
 });
@@ -455,278 +420,7 @@ describe("doctrine: the shell parser contract", () => {
 		const command = "cat <<EOF\ngit push\nEOF";
 		assert.equal(parseShellCommand(command).unsupported, "heredoc");
 		assert.equal(bash("companion", command), "ask");
-		assert.equal(bash("implementer", command), "deny");
-	});
-});
-
-describe("doctrine: file writes", () => {
-	const userHome = os.homedir();
-	const home = path.join(userHome, "agent-notes");
-	const repo = path.join(userHome, "repo");
-	const reason = (profession: string, filePath: string, cwd?: string): string =>
-		decide({
-			agent_type: `persona-agents:${profession}`,
-			tool_name: "Write",
-			tool_input: { file_path: filePath },
-			...(cwd === undefined ? {} : { cwd }),
-		})?.reason ?? "";
-
-	test("implementer and tester write anywhere", () => {
-		for (const profession of ["implementer", "tester"]) {
-			assert.equal(edit(profession, "/repo/src/main.ts"), "none", profession);
-			assert.equal(edit(profession, "/repo/src/main.ts", "Write"), "none", profession);
-		}
-	});
-
-	test("the companion writes a relative repository path freely", () => {
-		assert.equal(edit("companion", "src/main.ts", "Edit", repo), "none");
-		assert.equal(edit("companion", "README.md", "Write", repo), "none");
-		// The path resolves against the hook's cwd before the zone is tested.
-		assert.equal(edit("companion", "src/../README.md", "Write", repo), "none");
-		assert.equal(edit("companion", ".", "Write", repo), "none");
-	});
-
-	test("the companion writes an absolute repository path freely", () => {
-		assert.equal(edit("companion", `${repo}/src/main.ts`, "Edit", repo), "none");
-		assert.equal(edit("companion", `${repo}/content/professions/x.md`, "Write", repo), "none");
-	});
-
-	test("the companion writes anywhere in the agent-notes tree", () => {
-		assert.equal(edit("companion", `${home}/companion/journal.md`), "none");
-		assert.equal(edit("companion", `${home}/project-notes/repo/study.md`, "Write"), "none");
-		assert.equal(edit("companion", `${home}/researcher/findings.md`, "Write"), "none");
-		assert.equal(edit("companion", "agent-notes/companion/j.md", "Edit", userHome), "none");
-		assert.equal(edit("companion", "~/agent-notes/planner/x.md", "Write"), "none");
-	});
-
-	test("the companion writes anywhere in the temporary folder", () => {
-		for (const tool of ["Edit", "Write", "NotebookEdit"]) {
-			assert.equal(edit("companion", "/tmp", tool, repo), "none", tool);
-			assert.equal(edit("companion", "/tmp/a.txt", tool, repo), "none", tool);
-			assert.equal(edit("companion", "/tmp/a/b/c.txt", tool, repo), "none", tool);
-		}
-	});
-
-	test("a temp path that is not under /tmp asks", () => {
-		for (const target of ["/tmpfoo", "/tmp2/x", "/etc/tmp", "/alphabet/tmp", "/tmp/../etc/passwd", "/tmp/../tmpfoo/x"]) {
-			assert.equal(edit("companion", target, "Write", repo), "ask", target);
-			assert.equal(edit("companion", target, "Edit", repo), "ask", target);
-		}
-	});
-
-	test("a symlink under /tmp that leaves /tmp asks", (t) => {
-		let base = "";
-		try {
-			base = fs.mkdtempSync("/tmp/doctrine-temp-");
-		} catch {
-			t.skip("/tmp is not writable in this environment");
-			return;
-		}
-		try {
-			// The link sits inside /tmp and resolves to a folder outside it.
-			fs.symlinkSync("/etc", path.join(base, "link"));
-			assert.equal(edit("companion", path.join(base, "link", "passwd"), "Edit", repo), "ask");
-			assert.equal(edit("companion", path.join(base, "link", "x.md"), "Write", repo), "ask");
-			// A plain path in the same folder still writes freely.
-			assert.equal(edit("companion", path.join(base, "x.md"), "Write", repo), "none");
-		} finally {
-			fs.rmSync(base, { recursive: true, force: true });
-		}
-	});
-
-	test("a parent segment after a link does not escape the temporary zone", (t) => {
-		let base = "";
-		try {
-			// The escape case runs only where the system temporary folder resolves
-			// to /tmp, so the fixture must sit under it.
-			if (fs.realpathSync(os.tmpdir()) !== "/tmp") {
-				t.skip("the system temporary folder is not /tmp");
-				return;
-			}
-			base = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-link-"));
-		} catch {
-			t.skip("the system temporary folder is not writable in this environment");
-			return;
-		}
-		try {
-			// The link sits in /tmp and resolves outside it. The kernel follows the
-			// link, then folds the parent segment, so this target writes at /x. A
-			// fold of the parent segment first would say /tmp/x and pass.
-			fs.symlinkSync("/etc", path.join(base, "link"));
-			assert.equal(edit("companion", `${base}/link/../x.md`, "Write", repo), "ask");
-			assert.equal(edit("companion", `${base}/link/../x.md`, "Edit", repo), "ask");
-			// A parent segment that stays in /tmp still writes freely.
-			fs.mkdirSync(path.join(base, "sub"));
-			assert.equal(edit("companion", `${base}/sub/../y.md`, "Write", repo), "none");
-			// A link that resolves inside /tmp keeps the parent fold inside it.
-			fs.mkdirSync(path.join(base, "inner"));
-			fs.symlinkSync(path.join(base, "inner"), path.join(base, "inside"));
-			assert.equal(edit("companion", `${base}/inside/../z.md`, "Write", repo), "none");
-			assert.equal(edit("companion", `${base}/plain.md`, "Write", repo), "none");
-		} finally {
-			fs.rmSync(base, { recursive: true, force: true });
-		}
-	});
-
-	test("the companion asks on a path outside the repository, the notes, and the temporary folder", () => {
-		assert.equal(edit("companion", "/etc/passwd", "Write", repo), "ask");
-		assert.equal(edit("companion", `${repo}/../etc/passwd`, "Write", repo), "ask");
-		assert.equal(edit("companion", "../other/x.md", "Write", repo), "ask");
-		assert.equal(edit("companion", "/home/u/not-agent-notes/x.md", "Write", repo), "ask");
-		// Without an absolute cwd the hook cannot place an absolute path.
-		assert.equal(edit("companion", `${repo}/src/main.ts`, "Write"), "ask");
-		// An empty path is not a repository path.
-		assert.equal(edit("companion", "", "Write"), "ask");
-		assert.match(
-			reason("companion", "/etc/passwd", repo),
-			/outside the repository, the agent-notes tree, and the temporary folder/,
-		);
-	});
-
-	test("an ask reason names the approval, not a capability limit", () => {
-		const text = reason("companion", "/etc/passwd", repo);
-		assert.match(text, /needs your approval/);
-		assert.doesNotMatch(text, /does not edit/);
-	});
-
-	test("the agent-notes zone is anchored to the home folder", () => {
-		// A parent segment after agent-notes leaves the tree.
-		assert.equal(edit("companion", `${home}/../etc/passwd`, "Write", repo), "ask");
-		assert.equal(edit("companion", `${home}/companion/../../etc/passwd`, "Write"), "ask");
-		// agent-notes in another folder is not the tree; the /tmp path writes
-		// through the temporary folder zone, not through this one.
-		assert.equal(edit("companion", "/tmp/agent-notes/x", "Write", repo), "none");
-		assert.equal(edit("companion", "/tmp/agent-notes/companion/j.md", "Edit", repo), "none");
-		// agent-notes as a middle segment of another folder.
-		assert.equal(edit("companion", `${userHome}/x/agent-notes/y.md`, "Write", repo), "ask");
-		assert.equal(edit("companion", "/var/lib/agent-notes/project-notes/x.md", "Write", repo), "ask");
-	});
-
-	test("a leading tilde expands to the home folder", () => {
-		assert.equal(edit("companion", "~/agent-notes/planner/x.md", "Write", repo), "none");
-		assert.equal(edit("companion", "~/agent-notes/companion/j.md", "Write"), "none");
-		// Outside both zones the expanded path asks.
-		assert.equal(edit("companion", "~/other/x.md", "Write", repo), "ask");
-		assert.equal(edit("companion", "~", "Write", repo), "ask");
-	});
-
-	test("a cwd of / or of the home folder places no repository path", () => {
-		for (const cwd of ["/", userHome]) {
-			assert.equal(edit("companion", "src/main.ts", "Write", cwd), "ask", cwd);
-			assert.equal(edit("companion", path.join(cwd, "src/main.ts"), "Write", cwd), "ask", cwd);
-		}
-		// The notes tree stays writable from the home folder.
-		assert.equal(edit("companion", "agent-notes/companion/j.md", "Write", userHome), "none");
-		// `/` must not turn a relative notes path into the root tree.
-		assert.equal(edit("companion", "agent-notes/x.md", "Write", "/"), "ask");
-	});
-
-	test("a cwd that holds the home folder places no repository path", () => {
-		const homeParent = path.dirname(userHome);
-		assert.equal(edit("companion", "src/main.ts", "Write", homeParent), "ask");
-		assert.equal(edit("companion", path.join(homeParent, "repo/src/main.ts"), "Write", homeParent), "ask");
-		// The home parent holds the notes tree, so a notes path is not free either.
-		assert.equal(edit("companion", "agent-notes/x.md", "Write", homeParent), "ask");
-	});
-
-	test("a cwd of /tmp places no repository path but writes in the temp zone", () => {
-		// These paths write through the temporary zone. A system-wide folder
-		// places no repository base, but both zones give the same verdict here,
-		// so this test does not separate the two zones.
-		assert.equal(edit("companion", "src/main.ts", "Write", "/tmp"), "none");
-		assert.equal(edit("companion", "/tmp/repo/src/main.ts", "Write", "/tmp"), "none");
-		assert.equal(edit("companion", "agent-notes/x.md", "Write", "/tmp"), "none");
-		// A path that leaves /tmp still asks.
-		assert.equal(edit("companion", "../etc/passwd", "Write", "/tmp"), "ask");
-		// A system folder other than /tmp gives no zone, so a path under it asks.
-		assert.equal(edit("companion", "/etc/repo/x.md", "Write", "/etc"), "ask");
-		assert.equal(edit("companion", "/usr/x.md", "Write", "/usr"), "ask");
-	});
-
-	test("an empty path with a cwd of the temporary folder asks", () => {
-		assert.equal(edit("companion", "", "Write", "/tmp"), "ask");
-	});
-
-	test("a symlink that leaves the zone asks", () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-zone-"));
-		try {
-			const repoDir = path.join(tmp, "repo");
-			fs.mkdirSync(repoDir);
-			// The base sits in /tmp, so the link must leave /tmp as well as the
-			// repository to leave the zone of the session.
-			fs.symlinkSync("/etc", path.join(repoDir, "link"));
-			fs.symlinkSync("/etc/new.md", path.join(repoDir, "dangling"));
-			// The link sits inside the repository but resolves outside it.
-			assert.equal(edit("companion", path.join(repoDir, "link", "x.md"), "Write", repoDir), "ask");
-			assert.equal(edit("companion", "link/x.md", "Edit", repoDir), "ask");
-			// A link that resolves to a missing path outside the zone still asks.
-			assert.equal(edit("companion", "dangling", "Write", repoDir), "ask");
-			// A real path in the repository still writes freely.
-			assert.equal(edit("companion", path.join(repoDir, "x.md"), "Write", repoDir), "none");
-			assert.equal(edit("companion", "x.md", "Edit", repoDir), "none");
-		} finally {
-			fs.rmSync(tmp, { recursive: true, force: true });
-		}
-	});
-
-	test("a doubled slash resolves to one path", () => {
-		assert.equal(edit("companion", `${repo}//src/main.ts`, "Write", repo), "none");
-		assert.equal(edit("companion", "src//main.ts", "Write", repo), "none");
-		assert.equal(edit("companion", `${home}//companion/j.md`, "Write", repo), "none");
-		assert.equal(edit("companion", "//etc/passwd", "Write", repo), "ask");
-	});
-
-	test("the planner and researcher write only their own zone", () => {
-		assert.equal(edit("planner", `${home}/project-notes/repo/study.md`, "Edit", repo), "none");
-		assert.equal(edit("planner", "agent-notes/project-notes/x.md", "Write", userHome), "none");
-		assert.equal(edit("researcher", "agent-notes/researcher/x.md", "Write", userHome), "none");
-		assert.equal(edit("planner", `${home}/project-notes/repo/study.md`), "none");
-		assert.equal(edit("planner", `${home}/researcher/x.md`), "deny");
-		assert.equal(edit("researcher", `${home}/researcher/findings.md`, "Write"), "none");
-		assert.equal(edit("researcher", `${repo}/src/main.ts`), "deny");
-		assert.equal(edit("researcher", `${repo}/a.ipynb`, "NotebookEdit"), "deny");
-	});
-
-	test("the planner stays denied inside the companion zone", () => {
-		assert.equal(edit("planner", `${home}/companion/journal.md`, "Write"), "deny");
-		assert.equal(edit("planner", "~/agent-notes/companion/j.md", "Write", repo), "deny");
-		assert.equal(edit("planner", "src/main.ts", "Write", repo), "deny");
-		assert.equal(edit("researcher", "/tmp/agent-notes/researcher/x.md", "Write", repo), "deny");
-	});
-
-	test("the reviewer and the mascot never write", () => {
-		for (const profession of ["reviewer", "mascot"]) {
-			assert.equal(edit(profession, `${home}/project-notes/x.md`), "deny", profession);
-			assert.equal(edit(profession, `${repo}/src/main.ts`, "Write"), "deny", profession);
-		}
-	});
-
-	test("the planner, researcher, reviewer, and mascot deny a temp path", () => {
-		for (const profession of ["planner", "researcher", "reviewer", "mascot"]) {
-			assert.equal(edit(profession, "/tmp/x.md", "Write", repo), "deny", profession);
-			assert.equal(edit(profession, "/tmp/a/b/c.txt", "Edit", repo), "deny", profession);
-		}
-	});
-
-	test("a zone name inside another path does not count", () => {
-		assert.equal(edit("planner", `${repo}/not-agent-notes/project-notes/x.md`), "deny");
-		assert.equal(edit("companion", `${userHome}/not-agent-notes/x.md`, "Write", repo), "ask");
-	});
-
-	test("the widened companion zone moves no other verdict", () => {
-		const expected: Record<string, string> = {
-			companion: "none",
-			planner: "deny",
-			researcher: "deny",
-			implementer: "none",
-			tester: "none",
-			reviewer: "deny",
-			mascot: "deny",
-		};
-		for (const profession of PROFESSIONS) {
-			assert.equal(edit(profession, "src/main.ts", "Write", repo), expected[profession], profession);
-			assert.equal(edit(profession, `${repo}/src/main.ts`, "Edit", repo), expected[profession], profession);
-		}
+		assert.equal(bash("reviewer", command), "deny");
 	});
 });
 
@@ -763,11 +457,11 @@ describe("doctrine: hook wiring", () => {
 
 	test("a hit prints a PreToolUse permission decision", () => {
 		const out = JSON.parse(
-			run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git push" } }),
+			run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git push" } }),
 		) as { hookSpecificOutput: Record<string, string> };
 		assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
 		assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
-		assert.match(out.hookSpecificOutput.permissionDecisionReason, /persona-agents doctrine \(tester\)/);
+		assert.match(out.hookSpecificOutput.permissionDecisionReason, /persona-agents doctrine \(reviewer\)/);
 	});
 
 	test("a plain commit prints an allow for the companion", () => {
@@ -778,123 +472,43 @@ describe("doctrine: hook wiring", () => {
 	});
 
 	test("no hit prints nothing", () => {
-		assert.equal(run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git status" } }), "");
+		assert.equal(run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git status" } }), "");
 	});
 
-	test("the companion write zone follows the cwd in the hook input", () => {
-		const base = { agent_type: "persona-agents:companion", tool_name: "Write" };
-		const inside = { ...base, tool_input: { file_path: "src/main.ts" }, cwd: "/home/u/repo" };
-		const outside = { ...base, tool_input: { file_path: "/home/u/elsewhere/x.md" }, cwd: "/home/u/repo" };
-		assert.equal(run(inside), "");
-		const out = JSON.parse(run(outside)) as { hookSpecificOutput: Record<string, string> };
-		assert.equal(out.hookSpecificOutput.permissionDecision, "ask");
-	});
+
 });
 
-describe("doctrine: the journal write script", () => {
-	/** The script word the plugin installs: this repository tree. */
-	const script = path.join(
-		repoRoot, "content", "skills", "journal-management-generic", "scripts", "journal-write.sh",
-	);
-	const home = "/home/u";
-	const session = "20261108T201812123456789";
-	const token = `${session}-4242`;
-	const hold = `bash ${script} hold --agent companion --session ${session} --home ${home}`;
-	const release = `bash ${script} release --agent companion --session ${session} --token ${token} --home ${home}`;
-	const reason = (profession: string, command: string): string =>
-		decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
+/** Shell writes: the reviewer is denied, the companion gets no decision. */
+const WRITES = [
+	"rm -rf build",
+	"echo x > out.txt",
+	"npm test > /tmp/log.txt",
+	"sed -i s/a/b/ file.ts",
+	"perl -pi -e s/a/b/ file.ts",
+	"cp a b",
+	"bash -c 'mv a b'",
+	"tee log.txt < input",
+	"git checkout -- file.ts",
+	"git stash",
+	"git reset --hard",
+	"git branch -D topic",
+	"gh issue create -t x",
+	"curl -o x https://example.com",
+	"cat <<EOF > notes.txt\nhello\nEOF",
+];
 
-	test("J1 a hold from the installed skill path is allowed", () => {
-		assert.equal(bash("companion", hold), "allow");
-		assert.match(reason("companion", hold), /journal write script runs without a prompt/);
-	});
-
-	test("J2 a release is allowed", () => {
-		assert.equal(bash("companion", release), "allow");
-	});
-
-	test("J3 the hook process prints an allow", () => {
-		const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", doctrineScript], {
-			input: JSON.stringify({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command: hold } }),
-			env: { ...process.env, CLAUDE_PLUGIN_ROOT: repoRoot },
-			encoding: "utf8",
+describe("doctrine: shell writes", () => {
+	for (const command of WRITES) {
+		test(command, () => {
+			assert.equal(bash("reviewer", command), "deny");
+			assert.equal(bash("companion", command), "none");
 		});
-		assert.equal(result.status, 0, result.stderr);
-		const out = JSON.parse(result.stdout) as { hookSpecificOutput: Record<string, string> };
-		assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
-		assert.equal(out.hookSpecificOutput.permissionDecision, "allow");
-	});
+	}
 
-	test("J4 another path, a copy, a symlink, a relative word, and a bad subcommand get no allow", () => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "journal-script-"));
-		try {
-			const copyDir = path.join(tmp, "content", "skills", "journal-management-generic", "scripts");
-			fs.mkdirSync(copyDir, { recursive: true });
-			fs.copyFileSync(script, path.join(copyDir, "journal-write.sh"));
-			const alias = path.join(tmp, "journal-write.sh");
-			fs.symlinkSync(script, alias);
-			const refused = [
-				"bash /tmp/journal-write.sh hold",
-				`bash ${path.join(copyDir, "journal-write.sh")} hold`,
-				`bash ${alias} hold`,
-				`bash ${path.join(repoRoot, "install.sh")} hold`,
-				"bash content/skills/journal-management-generic/scripts/journal-write.sh hold",
-				`bash ${script}`,
-				`bash ${script} --help`,
-				`bash ${script} status`,
-			];
-			for (const command of refused) assert.equal(bash("companion", command), "none", command);
-		} finally {
-			fs.rmSync(tmp, { recursive: true, force: true });
+	test("reads with a harmless redirect stay untouched", () => {
+		for (const command of ["npm test 2>&1", "git diff > /dev/null", "git branch", "git branch -a", "git branch --show-current", "gh pr view 1"]) {
+			const expected = command.startsWith("gh pr") ? "deny" : "none";
+			assert.equal(bash("reviewer", command), expected, command);
 		}
-	});
-
-	test("J5 a missing flag value is left to the script", () => {
-		assert.equal(bash("companion", `bash ${script} hold --agent`), "allow");
-	});
-
-	test("J6 a second segment cancels the allow", () => {
-		const cancelled = [
-			`bash ${script} hold --agent x; rm -rf y`,
-			`bash ${script} hold --agent x && git status`,
-			`bash ${script} hold --agent x | tee log`,
-			`bash ${script} hold --agent x $(date)`,
-			// A newline, a backtick, a process substitution, and a heredoc each lose the allow.
-			`bash ${script} hold --agent x\nrm -rf y`,
-			`bash ${script} hold --agent x \`date\``,
-			`bash ${script} hold --agent x <(date)`,
-			`bash ${script} hold --agent x <<'EOF'\nhello\nEOF`,
-			`cd /repo && ${hold}`,
-		];
-		for (const command of cancelled) assert.equal(bash("companion", command), "none", command);
-	});
-
-	test("J7 the other six professions stay ungated", () => {
-		for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
-			assert.equal(bash(profession, hold), "none", profession);
-		}
-	});
-
-	test("J8 no wrapper and no redirect is ever allowed", () => {
-		const wrapped = [
-			`bash -c '${hold}'`,
-			`sudo ${hold}`,
-			`env ${hold}`,
-			`/tmp/bash ${script} hold --agent companion`,
-			`bash ${script} hold --agent companion > /tmp/out`,
-		];
-		for (const command of wrapped) assert.notEqual(bash("companion", command), "allow", command);
-	});
-
-	test("J9 a stronger verdict beats the allow", () => {
-		assert.equal(bash("companion", `${hold} && git push`), "ask");
-	});
-
-	test("J10 the removed subcommands get no allow", () => {
-		for (const removed of ["append", "check", "replace"]) {
-			assert.equal(bash("companion", `bash ${script} ${removed} --agent companion`), "none", removed);
-		}
-		assert.equal(bash("companion", hold), "allow");
-		assert.equal(bash("companion", release), "allow");
 	});
 });

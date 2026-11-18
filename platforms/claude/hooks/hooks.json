@@ -54,7 +54,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Edit|Write|NotebookEdit)$",
+        "matcher": "^Bash$",
         "hooks": [
           {
             "type": "command",

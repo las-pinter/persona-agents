@@ -8,6 +8,7 @@
     "claude-code-plugin"
   ],
   "scripts": {
+    "lint": "shellcheck install.sh",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test --test-reporter=dot --test-reporter-destination=stdout --test-reporter=spec --test-reporter-destination=/tmp/persona-agents-test.log \"tests/*.test.ts\""
   },

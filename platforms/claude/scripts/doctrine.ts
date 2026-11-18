@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// doctrine — Claude Code PreToolUse hook for persona-agents.
+// doctrine — Claude Code PreToolUse hook (Bash) for persona-agents.
 //
-// Enforces the commit and file doctrine from AGENTS.md for the persona-agents
-// agents (agent type `persona-agents:<profession>`), whether they run as the
-// main session (`claude --agent`) or as a subagent:
+// The settings snippet (platforms/claude/settings/recommended.json) holds the
+// base permission rules. This hook adds what settings rules cannot express,
+// for the persona-agents agents (agent type `persona-agents:<name>`):
 //
 //   plain git add/commit/pull/merge/rebase/tag
 //                     companion: allow; every other agent: deny
@@ -14,56 +14,36 @@
 //   merge strategy (-s, --strategy), and any wrapped or runtime-shaped
 //   history command
 //                     companion: ask; every other agent: deny
-//   cp, mv, rsync     companion and implementer: ask; the rest: deny
-//   bash <plugin root>/content/skills/journal-management-generic/
-//   scripts/journal-write.sh <hold|release> ...
-//                     companion: allow; every other agent: no decision
+//   a write: a file-changing command (cp, mv, rm, tee, sed -i, ...), a git
+//   verb outside the read list, a gh command that is not a read, or an
+//   output redirect to a file
+//                     companion: no decision; every other agent: deny
+//
+// The reviewer is read-only: it has no Edit or Write tool (its agent file),
+// and this hook denies it every shell write it can see.
 //
 // Allow is given only when every segment of the command is a plain history
-// command or the installed journal write script. A command that mixes an
-// allowed segment with an ungated one
+// command. A command that mixes an allowed segment with an ungated one
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
 // `$(...)` or backtick substitution, an env assignment, a path to git, the
-// unwrap depth limit) or a runtime-shaped one (a `$`
-// expansion, a glob, an output redirect to a file) is raised to ask.
-// Claude Code still applies settings deny and ask rules after a hook allow,
-// and an allow from this hook never overrides an ask or deny from another
-// hook (precedence deny > defer > ask > allow; see the PreToolUse decision
-// control section of the Claude Code hooks documentation).
+// unwrap depth limit) or a runtime-shaped one (a `$` expansion, a glob, an
+// output redirect to a file) is raised to ask. Claude Code still applies
+// settings deny and ask rules after a hook allow, and an allow from this hook
+// never overrides an ask or deny from another hook.
 //
 // Accepted risks (owner choice), allowed without a prompt:
 //   git rebase --exec '<cmd>' runs <cmd>; its payload is not inspected.
 //   git -C / --git-dir / --work-tree to another path runs that repository's
 //   hooks and core.* config.
 //
-// Write zone (FILE_ZONES). Edit, Write, and NotebookEdit are allowed inside the
-// zone of the agent. The companion holds every tool: its zone is the
-// repository, the whole agent-notes tree under the home folder, and the shared
-// temporary folder; any other path asks. The planner, researcher, reviewer, and
-// mascot deny every path outside their own notes zone, the temporary folder
-// included. The implementer and the tester write freely.
-//
-// A zone is anchored to an absolute folder and tested with a path check, never
-// a text match: `agent-notes` in the middle of another folder is not a zone.
-// The links resolve before a parent segment folds, as the kernel resolves them,
-// so a target that walks through a link and then carries `..` lands where the
-// write lands. A path that does not resolve counts as outside. The repository
-// zone is the session `cwd`, capped: a cwd that holds the home folder allows no
-// repository path, and neither does a cwd at a system-wide folder such as
-// `/tmp`, `/etc`, `/usr`, `/var`, or `/home`. A leading `~` expands to the home
-// folder before the test.
-//
 // A shell command is split into segments by the shell parser; each segment
 // is unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`)
 // before it is classified. A command the parser cannot read (a heredoc, an
-// unbalanced quote) that holds a gated form counts as a hit: fail closed. A gated
-// form is git with a history verb or push, gh with pr, run, or release, or cp,
-// mv, rsync. The hit is publish (companion: ask; every other agent: deny).
+// unbalanced quote) that holds a gated form counts as a hit: fail closed.
 // Unreadable text with only git read verbs (status, diff, log) is not a hit.
-// The fail-closed hit is ask, never allow. One exception: a single quoted
-// heredoc fed to a data reader (cat, tee, python3 -, node -) is checked by its
-// header only (safeHeredocHeader).
+// One exception: a single quoted heredoc fed to a data reader (cat, tee,
+// python3 -, node -) is checked by its header only (safeHeredocHeader).
 //
 // Any other agent, or a session without one, gets no decision, so Claude
 // Code's own permission flow runs unchanged.
@@ -71,10 +51,9 @@
 // Set PERSONA_AGENTS_DEBUG=1 to append each hook input and decision to
 // $CLAUDE_PLUGIN_DATA/doctrine.log.
 
-import { appendFileSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseShellCommand } from "./shell-parse.ts";
 
 const PREFIX = "persona-agents:";
@@ -90,8 +69,6 @@ export interface HookInput {
 	agent_type?: unknown;
 	tool_name?: unknown;
 	tool_input?: Record<string, unknown>;
-	/** The session working directory, as Claude Code sends it. */
-	cwd?: unknown;
 }
 
 /**
@@ -99,26 +76,23 @@ export interface HookInput {
  * publish: git push, and gh pr, gh release, or gh run, also when a gh global option
  * comes first, plus every history command that is an ask exception or comes
  * wrapped (see the header).
- * journal: the installed journal write script with its subcommand.
+ * write: a command that changes files or remote state (see the header).
  */
-type Gate = "history" | "publish" | "copy" | "journal";
+type Gate = "history" | "publish" | "write";
 /** A segment that runs a command no gate covers. */
 const UNGATED = "ungated";
 type Hit = Gate | typeof UNGATED;
 
-/** Verdict per gated command class; a profession missing here is denied. */
-const COMMAND_RULES: Record<Gate, Record<string, Verdict>> = {
-	history: { companion: "allow" },
-	publish: { companion: "ask" },
-	copy: { companion: "ask", implementer: "ask" },
-	journal: { companion: "allow" },
+/** The companion's verdict per gate; null leaves the call to Claude Code. Every other agent is denied. */
+const COMPANION_RULES: Record<Gate, Verdict | null> = {
+	history: "allow",
+	publish: "ask",
+	write: null,
 };
 
 const HISTORY_DENY = "only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 const PUBLISH_ASK =
 	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
-const JOURNAL_ALLOW = "the journal write script runs without a prompt for the companion";
-const JOURNAL_NO = "the journal write script runs only from its installed skill path";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
@@ -128,200 +102,12 @@ const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 		deny: HISTORY_DENY,
 	},
 	publish: { allow: PUBLISH_ASK, ask: PUBLISH_ASK, deny: HISTORY_DENY },
-	copy: {
-		allow: "cp, mv, and rsync need your approval",
-		ask: "cp, mv, and rsync need your approval",
-		deny: "cp, mv, and rsync are for the companion and the implementer only",
+	write: {
+		allow: "this agent is read-only",
+		ask: "this agent is read-only",
+		deny: "this agent is read-only: it may not change files or remote state from the shell",
 	},
-	// The classifier emits this hit for the companion only, so ask and deny
-	// stay unreachable; they carry the path rule, never a git reason.
-	journal: { allow: JOURNAL_ALLOW, ask: JOURNAL_NO, deny: JOURNAL_NO },
 };
-
-interface FileZone {
-	/**
-	 * The agent-notes subtree this profession may write, relative to the
-	 * agent-notes tree under the home folder. `""` is the whole tree; null is
-	 * no notes zone.
-	 */
-	notes: string | null;
-	/** The verdict on a path outside the zones. */
-	verdict: Verdict;
-	/** True when the repository is also a write zone. */
-	repo?: boolean;
-	/** True when the shared temporary folder is also a write zone. */
-	temp?: boolean;
-	/** The zone names for the ask or deny reason. */
-	label: string;
-}
-
-/** The home folder: the anchor of the agent-notes zone and of a `~` path. */
-const HOME = resolve(homedir());
-/** The agent-notes tree. A write zone is this folder or a folder under it. */
-const NOTES_ROOT = join(HOME, "agent-notes");
-/**
- * The shared temporary folder. One literal, two meanings: a repository base
- * here is too wide to be a repository, and a zone with `temp` may write here.
- */
-const TEMP_ROOT = "/tmp";
-
-/**
- * Where each profession may write with Edit/Write/NotebookEdit. A profession
- * missing here writes freely. The companion holds every tool, so its zone is
- * the repository, the whole agent-notes tree, and the shared temporary folder;
- * any other path asks. The planner, researcher, reviewer, and mascot keep their
- * narrow zone, so the temporary folder denies them.
- *
- * The repository zone. The tool input holds a path and no working directory.
- * The hook input holds the session `cwd`. With an absolute `cwd`, a relative
- * path resolves against it, and the path is in the repository when it equals
- * `cwd` or sits under it after `..` normalization. Without an absolute `cwd`, a
- * relative path stays in the working directory (REPO_RELATIVE), and an absolute
- * or parent-relative path cannot be placed, so it falls to the zone verdict.
- */
-const FILE_ZONES: Record<string, FileZone> = {
-	companion: {
-		notes: "",
-		verdict: "ask",
-		repo: true,
-		temp: true,
-		label: "outside the repository, the agent-notes tree, and the temporary folder",
-	},
-	planner: { notes: "project-notes", verdict: "deny", label: "outside its agent-notes zone" },
-	researcher: { notes: "researcher", verdict: "deny", label: "outside its agent-notes zone" },
-	reviewer: { notes: null, verdict: "deny", label: "at all" },
-	mascot: { notes: null, verdict: "deny", label: "at all" },
-};
-
-const FILE_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
-
-/** A relative path that stays in the working directory: no root and no parent segment. */
-const REPO_RELATIVE = /^(?![/~])(?!\.\.(?:\/|$))(?!.*\/\.\.(?:\/|$))/;
-
-/** True when `child` is `parent` or sits under it. Both paths must be absolute. */
-function under(child: string, parent: string): boolean {
-	if (!isAbsolute(child) || !isAbsolute(parent)) return false;
-	const rest = relative(parent, child);
-	return rest === "" || (!rest.startsWith("..") && !isAbsolute(rest));
-}
-
-/**
- * Folders that hold unrelated trees, so a repository base at one is too wide.
- * The temporary folder is named once, in TEMP_ROOT, for both meanings.
- */
-const SYSTEM_FOLDERS = new Set([TEMP_ROOT, "/etc", "/usr", "/var", "/home"]);
-
-/**
- * The repository base of a session, or null when the cwd is too wide to be a
- * repository: the filesystem root holds every path, a cwd that holds the home
- * folder holds the whole agent-notes tree, and a system-wide folder holds
- * trees that are not one repository.
- */
-function repoBase(cwdPath: string | null): string | null {
-	if (cwdPath === null) return null;
-	if (under(HOME, cwdPath)) return null;
-	if (SYSTEM_FOLDERS.has(cwdPath)) return null;
-	return cwdPath;
-}
-
-/** True when a name exists but resolves nowhere: a dangling symlink. */
-function dangling(path: string): boolean {
-	try {
-		lstatSync(path);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-/**
- * The real path of `path`, or null when the path cannot be placed. A relative
- * path joins onto the session `cwd`; the join keeps every segment, so no parent
- * segment folds first. The segments resolve in order: every segment that exists
- * resolves through symlinks, and a parent segment folds against that real path,
- * as the kernel folds it. Only the absent rest joins onto the last real folder.
- * A lexical test alone lets a symlink inside a zone carry the write outside the
- * zone. A loop, a denied folder, and a dangling symlink all fail the placement.
- */
-function resolvedPath(path: string, cwdPath: string | null = null): string | null {
-	const full = isAbsolute(path) ? path : cwdPath === null ? null : `${cwdPath.replace(/\/+$/, "")}/${path}`;
-	if (full === null) return null;
-	let resolved = "/";
-	/** The segments after the last folder that exists. None of them is `..`. */
-	const tail: string[] = [];
-	for (const segment of full.split("/")) {
-		if (segment === "" || segment === ".") continue;
-		if (segment === "..") {
-			// A parent segment folds against a real path, or against an absent name.
-			if (tail.length > 0) tail.pop();
-			else resolved = dirname(resolved);
-			continue;
-		}
-		if (tail.length > 0) {
-			tail.push(segment);
-			continue;
-		}
-		const candidate = join(resolved, segment);
-		try {
-			resolved = realpathSync(candidate);
-		} catch (error) {
-			// Only an absent name starts the tail; anything else is final.
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT" || dangling(candidate)) return null;
-			tail.push(segment);
-		}
-	}
-	return tail.length === 0 ? resolved : join(resolved, ...tail);
-}
-
-/** The target with a leading `~` or `~/` replaced by the home folder. */
-function expandHome(target: string): string {
-	if (target === "~") return HOME;
-	return target.startsWith("~/") ? join(HOME, target.slice(2)) : target;
-}
-
-/** True when the resolved path is in the notes subtree of the rule. */
-function inNotesZone(notes: string | null, path: string | null): boolean {
-	if (notes === null || path === null) return false;
-	const root = resolvedPath(notes === "" ? NOTES_ROOT : join(NOTES_ROOT, notes));
-	return root === null ? false : under(path, root);
-}
-
-/**
- * True when the target path is in a write zone of the rule. The path expands a
- * leading `~`, joins onto the session `cwd` when the hook input carries one,
- * and resolves through symlinks before the zone test. Every zone uses
- * `resolvedPath`, so the repository zone, the notes zone, and the temporary
- * zone all resolve the links before a parent segment folds.
- */
-function inWriteZone(rule: FileZone, rawTarget: string, cwd: unknown): boolean {
-	const target = expandHome(rawTarget);
-	const cwdPath = typeof cwd === "string" && isAbsolute(cwd) ? resolve(cwd) : null;
-	const base = repoBase(cwdPath);
-	// Without a cwd a relative path cannot be placed.
-	const placeable = isAbsolute(target) || cwdPath !== null;
-	const real = placeable ? resolvedPath(target, cwdPath) : null;
-	// A path that does not resolve cannot be placed, so it stays outside.
-	if (placeable && real === null) return false;
-	const realBase = base === null ? null : resolvedPath(base);
-	if (rule.repo && target !== "") {
-		if (cwdPath === null) {
-			if (REPO_RELATIVE.test(target)) return true;
-		} else if (realBase !== null && real !== null && under(real, realBase)) return true;
-	}
-	// The temporary folder resolves through symlinks, so a link under it that
-	// points outside it is not inside it. An empty target is not a temporary path.
-	if (rule.temp && target !== "" && real !== null) {
-		const realTemp = resolvedPath(TEMP_ROOT);
-		if (realTemp !== null && under(real, realTemp)) return true;
-	}
-	return inNotesZone(rule.notes, real);
-}
-
-/** An ask names the approval; a deny names who may write. */
-function zoneReason(rule: FileZone, profession: string): string {
-	if (rule.verdict === "ask") return `persona-agents doctrine: a write ${rule.label} needs your approval`;
-	return `persona-agents doctrine: the ${profession} does not edit files ${rule.label}`;
-}
 
 const GIT_HISTORY = new Set(["add", "commit", "pull", "merge", "rebase", "tag"]);
 const GIT_PUBLISH = new Set(["push"]);
@@ -342,7 +128,22 @@ const GIT_PATH_OPTIONS = new Set(["-C", "--git-dir", "--work-tree", "--namespace
 const GIT_INFO_OPTIONS = new Set(["--version", "--help"]);
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);
-const COPY_COMMANDS = new Set(["cp", "mv", "rsync"]);
+/** Commands that change files; a read-only agent may not run them. */
+const WRITE_COMMANDS = new Set([
+	"cp", "mv", "rsync", "rm", "rmdir", "tee", "dd", "truncate", "install", "ln", "mkdir", "touch",
+	"chmod", "chown", "chgrp", "patch", "shred", "unlink", "scp", "curl", "wget",
+]);
+/** Commands that change files only with an in-place flag (`sed -i`, `perl -pi`). */
+const IN_PLACE_COMMANDS = new Set(["sed", "perl", "ruby"]);
+/** Git verbs that only read; any other verb is a write for a read-only agent. */
+const GIT_READ = new Set([
+	"status", "diff", "log", "show", "blame", "rev-parse", "ls-files", "ls-tree", "grep", "describe",
+	"shortlog", "cat-file", "merge-base", "rev-list", "show-ref", "reflog", "version", "help", "range-diff",
+	"whatchanged", "name-rev", "for-each-ref", "check-ignore", "check-attr", "var",
+]);
+/** gh actions that only read (`gh issue list`, `gh repo view`). */
+const GH_READ_ACTIONS = new Set(["list", "view", "status", "diff", "checks", "search"]);
+const GH_READ_COMMANDS = new Set(["status", "search", "help", "version", "browse"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 /** Prefix commands that run the rest of the line, with options to skip. */
 const PREFIX_COMMANDS = new Set(["!", "sudo", "env", "command", "nice", "nohup", "time", "exec", "xargs", "eval", "timeout", "stdbuf", "doas"]);
@@ -356,7 +157,7 @@ const PREFIX_VALUE_OPTIONS: Record<string, Set<string>> = {
 	xargs: new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"]),
 };
 /** Names a fail-closed scan looks for in a command the parser cannot read. */
-const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync)(?=\s|$|['"])/;
+const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync|rm|tee)(?=\s|$|['"])/;
 /** A plain file path in a heredoc header: no quotes, expansions, or operators. */
 const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
 const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;
@@ -372,19 +173,6 @@ const SAFE_HEREDOC_HEADER = new RegExp(
 );
 
 const MAX_UNWRAP_DEPTH = 4;
-
-/**
- * The journal write script as this plugin installs it. The plugin cache folder
- * carries the version, so the path comes from this script's own location and
- * never from a fixed path or an environment variable. A symlink alias, a copy
- * outside the tree, and a relative word all resolve elsewhere and match nothing.
- */
-const JOURNAL_SCRIPT = resolve(
-	dirname(fileURLToPath(import.meta.url)),
-	"..", "..", "..",
-	"content", "skills", "journal-management-generic", "scripts", "journal-write.sh",
-);
-const JOURNAL_SUBCOMMANDS = new Set(["hold", "release"]);
 
 /** Split one segment into shell words, removing quotes. */
 export function shellWords(segment: string): string[] {
@@ -450,6 +238,25 @@ function runtimeShaped(segment: string): boolean {
 		}
 		if (ch === "'" || ch === '"') quote = ch;
 		else if ("*?[{".includes(ch)) return true;
+	}
+	return writesFile(segment);
+}
+
+/** True when the segment redirects output to a file (`2>&1` and `>/dev/null` stay plain). */
+function writesFile(segment: string): boolean {
+	let quote: "'" | '"' | null = null;
+	for (let i = 0; i < segment.length; i++) {
+		const ch = segment[i];
+		if (quote) {
+			if (ch === quote) quote = null;
+			else if (ch === "\\" && quote === '"') i++;
+			continue;
+		}
+		if (ch === "\\") {
+			i++;
+			continue;
+		}
+		if (ch === "'" || ch === '"') quote = ch;
 		else if (ch === "<" && segment[i + 1] === ">") return true;
 		else if (ch === ">") {
 			let j = i + 1;
@@ -462,6 +269,12 @@ function runtimeShaped(segment: string): boolean {
 		}
 	}
 	return false;
+}
+
+/** True when `git branch` arguments only list branches. */
+function isBranchListing(rest: string[]): boolean {
+	const LIST = new Set(["-a", "--all", "-r", "--remotes", "-l", "--list", "-v", "-vv", "--verbose", "--show-current", "--merged", "--no-merged", "--contains", "--no-contains", "--sort", "--format", "--column", "--no-column", "--points-at"]);
+	return rest.length === 0 || rest.includes("--show-current") || rest.includes("-l") || rest.includes("--list") || rest.every((arg) => !arg.startsWith("-") ? false : LIST.has(arg.split("=")[0]));
 }
 
 /** True when the command runs a `$(...)`, backtick, or `<(...)` substitution. */
@@ -479,7 +292,7 @@ function hasSubstitution(command: string): boolean {
 }
 
 /** The hits of one parsed segment, unwrapping prefixes and `sh -c` payloads. */
-function segmentGates(segment: string, profession: string, depth: number): Hit[] {
+function segmentGates(segment: string, depth: number): Hit[] {
 	// A subshell or group keeps its brackets in the segment: `(git push)`.
 	const trimmed = segment.trim();
 	const inner = trimmed.replace(/^[({]\s*/, "").replace(/\s*[)}]$/, "");
@@ -519,32 +332,17 @@ function segmentGates(segment: string, profession: string, depth: number): Hit[]
 		if (SHELLS.has(command)) {
 			const flag = words.findIndex((word) => /^-[a-z]*c[a-z]*$/.test(word));
 			if (flag < 0 || flag + 1 >= words.length) {
-				// A plain `bash <installed journal script> <subcommand> ...`.
-				if (!wrapped && !runtimeShaped(inner) && isJournalWords(words, profession)) {
-					return ["journal", ...extra];
-				}
 				return [UNGATED];
 			}
 			// Never allow through a shell: the payload's history hits ask.
-			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "copy"] as Hit[]) : raise(commandGates(words[flag + 1], profession, depth + 1));
-			// A payload that is only the journal call is downgraded: never allow through a shell.
-			return [...hits.map((hit) => (hit === "journal" ? UNGATED : hit)), ...extra];
+			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "write"] as Hit[]) : raise(commandGates(words[flag + 1], depth + 1));
+			return [...hits, ...extra];
 		}
 		let hits = classify(command, words.slice(1));
 		if (wrapped || (hits.includes("history") && runtimeShaped(inner))) hits = raise(hits);
+		if (writesFile(inner)) hits = [...hits, "write"];
 		return [...hits, ...extra];
 	}
-}
-
-/**
- * True only for `bash <installed script> <hold|release> ...` run by the
- * companion. The hook checks the path and the subcommand; the script owns
- * every flag value and exits 1 or 2 with no write.
- */
-function isJournalWords(words: string[], profession: string): boolean {
-	return profession === "companion" && words.length >= 3 && words[0] === "bash" &&
-		isAbsolute(words[1]) && resolve(words[1]) === JOURNAL_SCRIPT &&
-		JOURNAL_SUBCOMMANDS.has(words[2]);
 }
 
 /** True when `arg` is `long` or an abbreviation of it git accepts (`--amen`). */
@@ -555,7 +353,8 @@ function longOption(arg: string, long: string, min: number): boolean {
 
 /** The hits of one plain command (no prefixes). */
 function classify(command: string, args: string[]): Hit[] {
-	if (COPY_COMMANDS.has(command)) return ["copy"];
+	if (WRITE_COMMANDS.has(command)) return ["write"];
+	if (IN_PLACE_COMMANDS.has(command) && args.some((arg) => /^-[a-zA-Z]*i/.test(arg) || arg.startsWith("--in-place"))) return ["write"];
 	if (command === "gh") {
 		// A global option before the subcommand (`gh -R owner/repo run list`) moves the
 		// word the gate reads, so skip the options first. `-R` and `--repo` take the
@@ -563,7 +362,9 @@ function classify(command: string, args: string[]): Hit[] {
 		let g = 0;
 		while (g < args.length && args[g].startsWith("-")) g += args[g] === "-R" || args[g] === "--repo" ? 2 : 1;
 		const sub = args[g];
-		return sub !== undefined && GH_PUBLISH.has(sub) ? ["publish"] : [UNGATED];
+		if (sub !== undefined && GH_PUBLISH.has(sub)) return ["publish"];
+		if (sub === undefined || GH_READ_COMMANDS.has(sub) || GH_READ_ACTIONS.has(args[g + 1] ?? "")) return [UNGATED];
+		return ["write"];
 	}
 	if (command !== "git") return [UNGATED];
 	let i = 0;
@@ -578,7 +379,8 @@ function classify(command: string, args: string[]): Hit[] {
 	}
 	const sub = args[i];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
-	if (!sub || !GIT_HISTORY.has(sub)) return [UNGATED];
+	if (!sub) return [UNGATED];
+	if (!GIT_HISTORY.has(sub)) return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(args.slice(i + 1))) ? [UNGATED] : ["write"];
 	const rest = args.slice(i + 1);
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
@@ -637,11 +439,11 @@ function gatedFormFollows(program: "git" | "gh", after: string): boolean {
 }
 
 /** Every hit a whole shell command makes. */
-function commandGates(command: string, profession: string, depth = 0): Hit[] {
+function commandGates(command: string, depth = 0): Hit[] {
 	const parsed = parseShellCommand(command);
 	if (parsed.unsupported) {
 		const header = safeHeredocHeader(command);
-		if (header !== null) return commandGates(header, profession, depth);
+		if (header !== null) return commandGates(header, depth);
 		// Fail closed: an unreadable command that names a gated program is a
 		// hit, and never an allow.
 		const gates = new Set<Hit>();
@@ -650,11 +452,13 @@ function commandGates(command: string, profession: string, depth = 0): Hit[] {
 			if (program === "git" || program === "gh") {
 				// A read such as `git status` stays ungated; only a gated form fires.
 				if (gatedFormFollows(program, command.slice(match.index + program.length))) gates.add("publish");
-			} else gates.add("copy");
+			} else gates.add("write");
 		}
+		// The first line of an unreadable command (a heredoc header) may redirect into a file.
+		if (writesFile(command.split("\n")[0])) gates.add("write");
 		return [...gates];
 	}
-	const hits = [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, profession, depth)))];
+	const hits = [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, depth)))];
 	// A history command inside a substitution never runs without a prompt.
 	return hasSubstitution(command) ? raise(hits) : hits;
 }
@@ -686,34 +490,23 @@ export function decide(input: HookInput): Decision | null {
 	const agentType = typeof input.agent_type === "string" ? input.agent_type : "";
 	if (!agentType.startsWith(PREFIX)) return null;
 	const profession = agentType.slice(PREFIX.length);
-	const tool = typeof input.tool_name === "string" ? input.tool_name : "";
-	const toolInput = input.tool_input ?? {};
-
-	if (tool === "Bash") {
-		const command = typeof toolInput.command === "string" ? toolInput.command : "";
-		const hits = commandGates(command, profession);
-		const decisions = hits
-			.filter((hit): hit is Gate => hit !== UNGATED)
-			.map((gate) => {
-				const verdict = COMMAND_RULES[gate][profession] ?? "deny";
-				return { verdict, reason: GATE_REASON[gate][verdict] };
-			});
-		const decision = strongest(decisions, profession);
-		// A hook allow skips Claude Code's prompt for the whole command, so allow
-		// only when every segment is an allowed history command. An ungated
-		// segment next to it leaves the decision to Claude Code.
-		if (decision?.verdict === "allow" && hits.includes(UNGATED)) return null;
-		return decision;
-	}
-
-	if (FILE_TOOLS.has(tool)) {
-		const rule = FILE_ZONES[profession];
-		if (!rule) return null;
-		const target = String(toolInput.file_path ?? toolInput.notebook_path ?? "");
-		if (inWriteZone(rule, target, input.cwd)) return null;
-		return { verdict: rule.verdict, reason: zoneReason(rule, profession) };
-	}
-	return null;
+	if (input.tool_name !== "Bash") return null;
+	const command = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
+	let hits = commandGates(command);
+	// The companion may write; a write segment is an ungated segment for it.
+	if (profession === "companion") hits = hits.map((hit) => (hit === "write" ? UNGATED : hit));
+	const decisions = hits
+		.filter((hit): hit is Gate => hit !== UNGATED)
+		.map((gate) => {
+			const verdict = profession === "companion" ? (COMPANION_RULES[gate] ?? "deny") : "deny";
+			return { verdict, reason: GATE_REASON[gate][verdict] };
+		});
+	const decision = strongest(decisions, profession);
+	// A hook allow skips Claude Code's prompt for the whole command, so allow
+	// only when every segment is an allowed history command. An ungated
+	// segment next to it leaves the decision to Claude Code.
+	if (decision?.verdict === "allow" && hits.includes(UNGATED)) return null;
+	return decision;
 }
 
 /** Deny beats ask, ask beats allow; no hit means no decision. */
