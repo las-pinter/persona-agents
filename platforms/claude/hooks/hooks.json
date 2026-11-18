@@ -1,33 +1,8 @@
 {
-  "description": "Give persona-agents agents their profession rules and the selected theme's persona, set the subagent model, and enforce the commit and file doctrine",
+  "description": "Give the persona-agents companion its profession rules and the selected theme's persona, and enforce the commit and file doctrine",
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
-              "profession"
-            ],
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
-              "persona"
-            ],
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "matcher": "^persona-agents:",
         "hooks": [
           {
             "type": "command",
@@ -61,19 +36,6 @@
               "--experimental-strip-types",
               "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/doctrine.ts"
-            ],
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "^(Agent|Task)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/subagent-model.mjs"
             ],
             "timeout": 10
           }

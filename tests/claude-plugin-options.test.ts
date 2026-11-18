@@ -11,7 +11,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { inProject, managedOption, realHome, settingsOption, userConfigDir } from "../platforms/claude/scripts/plugin-options.mjs";
-import { modelSettings } from "./plugin-options-helpers.ts";
+
+/** A settings file body that sets one sample option, the way /config writes a plugin option. */
+function optionSettings(value: string): string {
+	return JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { sample_option: value } } } });
+}
 
 describe("plugin-options: explicit-path readers", () => {
 	const withTmp = (fn: (tmp: string) => void) => {
@@ -26,12 +30,12 @@ describe("plugin-options: explicit-path readers", () => {
 	test("settingsOption reads one key and gives '' for a missing, bad, or non-string value", () => {
 		withTmp((tmp) => {
 			const file = path.join(tmp, "s.json");
-			assert.equal(settingsOption(file, "subagent_model"), "");
-			fs.writeFileSync(file, modelSettings("haiku"));
-			assert.equal(settingsOption(file, "subagent_model"), "haiku");
+			assert.equal(settingsOption(file, "sample_option"), "");
+			fs.writeFileSync(file, optionSettings("haiku"));
+			assert.equal(settingsOption(file, "sample_option"), "haiku");
 			assert.equal(settingsOption(file, "theme"), "");
 			fs.writeFileSync(file, "{ not json");
-			assert.equal(settingsOption(file, "subagent_model"), "");
+			assert.equal(settingsOption(file, "sample_option"), "");
 			fs.writeFileSync(file, JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { x: 1 } } } }));
 			assert.equal(settingsOption(file, "x"), "");
 		});
@@ -41,14 +45,14 @@ describe("plugin-options: explicit-path readers", () => {
 		withTmp((tmp) => {
 			const managed = path.join(tmp, "managed-settings.json");
 			const dir = path.join(tmp, "managed-settings.d");
-			assert.equal(managedOption(managed, "subagent_model"), "");
-			fs.writeFileSync(managed, modelSettings("opus"));
-			assert.equal(managedOption(managed, "subagent_model"), "opus");
+			assert.equal(managedOption(managed, "sample_option"), "");
+			fs.writeFileSync(managed, optionSettings("opus"));
+			assert.equal(managedOption(managed, "sample_option"), "opus");
 			fs.mkdirSync(dir);
-			fs.writeFileSync(path.join(dir, "10-a.json"), modelSettings("haiku"));
-			fs.writeFileSync(path.join(dir, "20-b.json"), modelSettings(""));
-			fs.writeFileSync(path.join(dir, ".hidden.json"), modelSettings("sonnet"));
-			assert.equal(managedOption(managed, "subagent_model"), "haiku");
+			fs.writeFileSync(path.join(dir, "10-a.json"), optionSettings("haiku"));
+			fs.writeFileSync(path.join(dir, "20-b.json"), optionSettings(""));
+			fs.writeFileSync(path.join(dir, ".hidden.json"), optionSettings("sonnet"));
+			assert.equal(managedOption(managed, "sample_option"), "haiku");
 		});
 	});
 

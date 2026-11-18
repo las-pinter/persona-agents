@@ -6,8 +6,7 @@
 //   1. managed settings: the last managed-settings.d drop-in that sets the
 //      option, else managed-settings.json
 //   2. user settings.json (CLAUDE_CONFIG_DIR, else ~/.claude)
-//   3. CLAUDE_PLUGIN_OPTION_<NAME>, unless the caller turns it off
-//      (subagent-model.mjs does, because a project env block can set it)
+//   3. CLAUDE_PLUGIN_OPTION_<NAME>
 //
 // Not read: server-managed settings, the macOS plist policy, and the Windows
 // registry policy. An option set only there comes from the start-time env var.
@@ -30,8 +29,7 @@ import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-// Another marketplace name gives another key, so the lookup misses it and falls back to the env var
-// (or to the caller's default when the env fallback is off, as for subagent_model).
+// Another marketplace name gives another key, so the lookup misses it and falls back to the env var.
 const PLUGIN_ID = "persona-agents@persona-agents";
 const MANAGED_SETTINGS = {
 	linux: "/etc/claude-code/managed-settings.json",
@@ -135,34 +133,15 @@ function managedPath() {
 
 /**
  * The option value: managed settings, then user settings, then the env var; "" when none sets it.
- * With envFallback false, the env var is not read.
  */
-export function pluginOption(name, { envFallback = true } = {}) {
+export function pluginOption(name) {
 	const managed = managedPath();
 	const userDir = userConfigDir();
 	// Project settings are skipped: Claude Code reads pluginConfigs from user and managed settings only.
 	return (
 		(managed && managedOption(managed, name)) ||
 		(userDir && settingsOption(join(userDir, "settings.json"), name)) ||
-		(envFallback && process.env[`CLAUDE_PLUGIN_OPTION_${name.toUpperCase()}`]) ||
+		process.env[`CLAUDE_PLUGIN_OPTION_${name.toUpperCase()}`] ||
 		""
 	);
-}
-
-const SUBAGENT_MODELS = new Set(["sonnet", "opus", "haiku"]);
-const DEFAULT_SUBAGENT_MODEL = "sonnet";
-
-/**
- * The selected subagent model, or "inherit"; a value outside the options gives the default, sonnet.
- * CLAUDE_PLUGIN_OPTION_SUBAGENT_MODEL is not read. A probe (Claude Code 2.1.309)
- * showed that a project .claude/settings.json env block sets it for the hook, so
- * a repo could pick the subagent model. Only the settings files apply. A plugin
- * installed from another marketplace name gets a different pluginConfigs key,
- * so it always gets the default.
- * The hook and the session start line share this one function, so a later
- * per-profession option (subagent_model_<profession>, then subagent_model) changes it here only.
- */
-export function selectedSubagentModel() {
-	const value = pluginOption("subagent_model", { envFallback: false });
-	return SUBAGENT_MODELS.has(value) || value === "inherit" ? value : DEFAULT_SUBAGENT_MODEL;
 }

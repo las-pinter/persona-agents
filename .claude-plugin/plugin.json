@@ -1,7 +1,7 @@
 {
   "name": "persona-agents",
   "displayName": "Persona Agents",
-  "description": "Profession agents (orchestrator, implementer, and more) that speak in the voice of a switchable persona theme",
+  "description": "A companion agent that plans, builds, tests, and commits with you, in the voice of a switchable persona theme",
   "author": {
     "name": "Las Pinter"
   },
@@ -10,16 +10,11 @@
   "keywords": [
     "agents",
     "personas",
-    "orchestration"
+    "companion"
   ],
   "agents": [
-    "./platforms/claude/agents/orchestrator.md",
-    "./platforms/claude/agents/planner.md",
-    "./platforms/claude/agents/researcher.md",
-    "./platforms/claude/agents/implementer.md",
-    "./platforms/claude/agents/reviewer.md",
-    "./platforms/claude/agents/tester.md",
-    "./platforms/claude/agents/mascot.md"
+    "./platforms/claude/agents/companion.md",
+    "./platforms/claude/agents/reviewer.md"
   ],
   "skills": [
     "./content/skills/common/file-length-policy/",
@@ -52,7 +47,7 @@
     "theme": {
       "type": "string",
       "title": "Persona theme",
-      "description": "The crew whose personas the profession agents speak as",
+      "description": "The theme whose persona the companion speaks as",
       "options": [
         "catcrew",
         "caveman",
@@ -64,18 +59,6 @@
         "wh40kOrk"
       ],
       "default": "goblin"
-    },
-    "subagent_model": {
-      "type": "string",
-      "title": "Subagent model",
-      "description": "The model for the implementer, researcher, tester, reviewer, planner, and mascot",
-      "options": [
-        "sonnet",
-        "opus",
-        "haiku",
-        "inherit"
-      ],
-      "default": "sonnet"
     }
   }
 }

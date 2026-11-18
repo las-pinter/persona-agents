@@ -3,11 +3,11 @@
  *
  * The commit and file doctrine from AGENTS.md, per persona-agents agent:
  * a plain git add/commit/pull/merge/rebase/tag is allowed for the
- * orchestrator; git push, gh pr/release/run, the ask exceptions, and wrapped
- * forms ask for the orchestrator; all of these deny the rest;
- * cp/mv/rsync ask for the orchestrator and the implementer and deny the rest;
- * the installed journal write script is allowed for the orchestrator;
- * the orchestrator writes anywhere in the repository, anywhere in the
+ * companion; git push, gh pr/release/run, the ask exceptions, and wrapped
+ * forms ask for the companion; all of these deny the rest;
+ * cp/mv/rsync ask for the companion and the implementer and deny the rest;
+ * the installed journal write script is allowed for the companion;
+ * the companion writes anywhere in the repository, anywhere in the
  * agent-notes tree under the home folder, and anywhere in the shared temporary
  * folder, and asks on every other path; the planner, researcher, reviewer, and
  * mascot deny an edit outside their own zone, the temporary folder included.
@@ -33,7 +33,7 @@ import { parseShellCommand } from "../platforms/claude/scripts/shell-parse.ts";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");
 
-const PROFESSIONS = ["orchestrator", "planner", "researcher", "implementer", "reviewer", "tester", "mascot"];
+const PROFESSIONS = ["companion", "planner", "researcher", "implementer", "reviewer", "tester", "mascot"];
 
 /** The verdict for one agent running one shell command ("none" for no decision). */
 function bash(profession: string, command: string): string {
@@ -52,7 +52,7 @@ function edit(profession: string, filePath: string, tool = "Edit", cwd?: string)
 	);
 }
 
-/** Plain history writes: the orchestrator runs them without a prompt. */
+/** Plain history writes: the companion runs them without a prompt. */
 const ALLOWED = [
 	"git add .",
 	"git commit -m 'ai: x'",
@@ -195,8 +195,8 @@ function nestShell(command: string, levels: number): string {
 describe("doctrine: plain git history", () => {
 	for (const command of ALLOWED) {
 		test(command, () => {
-			assert.equal(bash("orchestrator", command), "allow");
-			for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash("companion", command), "allow");
+			for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 				assert.equal(bash(profession, command), "deny", profession);
 			}
 		});
@@ -206,8 +206,8 @@ describe("doctrine: plain git history", () => {
 describe("doctrine: git push, gh pr/release/run, ask exceptions, wrapped forms", () => {
 	for (const command of [...ASKED, ...DISGUISED_HISTORY]) {
 		test(command, () => {
-			assert.equal(bash("orchestrator", command), "ask");
-			for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash("companion", command), "ask");
+			for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 				assert.equal(bash(profession, command), "deny", profession);
 			}
 		});
@@ -228,8 +228,8 @@ describe("doctrine: an allow covers every segment or none", () => {
 	];
 	for (const command of MIXED) {
 		test(command, () => {
-			assert.equal(bash("orchestrator", command), "none");
-			for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+			assert.equal(bash("companion", command), "none");
+			for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 				assert.equal(bash(profession, command), "deny", profession);
 			}
 		});
@@ -238,14 +238,14 @@ describe("doctrine: an allow covers every segment or none", () => {
 	test("a nested shell never allows, at any depth", () => {
 		for (const levels of [1, 3, 4, 5, 7]) {
 			const command = nestShell("git add .", levels);
-			assert.equal(bash("orchestrator", command), "ask", command);
+			assert.equal(bash("companion", command), "ask", command);
 			assert.equal(bash("implementer", command), "deny", command);
 		}
 	});
 
 	test("an ask segment beats an allow segment", () => {
-		assert.equal(bash("orchestrator", "git status && git push"), "ask");
-		assert.equal(bash("orchestrator", "git commit -m m && cp a b"), "ask");
+		assert.equal(bash("companion", "git status && git push"), "ask");
+		assert.equal(bash("companion", "git commit -m m && cp a b"), "ask");
 	});
 });
 
@@ -272,7 +272,7 @@ describe("doctrine: cp, mv, rsync", () => {
 	for (const command of COPY) {
 		test(command, () => {
 			for (const profession of PROFESSIONS) {
-				const expected = profession === "orchestrator" || profession === "implementer" ? "ask" : "deny";
+				const expected = profession === "companion" || profession === "implementer" ? "ask" : "deny";
 				assert.equal(bash(profession, command), expected, profession);
 			}
 		});
@@ -290,7 +290,7 @@ describe("doctrine: reads stay untouched", () => {
 describe("doctrine: fail closed", () => {
 	test("an unreadable command that names git is a hit", () => {
 		const heredoc = "cat <<EOF\ngit push\nEOF";
-		assert.equal(bash("orchestrator", heredoc), "ask");
+		assert.equal(bash("companion", heredoc), "ask");
 		assert.equal(bash("implementer", heredoc), "deny");
 	});
 
@@ -301,7 +301,7 @@ describe("doctrine: fail closed", () => {
 	test("an unreadable command with only a git read is left alone", () => {
 		const command = "git status && python3 - <<EOF\nprint(1)\nEOF";
 		assert.equal(bash("implementer", command), "none");
-		assert.equal(bash("orchestrator", command), "none");
+		assert.equal(bash("companion", command), "none");
 	});
 
 	/** Unreadable commands whose raw text holds a gated form or a form the scan cannot read. */
@@ -333,7 +333,7 @@ describe("doctrine: fail closed", () => {
 	];
 	for (const command of FAIL_CLOSED_TEXT) {
 		test(`an unreadable command with a gated form stays a hit: ${JSON.stringify(command)}`, () => {
-			assert.equal(bash("orchestrator", command), "ask");
+			assert.equal(bash("companion", command), "ask");
 			assert.equal(bash("implementer", command), "deny");
 		});
 	}
@@ -352,7 +352,7 @@ describe("doctrine: fail closed", () => {
 	];
 	for (const command of DATA_HEREDOCS) {
 		test(`a quoted heredoc body is data: ${JSON.stringify(command)}`, () => {
-			for (const profession of ["implementer", "orchestrator", "tester"]) {
+			for (const profession of ["implementer", "companion", "tester"]) {
 				assert.equal(bash(profession, command), "none", profession);
 			}
 		});
@@ -400,7 +400,7 @@ describe("doctrine: fail closed", () => {
 	];
 	for (const command of GATED_HEREDOCS) {
 		test(`a heredoc stays gated: ${JSON.stringify(command)}`, () => {
-			assert.equal(bash("orchestrator", command), "ask");
+			assert.equal(bash("companion", command), "ask");
 			assert.equal(bash("implementer", command), "deny");
 			assert.equal(bash("tester", command), "deny");
 		});
@@ -410,32 +410,32 @@ describe("doctrine: fail closed", () => {
 		const command = "python3 - <<EOF\nmv a b\nEOF";
 		const reason = (profession: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
-		assert.equal(bash("orchestrator", command), "ask");
+		assert.equal(bash("companion", command), "ask");
 		assert.equal(bash("implementer", command), "ask");
 		assert.equal(bash("tester", command), "deny");
 		assert.match(reason("implementer"), /cp, mv, and rsync need your approval/);
-		assert.match(reason("tester"), /for the orchestrator and the implementer only/);
+		assert.match(reason("tester"), /for the companion and the implementer only/);
 		assert.doesNotMatch(reason("tester"), /git history/);
 	});
 
 	test("an ask explains the approval; a deny names who may run it", () => {
 		const reason = (profession: string, command: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
-		assert.match(reason("orchestrator", "git push"), /needs your approval/);
-		assert.match(reason("orchestrator", "git commit --amend"), /needs your approval/);
-		assert.match(reason("orchestrator", "git commit -m m"), /without a prompt/);
-		assert.match(reason("implementer", "git push"), /only the orchestrator/);
-		assert.match(reason("implementer", "git commit -m m"), /only the orchestrator/);
+		assert.match(reason("companion", "git push"), /needs your approval/);
+		assert.match(reason("companion", "git commit --amend"), /needs your approval/);
+		assert.match(reason("companion", "git commit -m m"), /without a prompt/);
+		assert.match(reason("implementer", "git push"), /only the companion/);
+		assert.match(reason("implementer", "git commit -m m"), /only the companion/);
 		assert.match(reason("implementer", "cp a b"), /need your approval/);
-		assert.match(reason("tester", "cp a b"), /for the orchestrator and the implementer only/);
+		assert.match(reason("tester", "cp a b"), /for the companion and the implementer only/);
 	});
 
 	test("a mixed compound takes the strongest verdict", () => {
 		// The implementer may ask for cp, but the commit in the same call denies it.
 		assert.equal(bash("implementer", "cp a b && git commit -m x"), "deny");
-		// For the orchestrator, the cp ask beats the commit allow.
-		assert.equal(bash("orchestrator", "cp a b && git commit -m x"), "ask");
-		assert.equal(bash("orchestrator", "git commit -m x && git push && cp a b"), "ask");
+		// For the companion, the cp ask beats the commit allow.
+		assert.equal(bash("companion", "cp a b && git commit -m x"), "ask");
+		assert.equal(bash("companion", "git commit -m x && git push && cp a b"), "ask");
 	});
 
 	test("a commit message from a heredoc asks, never allows", () => {
@@ -444,7 +444,7 @@ describe("doctrine: fail closed", () => {
 			"git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\"",
 			"cat <<'EOF' | git commit -F -\nmsg\nEOF",
 		]) {
-			assert.equal(bash("orchestrator", command), "ask", command);
+			assert.equal(bash("companion", command), "ask", command);
 			assert.equal(bash("implementer", command), "deny", command);
 		}
 	});
@@ -454,7 +454,7 @@ describe("doctrine: the shell parser contract", () => {
 	test("an unreadable heredoc reaches the hook as unsupported", () => {
 		const command = "cat <<EOF\ngit push\nEOF";
 		assert.equal(parseShellCommand(command).unsupported, "heredoc");
-		assert.equal(bash("orchestrator", command), "ask");
+		assert.equal(bash("companion", command), "ask");
 		assert.equal(bash("implementer", command), "deny");
 	});
 });
@@ -478,39 +478,39 @@ describe("doctrine: file writes", () => {
 		}
 	});
 
-	test("the orchestrator writes a relative repository path freely", () => {
-		assert.equal(edit("orchestrator", "src/main.ts", "Edit", repo), "none");
-		assert.equal(edit("orchestrator", "README.md", "Write", repo), "none");
+	test("the companion writes a relative repository path freely", () => {
+		assert.equal(edit("companion", "src/main.ts", "Edit", repo), "none");
+		assert.equal(edit("companion", "README.md", "Write", repo), "none");
 		// The path resolves against the hook's cwd before the zone is tested.
-		assert.equal(edit("orchestrator", "src/../README.md", "Write", repo), "none");
-		assert.equal(edit("orchestrator", ".", "Write", repo), "none");
+		assert.equal(edit("companion", "src/../README.md", "Write", repo), "none");
+		assert.equal(edit("companion", ".", "Write", repo), "none");
 	});
 
-	test("the orchestrator writes an absolute repository path freely", () => {
-		assert.equal(edit("orchestrator", `${repo}/src/main.ts`, "Edit", repo), "none");
-		assert.equal(edit("orchestrator", `${repo}/content/professions/x.md`, "Write", repo), "none");
+	test("the companion writes an absolute repository path freely", () => {
+		assert.equal(edit("companion", `${repo}/src/main.ts`, "Edit", repo), "none");
+		assert.equal(edit("companion", `${repo}/content/professions/x.md`, "Write", repo), "none");
 	});
 
-	test("the orchestrator writes anywhere in the agent-notes tree", () => {
-		assert.equal(edit("orchestrator", `${home}/orchestrator/journal.md`), "none");
-		assert.equal(edit("orchestrator", `${home}/project-notes/repo/study.md`, "Write"), "none");
-		assert.equal(edit("orchestrator", `${home}/researcher/findings.md`, "Write"), "none");
-		assert.equal(edit("orchestrator", "agent-notes/orchestrator/j.md", "Edit", userHome), "none");
-		assert.equal(edit("orchestrator", "~/agent-notes/planner/x.md", "Write"), "none");
+	test("the companion writes anywhere in the agent-notes tree", () => {
+		assert.equal(edit("companion", `${home}/companion/journal.md`), "none");
+		assert.equal(edit("companion", `${home}/project-notes/repo/study.md`, "Write"), "none");
+		assert.equal(edit("companion", `${home}/researcher/findings.md`, "Write"), "none");
+		assert.equal(edit("companion", "agent-notes/companion/j.md", "Edit", userHome), "none");
+		assert.equal(edit("companion", "~/agent-notes/planner/x.md", "Write"), "none");
 	});
 
-	test("the orchestrator writes anywhere in the temporary folder", () => {
+	test("the companion writes anywhere in the temporary folder", () => {
 		for (const tool of ["Edit", "Write", "NotebookEdit"]) {
-			assert.equal(edit("orchestrator", "/tmp", tool, repo), "none", tool);
-			assert.equal(edit("orchestrator", "/tmp/a.txt", tool, repo), "none", tool);
-			assert.equal(edit("orchestrator", "/tmp/a/b/c.txt", tool, repo), "none", tool);
+			assert.equal(edit("companion", "/tmp", tool, repo), "none", tool);
+			assert.equal(edit("companion", "/tmp/a.txt", tool, repo), "none", tool);
+			assert.equal(edit("companion", "/tmp/a/b/c.txt", tool, repo), "none", tool);
 		}
 	});
 
 	test("a temp path that is not under /tmp asks", () => {
 		for (const target of ["/tmpfoo", "/tmp2/x", "/etc/tmp", "/alphabet/tmp", "/tmp/../etc/passwd", "/tmp/../tmpfoo/x"]) {
-			assert.equal(edit("orchestrator", target, "Write", repo), "ask", target);
-			assert.equal(edit("orchestrator", target, "Edit", repo), "ask", target);
+			assert.equal(edit("companion", target, "Write", repo), "ask", target);
+			assert.equal(edit("companion", target, "Edit", repo), "ask", target);
 		}
 	});
 
@@ -525,10 +525,10 @@ describe("doctrine: file writes", () => {
 		try {
 			// The link sits inside /tmp and resolves to a folder outside it.
 			fs.symlinkSync("/etc", path.join(base, "link"));
-			assert.equal(edit("orchestrator", path.join(base, "link", "passwd"), "Edit", repo), "ask");
-			assert.equal(edit("orchestrator", path.join(base, "link", "x.md"), "Write", repo), "ask");
+			assert.equal(edit("companion", path.join(base, "link", "passwd"), "Edit", repo), "ask");
+			assert.equal(edit("companion", path.join(base, "link", "x.md"), "Write", repo), "ask");
 			// A plain path in the same folder still writes freely.
-			assert.equal(edit("orchestrator", path.join(base, "x.md"), "Write", repo), "none");
+			assert.equal(edit("companion", path.join(base, "x.md"), "Write", repo), "none");
 		} finally {
 			fs.rmSync(base, { recursive: true, force: true });
 		}
@@ -553,98 +553,98 @@ describe("doctrine: file writes", () => {
 			// link, then folds the parent segment, so this target writes at /x. A
 			// fold of the parent segment first would say /tmp/x and pass.
 			fs.symlinkSync("/etc", path.join(base, "link"));
-			assert.equal(edit("orchestrator", `${base}/link/../x.md`, "Write", repo), "ask");
-			assert.equal(edit("orchestrator", `${base}/link/../x.md`, "Edit", repo), "ask");
+			assert.equal(edit("companion", `${base}/link/../x.md`, "Write", repo), "ask");
+			assert.equal(edit("companion", `${base}/link/../x.md`, "Edit", repo), "ask");
 			// A parent segment that stays in /tmp still writes freely.
 			fs.mkdirSync(path.join(base, "sub"));
-			assert.equal(edit("orchestrator", `${base}/sub/../y.md`, "Write", repo), "none");
+			assert.equal(edit("companion", `${base}/sub/../y.md`, "Write", repo), "none");
 			// A link that resolves inside /tmp keeps the parent fold inside it.
 			fs.mkdirSync(path.join(base, "inner"));
 			fs.symlinkSync(path.join(base, "inner"), path.join(base, "inside"));
-			assert.equal(edit("orchestrator", `${base}/inside/../z.md`, "Write", repo), "none");
-			assert.equal(edit("orchestrator", `${base}/plain.md`, "Write", repo), "none");
+			assert.equal(edit("companion", `${base}/inside/../z.md`, "Write", repo), "none");
+			assert.equal(edit("companion", `${base}/plain.md`, "Write", repo), "none");
 		} finally {
 			fs.rmSync(base, { recursive: true, force: true });
 		}
 	});
 
-	test("the orchestrator asks on a path outside the repository, the notes, and the temporary folder", () => {
-		assert.equal(edit("orchestrator", "/etc/passwd", "Write", repo), "ask");
-		assert.equal(edit("orchestrator", `${repo}/../etc/passwd`, "Write", repo), "ask");
-		assert.equal(edit("orchestrator", "../other/x.md", "Write", repo), "ask");
-		assert.equal(edit("orchestrator", "/home/u/not-agent-notes/x.md", "Write", repo), "ask");
+	test("the companion asks on a path outside the repository, the notes, and the temporary folder", () => {
+		assert.equal(edit("companion", "/etc/passwd", "Write", repo), "ask");
+		assert.equal(edit("companion", `${repo}/../etc/passwd`, "Write", repo), "ask");
+		assert.equal(edit("companion", "../other/x.md", "Write", repo), "ask");
+		assert.equal(edit("companion", "/home/u/not-agent-notes/x.md", "Write", repo), "ask");
 		// Without an absolute cwd the hook cannot place an absolute path.
-		assert.equal(edit("orchestrator", `${repo}/src/main.ts`, "Write"), "ask");
+		assert.equal(edit("companion", `${repo}/src/main.ts`, "Write"), "ask");
 		// An empty path is not a repository path.
-		assert.equal(edit("orchestrator", "", "Write"), "ask");
+		assert.equal(edit("companion", "", "Write"), "ask");
 		assert.match(
-			reason("orchestrator", "/etc/passwd", repo),
+			reason("companion", "/etc/passwd", repo),
 			/outside the repository, the agent-notes tree, and the temporary folder/,
 		);
 	});
 
 	test("an ask reason names the approval, not a capability limit", () => {
-		const text = reason("orchestrator", "/etc/passwd", repo);
+		const text = reason("companion", "/etc/passwd", repo);
 		assert.match(text, /needs your approval/);
 		assert.doesNotMatch(text, /does not edit/);
 	});
 
 	test("the agent-notes zone is anchored to the home folder", () => {
 		// A parent segment after agent-notes leaves the tree.
-		assert.equal(edit("orchestrator", `${home}/../etc/passwd`, "Write", repo), "ask");
-		assert.equal(edit("orchestrator", `${home}/orchestrator/../../etc/passwd`, "Write"), "ask");
+		assert.equal(edit("companion", `${home}/../etc/passwd`, "Write", repo), "ask");
+		assert.equal(edit("companion", `${home}/companion/../../etc/passwd`, "Write"), "ask");
 		// agent-notes in another folder is not the tree; the /tmp path writes
 		// through the temporary folder zone, not through this one.
-		assert.equal(edit("orchestrator", "/tmp/agent-notes/x", "Write", repo), "none");
-		assert.equal(edit("orchestrator", "/tmp/agent-notes/orchestrator/j.md", "Edit", repo), "none");
+		assert.equal(edit("companion", "/tmp/agent-notes/x", "Write", repo), "none");
+		assert.equal(edit("companion", "/tmp/agent-notes/companion/j.md", "Edit", repo), "none");
 		// agent-notes as a middle segment of another folder.
-		assert.equal(edit("orchestrator", `${userHome}/x/agent-notes/y.md`, "Write", repo), "ask");
-		assert.equal(edit("orchestrator", "/var/lib/agent-notes/project-notes/x.md", "Write", repo), "ask");
+		assert.equal(edit("companion", `${userHome}/x/agent-notes/y.md`, "Write", repo), "ask");
+		assert.equal(edit("companion", "/var/lib/agent-notes/project-notes/x.md", "Write", repo), "ask");
 	});
 
 	test("a leading tilde expands to the home folder", () => {
-		assert.equal(edit("orchestrator", "~/agent-notes/planner/x.md", "Write", repo), "none");
-		assert.equal(edit("orchestrator", "~/agent-notes/orchestrator/j.md", "Write"), "none");
+		assert.equal(edit("companion", "~/agent-notes/planner/x.md", "Write", repo), "none");
+		assert.equal(edit("companion", "~/agent-notes/companion/j.md", "Write"), "none");
 		// Outside both zones the expanded path asks.
-		assert.equal(edit("orchestrator", "~/other/x.md", "Write", repo), "ask");
-		assert.equal(edit("orchestrator", "~", "Write", repo), "ask");
+		assert.equal(edit("companion", "~/other/x.md", "Write", repo), "ask");
+		assert.equal(edit("companion", "~", "Write", repo), "ask");
 	});
 
 	test("a cwd of / or of the home folder places no repository path", () => {
 		for (const cwd of ["/", userHome]) {
-			assert.equal(edit("orchestrator", "src/main.ts", "Write", cwd), "ask", cwd);
-			assert.equal(edit("orchestrator", path.join(cwd, "src/main.ts"), "Write", cwd), "ask", cwd);
+			assert.equal(edit("companion", "src/main.ts", "Write", cwd), "ask", cwd);
+			assert.equal(edit("companion", path.join(cwd, "src/main.ts"), "Write", cwd), "ask", cwd);
 		}
 		// The notes tree stays writable from the home folder.
-		assert.equal(edit("orchestrator", "agent-notes/orchestrator/j.md", "Write", userHome), "none");
+		assert.equal(edit("companion", "agent-notes/companion/j.md", "Write", userHome), "none");
 		// `/` must not turn a relative notes path into the root tree.
-		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", "/"), "ask");
+		assert.equal(edit("companion", "agent-notes/x.md", "Write", "/"), "ask");
 	});
 
 	test("a cwd that holds the home folder places no repository path", () => {
 		const homeParent = path.dirname(userHome);
-		assert.equal(edit("orchestrator", "src/main.ts", "Write", homeParent), "ask");
-		assert.equal(edit("orchestrator", path.join(homeParent, "repo/src/main.ts"), "Write", homeParent), "ask");
+		assert.equal(edit("companion", "src/main.ts", "Write", homeParent), "ask");
+		assert.equal(edit("companion", path.join(homeParent, "repo/src/main.ts"), "Write", homeParent), "ask");
 		// The home parent holds the notes tree, so a notes path is not free either.
-		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", homeParent), "ask");
+		assert.equal(edit("companion", "agent-notes/x.md", "Write", homeParent), "ask");
 	});
 
 	test("a cwd of /tmp places no repository path but writes in the temp zone", () => {
 		// These paths write through the temporary zone. A system-wide folder
 		// places no repository base, but both zones give the same verdict here,
 		// so this test does not separate the two zones.
-		assert.equal(edit("orchestrator", "src/main.ts", "Write", "/tmp"), "none");
-		assert.equal(edit("orchestrator", "/tmp/repo/src/main.ts", "Write", "/tmp"), "none");
-		assert.equal(edit("orchestrator", "agent-notes/x.md", "Write", "/tmp"), "none");
+		assert.equal(edit("companion", "src/main.ts", "Write", "/tmp"), "none");
+		assert.equal(edit("companion", "/tmp/repo/src/main.ts", "Write", "/tmp"), "none");
+		assert.equal(edit("companion", "agent-notes/x.md", "Write", "/tmp"), "none");
 		// A path that leaves /tmp still asks.
-		assert.equal(edit("orchestrator", "../etc/passwd", "Write", "/tmp"), "ask");
+		assert.equal(edit("companion", "../etc/passwd", "Write", "/tmp"), "ask");
 		// A system folder other than /tmp gives no zone, so a path under it asks.
-		assert.equal(edit("orchestrator", "/etc/repo/x.md", "Write", "/etc"), "ask");
-		assert.equal(edit("orchestrator", "/usr/x.md", "Write", "/usr"), "ask");
+		assert.equal(edit("companion", "/etc/repo/x.md", "Write", "/etc"), "ask");
+		assert.equal(edit("companion", "/usr/x.md", "Write", "/usr"), "ask");
 	});
 
 	test("an empty path with a cwd of the temporary folder asks", () => {
-		assert.equal(edit("orchestrator", "", "Write", "/tmp"), "ask");
+		assert.equal(edit("companion", "", "Write", "/tmp"), "ask");
 	});
 
 	test("a symlink that leaves the zone asks", () => {
@@ -657,23 +657,23 @@ describe("doctrine: file writes", () => {
 			fs.symlinkSync("/etc", path.join(repoDir, "link"));
 			fs.symlinkSync("/etc/new.md", path.join(repoDir, "dangling"));
 			// The link sits inside the repository but resolves outside it.
-			assert.equal(edit("orchestrator", path.join(repoDir, "link", "x.md"), "Write", repoDir), "ask");
-			assert.equal(edit("orchestrator", "link/x.md", "Edit", repoDir), "ask");
+			assert.equal(edit("companion", path.join(repoDir, "link", "x.md"), "Write", repoDir), "ask");
+			assert.equal(edit("companion", "link/x.md", "Edit", repoDir), "ask");
 			// A link that resolves to a missing path outside the zone still asks.
-			assert.equal(edit("orchestrator", "dangling", "Write", repoDir), "ask");
+			assert.equal(edit("companion", "dangling", "Write", repoDir), "ask");
 			// A real path in the repository still writes freely.
-			assert.equal(edit("orchestrator", path.join(repoDir, "x.md"), "Write", repoDir), "none");
-			assert.equal(edit("orchestrator", "x.md", "Edit", repoDir), "none");
+			assert.equal(edit("companion", path.join(repoDir, "x.md"), "Write", repoDir), "none");
+			assert.equal(edit("companion", "x.md", "Edit", repoDir), "none");
 		} finally {
 			fs.rmSync(tmp, { recursive: true, force: true });
 		}
 	});
 
 	test("a doubled slash resolves to one path", () => {
-		assert.equal(edit("orchestrator", `${repo}//src/main.ts`, "Write", repo), "none");
-		assert.equal(edit("orchestrator", "src//main.ts", "Write", repo), "none");
-		assert.equal(edit("orchestrator", `${home}//orchestrator/j.md`, "Write", repo), "none");
-		assert.equal(edit("orchestrator", "//etc/passwd", "Write", repo), "ask");
+		assert.equal(edit("companion", `${repo}//src/main.ts`, "Write", repo), "none");
+		assert.equal(edit("companion", "src//main.ts", "Write", repo), "none");
+		assert.equal(edit("companion", `${home}//companion/j.md`, "Write", repo), "none");
+		assert.equal(edit("companion", "//etc/passwd", "Write", repo), "ask");
 	});
 
 	test("the planner and researcher write only their own zone", () => {
@@ -687,9 +687,9 @@ describe("doctrine: file writes", () => {
 		assert.equal(edit("researcher", `${repo}/a.ipynb`, "NotebookEdit"), "deny");
 	});
 
-	test("the planner stays denied inside the orchestrator zone", () => {
-		assert.equal(edit("planner", `${home}/orchestrator/journal.md`, "Write"), "deny");
-		assert.equal(edit("planner", "~/agent-notes/orchestrator/j.md", "Write", repo), "deny");
+	test("the planner stays denied inside the companion zone", () => {
+		assert.equal(edit("planner", `${home}/companion/journal.md`, "Write"), "deny");
+		assert.equal(edit("planner", "~/agent-notes/companion/j.md", "Write", repo), "deny");
 		assert.equal(edit("planner", "src/main.ts", "Write", repo), "deny");
 		assert.equal(edit("researcher", "/tmp/agent-notes/researcher/x.md", "Write", repo), "deny");
 	});
@@ -710,12 +710,12 @@ describe("doctrine: file writes", () => {
 
 	test("a zone name inside another path does not count", () => {
 		assert.equal(edit("planner", `${repo}/not-agent-notes/project-notes/x.md`), "deny");
-		assert.equal(edit("orchestrator", `${userHome}/not-agent-notes/x.md`, "Write", repo), "ask");
+		assert.equal(edit("companion", `${userHome}/not-agent-notes/x.md`, "Write", repo), "ask");
 	});
 
-	test("the widened orchestrator zone moves no other verdict", () => {
+	test("the widened companion zone moves no other verdict", () => {
 		const expected: Record<string, string> = {
-			orchestrator: "none",
+			companion: "none",
 			planner: "deny",
 			researcher: "deny",
 			implementer: "none",
@@ -770,9 +770,9 @@ describe("doctrine: hook wiring", () => {
 		assert.match(out.hookSpecificOutput.permissionDecisionReason, /persona-agents doctrine \(tester\)/);
 	});
 
-	test("a plain commit prints an allow for the orchestrator", () => {
+	test("a plain commit prints an allow for the companion", () => {
 		const out = JSON.parse(
-			run({ agent_type: "persona-agents:orchestrator", tool_name: "Bash", tool_input: { command: "git commit -m m" } }),
+			run({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command: "git commit -m m" } }),
 		) as { hookSpecificOutput: Record<string, string> };
 		assert.equal(out.hookSpecificOutput.permissionDecision, "allow");
 	});
@@ -781,8 +781,8 @@ describe("doctrine: hook wiring", () => {
 		assert.equal(run({ agent_type: "persona-agents:tester", tool_name: "Bash", tool_input: { command: "git status" } }), "");
 	});
 
-	test("the orchestrator write zone follows the cwd in the hook input", () => {
-		const base = { agent_type: "persona-agents:orchestrator", tool_name: "Write" };
+	test("the companion write zone follows the cwd in the hook input", () => {
+		const base = { agent_type: "persona-agents:companion", tool_name: "Write" };
 		const inside = { ...base, tool_input: { file_path: "src/main.ts" }, cwd: "/home/u/repo" };
 		const outside = { ...base, tool_input: { file_path: "/home/u/elsewhere/x.md" }, cwd: "/home/u/repo" };
 		assert.equal(run(inside), "");
@@ -799,23 +799,23 @@ describe("doctrine: the journal write script", () => {
 	const home = "/home/u";
 	const session = "20261108T201812123456789";
 	const token = `${session}-4242`;
-	const hold = `bash ${script} hold --agent orchestrator --session ${session} --home ${home}`;
-	const release = `bash ${script} release --agent orchestrator --session ${session} --token ${token} --home ${home}`;
+	const hold = `bash ${script} hold --agent companion --session ${session} --home ${home}`;
+	const release = `bash ${script} release --agent companion --session ${session} --token ${token} --home ${home}`;
 	const reason = (profession: string, command: string): string =>
 		decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
 
 	test("J1 a hold from the installed skill path is allowed", () => {
-		assert.equal(bash("orchestrator", hold), "allow");
-		assert.match(reason("orchestrator", hold), /journal write script runs without a prompt/);
+		assert.equal(bash("companion", hold), "allow");
+		assert.match(reason("companion", hold), /journal write script runs without a prompt/);
 	});
 
 	test("J2 a release is allowed", () => {
-		assert.equal(bash("orchestrator", release), "allow");
+		assert.equal(bash("companion", release), "allow");
 	});
 
 	test("J3 the hook process prints an allow", () => {
 		const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", doctrineScript], {
-			input: JSON.stringify({ agent_type: "persona-agents:orchestrator", tool_name: "Bash", tool_input: { command: hold } }),
+			input: JSON.stringify({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command: hold } }),
 			env: { ...process.env, CLAUDE_PLUGIN_ROOT: repoRoot },
 			encoding: "utf8",
 		});
@@ -843,14 +843,14 @@ describe("doctrine: the journal write script", () => {
 				`bash ${script} --help`,
 				`bash ${script} status`,
 			];
-			for (const command of refused) assert.equal(bash("orchestrator", command), "none", command);
+			for (const command of refused) assert.equal(bash("companion", command), "none", command);
 		} finally {
 			fs.rmSync(tmp, { recursive: true, force: true });
 		}
 	});
 
 	test("J5 a missing flag value is left to the script", () => {
-		assert.equal(bash("orchestrator", `bash ${script} hold --agent`), "allow");
+		assert.equal(bash("companion", `bash ${script} hold --agent`), "allow");
 	});
 
 	test("J6 a second segment cancels the allow", () => {
@@ -866,11 +866,11 @@ describe("doctrine: the journal write script", () => {
 			`bash ${script} hold --agent x <<'EOF'\nhello\nEOF`,
 			`cd /repo && ${hold}`,
 		];
-		for (const command of cancelled) assert.equal(bash("orchestrator", command), "none", command);
+		for (const command of cancelled) assert.equal(bash("companion", command), "none", command);
 	});
 
 	test("J7 the other six professions stay ungated", () => {
-		for (const profession of PROFESSIONS.filter((p) => p !== "orchestrator")) {
+		for (const profession of PROFESSIONS.filter((p) => p !== "companion")) {
 			assert.equal(bash(profession, hold), "none", profession);
 		}
 	});
@@ -880,21 +880,21 @@ describe("doctrine: the journal write script", () => {
 			`bash -c '${hold}'`,
 			`sudo ${hold}`,
 			`env ${hold}`,
-			`/tmp/bash ${script} hold --agent orchestrator`,
-			`bash ${script} hold --agent orchestrator > /tmp/out`,
+			`/tmp/bash ${script} hold --agent companion`,
+			`bash ${script} hold --agent companion > /tmp/out`,
 		];
-		for (const command of wrapped) assert.notEqual(bash("orchestrator", command), "allow", command);
+		for (const command of wrapped) assert.notEqual(bash("companion", command), "allow", command);
 	});
 
 	test("J9 a stronger verdict beats the allow", () => {
-		assert.equal(bash("orchestrator", `${hold} && git push`), "ask");
+		assert.equal(bash("companion", `${hold} && git push`), "ask");
 	});
 
 	test("J10 the removed subcommands get no allow", () => {
 		for (const removed of ["append", "check", "replace"]) {
-			assert.equal(bash("orchestrator", `bash ${script} ${removed} --agent orchestrator`), "none", removed);
+			assert.equal(bash("companion", `bash ${script} ${removed} --agent companion`), "none", removed);
 		}
-		assert.equal(bash("orchestrator", hold), "allow");
-		assert.equal(bash("orchestrator", release), "allow");
+		assert.equal(bash("companion", hold), "allow");
+		assert.equal(bash("companion", release), "allow");
 	});
 });

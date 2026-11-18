@@ -5,5 +5,4 @@ export function managedOption(managedFile: string, name: string): string;
 export function realHome(): string;
 export function inProject(dir: string, env?: NodeJS.ProcessEnv, cwd?: string, home?: string): boolean;
 export function userConfigDir(env?: NodeJS.ProcessEnv, cwd?: string, home?: string): string;
-export function pluginOption(name: string, options?: { envFallback?: boolean }): string;
-export function selectedSubagentModel(): string;
+export function pluginOption(name: string): string;

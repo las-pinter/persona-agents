@@ -1,7 +1,7 @@
 /**
  * Checks for the Claude Code context hook (context.mjs).
  *
- * The hook reads the profession and the persona from content/ at run time.
+ * The hook reads the companion profession and the persona from content/ at run time.
  * These tests run the hook and keep every hook string under Claude Code's
  * 10,000-character cap, so no profession or persona is cut to a preview.
  *
@@ -134,103 +134,48 @@ function runContext(
 	};
 }
 
-function subagentInput(profession: string): Record<string, unknown> {
-	return { hook_event_name: "SubagentStart", agent_type: `persona-agents:${profession}`, agent_id: "a1" };
+/** A companion SessionStart input; compaction restarts the session with source "compact". */
+function companionInput(source = "startup"): Record<string, unknown> {
+	return { hook_event_name: "SessionStart", source, agent_type: "persona-agents:companion" };
 }
 
 describe("claude plugin: context hook", () => {
-	for (const profession of professions) {
-		test(`${profession}: the profession part is the file, verbatim, under the cap`, () => {
-			const run = runContext("profession", subagentInput(profession));
-			const file = fs.readFileSync(path.join(contentDir, "professions", `${profession}.md`), "utf8").trim();
-			assert.equal(run.context, file);
-			assert.equal(run.eventName, "SubagentStart");
-			assert.ok(file.length < HOOK_STRING_CAP, `${profession}.md is ${file.length} characters`);
-		});
-	}
-
-	test("every theme × profession persona part fits under the cap", () => {
-		for (const theme of themes) {
-			for (const profession of professions) {
-				const run = runContext("persona", subagentInput(profession), theme);
-				assert.ok(run.context, `${theme}/${profession}: no persona context`);
-				assert.match(run.context, new RegExp(`persona theme: ${theme}\\)`));
-				assert.ok(
-					run.context.length < HOOK_STRING_CAP,
-					`${theme}/${profession}: ${run.context.length} characters`,
-				);
-			}
-		}
+	test("there is exactly one profession, the companion", () => {
+		assert.deepEqual(professions, ["companion"]);
 	});
 
-	test("the main session gets the same parts through SessionStart", () => {
-		const input = { hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:orchestrator" };
-		const run = runContext("profession", input);
+	test("the profession part is the file, verbatim, under the cap", () => {
+		const run = runContext("profession", companionInput());
+		const file = fs.readFileSync(path.join(contentDir, "professions", "companion.md"), "utf8").trim();
+		assert.equal(run.context, file);
 		assert.equal(run.eventName, "SessionStart");
-		assert.match(run.context ?? "", /^# Orchestrator/);
+		assert.ok(file.length < HOOK_STRING_CAP, `companion.md is ${file.length} characters`);
 	});
 
-	describe("subagent model line", () => {
-		const orchestratorInput = {
-			hook_event_name: "SessionStart",
-			source: "startup",
-			agent_type: "persona-agents:orchestrator",
-		};
-		const modelSettings = (model: string) =>
-			JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { subagent_model: model } } } });
-		const modelLine = (model: string) =>
-			`- Subagent model: ${model}. Pass model: "${model}" on every Agent call to a persona-agents: profession.`;
-
-		for (const model of ["sonnet", "opus", "haiku"]) {
-			test(`the orchestrator is told ${model}`, () => {
-				const run = runContext("persona", orchestratorInput, undefined, { user: modelSettings(model) });
-				const context = run.context ?? "";
-				assert.ok(context.includes(modelLine(model)));
-				assert.ok(context.length < HOOK_STRING_CAP);
-			});
+	test("every theme persona part fits under the cap", () => {
+		for (const theme of themes) {
+			const run = runContext("persona", companionInput(), theme);
+			assert.ok(run.context, `${theme}: no persona context`);
+			assert.match(run.context, new RegExp(`persona theme: ${theme}\\)`));
+			assert.ok(run.context.length < HOOK_STRING_CAP, `${theme}: ${run.context.length} characters`);
 		}
+	});
 
-		test("no option set tells the orchestrator sonnet", () => {
-			assert.ok(runContext("persona", orchestratorInput).context?.includes(modelLine("sonnet")));
-		});
-
-		test("inherit prints no line", () => {
-			const run = runContext("persona", orchestratorInput, undefined, { user: modelSettings("inherit") });
-			assert.ok(run.context);
-			assert.doesNotMatch(run.context, /Subagent model/);
-		});
-
-		test("a subagent never gets the line", () => {
-			for (const profession of professions.filter((name) => name !== "orchestrator")) {
-				const run = runContext("persona", subagentInput(profession), undefined, { user: modelSettings("opus") });
-				assert.ok(run.context, profession);
-				assert.doesNotMatch(run.context, /Subagent model/, profession);
-			}
-		});
-
-		test("the profession part never gets the line", () => {
-			const run = runContext("profession", orchestratorInput, undefined, { user: modelSettings("opus") });
-			assert.doesNotMatch(run.context ?? "", /Subagent model/);
-		});
-
-		test("the orchestrator persona part fits under the cap for every theme with the line", () => {
-			for (const theme of themes) {
-				const run = runContext("persona", orchestratorInput, theme, { user: modelSettings("haiku") });
-				const context = run.context ?? "";
-				assert.ok(context.includes(modelLine("haiku")), theme);
-				assert.ok(context.length < HOOK_STRING_CAP, `${theme}: ${context.length} characters`);
-			}
-		});
+	test("both parts come back after a compaction", () => {
+		for (const part of ["profession", "persona"]) {
+			assert.ok(runContext(part, companionInput("compact")).context, part);
+		}
 	});
 
 	test("no option set means the goblin theme", () => {
-		assert.match(runContext("persona", subagentInput("implementer")).context ?? "", /persona theme: goblin\)/);
+		assert.match(runContext("persona", companionInput()).context ?? "", /persona theme: goblin\)/);
 	});
 
 	test("a plain session and a foreign agent get no output", () => {
 		for (const input of [
 			{ hook_event_name: "SessionStart", source: "startup" },
-			{ hook_event_name: "SubagentStart", agent_type: "Explore", agent_id: "a2" },
+			{ hook_event_name: "SessionStart", source: "startup", agent_type: "Explore" },
+			{ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:reviewer" },
 		]) {
 			for (const part of ["profession", "persona"]) {
 				const run = runContext(part, input);
@@ -249,16 +194,16 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("the user settings theme wins over the env var", () => {
-			const run = runContext("persona", subagentInput("implementer"), themeB, { user: themeSettings(themeA) });
+			const run = runContext("persona", companionInput(), themeB, { user: themeSettings(themeA) });
 			assert.equal(themeOf(run), themeA);
 		});
 
 		test("the env var applies when no settings file exists", () => {
-			assert.equal(themeOf(runContext("persona", subagentInput("implementer"), themeB)), themeB);
+			assert.equal(themeOf(runContext("persona", companionInput(), themeB)), themeB);
 		});
 
 		test("a settings file with bad JSON falls back to the env var", () => {
-			const run = runContext("persona", subagentInput("implementer"), themeB, { user: "{ not json" });
+			const run = runContext("persona", companionInput(), themeB, { user: "{ not json" });
 			assert.equal(run.status, 0);
 			assert.equal(themeOf(run), themeB);
 		});
@@ -271,14 +216,14 @@ describe("claude plugin: context hook", () => {
 		};
 		for (const [label, body] of Object.entries(wrongTypeBodies)) {
 			test(`a wrong-type settings body falls back to the env var: ${label}`, () => {
-				const run = runContext("persona", subagentInput("implementer"), themeB, { user: JSON.stringify(body) });
+				const run = runContext("persona", companionInput(), themeB, { user: JSON.stringify(body) });
 				assert.equal(run.status, 0);
 				assert.equal(themeOf(run), themeB);
 			});
 		}
 
 		test("a bad managed file falls through to the user settings theme", () => {
-			const run = runContext("persona", subagentInput("implementer"), themeB, {
+			const run = runContext("persona", companionInput(), themeB, {
 				managed: "{ not json",
 				user: themeSettings(themeA),
 			});
@@ -286,7 +231,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("without CLAUDE_CONFIG_DIR the hook reads .claude/settings.json under HOME", () => {
-			const run = runContext("persona", subagentInput("implementer"), themeB, {
+			const run = runContext("persona", companionInput(), themeB, {
 				user: themeSettings(themeA),
 				noConfigDir: true,
 			});
@@ -315,7 +260,7 @@ describe("claude plugin: context hook", () => {
 			);
 			assert.equal(probe.status, 0, probe.stderr);
 			assert.equal(JSON.parse(probe.stdout), "");
-			const run = runContext("persona", subagentInput("implementer"), themeB, {
+			const run = runContext("persona", companionInput(), themeB, {
 				user: themeSettings(themeA),
 				noConfigDir: true,
 				nodeArgs: [preload(failingUserInfo)],
@@ -325,12 +270,12 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a settings file without the plugin key falls back to the default", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, { user: "{}" });
+			const run = runContext("persona", companionInput(), undefined, { user: "{}" });
 			assert.equal(themeOf(run), manifest.userConfig.theme.default);
 		});
 
 		test("the managed settings theme wins over the user settings theme", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				managed: themeSettings(themeB),
 				user: themeSettings(themeA),
 			});
@@ -338,7 +283,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a managed-settings.d drop-in theme wins over the managed-settings.json theme", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				managed: themeSettings(themeA),
 				dropIns: { "10-theme.json": themeSettings(themeB) },
 			});
@@ -346,7 +291,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a drop-in theme wins over the user settings theme without managed-settings.json", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				user: themeSettings(themeA),
 				dropIns: { "10-theme.json": themeSettings(themeB) },
 			});
@@ -354,21 +299,21 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("of two drop-ins, the later one in alphabetical order wins", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				dropIns: { "20-b.json": themeSettings(themeB), "10-a.json": themeSettings(themeA) },
 			});
 			assert.equal(themeOf(run), themeB);
 		});
 
 		test("a later drop-in without the plugin key does not hide an earlier drop-in theme", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				dropIns: { "10-a.json": themeSettings(themeA), "20-b.json": "{}" },
 			});
 			assert.equal(themeOf(run), themeA);
 		});
 
 		test("a drop-in with bad JSON falls through to the next source", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				managed: themeSettings(themeA),
 				dropIns: { "10-bad.json": "{ not json" },
 			});
@@ -377,7 +322,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a hidden drop-in and a non-json drop-in are ignored", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				managed: themeSettings(themeA),
 				dropIns: { ".x.json": themeSettings(themeB), "x.json.bak": themeSettings(themeB) },
 			});
@@ -385,7 +330,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a drop-in with an empty theme does not hide the managed-settings.json theme", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				managed: themeSettings(themeA),
 				dropIns: { "50-reset.json": themeSettings("") },
 			});
@@ -393,7 +338,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a later drop-in with an empty options object does not hide an earlier drop-in theme", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				dropIns: {
 					"10-a.json": themeSettings(themeA),
 					"20-b.json": JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: {} } } }),
@@ -403,7 +348,7 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("a subdirectory named like a drop-in is skipped", () => {
-			const run = runContext("persona", subagentInput("implementer"), undefined, {
+			const run = runContext("persona", companionInput(), undefined, {
 				managed: themeSettings(themeA),
 				dropInDirs: ["x.json"],
 			});
@@ -412,18 +357,18 @@ describe("claude plugin: context hook", () => {
 		});
 
 		test("an unknown theme from the settings file still warns", () => {
-			const run = runContext("persona", subagentInput("tester"), themeA, { user: themeSettings("nosuch") });
+			const run = runContext("persona", companionInput(), themeA, { user: themeSettings("nosuch") });
 			assert.equal(run.status, 0);
 			assert.equal(run.context, null);
-			assert.match(run.stderr, /no nosuch persona for tester/);
+			assert.match(run.stderr, /no nosuch persona for the companion/);
 		});
 	});
 
 	test("an unknown theme warns and still sends the profession", () => {
-		const persona = runContext("persona", subagentInput("tester"), "nosuch");
+		const persona = runContext("persona", companionInput(), "nosuch");
 		assert.equal(persona.status, 0);
 		assert.equal(persona.context, null);
-		assert.match(persona.stderr, /no nosuch persona for tester/);
-		assert.ok(runContext("profession", subagentInput("tester"), "nosuch").context);
+		assert.match(persona.stderr, /no nosuch persona for the companion/);
+		assert.ok(runContext("profession", companionInput(), "nosuch").context);
 	});
 });

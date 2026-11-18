@@ -6,18 +6,18 @@
 // main session (`claude --agent`) or as a subagent:
 //
 //   plain git add/commit/pull/merge/rebase/tag
-//                     orchestrator: allow; every other agent: deny
+//                     companion: allow; every other agent: deny
 //   git push, gh pr, gh release, gh run, git tag -d/--delete/-f/--force,
 //   any git global option outside GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS
 //   (-c, --config-env, --exec-path, --attr-source, ...), git commit --amend,
 //   git pull --upload-pack, git pull/merge with a `::` transport URL or a
 //   merge strategy (-s, --strategy), and any wrapped or runtime-shaped
 //   history command
-//                     orchestrator: ask; every other agent: deny
-//   cp, mv, rsync     orchestrator and implementer: ask; the rest: deny
+//                     companion: ask; every other agent: deny
+//   cp, mv, rsync     companion and implementer: ask; the rest: deny
 //   bash <plugin root>/content/skills/common/journal-management-generic/
 //   scripts/journal-write.sh <hold|release> ...
-//                     orchestrator: allow; every other agent: no decision
+//                     companion: allow; every other agent: no decision
 //
 // Allow is given only when every segment of the command is a plain history
 // command or the installed journal write script. A command that mixes an
@@ -38,7 +38,7 @@
 //   hooks and core.* config.
 //
 // Write zone (FILE_ZONES). Edit, Write, and NotebookEdit are allowed inside the
-// zone of the agent. The orchestrator holds every tool: its zone is the
+// zone of the agent. The companion holds every tool: its zone is the
 // repository, the whole agent-notes tree under the home folder, and the shared
 // temporary folder; any other path asks. The planner, researcher, reviewer, and
 // mascot deny every path outside their own notes zone, the temporary folder
@@ -59,7 +59,7 @@
 // before it is classified. A command the parser cannot read (a heredoc, an
 // unbalanced quote) that holds a gated form counts as a hit: fail closed. A gated
 // form is git with a history verb or push, gh with pr, run, or release, or cp,
-// mv, rsync. The hit is publish (orchestrator: ask; every other agent: deny).
+// mv, rsync. The hit is publish (companion: ask; every other agent: deny).
 // Unreadable text with only git read verbs (status, diff, log) is not a hit.
 // The fail-closed hit is ask, never allow. One exception: a single quoted
 // heredoc fed to a data reader (cat, tee, python3 -, node -) is checked by its
@@ -108,22 +108,22 @@ type Hit = Gate | typeof UNGATED;
 
 /** Verdict per gated command class; a profession missing here is denied. */
 const COMMAND_RULES: Record<Gate, Record<string, Verdict>> = {
-	history: { orchestrator: "allow" },
-	publish: { orchestrator: "ask" },
-	copy: { orchestrator: "ask", implementer: "ask" },
-	journal: { orchestrator: "allow" },
+	history: { companion: "allow" },
+	publish: { companion: "ask" },
+	copy: { companion: "ask", implementer: "ask" },
+	journal: { companion: "allow" },
 };
 
-const HISTORY_DENY = "only the orchestrator writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
+const HISTORY_DENY = "only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 const PUBLISH_ASK =
 	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
-const JOURNAL_ALLOW = "the journal write script runs without a prompt for the orchestrator";
+const JOURNAL_ALLOW = "the journal write script runs without a prompt for the companion";
 const JOURNAL_NO = "the journal write script runs only from its installed skill path";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 	history: {
-		allow: "a plain git add, commit, pull, merge, rebase, or tag runs without a prompt for the orchestrator",
+		allow: "a plain git add, commit, pull, merge, rebase, or tag runs without a prompt for the companion",
 		ask: PUBLISH_ASK,
 		deny: HISTORY_DENY,
 	},
@@ -131,9 +131,9 @@ const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 	copy: {
 		allow: "cp, mv, and rsync need your approval",
 		ask: "cp, mv, and rsync need your approval",
-		deny: "cp, mv, and rsync are for the orchestrator and the implementer only",
+		deny: "cp, mv, and rsync are for the companion and the implementer only",
 	},
-	// The classifier emits this hit for the orchestrator only, so ask and deny
+	// The classifier emits this hit for the companion only, so ask and deny
 	// stay unreachable; they carry the path rule, never a git reason.
 	journal: { allow: JOURNAL_ALLOW, ask: JOURNAL_NO, deny: JOURNAL_NO },
 };
@@ -167,7 +167,7 @@ const TEMP_ROOT = "/tmp";
 
 /**
  * Where each profession may write with Edit/Write/NotebookEdit. A profession
- * missing here writes freely. The orchestrator holds every tool, so its zone is
+ * missing here writes freely. The companion holds every tool, so its zone is
  * the repository, the whole agent-notes tree, and the shared temporary folder;
  * any other path asks. The planner, researcher, reviewer, and mascot keep their
  * narrow zone, so the temporary folder denies them.
@@ -180,7 +180,7 @@ const TEMP_ROOT = "/tmp";
  * or parent-relative path cannot be placed, so it falls to the zone verdict.
  */
 const FILE_ZONES: Record<string, FileZone> = {
-	orchestrator: {
+	companion: {
 		notes: "",
 		verdict: "ask",
 		repo: true,
@@ -330,7 +330,7 @@ const GH_PUBLISH = new Set(["pr", "release", "run"]);
  * The only git global options a history command may carry and still get its
  * verdict by subcommand. Any other leading option (-c, --config-env,
  * --exec-path, --attr-source, an option git adds later) makes the command
- * publish: ask for the orchestrator, deny for the rest.
+ * publish: ask for the companion, deny for the rest.
  */
 const GIT_PLAIN_OPTIONS = new Set([
 	"--no-pager", "-p", "--paginate", "-P", "--bare", "--no-replace-objects", "--literal-pathspecs",
@@ -538,11 +538,11 @@ function segmentGates(segment: string, profession: string, depth: number): Hit[]
 
 /**
  * True only for `bash <installed script> <hold|release> ...` run by the
- * orchestrator. The hook checks the path and the subcommand; the script owns
+ * companion. The hook checks the path and the subcommand; the script owns
  * every flag value and exits 1 or 2 with no write.
  */
 function isJournalWords(words: string[], profession: string): boolean {
-	return profession === "orchestrator" && words.length >= 3 && words[0] === "bash" &&
+	return profession === "companion" && words.length >= 3 && words[0] === "bash" &&
 		isAbsolute(words[1]) && resolve(words[1]) === JOURNAL_SCRIPT &&
 		JOURNAL_SUBCOMMANDS.has(words[2]);
 }
