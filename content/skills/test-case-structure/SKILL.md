@@ -185,6 +185,16 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 
 ---
 
+## Testing Rules
+
+- Never test only the happy path. Cover failure modes, boundaries, and
+  invalid input.
+- When no test suite exists, start with the highest-risk paths (core logic,
+  error handling, boundary input) and state the coverage assumptions.
+- Back every result claim with evidence: the exact command, the exit code, and
+  the counts. Quote every failing test line. When a command did not run, say so.
+- Do not weaken a test to make it pass. See **production-issue-flagging**.
+
 ## File Length
 
 Test files follow the common **file-length-policy** skill. It owns the tiers, the exemptions, and

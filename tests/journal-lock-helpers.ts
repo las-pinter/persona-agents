@@ -24,7 +24,6 @@ export const writeScript = path.join(
 	repoRoot,
 	"content",
 	"skills",
-	"common",
 	"journal-management-generic",
 	"scripts",
 	"journal-write.sh",

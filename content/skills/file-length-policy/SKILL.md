@@ -14,7 +14,7 @@ every repository. The law covers a source file and a test file.
 |-------|--------|
 | 0 to 300 | No action. |
 | 301 to 500 | Note the length. Consider a split when the file holds more than one responsibility. |
-| 501 to 1000 | The reviewer asks for a cohesion check. Split the file when it mixes responsibilities. |
+| 501 to 1000 | The review asks for a cohesion check. Split the file when it mixes responsibilities. |
 | over 1000 | A split is required. |
 
 ## The Cohesion Exception

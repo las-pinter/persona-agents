@@ -40,7 +40,7 @@ For a pre-existing warning, follow Phase 4 of the **code-implementation** skill.
 ## 4. Build Verification — MUST HAVE
 
 - `npm run build` (or the project's configured build) — the app must build cleanly.
-- No `package.json` → flag to orchestrator; do not create it unrequested.
+- No `package.json` → tell the owner; do not create it unrequested.
 
 ## Structure & Accessibility — RECOMMENDED
 

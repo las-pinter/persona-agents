@@ -12,7 +12,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 2. PLAN      → Read full files, consider edge cases, identify changes
 3. IMPLEMENT → Follow patterns, handle all states, comment WHY not WHAT
 4. VERIFY    → Run the project language gate (see Phase 4)
-5. DELIVER   → Self-review, update docs, suggest a commit (never run one)
+5. DELIVER   → Self-review, update docs, get the review, commit
 ```
 
 ---
@@ -53,8 +53,7 @@ Before touching a single line:
 - Search for existing helpers before writing new code (DRY).
 - Make minimal changes — do not refactor unrelated code in the same change.
 - Comment WHY, not WHAT. The code already says what it does.
-- Keep comments brief; follow **simplified-technical-english** for comment length.
-  Prefer code that explains itself; a long comment shows the code needs a
+- Keep comments brief. Prefer code that explains itself; a long comment shows the code needs a
   rewrite.
 - Follow **persona-free-documents** for repository artifacts.
 
@@ -71,15 +70,15 @@ Before touching a single line:
 ## Phase 4: Verify
 
 Run the quality gate for the project's language. Fix each new issue or warning
-before delivering. Report an issue or warning that predates the change in the
-hand-back report.
+before delivering. Report an issue or warning that predates the change to the
+owner; when an old warning blocks a gate, the owner decides.
 
 The three language gate skills (`python-quality-gates`, `rust-quality-gates`,
 `react-quality-gates`) own the gate order and the language tools. Follow the gate
 for the project language. When the project language has no gate skill, use this
 order: type check, lint, tests, build.
 
-**Prove each test can fail.** Do this for each acceptance test the dispatch names,
+**Prove each test can fail.** Do this for each acceptance test the study names,
 and for each new test. A compile check, a lint, or a type check is a gate, not a
 test. Skip this step for it.
 
@@ -92,7 +91,7 @@ test. Skip this step for it.
   tests still gets its own break-fail-restore line. That line names the shared
   break.
 - If the test still passes with the code broken, the test is wrong. Fix the test
-  before the hand-back.
+  before you deliver.
 - A bug-fix test that failed before the fix already shows step 2. Record that
   run as the fail result, and the run after the fix as the pass result. Still do step 1 for any other new test.
 - Check `git diff` after the restore. The break must not be in the final diff.
@@ -102,9 +101,24 @@ test. Skip this step for it.
 
 ## Phase 5: Deliver
 
-- Review your own code as if you were a reviewer: correctness, edge cases, naming, comments, dead code, security.
+- Review your own diff first: correctness, edge cases, naming, comments, dead code, security.
 - Update docs affected by the change: README, API docs, inline docs, changelog.
-- Suggest a commit message. Never run git add, commit, push, pull, merge, rebase, tag, gh pr, gh run, or gh release.
+- For a non-trivial change, get the independent review (see the companion
+  profession) and fix its findings before the commit.
+- Commit in the repository's commit form. A push, a pull request, or a release
+  asks the owner.
+
+## Scope Discipline
+
+- Implement the accepted plan, not more. An improvement you see nearby goes to
+  the owner as a suggestion, not into the diff.
+- When the code contradicts the plan, stop and update the plan (and ask the
+  owner when the change alters the outcome) before you continue.
+- Surface an ambiguity; do not resolve it silently with an assumption.
+- Flag a security-sensitive change (auth, crypto, input validation, secrets)
+  to the reviewer and in the report.
+- Report a quality problem in existing code you did not change; do not fix it
+  unrequested.
 
 ---
 

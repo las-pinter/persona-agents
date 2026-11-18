@@ -16,7 +16,9 @@ Flag production-code issues found while testing when the problem is NOT the test
 - Production code is not testable as written (needs modification to be testable)
 - Tests reveal a logic bug in production code
 
-Do NOT modify production code to make tests pass — flag it instead.
+Do NOT weaken or bend a test to make it pass. Fix the production code as a
+separate, named step, or flag the issue to the owner when the fix is out of
+the plan's scope.
 
 ## Report Format
 
@@ -24,11 +26,12 @@ Include this in your output for each issue:
 
 ``` text
 ⚠ TESTABILITY ISSUE: [file:line] — [description of the problem and why it blocks testing]
-Recommendation: [suggested refactor for the implementer]
+Recommendation: [suggested refactor]
 ```
 
 For a production bug found by tests, use the same format with the bug's file:line, what's wrong, and the failing behavior.
 
 ## How to Report
 
-Escalate the flag to the orchestrator or implementer before proceeding.
+Report the flag to the owner before you proceed. When the fix is in scope,
+update the plan with it first, then fix it.

@@ -45,7 +45,7 @@ For a pre-existing warning, follow Phase 4 of the **code-implementation** skill.
 ## 5. Build Verification — MUST HAVE
 
 - `cargo build --workspace --release --locked` — the workspace must build cleanly.
-- No `Cargo.toml` → flag to orchestrator; do not create it unrequested.
+- No `Cargo.toml` → tell the owner; do not create it unrequested.
 
 ## Project Structure — RECOMMENDED
 

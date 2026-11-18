@@ -11,27 +11,29 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 
 ---
 
-## Tool Names Per Stack
+## Tool Names
 
-Tool names differ by stack. This skill names the capability (Context7,
-DeepWiki, Exa). Replace each name with the name for your stack. The pi server
-names come from `config/mcp.json.example`. The pi tool form is
-`mcp__<server>__<tool>`. Claude Code uses the tool names that the session
-lists.
+This skill names the capability (Context7, DeepWiki, Exa). Use the tool names
+that the session lists, such as `mcp__<server>__<tool>`. `config/mcp.json.example`
+holds a sample server setup.
 
-| Capability | pi | kiro | opencode |
-|---|---|---|---|
-| Web search | `mcp__exa__web_search_exa` | `@exa` or `web_search` | `websearch` or `exa*` |
-| Web fetch | `mcp__exa__web_fetch_exa` | `@exa` | `exa*` |
-| Library and API docs | `mcp__context7__*` | `@context7` | `context7*` |
-| Repository architecture | `mcp__deepwiki__*` | `@deepwiki` | `deepwiki*` |
+## Research Rules
+
+- Restate the question before you search when it is ambiguous.
+- Cite every source with its date: the publication date when known, else the
+  access date. Do not fabricate a source, a version number, an API name, or a
+  fact.
+- When sources conflict, show the conflict; do not silently pick a side.
+- When a search gives nothing useful, say so, then try one other query or
+  source.
+- Synthesize the findings; do not paste raw results.
 
 ---
 
 ## Freshness Rule
 
-Reuse a prior report only for a stable topic. Re-verify before reuse for a
-VOLATILE topic. A volatile topic changes after the report date.
+Reuse a prior research note only for a stable topic. Re-verify before reuse
+for a VOLATILE topic. A volatile topic changes after the note date.
 
 Volatile topics include:
 
@@ -41,13 +43,13 @@ Volatile topics include:
 - current events and recent news.
 
 Stable topics include concepts, architectures, history, and published
-standards. A prior report may still answer a stable topic.
+standards. A prior note may still answer a stable topic.
 
 For a volatile topic:
 
-1. Re-run the search. Do not reuse the prior report.
-2. Compare the new result with the prior report.
-3. Update the report or write a new one. Correct the index.
+1. Re-run the search. Do not reuse the prior note.
+2. Compare the new result with the prior note.
+3. Update the note.
 
 When unsure if a topic is volatile: treat it as volatile.
 
@@ -55,20 +57,17 @@ When unsure if a topic is volatile: treat it as volatile.
 
 ## Step 0: Pre-research — Check Existing Notes First
 
-Before choosing a source, check whether this topic was already researched. Do not duplicate prior work.
+Before choosing a source, check whether this topic was already researched. Do
+not duplicate prior work. Research that outlives the session goes into the
+project notes as a `tech/<slug>.md` note (see the **project-notes** skill).
 
-`<USER_HOME>` is the folder that holds `agent-notes`. Follow the
-**journal-management-generic** skill for the exact rule and the fallback.
-
-1. Glob `<USER_HOME>/agent-notes/researcher/reports/*.md` and read `<USER_HOME>/agent-notes/researcher/index.md` if present.
+1. Read the project's `tech/` note names, and the note that covers the topic.
 2. Decide based on what exists:
-   - Prior report fully covers the question → reference and reuse it; state the existing answer; do NOT redo the work.
-   - Prior report partially covers it → state the gap and extend that existing report.
-   - Nothing relevant exists → proceed to Step 1 and do new research.
-3. After writing any new report:
-   - Use `YYYY-MM-DD-<topic>.md` naming; check existing filenames first to avoid near-duplicates.
-   - List prior reports it builds on under a `Related report:` line.
-   - Append `date + filename + short topic` to `<USER_HOME>/agent-notes/researcher/index.md` (create it if missing).
+   - A note fully covers the question → reuse it; do NOT redo the work.
+   - A note partially covers it → state the gap and extend that note.
+   - Nothing relevant exists → proceed to Step 1.
+3. When the finding is worth keeping, write or extend the `tech/` note, with
+   the dated sources.
 
 ---
 

@@ -46,7 +46,7 @@ For a pre-existing warning, follow Phase 4 of the **code-implementation** skill.
 ## 5. Build Verification — MUST HAVE
 
 - `uv build` (or `pip install .` if uv unavailable) — the package must install cleanly.
-- No `pyproject.toml` → flag to orchestrator; do not create it unrequested.
+- No `pyproject.toml` → tell the owner; do not create it unrequested.
 
 ## Project Structure — RECOMMENDED
 

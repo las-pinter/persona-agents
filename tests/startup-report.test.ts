@@ -20,7 +20,6 @@ const reportScript = path.join(
 	repoRoot,
 	"content",
 	"skills",
-	"orchestrator",
 	"journal-management",
 	"scripts",
 	"startup-report.sh",

@@ -1,6 +1,6 @@
 ---
 name: project-notes
-description: Shared, persona-free project notes and planner studies for repositories agents work on. The orchestrator and the planner write them. They and the implementer read `agent-notes/project-notes/`.
+description: Persona-free project notes, rules, and studies for each repository, under `agent-notes/project-notes/<project>/`. Read the rules and summary at session start; write on a significant discovery or an owner correction.
 ---
 
 # Project Notes
@@ -8,11 +8,8 @@ description: Shared, persona-free project notes and planner studies for reposito
 ## Overview
 
 Plain, persona-free records about repositories agents work on. The notes hold
-architecture, conventions, lessons learned, and planner studies. No flair.
-Every line must earn its place.
-
-Only the orchestrator and the planner write `agent-notes/project-notes/`. They
-and the implementer read it. Every profession reads it in a retro.
+architecture, conventions, lessons learned, rules, and studies. No flair.
+Every line must earn its place. The companion reads and writes them.
 
 ## Persona-Free Documents
 
@@ -24,26 +21,21 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 <USER_HOME>/agent-notes/
 ├── project-notes/
 │   └── <project>/
-│       ├── summary.md                 (orchestrator)
-│       ├── features/<slug>.md         (orchestrator)
-│       ├── bugs/<slug>.md             (orchestrator)
-│       ├── tech/<slug>.md             (orchestrator)
-│       ├── releases/<version>.md      (orchestrator, one note per release)
-│       ├── audit/<slug>.md            (orchestrator, one note per audit)
-│       ├── rules/<slug>.md            (orchestrator, one rule per file)
+│       ├── summary.md
+│       ├── features/<slug>.md
+│       ├── bugs/<slug>.md
+│       ├── tech/<slug>.md
+│       ├── releases/<version>.md      (one note per release)
+│       ├── audit/<slug>.md            (one note per audit)
+│       ├── rules/<slug>.md            (one rule per file)
 │       └── studies/
-│           ├── index.md               (planner)
-│           ├── legacy_studies/        (orchestrator)
+│           ├── index.md
+│           ├── legacy_studies/
 │           └── YYYY-MM-DD-<slug>/
-│               ├── study.md           (planner)
-│               ├── status.md          (planner)
-│               ├── briefs/NN-<slug>.md (planner, one file per brief)
-│               ├── <side-doc>.md      (planner)
-│               └── reverse_engineering/  (planner)
-└── researcher/
-    ├── index.md                       (researcher)
-    └── reports/
-        └── YYYY-MM-DD-<topic>.md      (researcher)
+│               ├── study.md
+│               ├── status.md
+│               ├── <side-doc>.md
+│               └── reverse_engineering/
 ```
 
 **Folder paths:** A bare name such as `rules/` or `summary.md` means that path
@@ -58,28 +50,24 @@ name. If two repositories still collide, add a short owner or path suffix to
 one folder name.
 **File naming:** Note files use plain slugs, with no date prefix (for example,
 `regexp-tool-permissions.md`). An audit note uses the same plain slug.
-A release note file uses `<version>.md`. Researcher report files use
-`YYYY-MM-DD-<topic>.md`. Study folders use `YYYY-MM-DD-<slug>`.
+A release note file uses `<version>.md`. Study folders use `YYYY-MM-DD-<slug>`.
 **Home directory:** `<USER_HOME>` is the folder that holds `agent-notes`. Follow
 the **journal-management-generic** skill for the exact rule and the fallback.
 
-## Ownership Split
+## When to Write
 
-| Path | Owner | When to write |
-|------|-------|---------------|
-| `summary.md` | orchestrator | On significant discovery or owner correction. |
-| `features/`, `bugs/`, `tech/` | orchestrator | On significant discovery or owner correction. |
-| `releases/` | orchestrator | On each release, one note per version. |
-| `audit/` | orchestrator | On each audit, one note per audit. |
-| `rules/` | orchestrator | On rule create, update, or retire. The planner does not write it. |
-| `studies/index.md` | planner | On study creation and on every stage change. |
-| `studies/legacy_studies/` | orchestrator | When archiving an old study. |
-| `<study>/study.md` | planner | On study creation, on every interview round, and when a decision changes. |
-| `<study>/status.md` | planner | On study creation and on every stage change. |
-| `<study>/<side-doc>.md` | planner | When detail must move out of the study. |
-
-The subfolder rule is doctrine, not a gate rule. Do not write another owner's
-subfolder.
+| Path | When to write |
+|------|---------------|
+| `summary.md` | On significant discovery or owner correction. |
+| `features/`, `bugs/`, `tech/` | On significant discovery or owner correction. |
+| `releases/` | On each release, one note per version. |
+| `audit/` | On each audit, one note per audit. |
+| `rules/` | On rule create, update, or retire. |
+| `studies/index.md` | On study creation and on every stage change. |
+| `studies/legacy_studies/` | When archiving an old study. |
+| `<study>/study.md` | On study creation, on every interview round, and when a decision changes. |
+| `<study>/status.md` | On study creation, on every stage change, and when a task closes. |
+| `<study>/<side-doc>.md` | When detail must move out of the study. |
 
 **READ rule.** The read order lives in **Read order** under `## Rules Folder`. A
 task read happens only when the task names the note.
@@ -122,14 +110,13 @@ retire one rule or merge two rules in the same edit. Then write the new rule.
 4. Read `studies/index.md` and one `status.md` only when the task names a study.
 5. Read every other note only when a task names it.
 
-**Mid-session duty.** The orchestrator writes, updates, or retires a rule in the
-session that finds it. It records the reason in one journal line.
+**Mid-session duty.** Write, update, or retire a rule in the session that finds
+it. Record the reason in the session notes.
 
-**Startup guard.** Run it after the folder read and before the first dispatch.
+**Startup guard.** Run it after the folder read and before the first task.
 Count the rules files. Count their total lines. Re-read each rule against the
-current tree. Record one journal line per breach, with the measured value and
-the limit. The orchestrator's startup report prints the summary and rule
-limits. The guard is a procedure: no repository test can read the notes tree in
+current tree. Report each breach to the owner, with the measured value and
+the limit. The guard is a procedure: no repository test can read the notes tree in
 the home folder.
 
 ## Note Structure
@@ -166,27 +153,22 @@ Rules:
   exceeds the cap.
 - Each side document: maximum 300 lines (hard ceiling). Split the topic before
   it exceeds the cap.
-- Each brief file: maximum 100 lines (hard ceiling). Aim for 90 lines or less.
-  The reviewer counts the lines of a brief file it reviews. File length only.
-  The size of the work is in **task-routing**. `NN` is a two-digit order number.
 - Omit a section when it has nothing notable.
 
-## Study Lifecycle (planner-owned, manual)
+## Study Lifecycle
 
-No script writes these files. The planner writes them with the `write` and
-`edit` tools. The orchestrator reads them. The write policy leaves them to the
-planner.
+No script writes these files. Write them with the file tools.
 
 A study has five stages: `draft`, `ready`, `in-progress`, `done`, and
 `abandoned`. The stage names what the study is doing, not what the document
 contains.
 
-- **draft** — the planner still writes or revises the study, and the owner has
+- **draft** — the study is still being written or revised, and the owner has
   not accepted it.
 - **ready** — the owner accepted the study, and the decisions are settled. The
-  briefs are to be written and executed.
-- **in-progress** — the agents execute briefs for the study.
-- **done** — every brief is closed, and the work the study describes is
+  tasks are to be worked.
+- **in-progress** — the tasks of the study are being worked.
+- **done** — every task is closed, and the work the study describes is
   complete.
 - **abandoned** — the owner stopped the study. It may replace any stage at any
   time.
@@ -201,7 +183,6 @@ independent of the stage. A study can be `ready` and blocked at the same time.
 
 - **Stage:** draft | ready | in-progress | done | abandoned
 - **Updated:** YYYY-MM-DD
-- **Owner:** planner
 - **Next action:** <one line>
 - **Blocked by:** <none | short reason>
 - **Side documents:** <list, or none>
@@ -212,7 +193,7 @@ independent of the stage. A study can be `ready` and blocked at the same time.
 |------|-------|------|
 | YYYY-MM-DD | draft | folder created |
 | YYYY-MM-DD | ready | owner accepted the study |
-| YYYY-MM-DD | in-progress | first brief started |
+| YYYY-MM-DD | in-progress | first task started |
 ```
 
 Rules:
@@ -221,11 +202,9 @@ Rules:
    study starts at `draft`.
 2. Move the stage in order: `draft` → `ready` → `in-progress` → `done`. The
    owner's acceptance moves it from `draft` to `ready`. The start of the next
-   open brief moves it from `ready` to `in-progress`. On a reopened study, that
-   is the next open brief that starts after the reopen. The close of the last
-   brief moves it from `in-progress` to `done`. The orchestrator re-dispatches
-   the planner on every stage move, including the reopen. The planner writes
-   `status.md`. The stage `abandoned` may replace any stage at any time.
+   open task moves it from `ready` to `in-progress`. On a reopened study, that
+   is the next open task that starts after the reopen. The close of the last
+   task moves it from `in-progress` to `done`. The stage `abandoned` may replace any stage at any time.
 3. Reopen a `done` or `abandoned` study to `ready` when the owner orders more
    work on it. This is the only edge into a closed stage's past, and it lands
    on `ready` alone. The normal order then carries the study forward. The
@@ -250,15 +229,15 @@ Location: `studies/index.md` inside the project folder.
 
 Rules:
 
-1. Add one row when the planner creates a study folder.
-2. Update the row's `Stage` and `Updated` whenever the planner writes
+1. Add one row when you create a study folder.
+2. Update the row's `Stage` and `Updated` whenever you write
    `status.md`.
 3. Put the newest study on top. Use no script.
 
 ### Legacy studies
 
 - Archived studies live in `studies/legacy_studies/`.
-- The orchestrator moves an old study folder there.
+- Move an old study folder there when the owner asks.
 - Read an archived study only when a task names it.
 - Never migrate an archived study back.
 
@@ -267,7 +246,7 @@ Rules:
 **READ** — follow the **READ rule** under `## Ownership Split`.
 
 **CREATE** — the first time working on a new repository: check if the project
-folder exists. If not, dispatch a researcher to gather context, then create the
+folder exists. If not, read the repository to gather context, then create the
 project folder and `summary.md`. Create subfolders only as needed.
 
 **UPDATE** — only on noteworthy changes:
@@ -296,5 +275,4 @@ history. When a feature ships, its note may be removed or consolidated.
 - **study** — Owns `study.md` and the side documents.
 - **interview** — Owns the frontier rounds and the
   decisions record.
-- **source-selection** — Owns the researcher report root
-  `agent-notes/researcher/reports/`.
+- **source-selection** — Owns the research rules; lasting findings go to `tech/`.

@@ -794,7 +794,7 @@ describe("doctrine: hook wiring", () => {
 describe("doctrine: the journal write script", () => {
 	/** The script word the plugin installs: this repository tree. */
 	const script = path.join(
-		repoRoot, "content", "skills", "common", "journal-management-generic", "scripts", "journal-write.sh",
+		repoRoot, "content", "skills", "journal-management-generic", "scripts", "journal-write.sh",
 	);
 	const home = "/home/u";
 	const session = "20261108T201812123456789";
@@ -828,7 +828,7 @@ describe("doctrine: the journal write script", () => {
 	test("J4 another path, a copy, a symlink, a relative word, and a bad subcommand get no allow", () => {
 		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "journal-script-"));
 		try {
-			const copyDir = path.join(tmp, "content", "skills", "common", "journal-management-generic", "scripts");
+			const copyDir = path.join(tmp, "content", "skills", "journal-management-generic", "scripts");
 			fs.mkdirSync(copyDir, { recursive: true });
 			fs.copyFileSync(script, path.join(copyDir, "journal-write.sh"));
 			const alias = path.join(tmp, "journal-write.sh");
@@ -838,7 +838,7 @@ describe("doctrine: the journal write script", () => {
 				`bash ${path.join(copyDir, "journal-write.sh")} hold`,
 				`bash ${alias} hold`,
 				`bash ${path.join(repoRoot, "install.sh")} hold`,
-				"bash content/skills/common/journal-management-generic/scripts/journal-write.sh hold",
+				"bash content/skills/journal-management-generic/scripts/journal-write.sh hold",
 				`bash ${script}`,
 				`bash ${script} --help`,
 				`bash ${script} status`,

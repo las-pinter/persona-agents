@@ -15,7 +15,7 @@
 //   history command
 //                     companion: ask; every other agent: deny
 //   cp, mv, rsync     companion and implementer: ask; the rest: deny
-//   bash <plugin root>/content/skills/common/journal-management-generic/
+//   bash <plugin root>/content/skills/journal-management-generic/
 //   scripts/journal-write.sh <hold|release> ...
 //                     companion: allow; every other agent: no decision
 //
@@ -382,7 +382,7 @@ const MAX_UNWRAP_DEPTH = 4;
 const JOURNAL_SCRIPT = resolve(
 	dirname(fileURLToPath(import.meta.url)),
 	"..", "..", "..",
-	"content", "skills", "common", "journal-management-generic", "scripts", "journal-write.sh",
+	"content", "skills", "journal-management-generic", "scripts", "journal-write.sh",
 );
 const JOURNAL_SUBCOMMANDS = new Set(["hold", "release"]);
 

@@ -26,26 +26,27 @@ Model the request as a tree of decisions.
 ## Frontier Rounds
 
 1. Compute the frontier of the design tree.
-2. Pose the whole frontier in one relay block. Number each question.
-3. Put the recommendation on its own line under the question. Word the
-   question so the answer "yes" accepts the recommendation.
+2. Ask the whole frontier in one round with the question tool. Number each
+   question.
+3. Put the recommendation first among the options, marked as recommended.
+   Word the question so accepting the recommendation is one choice.
 4. Never put two dependent questions in the same round.
-5. End the run with the relay block. Continue only when the orchestrator
-   re-dispatches the planner with the answers.
-6. Settle the answers into the study. Recompute the frontier.
-7. Repeat until the frontier is empty.
+5. Settle the answers into the study on disk before the next round.
+   Recompute the frontier.
+6. Repeat until the frontier is empty.
 
 ## Facts vs Decisions
 
-- A fact is findable. Finding facts is the planner's job. Dispatch a subagent,
-  or read the codebase.
+- A fact is findable. Find it yourself: read the codebase, or search.
 - A decision belongs to the user. Surface it in a question round.
-- Never ask the user for a fact the planner can find.
-- Never answer the planner's own decision question.
+- Never ask the user for a fact you can find.
+- Never answer your own decision question.
+- For an architectural decision with no obvious answer, give 2 to 3 options
+  with trade-offs; do not pick one alone.
 
 ## Findings
 
-- Run one researcher sweep before the first round.
+- Run one look-up sweep of the code and the project notes before the first round.
 - Run a look-up during the interview when a question demands one.
 - Do not ask the user for anything a look-up can settle.
 
@@ -59,35 +60,11 @@ After each round, write into the study document:
 
 The study document is the living record. See the **study** skill.
 
-## The Relay Contract
+## Memory
 
-The planner runs as a stateless subagent. It has no user access. It cannot ask
-the user, and it must never wait for input.
-
-Each turn, the planner does these steps in order:
-
-1. Update the study on disk.
-2. End its reply with exactly one relay block.
-
-When a question stays open, end with:
-
-```
-## QUESTION ROUND <n>
-1. <question>
-   Recommendation: <the recommended answer>
-2. ...
-```
-
-When no question stays open, end with:
-
-```
-## INTERVIEW COMPLETE
-All decisions are settled. The study at <path> waits for owner acceptance.
-```
-
-The orchestrator reads the block, asks the user, and re-dispatches the planner
-with the study path and the answers. The planner re-reads the study from disk
-at the start of every run. The disk file is its memory.
+The study on disk is the record of the interview. Context can be compacted
+between rounds, so write each round into the study before you ask the next one,
+and re-read the study when the context no longer holds it.
 
 ## Handling "I don't know"
 
@@ -104,10 +81,9 @@ at the start of every run. The disk file is its memory.
 
 ## End of the Interview
 
-The interview ends when the frontier is empty. The planner then ends the run
-with `## INTERVIEW COMPLETE`.
-
-Study acceptance is a separate, later step. The **project-notes** skill owns the
+The interview ends when the frontier is empty. Then present the study to the
+owner for acceptance. Acceptance is a separate step: do not implement before
+the owner accepts the study. The **project-notes** skill owns the
 `status.md` stage rules and the reopen.
 
 ## Self-Check

@@ -58,10 +58,8 @@ Confirm the net change is intended. Confirm no workaround scaffolding stays.
 Run the tests and the typecheck on the final tree. All must pass.
 Re-run both after any squash.
 
-Run points have one owner per role. The implementer run point lives in Phase 1 of
-**code-implementation**. The reviewer run point lives in the verification section
-of **code-review-checklist**. This skill owns the final-tree run and the
-squash run.
+Phase 4 of **code-implementation** owns the run after each change. This skill
+owns the final-tree run and the squash run.
 
 ### 4. Plan and Docs State
 
@@ -86,8 +84,6 @@ previous commit.
    The repository's own contribution rules own the commit form. When the
    repository has no commit rule, ask the user before the first commit.
    Unstage as needed with `git add <path>` or `git commit <path>`. Do not use a mixed `git reset`.
-   `git reset --soft` asks for approval on pi, opencode, and Kiro. On Claude
-   Code, the hook gives no decision, so the Claude Code permission flow applies.
 5. Re-run the tests and the typecheck.
 
 ## Rules
@@ -95,7 +91,6 @@ previous commit.
 - One concern per commit.
 - Never rewrite pushed history.
 - Never push before this check passes.
-- Only the orchestrator commits and squashes.
 
 ## Report Format
 
