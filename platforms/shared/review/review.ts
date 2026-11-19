@@ -288,7 +288,7 @@ export function buildBrief(input: BriefInput): ResolvedBrief {
  * no checklist, and the prompt says so, because an author's list is the
  * author's view.
  */
-export function promptForBrief(brief: Brief): string {
+export function promptForBrief(brief: Brief, platform: "Pi" | "Kiro" = "Pi"): string {
 	return [
 		"Review one change in this repository.",
 		"",
@@ -307,9 +307,9 @@ export function promptForBrief(brief: Brief): string {
 		"A scope that git cannot resolve is not a scope: say so in one line, and",
 		"review what you can.",
 		"",
-		"Note for Pi: skill names carry no plugin prefix here. The agent",
-		"instructions name `persona-agents:code-review-checklist`; on Pi load",
-		"`code-review-checklist`. Never a name with the prefix.",
+		`Note for ${platform}: skill names carry no plugin prefix here. The agent`,
+		"instructions name `persona-agents:code-review-checklist`; on",
+		`${platform} load \`code-review-checklist\`. Never a name with the prefix.`,
 		"",
 		"Orient yourself before you judge: the repository and its branch, `git log`",
 		"for the scope, the project rules (AGENTS.md, CLAUDE.md), and the decisions",

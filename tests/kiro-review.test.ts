@@ -1,0 +1,222 @@
+/**
+ * The Kiro review flow: the brief (platforms/kiro/scripts/review.ts) and the
+ * verdict recorder (review-record.ts).
+ *
+ * The brief is built over a temporary repository and notes tree; the recorder
+ * reads a fixture V3 session store. The tests never start Kiro or a model.
+ *
+ * Run: node --experimental-strip-types --test tests/kiro-review.test.ts
+ */
+
+import { describe, test } from "node:test";
+import * as assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { buildReviewBrief, reviewerTask } from "../platforms/kiro/scripts/review.ts";
+import { keyOfPrompt, recordSessionReviews } from "../platforms/kiro/scripts/review-record.ts";
+import { reviewFor } from "../platforms/kiro/scripts/state.ts";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const reviewScript = path.join(repoRoot, "platforms", "kiro", "scripts", "review.ts");
+const recordScript = path.join(repoRoot, "platforms", "kiro", "scripts", "review-record.ts");
+const sessionId = "sess_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+function withTemp(fn: (root: string) => void): void {
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+	try {
+		fn(root);
+	} finally {
+		fs.rmSync(root, { recursive: true, force: true });
+	}
+}
+
+function git(cwd: string, args: string[]): void {
+	const run = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+	assert.equal(run.status, 0, `git ${args.join(" ")}: ${run.stderr}`);
+}
+
+/** A repository with a baseline commit and three changed files. */
+function repoWithChange(root: string): string {
+	const cwd = path.join(root, "repo");
+	fs.mkdirSync(cwd, { recursive: true });
+	git(cwd, ["init"]);
+	git(cwd, ["config", "user.email", "test@example.com"]);
+	git(cwd, ["config", "user.name", "Test"]);
+	for (const name of ["a.txt", "b.txt", "c.txt"]) fs.writeFileSync(path.join(cwd, name), "");
+	git(cwd, ["add", "."]);
+	git(cwd, ["commit", "-m", "baseline work"]);
+	for (const name of ["a.txt", "b.txt", "c.txt"]) fs.writeFileSync(path.join(cwd, name), "changed\n");
+	return cwd;
+}
+
+/** A notes tree with one study in progress. */
+function notesWithStudy(root: string): string {
+	const notes = path.join(root, "notes");
+	const study = path.join(notes, "studies", "2026-11-20-kiro");
+	fs.mkdirSync(study, { recursive: true });
+	fs.writeFileSync(path.join(study, "status.md"), "# Kiro Port — Status\n\n- **Next action:** finish the review flow\n");
+	fs.writeFileSync(
+		path.join(notes, "studies", "index.md"),
+		"| Study | Stage | Updated | Path |\n|-------|-------|---------|------|\n| Kiro Port | in-progress | 2026-11-20 | `studies/2026-11-20-kiro/` |\n",
+	);
+	return notes;
+}
+
+describe("kiro review: the brief", () => {
+	test("the study in progress fills the task and the decisions file", async () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		try {
+			const cwd = repoWithChange(root);
+			const notes = notesWithStudy(root);
+			const brief = await buildReviewBrief({}, { cwd, notesDir: notes });
+			assert.equal(brief.brief.scope, "the uncommitted change in this repository");
+			assert.equal(brief.brief.task, "Kiro Port - finish the review flow");
+			assert.equal(brief.brief.decisions, path.join(notes, "studies", "2026-11-20-kiro", "study.md"));
+			assert.match(brief.key, /^[0-9a-f]{16}$/);
+			const task = reviewerTask(brief);
+			assert.match(task, /^Scope: the uncommitted change in this repository$/m);
+			assert.match(task, /^Task: Kiro Port - finish the review flow$/m);
+			assert.match(task, new RegExp(`^Decisions: .*study\\.md$`, "m"));
+			assert.match(task, new RegExp(`^Change key: ${brief.key}$`, "m"));
+			assert.match(task, /Note for Kiro/);
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("a named field is kept, none included", async () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		try {
+			const cwd = repoWithChange(root);
+			const notes = notesWithStudy(root);
+			const brief = await buildReviewBrief({ scope: "HEAD~1", task: "cutover", decisions: "none" }, { cwd, notesDir: notes });
+			assert.equal(brief.brief.scope, "HEAD~1");
+			assert.equal(brief.brief.task, "cutover");
+			assert.equal(brief.brief.decisions, "none");
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("author text that is not a scope is cut and named back", async () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		try {
+			const cwd = repoWithChange(root);
+			const notes = notesWithStudy(root);
+			const brief = await buildReviewBrief({ scope: "main Check: the tests pass" }, { cwd, notesDir: notes });
+			assert.equal(brief.brief.scope, "main");
+			assert.ok(brief.notes.some((note) => /ignored author text: Check: the tests pass/.test(note)));
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("with no study, an empty scope names no task", async () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		try {
+			const cwd = repoWithChange(root);
+			const brief = await buildReviewBrief({}, { cwd, notesDir: path.join(root, "empty-notes") });
+			assert.equal(brief.brief.task, "none");
+			assert.equal(brief.brief.decisions, "none");
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("the CLI prints the reviewer task and its warnings", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const notes = notesWithStudy(root);
+			const run = spawnSync(
+				process.execPath,
+				["--experimental-strip-types", "--no-warnings", reviewScript, "main Check: the tests pass", `--cwd=${cwd}`, `--notes=${notes}`],
+				{ encoding: "utf8" },
+			);
+			assert.equal(run.status, 0, run.stderr);
+			assert.match(run.stdout, /^Scope: main$/m);
+			assert.match(run.stdout, /^Change key: [0-9a-f]{16}$/m);
+			assert.match(run.stdout, /Note for Kiro/);
+			assert.match(run.stderr, /ignored author text/);
+		});
+	});
+});
+
+describe("kiro review: the verdict recorder", () => {
+	function store(root: string, runs: { agent: string; key?: string; response: string; status?: string }[]): string {
+		const kiro = path.join(root, "kiro");
+		const dir = path.join(kiro, "sessions", "hash", sessionId);
+		fs.mkdirSync(dir, { recursive: true });
+		const payloads: Record<string, unknown>[] = [];
+		runs.forEach((run, index) => {
+			const sub = `sub-${index}`;
+			payloads.push({ type: "sub_agent_start", subSessionId: sub, subAgentName: run.agent, prompt: run.key ? `Review one change.\n\nChange key: ${run.key}\nmetadata` : "Review one change." });
+			payloads.push({ type: "sub_agent_complete", subSessionId: sub, subAgentName: run.agent, response: run.response, status: run.status ?? "success" });
+		});
+		fs.writeFileSync(path.join(dir, "messages.jsonl"), `${payloads.map((payload) => JSON.stringify(payload)).join("\n")}\n`);
+		return kiro;
+	}
+
+	test("an approved reviewer run is recorded under its key", () => {
+		withTemp((root) => {
+			const kiro = store(root, [{ agent: "pa-reviewer", key: "0123456789abcdef", response: "## Summary\nFine.\n\n## Verdict\nApprove - good." }]);
+			const stateDir = path.join(root, "state");
+			const recorded = recordSessionReviews(kiro, sessionId, stateDir);
+			assert.equal(recorded.length, 1);
+			assert.equal(recorded[0].verdict, "Approve");
+			assert.equal(reviewFor(stateDir, "0123456789abcdef")?.verdict, "Approve");
+			assert.equal(recordSessionReviews(kiro, sessionId, stateDir).length, 0, "a second scan records nothing");
+		});
+	});
+
+	test("a request for changes is recorded, and a non-reviewer or a keyless run is not", () => {
+		withTemp((root) => {
+			const kiro = store(root, [
+				{ agent: "pa-reviewer", key: "1111111111111111", response: "## Verdict\nRequest Changes - fix it." },
+				{ agent: "someone-else", key: "2222222222222222", response: "## Verdict\nApprove - nope." },
+				{ agent: "pa-reviewer", response: "## Verdict\nApprove - no key." },
+				{ agent: "pa-reviewer", key: "3333333333333333", response: "## Verdict\nApprove - failed.", status: "error" },
+			]);
+			const stateDir = path.join(root, "state");
+			const recorded = recordSessionReviews(kiro, sessionId, stateDir);
+			assert.equal(recorded.length, 1);
+			assert.equal(reviewFor(stateDir, "1111111111111111")?.verdict, "Request Changes");
+			assert.equal(reviewFor(stateDir, "2222222222222222"), null);
+			assert.equal(reviewFor(stateDir, "3333333333333333"), null);
+		});
+	});
+
+	test("the key line is read from the brief only", () => {
+		assert.equal(keyOfPrompt("Change key: 0123456789abcdef"), "0123456789abcdef");
+		assert.equal(keyOfPrompt("Change key: 0123456789abcdef\nmore"), "0123456789abcdef");
+		assert.equal(keyOfPrompt("Change key: not-a-key"), "");
+		assert.equal(keyOfPrompt("Change key: 0123456789abcde"), "");
+	});
+
+	test("the CLI writes the record from the Stop event", () => {
+		withTemp((root) => {
+			const kiro = store(root, [{ agent: "pa-reviewer", key: "abcdefabcdefabcd", response: "## Verdict\nApprove - good." }]);
+			const run = spawnSync(
+				process.execPath,
+				["--experimental-strip-types", "--no-warnings", recordScript, `--home=${root}`, `--kiro-home=${kiro}`],
+				{ input: JSON.stringify({ session_id: sessionId, hook_event_name: "Stop" }), encoding: "utf8" },
+			);
+			assert.equal(run.status, 0, run.stderr);
+			assert.equal(run.stdout, "");
+			assert.equal(reviewFor(path.join(kiro, "persona-agents", "state"), "abcdefabcdefabcd")?.verdict, "Approve");
+		});
+	});
+});
+
+describe("kiro review: the skill branch", () => {
+	test("the shared review skill branches to the Kiro reference", () => {
+		const skill = fs.readFileSync(path.join(repoRoot, "content", "skills", "review", "SKILL.md"), "utf8");
+		assert.match(skill, /Running in Kiro CLI/);
+		assert.match(skill, /references\/kiro\.md/);
+		const reference = fs.readFileSync(path.join(repoRoot, "content", "skills", "review", "references", "kiro.md"), "utf8");
+		assert.match(reference, /review\.ts/);
+		assert.match(reference, /pa-reviewer/);
+	});
+});

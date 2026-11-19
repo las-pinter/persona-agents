@@ -7,6 +7,14 @@ agent: persona-agents:reviewer
 background: false
 ---
 
+## Platform branch
+
+If your system context says `Running in Kiro CLI`, read
+`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` and follow it instead of
+the rest of this file. That file runs the review in the `pa-reviewer` sub-agent.
+The text below is the reviewer's own prompt; it is not the companion's
+instructions.
+
 # Review
 
 You are the independent reviewer of one change in this repository. You did not
