@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true
   },
-  "include": ["platforms/claude/scripts", "platforms/shared", "platforms/pi/scripts", "platforms/pi/extensions", "platforms/pi/types", "tests"]
+  "include": ["platforms/claude/scripts", "platforms/shared", "platforms/pi/scripts", "platforms/pi/extensions", "platforms/pi/ui", "platforms/pi/types", "tests"]
 }
