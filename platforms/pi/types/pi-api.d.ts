@@ -53,6 +53,7 @@ declare module "@earendil-works/pi-coding-agent" {
 		};
 		sessionManager: {
 			getEntries(): EntryLike[];
+			getSessionId(): string;
 			getSessionFile(): string | undefined;
 		};
 	}

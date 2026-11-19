@@ -70,6 +70,8 @@ const RELOAD_LIST = "persona-agents:reload-list";
 const SECTIONS = ["profession", "persona", "platform"] as const;
 
 interface Session {
+	/** The id of this Pi session, from its manager: an inherited env var is not it. */
+	id: string;
 	profile: Profile;
 	theme: string;
 	registry: Registry;
@@ -99,10 +101,6 @@ function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
 /** True when the log keeps allowed calls too (the audit trail is otherwise failures only). */
 function logsAllows(): boolean {
 	return process.env.PERSONA_AGENTS_DEBUG === "1";
-}
-
-function sessionId(): string {
-	return process.env.PI_SESSION_ID || "unknown";
 }
 
 /** Start the agent for this session, or return null and explain why. */
@@ -149,6 +147,7 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 	const policy = loadPolicy(refs, profile.name);
 
 	const session: Session = {
+		id: ctx.sessionManager.getSessionId() || "unknown",
 		profile,
 		theme,
 		registry,
@@ -591,10 +590,10 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		const input = event.input ?? {};
 		const decision = decidePolicy(session.profile, event.toolName, input, session.policy, session.env);
 		if (decision.verdict === "allow") {
-			if (logsAllows()) appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: sessionId() }));
+			if (logsAllows()) appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
 			return undefined;
 		}
-		appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: sessionId() }));
+		appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
 		if (decision.verdict === "deny") return { block: true, reason: decision.reason };
 		if (decision.verdict === "ask") return handleAsk(ctx, session, event.toolName, input, decision);
 		// Allowed by policy: the companion still needs a review for a real commit.
@@ -621,9 +620,9 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		const at = new Date();
 		const yesterday = new Date(at.getTime() - 86_400_000);
 		// A wrap-up already ran, or the session wrote nothing worth an entry.
-		if (findEntry(notesDir, sessionId(), [dayOf(at), dayOf(yesterday)])) return;
+		if (findEntry(notesDir, session.id, [dayOf(at), dayOf(yesterday)])) return;
 		const payload: Payload = {
-			session: sessionId(),
+			session: session.id,
 			notesDir,
 			at: at.toISOString(),
 			pi: piInvocation(),
@@ -633,7 +632,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		try {
 			const dir = join(piAgentDir(), "persona-agents");
 			mkdirSync(dir, { recursive: true });
-			const file = join(dir, `journal-${sessionId().replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+			const file = join(dir, `journal-${session.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
 			writeFileSync(file, JSON.stringify(payload));
 			// Detached: a shutdown must not wait for a model, and this process is
 			// about to exit. The writer removes its own payload.
@@ -668,13 +667,13 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			const notesDir = session.env.notesDir;
 			const action = String(params.action);
 			if (action === "path") {
-				const path = entryPath(notesDir, sessionId());
+				const path = entryPath(notesDir, session.id);
 				return { content: [{ type: "text", text: path }], details: { path } };
 			}
 			if (action === "write") {
 				const text = typeof params.text === "string" ? params.text : "";
 				if (text.trim() === "") return { content: [{ type: "text", text: "journal write needs the entry text" }], isError: true };
-				const path = entryPath(notesDir, sessionId());
+				const path = entryPath(notesDir, session.id);
 				mkdirSync(dirname(path), { recursive: true });
 				writeFileSync(path, text.endsWith("\n") ? text : `${text}\n`);
 				return { content: [{ type: "text", text: `journal entry written: ${path}` }], details: { path } };
@@ -704,11 +703,11 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			}
 			let decisions: DecisionLine[] = [];
 			try {
-				decisions = sessionDecisions(parseDecisions(readFileSync(logFile(), "utf8")), sessionId());
+				decisions = sessionDecisions(parseDecisions(readFileSync(logFile(), "utf8")), session.id);
 			} catch {
 				// No log yet is normal: the retro then runs on the entries alone.
 			}
-			const entry = entryPath(session.env.notesDir, sessionId());
+			const entry = entryPath(session.env.notesDir, session.id);
 			const facts = summarizeSession({
 				entries: ctx.sessionManager.getEntries() as EntryLike[],
 				decisions,

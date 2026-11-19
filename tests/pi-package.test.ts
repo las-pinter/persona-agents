@@ -138,6 +138,15 @@ describe("pi package: one parser, two platforms", () => {
 		}
 	});
 
+	test("the session id comes from the session manager, never the environment", () => {
+		// PI_SESSION_ID is inherited by every child process: a reviewer or a
+		// second pi started from a session would file its journal entry under the
+		// parent's id, at the parent's path.
+		const wiring = read("platforms/pi/extensions/index.ts");
+		assert.equal(wiring.includes("PI_SESSION_ID"), false);
+		assert.match(wiring, /sessionManager\.getSessionId\(\)/);
+	});
+
 	test("the type shim stays in step with the events the wiring uses", () => {
 		const shim = read("platforms/pi/types/pi-api.d.ts");
 		const wiring = read("platforms/pi/extensions/index.ts");
