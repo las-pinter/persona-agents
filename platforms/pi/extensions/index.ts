@@ -19,11 +19,14 @@
  * than running half-configured.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
+import { dayOf, entryPath, findEntry, recentJournal } from "../scripts/journal.ts";
+import { hasMaterial, sources, type Payload } from "../scripts/journal-net.ts";
 import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../scripts/notes.ts";
@@ -46,6 +49,7 @@ import {
 	type Verdict,
 } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
+import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../scripts/retro.ts";
 import {
 	commitGate,
 	isCommitCommand,
@@ -608,6 +612,112 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				return;
 			}
 			permissionsCommand(pi, session, args, ctx);
+		},
+	});
+
+	pi.on("session_shutdown", (event, ctx) => {
+		if (!session || event.reason !== "quit" || session.profile.name !== "companion") return;
+		const notesDir = session.env.notesDir;
+		const at = new Date();
+		const yesterday = new Date(at.getTime() - 86_400_000);
+		// A wrap-up already ran, or the session wrote nothing worth an entry.
+		if (findEntry(notesDir, sessionId(), [dayOf(at), dayOf(yesterday)])) return;
+		const payload: Payload = {
+			session: sessionId(),
+			notesDir,
+			at: at.toISOString(),
+			pi: piInvocation(),
+			sources: sources(ctx.sessionManager.getEntries() as EntryLike[], notesDir),
+		};
+		if (!hasMaterial(payload.sources)) return;
+		try {
+			const dir = join(piAgentDir(), "persona-agents");
+			mkdirSync(dir, { recursive: true });
+			const file = join(dir, `journal-${sessionId().replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+			writeFileSync(file, JSON.stringify(payload));
+			// Detached: a shutdown must not wait for a model, and this process is
+			// about to exit. The writer removes its own payload.
+			const child = spawn(
+				process.execPath,
+				["--experimental-strip-types", "--no-warnings", fileURLToPath(new URL("../scripts/journal-writer.ts", import.meta.url)), file],
+				{ detached: true, stdio: "ignore", env: { ...process.env, PERSONA_AGENTS_JOURNAL_WRITER: "1" } },
+			);
+			child.unref();
+		} catch {
+			// A journal entry is a convenience; a failed spawn is not worth an error.
+		}
+	});
+
+	pi.registerTool({
+		name: "journal",
+		label: "Journal",
+		description:
+			"This session's journal entry: `path` for where it goes, `write` to save the whole entry there, `recent` to read the last days. Use `path` first when you wrap up.",
+		parameters: {
+			type: "object",
+			properties: {
+				action: { type: "string", enum: ["path", "write", "recent"] },
+				text: { type: "string", description: "The complete entry, for action `write`." },
+				days: { type: "number", description: "For `recent`: how many day folders, default 3." },
+			},
+			required: ["action"],
+			additionalProperties: false,
+		},
+		async execute(_toolCallId, params) {
+			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
+			const notesDir = session.env.notesDir;
+			const action = String(params.action);
+			if (action === "path") {
+				const path = entryPath(notesDir, sessionId());
+				return { content: [{ type: "text", text: path }], details: { path } };
+			}
+			if (action === "write") {
+				const text = typeof params.text === "string" ? params.text : "";
+				if (text.trim() === "") return { content: [{ type: "text", text: "journal write needs the entry text" }], isError: true };
+				const path = entryPath(notesDir, sessionId());
+				mkdirSync(dirname(path), { recursive: true });
+				writeFileSync(path, text.endsWith("\n") ? text : `${text}\n`);
+				return { content: [{ type: "text", text: `journal entry written: ${path}` }], details: { path } };
+			}
+			if (action === "recent") {
+				const days = typeof params.days === "number" && params.days > 0 ? Math.min(params.days, 30) : 3;
+				const entries = recentJournal(notesDir, days);
+				return {
+					content: [
+						{
+							type: "text",
+							text: entries.length ? entries.map((entry) => `<!-- ${entry.path} -->\n${entry.text}`).join("\n\n") : "no journal entries",
+						},
+					],
+				};
+			}
+			return { content: [{ type: "text", text: "journal action must be path, write, or recent" }], isError: true };
+		},
+	});
+
+	pi.registerCommand("retro", {
+		description: "Print-only retrospective of this session, from the facts it recorded",
+		handler: (_args, ctx) => {
+			if (!session) {
+				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
+				return;
+			}
+			let decisions: DecisionLine[] = [];
+			try {
+				decisions = sessionDecisions(parseDecisions(readFileSync(logFile(), "utf8")), sessionId());
+			} catch {
+				// No log yet is normal: the retro then runs on the entries alone.
+			}
+			const entry = entryPath(session.env.notesDir, sessionId());
+			const facts = summarizeSession({
+				entries: ctx.sessionManager.getEntries() as EntryLike[],
+				decisions,
+				journal: existsSync(entry) ? [entry] : [],
+			});
+			pi.sendMessage(
+				{ customType: "persona-agents:retro", content: `${RETRO_INSTRUCTION}\n\n${facts}`, display: true },
+				{ triggerTurn: true },
+			);
 		},
 	});
 

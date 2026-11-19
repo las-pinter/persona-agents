@@ -12,15 +12,17 @@ Follow the **persona-free-documents** skill: the entry holds no persona voice.
 
 ## Steps
 
-1. Get the entry path for this session:
+1. Get the entry path for this session. On Pi, call the `journal` tool with
+   `action: "path"`. On Claude Code, run:
 
-   ```
+   ```sh
    node "${CLAUDE_SKILL_DIR}/../../../platforms/claude/scripts/journal.mjs" path --session=${CLAUDE_SESSION_ID}
    ```
 
    The path is this session's existing entry (today or yesterday) or a new
    one. Each session has its own file, so parallel sessions never collide.
-2. Write the whole entry to that path with the Write tool, in the format
+2. Write the whole entry to that path — the `journal` tool with
+   `action: "write"` on Pi, the Write tool on Claude Code — in the format
    below. When the file exists, read it first and write the merged entry: a
    second wrap-up replaces the first.
 3. Update each session notes file this session worked on: mark the plan

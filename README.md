@@ -120,11 +120,12 @@ either file.
   session used, the session notes, and the pinned documents. After it, the
   companion reloads them before it continues — so the plan, the skills, and the
   key documents survive.
-- **Wrap-up.** `/persona-agents:wrap-up` writes this session's journal entry.
+- **Wrap-up.** On Pi `/skill:wrap-up`, on Claude Code `/persona-agents:wrap-up`;
+  either writes this session's journal entry.
   Each session writes its own file, so parallel sessions never collide. If you
   exit without a wrap-up, a background writer creates a shorter entry for you.
-- **Retro.** `/persona-agents:retro` prints a blameless review of the session
-  with findings and actions. It writes no files.
+- **Retro.** `/retro` on Pi, `/persona-agents:retro` on Claude Code: a blameless
+  review of the session with findings and actions. It writes no files.
 
 Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
 the repository's folder name (shared by all its worktrees), or `common`

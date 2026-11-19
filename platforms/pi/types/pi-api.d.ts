@@ -78,6 +78,11 @@ declare module "@earendil-works/pi-coding-agent" {
 		previousSessionFile?: string;
 	}
 
+	export interface SessionShutdownEvent {
+		reason: "quit" | "reload" | "new" | "resume" | "fork";
+		targetSessionFile?: string;
+	}
+
 	export interface SessionCompactEvent {
 		reason: "manual" | "threshold" | "overflow";
 		willRetry: boolean;
@@ -133,6 +138,7 @@ declare module "@earendil-works/pi-coding-agent" {
 		on(event: "tool_call", handler: (event: ToolCallEvent, ctx: ExtensionContext) => unknown): void;
 		on(event: "session_before_compact", handler: (event: SessionBeforeCompactEvent, ctx: ExtensionContext) => unknown): void;
 		on(event: "session_compact", handler: (event: SessionCompactEvent, ctx: ExtensionContext) => unknown): void;
+		on(event: "session_shutdown", handler: (event: SessionShutdownEvent, ctx: ExtensionContext) => unknown): void;
 		registerCommand(name: string, options: { description: string; handler: (args: string, ctx: ExtensionContext) => unknown }): void;
 		setActiveTools(names: string[]): void;
 		getActiveTools(): string[];

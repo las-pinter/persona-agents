@@ -11,6 +11,10 @@ disable-model-invocation: true
 Review the current session and print the result in chat. Write nothing
 durable.
 
+On Pi, `/retro` gathers the session facts (tool calls, changed files,
+compactions, reviews, and every permission decision) and sends them here. On
+Claude Code, `/persona-agents:retro` starts the same work.
+
 The spine is the After Action Review (AAR). It has four parts:
 
 1. What was supposed to happen.

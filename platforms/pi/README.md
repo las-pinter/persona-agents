@@ -57,6 +57,7 @@ user enabled (MCP, other extensions) stay enabled.
 | `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. An allowed `git commit` of an unreviewed, non-trivial change asks first. |
 | `session_before_compact` | Build the reload manifest from the branch and save it, then let Pi summarize with the manifest's focus. |
 | `session_compact` | Record the compaction, and send the reload list at once: steered mid-run, stored when idle. |
+| `session_shutdown` | On `quit`, start the detached journal writer when the session has no entry. |
 
 The read list is paths and short facts, never contents: the companion reads
 the files itself. `notes.ts` builds it from the project rules, the summary,
@@ -121,6 +122,34 @@ in context, so `/tree` navigation and `/fork` cannot point the reload at
 another branch's plan. The profession, persona, and platform note are prompt
 sections rebuilt every run, so they are never part of what compaction replaces.
 
+## Journal
+
+A session that ends without a wrap-up still leaves an entry.
+
+- **The good path** is the `wrap-up` skill: `journal` with `action: "path"`
+  gives this session's entry path (today's or yesterday's entry if one exists,
+  else a new one), then `action: "write"` saves the whole entry. The tool writes
+  the standard format; nothing else in the plugin touches the journal tree.
+- **The safety net** runs on `session_shutdown` with reason `quit`, and only for
+  the companion. If the session has no entry and has material, it writes a
+  payload to `<pi agent dir>/persona-agents/journal-<session>.json` and detaches
+  `node --experimental-strip-types platforms/pi/scripts/journal-writer.ts`. The
+  writer runs one headless Pi request (`-p -nt --no-session`, no tools), and
+  writes the entry only when it still does not exist. The material is capped:
+  8k characters of session notes, 20k of compaction summaries, 20k of the
+  conversation after the last compaction. A failure is silent by design.
+- A `/new`, `/resume`, or `/reload` does not trigger the writer: those end a
+  runtime, not a session.
+
+## Retro
+
+`/retro` is print-only. It reads the facts rather than the model's memory: the
+decisions log for this session (`verdict`, `source`, `reason` per tool call),
+the tool calls and changed files from the branch entries, the compactions, the
+stored review verdicts, and the journal entry when one exists. `scripts/retro.ts`
+does the counting and the caps; the command sends the facts plus the instruction
+to write nothing durable.
+
 ## Permissions
 
 Pi has no permission engine, so this gate is the whole policy. Layers, first
@@ -184,9 +213,3 @@ folder: every module takes its home, notes folder, and policy files as
 arguments, and each test builds them in a temp dir. `tests/pi-package.test.ts`
 keeps the `pi` manifest equal to what the package ships and asserts that
 `platforms/shared/shell` holds the only copy of the parser.
-
-## Not built yet
-
-The reviewer subagent (`agents/`), the compaction reload manifest, the
-journal safety net on `session_shutdown`, and `/retro`. The Claude adapter has
-all four; this list is the gap between the two.
