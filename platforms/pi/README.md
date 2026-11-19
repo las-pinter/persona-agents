@@ -223,6 +223,13 @@ There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
 | `PI_CODING_AGENT_DIR` | The Pi agent dir: policy file, decisions log. `PI_CODING_AGENT` is pi's own `"true"` marker and is never a path. |
 | `PI_SESSION_ID` | The session id recorded with each decision and journal line. |
 
+**Upgrade note.** Earlier builds read `PI_CODING_AGENT` as a path, which is
+`"true"`, so the user policy and the decision log were written under
+`<cwd>/true/persona-agents/` in every repository. Those files are no longer
+read. Re-apply any `/permissions` grants you need with
+`/permissions allow <tool> <regex>`, and delete the stray `true/` folder. Add
+this line to the release notes whenever a release carries the fix.
+
 ## Testing
 
 `npm test` runs `tests/pi-*.test.ts` under plain Node with type stripping.

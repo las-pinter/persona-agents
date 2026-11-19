@@ -419,10 +419,11 @@ async function prepareBrief(
 	const finalized = finalizeBrief(prepared.brief, prepared.given, {
 		notesDir: session.env.notesDir,
 		indexText,
-		readStatus: readText,
+		readFile: readText,
 	});
 	let brief = finalized.brief;
-	if (finalized.needsSubjects) {
+	// No scope means the uncommitted change, which has no commits of its own.
+	if (finalized.needsSubjects && brief.scope !== "") {
 		const subjects = await subjectsFromQueries(brief.scope, async (args) => pi.exec("git", args, { cwd: session.env.cwd }));
 		brief = { ...brief, task: deriveTask("", "", subjects) };
 	}
