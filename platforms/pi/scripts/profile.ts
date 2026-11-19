@@ -13,7 +13,7 @@
 
 export const AGENT_PREFIX = "persona-agents:";
 /** The theme used when neither the flag nor the settings name one. */
-export const DEFAULT_THEME = "goblin";
+export { DEFAULT_THEME } from "../../shared/context/context.ts";
 
 export type ProfileName = "companion" | "reviewer";
 

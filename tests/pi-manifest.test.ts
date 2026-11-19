@@ -1,5 +1,5 @@
 /**
- * The compaction manifest (platforms/pi/scripts/manifest.ts).
+ * The compaction manifest (platforms/shared/compaction/manifest.ts).
  *
  * A compaction must not lose the plan. The manifest names the skills the
  * session used, the session notes file, and the documents to re-read; the
@@ -13,7 +13,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { buildManifest, reloadContext, skillOfPath, summaryInstructions, type EntryLike } from "../platforms/pi/scripts/manifest.ts";
+import { buildManifest, reloadContext, skillOfPath, summaryInstructions, type EntryLike } from "../platforms/shared/compaction/manifest.ts";
 
 /** An assistant message holding the given tool calls, in pi's block shape. */
 function toolCalls(...calls: { name: string; args: Record<string, unknown> }[]): EntryLike {

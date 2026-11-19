@@ -25,12 +25,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
-import { dayOf, entryPath, findEntry, recentJournal } from "../scripts/journal.ts";
-import { hasMaterial, sources, type Payload } from "../scripts/journal-net.ts";
-import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
+import { dayOf, entryPath, findEntry, recentJournal } from "../../shared/notes/journal.ts";
+import { hasMaterial, sources, type Payload } from "../../shared/notes/journal-net.ts";
+import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../../shared/compaction/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
-import { startupContext } from "../scripts/notes.ts";
-import { projectDir, projectName } from "../scripts/notes-paths.ts";
+import { startupContext } from "../../shared/notes/notes.ts";
+import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
 import {
 	addRule,
@@ -49,7 +49,7 @@ import {
 	type Verdict,
 } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
-import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../scripts/retro.ts";
+import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
 import {
 	buildBrief,
 	commitGate,
@@ -70,7 +70,7 @@ import {
 	type BriefInput,
 	type Change,
 	type Verdict as ReviewVerdict,
-} from "../scripts/review.ts";
+} from "../../shared/review/review.ts";
 
 /** The message type of the read list, so a renderer can find it later. */
 const READ_LIST = "persona-agents:read-list";

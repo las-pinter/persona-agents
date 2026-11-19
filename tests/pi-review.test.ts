@@ -1,6 +1,6 @@
 /**
  * The Pi reviewer: the change, the verdict, and the commit gate
- * (platforms/pi/scripts/review.ts).
+ * (platforms/shared/review/review.ts).
  *
  * Run: node --experimental-strip-types --test tests/pi-review.test.ts
  */
@@ -35,7 +35,7 @@ import {
 	subjectQueries,
 	subjectsFromQueries,
 	untrackedFiles,
-} from "../platforms/pi/scripts/review.ts";
+} from "../platforms/shared/review/review.ts";
 
 const DIFF = [
 	"diff --git a/src/gate.ts b/src/gate.ts",

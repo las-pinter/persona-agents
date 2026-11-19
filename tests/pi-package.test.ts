@@ -118,6 +118,33 @@ describe("pi package: the reviewer agent", () => {
 });
 
 describe("pi package: one parser, two platforms", () => {
+	test("the neutral notes, review, compaction, and retro modules live in shared only", () => {
+		const shared = [
+			"platforms/shared/notes/notes-paths.ts",
+			"platforms/shared/notes/notes.ts",
+			"platforms/shared/notes/journal.ts",
+			"platforms/shared/notes/journal-net.ts",
+			"platforms/shared/compaction/manifest.ts",
+			"platforms/shared/review/review.ts",
+			"platforms/shared/retro/retro.ts",
+			"platforms/shared/context/context.ts",
+		];
+		for (const file of shared) assert.ok(fs.existsSync(path.join(repoRoot, file)), `${file} is missing`);
+		for (const name of ["notes-paths.ts", "notes.ts", "journal.ts", "journal-net.ts", "manifest.ts", "review.ts", "retro.ts"]) {
+			assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "pi", "scripts", name)), false, `pi/scripts/${name} is a duplicate`);
+		}
+		// The Pi context file stays as a thin adapter over the shared builder: it
+		// adds only the Pi platform note.
+		assert.match(read("platforms/pi/scripts/context.ts"), /shared\/context\/context\.ts/);
+	});
+
+	test("the pi extension imports the shared notes, review, compaction, and retro modules", () => {
+		const source = read("platforms/pi/extensions/index.ts");
+		for (const part of ["shared/notes/journal.ts", "shared/notes/notes.ts", "shared/compaction/manifest.ts", "shared/review/review.ts", "shared/retro/retro.ts"]) {
+			assert.ok(source.includes(part), `the extension does not import ${part}`);
+		}
+	});
+
 	test("the shell parser lives in platforms/shared and only there", () => {
 		for (const file of ["shell-parse.ts", "shell-grammar.ts", "gates.ts"]) {
 			assert.ok(fs.existsSync(path.join(repoRoot, "platforms", "shared", "shell", file)), `shared/${file} is missing`);

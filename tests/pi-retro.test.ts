@@ -1,5 +1,5 @@
 /**
- * `/retro` session facts (platforms/pi/scripts/retro.ts).
+ * `/retro` session facts (platforms/shared/retro/retro.ts).
  *
  * The retro is print-only and evidence-based: these tests pin what it counts,
  * what it caps, and that a broken log line never breaks the retro.
@@ -9,8 +9,8 @@
 
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import type { EntryLike } from "../platforms/pi/scripts/manifest.ts";
-import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, toolCalls } from "../platforms/pi/scripts/retro.ts";
+import type { EntryLike } from "../platforms/shared/compaction/manifest.ts";
+import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, toolCalls } from "../platforms/shared/retro/retro.ts";
 
 function assistant(...calls: { name: string; args: Record<string, unknown> }[]): EntryLike {
 	return {
