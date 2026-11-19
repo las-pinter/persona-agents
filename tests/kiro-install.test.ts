@@ -123,7 +123,7 @@ describe("kiro install: a fresh install", () => {
 		withTemp((temp) => {
 			assert.ok(fresh(temp).ok);
 			const agent = readJson(path.join(temp.kiro, "agents", "pa-companion.json"));
-			assert.match(String(agent.prompt), /^file:\/\/.*content\/professions\/companion\.md$/);
+			assert.match(String(agent.prompt), /^# Companion\n/);
 			assert.deepEqual(agent.tools, ["read", "write", "shell", "web", "subagent/pa-reviewer"]);
 			assert.equal((agent.resources as string[]).length, 21);
 			assert.ok((agent.resources as string[]).every((resource) => resource.includes(`/skills/`) && resource.endsWith("/SKILL.md")));
@@ -143,6 +143,7 @@ describe("kiro install: a fresh install", () => {
 		withTemp((temp) => {
 			assert.ok(fresh(temp).ok);
 			const reviewer = readJson(path.join(temp.kiro, "agents", "pa-reviewer.json"));
+			assert.match(String(reviewer.prompt), /^You are an independent code reviewer\./);
 			assert.deepEqual(reviewer.tools, ["read", "web", "shell"]);
 			const hooks = reviewer.hooks as Array<Record<string, unknown>>;
 			assert.equal(hooks.length, 1);

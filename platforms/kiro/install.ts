@@ -290,7 +290,8 @@ export function companionAgent(plan: Plan, registry: Registry, kiroCli: string):
 	return {
 		name: "pa-companion",
 		description: entry?.description ?? "The persona-agents companion: one agent that plans, builds, tests, and commits with the owner, in a persona voice.",
-		prompt: `file://${join(plan.payload, "content", "professions", "companion.md")}`,
+		// Kiro rejects an absolute `file://` prompt, so the body is inlined.
+		prompt: readFileSync(join(plan.payload, "content", "professions", "companion.md"), "utf8"),
 		...(entry?.welcomeMessage ? { welcomeMessage: entry.welcomeMessage } : {}),
 		tools: ["read", "write", "shell", "web", "subagent/pa-reviewer"],
 		resources: plan.skillNames.map((name) => `skill://${join(plan.kiroHome, "skills", name, "SKILL.md")}`),
@@ -304,7 +305,7 @@ export function reviewerAgent(plan: Plan): Record<string, unknown> {
 	return {
 		name: "pa-reviewer",
 		description: "Independent, read-only review of a change, in a separate context. Returns findings with severity and location and a verdict. Started by the companion's review skill.",
-		prompt: `file://${join(plan.payload, "platforms", "kiro", "agents", "reviewer-prompt.md")}`,
+		prompt: readFileSync(join(plan.payload, "platforms", "kiro", "agents", "reviewer-prompt.md"), "utf8"),
 		tools: ["read", "web", "shell"],
 		resources: plan.skillNames.map((name) => `skill://${join(plan.kiroHome, "skills", name, "SKILL.md")}`),
 		permissions: { rules: reviewerRules(plan.payload) },
