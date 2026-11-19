@@ -24,12 +24,22 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
 import { dayOf, entryPath, findEntry, recentJournal } from "../scripts/journal.ts";
 import { hasMaterial, sources, type Payload } from "../scripts/journal-net.ts";
 import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../scripts/notes.ts";
+import {
+	journalLine,
+	listLine,
+	permissionsLine,
+	retroLine,
+	reviewLine,
+	summarizeReview,
+} from "../scripts/summary.ts";
+import { ReviewPanel, type PanelModel } from "../ui/panel.ts";
 import { projectDir, projectName } from "../scripts/notes-paths.ts";
 import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
 import {
@@ -78,6 +88,41 @@ const READ_LIST = "persona-agents:read-list";
 const RELOAD_LIST = "persona-agents:reload-list";
 /** The section names this extension owns in the system prompt. */
 const SECTIONS = ["profession", "persona", "platform"] as const;
+/** The widget key of the review panel above the editor. */
+const REVIEW_PANEL = "persona-agents:review-panel";
+
+/** The panel shows the one line it was last given. */
+let panel: ReviewPanel | null = null;
+
+/** Show, replace, or clear the review panel. */
+function setPanel(ctx: ExtensionContext | undefined, model: PanelModel | null): void {
+	if (!ctx?.hasUI) return;
+	if (!model) {
+		panel = null;
+		ctx.ui.setWidget(REVIEW_PANEL, undefined);
+		return;
+	}
+	ctx.ui.setWidget(REVIEW_PANEL, (tui, theme) => {
+		panel = new ReviewPanel(model, theme, () => tui.requestRender());
+		return panel;
+	});
+}
+
+/** The plain text of a tool result or a message body. */
+function bodyText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((part): part is { type: string; text?: string } => typeof part === "object" && part !== null && "type" in part)
+		.filter((part) => part.type === "text")
+		.map((part) => part.text ?? "")
+		.join("\n");
+}
+
+/** A collapsed row: the mark, then the one line the summarizer built. */
+function collapsedRow(theme: { fg(color: string, text: string): string }, line: string): Text {
+	return new Text(`${theme.fg("accent", "▸ ")}${line}`, 0, 0);
+}
 
 interface Session {
 	/** The id of this Pi session, from its manager: an inherited env var is not it. */
@@ -487,7 +532,14 @@ async function executeReview(
 	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
 	if (verdict) {
 		session.reviews.set(key, verdict);
-		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
+		pi.appendEntry("persona-agents:review", {
+			at: new Date().toISOString(),
+			key,
+			verdict,
+			files: change.files,
+			line: reviewLine(summarizeReview(text)),
+			text,
+		});
 	}
 	return { text, verdict, key, notes };
 }
@@ -559,13 +611,16 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			const theme = (entry.data as { theme?: unknown } | undefined)?.theme;
 			if (typeof theme === "string" && theme in session.registry) session.theme = theme;
 		}
+		let newest: PanelModel | null = null;
 		for (const entry of ctx.sessionManager.getEntries()) {
 			if (entry.type !== "custom" || entry.customType !== "persona-agents:review") continue;
-			const data = entry.data as { key?: unknown; verdict?: unknown } | undefined;
+			const data = entry.data as { key?: unknown; verdict?: unknown; line?: unknown; text?: unknown } | undefined;
 			if (typeof data?.key === "string" && typeof data.verdict === "string" && ["Approve", "Request Changes", "Reject"].includes(data.verdict)) {
 				session.reviews.set(data.key, data.verdict as ReviewVerdict);
 			}
+			if (typeof data?.line === "string" && data.line !== "") newest = { line: data.line, text: typeof data.text === "string" ? data.text : "" };
 		}
+		if (newest) setPanel(ctx, newest);
 		ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
 	});
 
@@ -723,6 +778,11 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			required: ["action"],
 			additionalProperties: false,
 		},
+		renderResult(result, { expanded }, theme) {
+			const text = bodyText(result.content);
+			if (expanded) return new Text(text, 0, 0);
+			return collapsedRow(theme, journalLine(text));
+		},
 		async execute(_toolCallId, params) {
 			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
 			const notesDir = session.env.notesDir;
@@ -795,7 +855,12 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			},
 			additionalProperties: false,
 		},
-		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+		renderResult(result, { expanded }, theme) {
+			const text = bodyText(result.content);
+			if (expanded) return new Text(text, 0, 0);
+			return collapsedRow(theme, reviewLine(summarizeReview(text)));
+		},
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }] };
 			const input: BriefInput = {};
 			if (typeof params.scope === "string") input.scope = params.scope;
@@ -803,6 +868,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			if (typeof params.decisions === "string") input.decisions = params.decisions;
 			try {
 				const { text, verdict, key, notes } = await executeReview(pi, session, { input }, signal);
+				setPanel(ctx, { line: reviewLine(summarizeReview(text)), text });
 				const extra = notes.map((note) => `\n${note}`).join("");
 				return {
 					content: [{ type: "text", text: `${text}\n\nreview key: ${key}${extra}` }],
@@ -824,6 +890,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			const parsed = parseReviewArgs(args);
 			executeReview(pi, session, { input: parsed.input, dropped: parsed.dropped })
 				.then(({ text, verdict, notes }) => {
+					setPanel(ctx, { line: reviewLine(summarizeReview(text)), text });
 					const extra = notes.map((note) => `\n${note}`).join("");
 					pi.sendMessage({
 						customType: "persona-agents:review",
@@ -832,6 +899,43 @@ export default function personaAgents(pi: ExtensionAPI): void {
 					});
 				})
 				.catch((error: unknown) => ctx.ui.notify(`the review could not run: ${(error as Error).message}`, "error"));
+		},
+	});
+
+	pi.registerMessageRenderer("persona-agents:review", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, reviewLine(summarizeReview(text)));
+	});
+
+	pi.registerMessageRenderer("persona-agents:permissions", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, permissionsLine(text));
+	});
+
+	pi.registerMessageRenderer("persona-agents:retro", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, retroLine(text));
+	});
+
+	for (const [type, name] of [[READ_LIST, "read list"], [RELOAD_LIST, "reload list"]] as const) {
+		pi.registerMessageRenderer(type, (message, options, theme) => {
+			const text = bodyText(message.content);
+			if (options.expanded) return new Text(text, 0, 0);
+			return collapsedRow(theme, listLine(name, text));
+		});
+	}
+
+	pi.registerCommand("review-panel", {
+		description: "Fold or unfold the review panel above the editor",
+		handler: (_args, ctx) => {
+			if (!panel) {
+				ctx.ui.notify("persona-agents: no review panel yet; run a review first", "info");
+				return;
+			}
+			ctx.ui.notify(`persona-agents: review panel ${panel.toggle() ? "unfolded" : "folded"}`, "info");
 		},
 	});
 

@@ -50,6 +50,11 @@ declare module "@earendil-works/pi-coding-agent" {
 			select(title: string, options: string[]): Promise<string | undefined>;
 			confirm(title: string, body: string): Promise<boolean>;
 			setStatus(key: string, text: string | undefined): void;
+			setWidget(
+				key: string,
+				content: string[] | ((tui: { requestRender(): void }, theme: UiTheme) => UiComponent) | undefined,
+				options?: { placement?: "aboveEditor" | "belowEditor" },
+			): void;
 		};
 		sessionManager: {
 			getEntries(): EntryLike[];
@@ -111,6 +116,44 @@ declare module "@earendil-works/pi-coding-agent" {
 		truncated?: boolean;
 	}
 
+	/** A normalized mouse event a component may receive. */
+	export interface UiMouseEvent {
+		type: "press" | "release" | "move" | "drag" | "click" | "wheel";
+		button: "left" | "middle" | "right" | "none";
+		x: number;
+		y: number;
+		screenX: number;
+		screenY: number;
+		shift: boolean;
+		alt: boolean;
+		ctrl: boolean;
+		wheelDelta?: number;
+		clickCount?: number;
+	}
+
+	/** Whether a component handled a mouse event, and what it asks for. */
+	export interface UiMouseResult {
+		handled?: boolean;
+		capture?: boolean;
+		focus?: boolean;
+		requestRender?: boolean;
+	}
+
+	/** A TUI component an extension renderer may return. */
+	export interface UiComponent {
+		render(width: number): string[];
+		invalidate(): void;
+		handleMouse?(event: UiMouseEvent): UiMouseResult | undefined;
+		dispose?(): void;
+	}
+
+	/** The theme an extension renderer may use. */
+	export interface UiTheme {
+		fg(color: string, text: string): string;
+		bold(text: string): string;
+		dim(text: string): string;
+	}
+
 	export interface ToolResult {
 		content: { type: "text"; text: string }[];
 		details?: unknown;
@@ -129,6 +172,12 @@ declare module "@earendil-works/pi-coding-agent" {
 			onUpdate?: unknown,
 			ctx?: ExtensionContext,
 		): Promise<ToolResult>;
+		renderResult?(
+			result: ToolResult,
+			options: { expanded: boolean; isPartial: boolean },
+			theme: UiTheme,
+			context: unknown,
+		): UiComponent;
 	}
 
 	export interface ExtensionAPI {
@@ -154,6 +203,10 @@ declare module "@earendil-works/pi-coding-agent" {
 			options?: { cwd?: string; timeout?: number; signal?: AbortSignal; maxBuffer?: number },
 		): Promise<ExecResult>;
 		registerTool(definition: ToolDefinition): void;
+		registerMessageRenderer(
+			customType: string,
+			renderer: (message: { customType: string; content: unknown }, options: { expanded: boolean }, theme: UiTheme) => UiComponent,
+		): void;
 	}
 
 	/** Pi's own summarizer, used to add a focus to the compaction summary. */
