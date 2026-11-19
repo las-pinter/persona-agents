@@ -3,6 +3,12 @@ name: wrap-up
 description: Write or rewrite this session's journal entry, and close or update the session notes. Run it before the owner ends the session, when the owner asks to wrap up, or after a large piece of work. Safe to run more than once.
 ---
 
+## Platform branch
+
+If your system context says `Running in Kiro CLI`, read
+`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the journal path and
+the write step. Then continue with steps 3 to 5 and the entry format below.
+
 # Wrap-Up
 
 Write this session's journal entry. The journal records what happened; the
