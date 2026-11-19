@@ -25,7 +25,9 @@ Flags:
 - `--claude` / `--kiro` restrict the run; with neither, both are installed.
   When `kiro-cli` is absent the Kiro step is skipped with a message, unless
   `--kiro` was named.
-- `--theme <name>` writes the persona theme; the default is `goblin`.
+- `--theme <name>` writes the persona theme. When the flag is absent the
+  installer keeps the theme already in `config.json`, or writes `goblin` on a
+  first install.
 - `--dry-run` prints the plan and writes nothing.
 - `--force` backs up and replaces a skill folder the installer does not own.
 - `--kiro-home=<dir>` overrides `$KIRO_HOME`; `--kiro-cli=<path>` overrides the
@@ -45,8 +47,9 @@ The installer (`install.ts`) writes:
   and no built-in provides; it is never rewritten.
 
 A skill folder is replaced only when it carries the marker
-`.persona-agents.json`. A folder without the marker stops the install before
-any write; `--force` renames it to `<name>.bak-<timestamp>` and replaces it.
+`.persona-agents.json`. The installer stops before any write when a folder
+lacks the marker; `--force` renames it to `<name>.bak-<timestamp>` and replaces
+it.
 A version below 3.4.0 is refused before any write.
 
 Update with `git pull` and a rerun of `./install.sh`. A changed file is backed
@@ -91,10 +94,11 @@ The payload keeps the repository layout so the relative imports between
 
 ## The three agents
 
-- **`pa-companion`** — the main session. Prompt is
-  `file://<payload>/content/professions/companion.md`; tools `read`, `write`,
-  `shell`, `web`, `subagent/pa-reviewer`; resources are the 21 installed
-  `skill://` files. No model is pinned: the owner's session model is used.
+- **`pa-companion`** — the main session. The prompt is
+  `content/professions/companion.md`, inlined into the config because Kiro
+  rejects an absolute `file://` prompt; tools `read`, `write`, `shell`, `web`,
+  `subagent/pa-reviewer`; resources are the 21 installed `skill://` files. No
+  model is pinned: the owner's session model is used.
 - **`pa-reviewer`** — read-only, separate context. Tools `read`, `web`,
   `shell`; no file-write tool. Its `permissions.rules` deny every `fs_write`,
   and a PreToolUse hook blocks shell writes, git history, and publish commands.

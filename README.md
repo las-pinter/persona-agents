@@ -127,8 +127,8 @@ kiro-cli --agent pa-companion
 
 The native Kiro rules allow the read-only git and test commands. An unreviewed
 non-trivial commit, a push, or a pull request shows Kiro's own permission
-prompt. The automatic journal entry needs an interactive exit, so run the
-wrap-up skill before you quit.
+prompt. The automatic journal entry needs an interactive exit; a headless run
+gets none, so run the wrap-up skill there.
 
 ## How the companion works
 
