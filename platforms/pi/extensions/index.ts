@@ -32,12 +32,14 @@ import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../scripts/notes.ts";
 import {
+	BUILTIN_TOOLS,
 	journalLine,
 	listLine,
 	permissionsLine,
 	retroLine,
 	reviewLine,
 	summarizeReview,
+	toolCallLine,
 } from "../scripts/summary.ts";
 import { projectDir, projectName } from "../scripts/notes-paths.ts";
 import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
@@ -887,6 +889,19 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				})
 				.catch((error: unknown) => ctx.ui.notify(`the review could not run: ${(error as Error).message}`, "error"));
 		},
+	});
+
+	pi.registerToolRenderer((toolName, next) => {
+		if (!BUILTIN_TOOLS.has(toolName)) return next();
+		const base = next();
+		return {
+			...base,
+			renderCall: (args, theme, context) => {
+				// Expanded, the owner wants the real call: Pi's own renderer, or the line.
+				if (context?.expanded) return base?.renderCall?.(args, theme, context) ?? new Text(toolCallLine(toolName, args), 0, 0);
+				return collapsedRow(theme, toolCallLine(toolName, args));
+			},
+		};
 	});
 
 	pi.registerMessageRenderer("persona-agents:review", (message, options, theme) => {

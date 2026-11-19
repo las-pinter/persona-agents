@@ -9,6 +9,7 @@ import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
 	journalLine,
+	toolCallLine,
 	listLine,
 	permissionsLine,
 	retroLine,
@@ -165,6 +166,27 @@ describe("pi summary: the other surfaces", () => {
 		const list = ["## Rules", "- rule one", "- rule two", "", "## Summary", "- summary"].join("\n");
 		assert.equal(listLine("read list", list), "read list  3 paths · 6 lines");
 		assert.equal(listLine("read list", "- none"), "read list  0 paths · 1 lines");
+	});
+
+	test("a bash call shows its first line, cut to one line", () => {
+		assert.equal(toolCallLine("bash", { command: "cd /repo && npm test" }), "bash  cd /repo && npm test");
+		const multi = toolCallLine("bash", { command: "line one\nline two" });
+		assert.equal(multi, "bash  line one");
+		const long = toolCallLine("bash", { command: "x".repeat(400) });
+		assert.ok(long.length <= 127, `the row is ${long.length} characters`);
+		assert.match(long, /…$/);
+	});
+
+	test("a file tool shows the path, and a grep shows where it looked", () => {
+		assert.equal(toolCallLine("read", { path: "src/a.ts" }), "read  src/a.ts");
+		assert.equal(toolCallLine("edit", { path: "src/a.ts" }), "edit  src/a.ts");
+		assert.equal(toolCallLine("grep", { pattern: "todo", path: "src" }), 'grep  "todo" in src');
+		assert.equal(toolCallLine("grep", { pattern: "todo" }), 'grep  "todo"');
+		assert.equal(toolCallLine("ls", {}), "ls  .");
+	});
+
+	test("an unknown tool gets its name alone, never a guess", () => {
+		assert.equal(toolCallLine("mcp__thing", { id: 1 }), "mcp__thing");
 	});
 
 	test("a journal row names the file it wrote", () => {

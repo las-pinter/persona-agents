@@ -180,6 +180,27 @@ declare module "@earendil-works/pi-coding-agent" {
 		): UiComponent;
 	}
 
+	/** What an extension may replace when it draws a tool call or result. */
+	export interface ToolRenderers {
+		renderShell?: (args: Record<string, unknown>, theme: UiTheme, context: ToolRenderContext) => UiComponent;
+		renderCall?: (args: Record<string, unknown>, theme: UiTheme, context: ToolRenderContext) => UiComponent;
+		renderResult?: (
+			result: ToolResult,
+			options: { expanded: boolean; isPartial: boolean },
+			theme: UiTheme,
+			context: ToolRenderContext,
+		) => UiComponent;
+	}
+
+	/** What a tool renderer is told about the call it draws. */
+	export interface ToolRenderContext {
+		expanded: boolean;
+		args?: Record<string, unknown>;
+	}
+
+	/** Chooses how any tool is drawn; `next()` returns what the others would use. */
+	export type ToolRendererResolver = (toolName: string, next: () => ToolRenderers | undefined) => ToolRenderers | undefined;
+
 	export interface ExtensionAPI {
 		registerFlag(name: string, options: { description: string; type: "string" | "boolean"; default?: string | boolean }): void;
 		getFlag(name: string): string | boolean | undefined;
@@ -203,6 +224,7 @@ declare module "@earendil-works/pi-coding-agent" {
 			options?: { cwd?: string; timeout?: number; signal?: AbortSignal; maxBuffer?: number },
 		): Promise<ExecResult>;
 		registerTool(definition: ToolDefinition): void;
+		registerToolRenderer(resolver: ToolRendererResolver): void;
 		registerMessageRenderer(
 			customType: string,
 			renderer: (message: { customType: string; content: unknown }, options: { expanded: boolean }, theme: UiTheme) => UiComponent,

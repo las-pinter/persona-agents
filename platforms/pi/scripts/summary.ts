@@ -151,6 +151,44 @@ export function listLine(name: string, text: string): string {
 	return `${name}  ${paths} paths · ${text.split("\n").length} lines`;
 }
 
+/** The tools whose call row this package shortens; anything else keeps Pi's own. */
+export const BUILTIN_TOOLS = new Set(["bash", "read", "edit", "write", "grep", "find", "ls"]);
+
+/** A path or command out of a tool argument, as text. */
+function argText(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+/**
+ * One line for a built-in tool call: what it does and where, with the first line
+ * of a long argument. An unknown tool gets its name alone.
+ */
+export function toolCallLine(tool: string, args: Record<string, unknown>): string {
+	// A call row is one line: a multi-line command shows its first line only.
+	const one = (text: string, max = 100): string => oneLine(text.split("\n")[0] ?? "", max);
+	switch (tool) {
+		case "bash":
+			return `bash  ${one(argText(args.command), 120)}`;
+		case "read":
+			return `read  ${one(argText(args.path))}`;
+		case "edit":
+			return `edit  ${one(argText(args.path))}`;
+		case "write":
+			return `write  ${one(argText(args.path))}`;
+		case "grep": {
+			const pattern = argText(args.pattern);
+			const where = argText(args.path);
+			return where === "" ? `grep  "${one(pattern, 60)}"` : `grep  "${one(pattern, 60)}" in ${one(where, 60)}`;
+		}
+		case "find":
+			return `find  ${one(argText(args.pattern))}`;
+		case "ls":
+			return `ls  ${one(argText(args.path) || ".")}`;
+		default:
+			return tool;
+	}
+}
+
 /** `journal  written: <path>`, or the text itself when it names no file. */
 export function journalLine(text: string): string {
 	for (const line of text.split("\n")) {
