@@ -19,6 +19,10 @@ When a new version is released:
    - A change to `content/`, `platforms/pi/`, `platforms/shared/`, or the `pi`
      block of `package.json` needs the Pi package update: `pi update
      --extensions`, then a new session so the extension reloads.
+   - A change to `content/`, `platforms/kiro/`, or `platforms/shared/` needs
+     the Kiro adapter update: `git pull` in the clone, then
+     `./install.sh --kiro`. The payload under `$KIRO_HOME/persona-agents/` is a
+     copy, so a pull alone leaves the installed adapter on the old code.
    - A change to `platforms/claude/settings/recommended.json` or `install.sh`
      also needs `./install.sh` from an updated clone.
 
@@ -41,7 +45,7 @@ Rules:
 Only the companion writes git history. Every commit it makes starts with the
 prefix `ai:`. The reviewer never commits.
 
-The doctrine lives in two places:
+The doctrine lives in three places:
 
 - The settings snippet `platforms/claude/settings/recommended.json`, which
   `install.sh` merges into the user settings: `git push`, `gh pr`, `gh run`,
@@ -49,7 +53,8 @@ The doctrine lives in two places:
 - The PreToolUse hook `platforms/claude/scripts/doctrine.ts`, for the
   persona-agents agents. The command classification it uses lives in
   `platforms/shared/shell/` and is shared with the Pi gate
-  (`platforms/pi/scripts/policy.ts`), so the two adapters cannot drift apart. The companion runs a plain `git add`, `git commit`,
+  (`platforms/pi/scripts/policy.ts`) and the Kiro gate, so the adapters cannot
+  drift apart. The companion runs a plain `git add`, `git commit`,
   `git pull`, `git merge`, `git rebase`, or `git tag` with no prompt, when
   every part of the command is one of those. A push, a `gh pr` / `run` /
   `release`, a tag delete or force-move, `commit --amend`, a `git -c`
@@ -57,8 +62,14 @@ The doctrine lives in two places:
   URL, a merge strategy, and any wrapped or substituted history command ask.
   Every other plugin agent is denied all of these and every shell write the
   hook can see.
+- The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and
+  `pa-reviewer`. A `PermissionRequest` hook allows a plain history command and
+  a reviewed or trivial commit; anything else returns no decision, so Kiro's
+  native prompt asks. A PreToolUse hook denies the reviewer every shell write
+  and history command.
 
-`platforms/claude/README.md` holds the hook details.
+`platforms/claude/README.md` and `platforms/kiro/README.md` hold the hook
+details.
 
 Accepted risks: `rebase --exec` and `rebase -i` are allowed. `git -C` to
 another repository is allowed, and the hooks and config of that repository
