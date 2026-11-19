@@ -563,7 +563,13 @@ export function initPolicyFile(ref: PolicyFileRef): void {
 	writeFileSync(ref.path, `${JSON.stringify(skeleton, null, 2)}\n`);
 }
 
-/** The Pi agent dir, where settings, extensions, and this package's log live. */
+/**
+ * The Pi agent dir, where settings, extensions, and this package's log live.
+ *
+ * `PI_CODING_AGENT` is a marker pi sets to `"true"`, not a path; reading it
+ * put the log and the user policy under `<cwd>/true/`. The path variable is
+ * `PI_CODING_AGENT_DIR`.
+ */
 export function piAgentDir(env: NodeJS.ProcessEnv = process.env, fallback: string = homedir()): string {
-	return env.PI_CODING_AGENT || join(fallback, ".pi", "agent");
+	return env.PI_CODING_AGENT_DIR || join(fallback, ".pi", "agent");
 }

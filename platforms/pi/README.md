@@ -76,11 +76,29 @@ code without the author's reasoning.
 - **`scripts/review.ts`** is pure: it reads a diff and a status into a
   `Change`, names it with a 16-character hash (`reviewKey`), parses the
   verdict, and decides the gate.
-- The **`review` tool** and `/review` command spawn
+- The review starts from a **three-field brief**, never a checklist: `Scope`
+  (a ref, a range, or paths), `Task` (one line: goal and study task id), and
+  `Decisions` (the file that holds the owner decisions, or `none`).
+  `normalizeScope` cuts the scope at the first label (`Check:`), the first line
+  break, or the first option token (`--all`), and returns what it cut, so the
+  author hears what went nowhere. A scope that is plain prose survives that cut;
+  the reviewer then says the scope does not resolve and reviews what it can.
+  The reviewer is told the brief is the author's view, not its checklist.
+- **`Task` and `Decisions` are filled when the author leaves them out**: the
+  decisions file is the single study at stage `in-progress` in
+  `studies/index.md` (two in progress names `none` and both titles, never a
+  guess), and the task is that study's `<title> - <Next action>`, else the
+  commit subjects of the scope cut to one line.
+- The **`review` tool** takes `scope`, `task`, and `decisions`; the `/review`
+  command takes a bare scope or `scope=` / `task=` / `decisions=` labels, and a
+  quoted value may hold a label of its own. Both spawn
   `pi --extension <this file> -p --no-session --agent persona-agents:reviewer
   --tools read,grep,find,ls,bash --append-system-prompt <body> <task>`. Passing
   `--extension` means the reviewer profile and the policy apply even when the
   package is not installed; the tool list is a second, structural guarantee.
+- The child gets **600 seconds** (`REVIEWER_TIMEOUT_MS`). A killed child, a
+  non-zero exit, or a clean exit with no text is reported as a failure line
+  (`reviewerFailure`), so a silent child can never arrive as an empty review.
 - The verdict is read from the reviewer's `## Verdict` line and **stored against
   the key of the exact change** (a session entry, restored on reload), so a
   review covers what it reviewed and nothing else. An untracked file edited
@@ -202,7 +220,7 @@ There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
 | --- | --- |
 | `PERSONA_AGENTS_THEME` | The persona theme, when `--persona` is absent. |
 | `PERSONA_AGENTS_DEBUG=1` | Log allowed decisions too. |
-| `PI_CODING_AGENT` | The Pi agent dir: policy file, decisions log. |
+| `PI_CODING_AGENT_DIR` | The Pi agent dir: policy file, decisions log. `PI_CODING_AGENT` is pi's own `"true"` marker and is never a path. |
 | `PI_SESSION_ID` | The session id recorded with each decision and journal line. |
 
 ## Testing

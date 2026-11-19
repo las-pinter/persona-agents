@@ -33,18 +33,40 @@ export function openSessionNotes(notesDir: string): string[] {
 		.filter((path) => isFile(path) && /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
 }
 
+/** One row of `studies/index.md`, in file order. */
+export interface StudyRow {
+	title: string;
+	stage: string;
+	/** The folder path the index writes, backticks removed. */
+	path: string;
+}
+
+/**
+ * The rows of `studies/index.md`. The header row and the separator row are
+ * skipped. Both the read list and the review brief read the file this way, so a
+ * table change lands in one parser.
+ */
+export function studyIndexRows(indexText: string): StudyRow[] {
+	const rows: StudyRow[] = [];
+	for (const line of indexText.split("\n")) {
+		const cells = line.split("|").map((cell) => cell.trim());
+		// | title | stage | updated | `path` |  splits to ["", title, stage, updated, path, ""]
+		if (cells.length < 6) continue;
+		const title = cells[1] ?? "";
+		const stage = cells[2] ?? "";
+		if (title === "" || title === "Study" || /^-+$/.test(stage)) continue;
+		rows.push({ title, stage, path: (cells[4] ?? "").replace(/`/g, "") });
+	}
+	return rows;
+}
+
 /** Rows of studies/index.md whose stage is not done or abandoned: "title (stage): path". */
 export function unfinishedStudies(notesDir: string): string[] {
 	const index = join(notesDir, "studies", "index.md");
 	if (!existsSync(index)) return [];
-	const rows: string[] = [];
-	for (const line of readFileSync(index, "utf8").split("\n")) {
-		const cells = line.split("|").map((cell) => cell.trim());
-		// | title | stage | updated | `path` |  splits to ["", title, stage, updated, path, ""]
-		if (cells.length < 6 || !UNFINISHED_STAGES.has(cells[2])) continue;
-		rows.push(`${cells[1]} (${cells[2]}): ${join(notesDir, cells[4].replace(/`/g, ""))}`);
-	}
-	return rows;
+	return studyIndexRows(readFileSync(index, "utf8"))
+		.filter((row) => UNFINISHED_STAGES.has(row.stage))
+		.map((row) => `${row.title} (${row.stage}): ${join(notesDir, row.path)}`);
 }
 
 /** The project rules files, in read order. */

@@ -51,13 +51,23 @@ import {
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
 import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../scripts/retro.ts";
 import {
+	buildBrief,
 	commitGate,
+	deriveTask,
+	finalizeBrief,
 	isCommitCommand,
 	isTrivial,
 	makeChange,
+	oneLine,
+	parseReviewArgs,
 	parseVerdict,
+	promptForBrief,
+	reviewerFailure,
 	reviewKey,
-	reviewerPrompt,
+	REVIEWER_TIMEOUT_MS,
+	subjectsFromQueries,
+	type Brief,
+	type BriefInput,
 	type Change,
 	type Verdict as ReviewVerdict,
 } from "../scripts/review.ts";
@@ -383,11 +393,47 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 	return { ...change, signature };
 }
 
+/** Read a file for the brief: its text, or null when it cannot be read. */
+function readText(path: string): string | null {
+	try {
+		return readFileSync(path, "utf8");
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The brief one review starts from: the author's fields cut once, then the
+ * missing ones filled from the notes. Git is asked for commit subjects only
+ * when the notes name no task, so a study review costs no git call.
+ */
+async function prepareBrief(
+	pi: ExtensionAPI,
+	session: Session,
+	input: BriefInput,
+): Promise<{ brief: Brief; dropped: string; notes: string[] }> {
+	const prepared = buildBrief(input);
+	const indexPath = join(session.env.notesDir, "studies", "index.md");
+	// Absent is normal (""), unreadable is not (null), and the two are not the same note.
+	const indexText = existsSync(indexPath) ? readText(indexPath) : "";
+	const finalized = finalizeBrief(prepared.brief, prepared.given, {
+		notesDir: session.env.notesDir,
+		indexText,
+		readStatus: readText,
+	});
+	let brief = finalized.brief;
+	if (finalized.needsSubjects) {
+		const subjects = await subjectsFromQueries(brief.scope, async (args) => pi.exec("git", args, { cwd: session.env.cwd }));
+		brief = { ...brief, task: deriveTask("", "", subjects) };
+	}
+	return { brief, dropped: prepared.dropped, notes: finalized.notes };
+}
+
 /** Run the reviewer in its own process: read-only tools, its own profile, its own gate. */
 async function runReviewer(
 	pi: ExtensionAPI,
 	cwd: string,
-	scope: string,
+	brief: Brief,
 	signal?: AbortSignal,
 ): Promise<{ text: string; verdict: ReviewVerdict | null }> {
 	const invocation = piInvocation();
@@ -407,29 +453,42 @@ async function runReviewer(
 			"read,grep,find,ls,bash",
 			"--append-system-prompt",
 			reviewerBody(),
-			reviewerPrompt(scope),
+			promptForBrief(brief),
 		],
-		{ cwd, timeout: 300_000, signal },
+		{ cwd, timeout: REVIEWER_TIMEOUT_MS, signal },
 	);
+	const failure = reviewerFailure({ ...result, aborted: signal?.aborted === true });
+	if (failure !== "") throw new Error(failure);
 	const text = result.stdout.trim();
 	return { text, verdict: parseVerdict(text) };
+}
+
+/** A review request: the fields the caller holds, and the text it dropped. */
+interface ReviewRequest {
+	input: BriefInput;
+	/** Text the caller removed before the fields, named back in the result. */
+	dropped?: string;
 }
 
 /** Run a review, remember its verdict for the exact change, and return the text. */
 async function executeReview(
 	pi: ExtensionAPI,
 	session: Session,
-	scope: string,
+	request: ReviewRequest,
 	signal?: AbortSignal,
-): Promise<{ text: string; verdict: ReviewVerdict | null; key: string }> {
+): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[] }> {
 	const change = await readChange(pi, session.env.cwd);
 	const key = reviewKey(change);
-	const { text, verdict } = await runReviewer(pi, session.env.cwd, scope, signal);
+	const prepared = await prepareBrief(pi, session, request.input);
+	const notes = [...prepared.notes];
+	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
+	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
+	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
 	if (verdict) {
 		session.reviews.set(key, verdict);
 		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
 	}
-	return { text, verdict, key };
+	return { text, verdict, key, notes };
 }
 
 /** The ask when a commit has no covering review. */
@@ -464,8 +523,9 @@ async function reviewGate(
 	}
 	if (choice === "Run the review now") {
 		try {
-			const { text, verdict } = await executeReview(pi, session, "");
-			return { block: true, reason: `review finished: ${verdict ?? "no verdict"}. Fix what it asks, then commit again.\n\n${text}` };
+			const { text, verdict, notes } = await executeReview(pi, session, { input: {} });
+			const extra = notes.map((note) => `\n${note}`).join("");
+			return { block: true, reason: `review finished: ${verdict ?? "no verdict"}. Fix what it asks, then commit again.\n\n${text}${extra}` };
 		} catch (error) {
 			return { block: true, reason: `the review could not run: ${(error as Error).message}` };
 		}
@@ -724,20 +784,28 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		name: "review",
 		label: "Review",
 		description:
-			"Run an independent, read-only review of the current change in a separate context. Returns findings with severity and location, and a verdict. Use it before committing a non-trivial change.",
+			"Run an independent, read-only review of the current change in a separate context. Returns findings with severity and location, and a verdict. Use it before committing a non-trivial change. The brief says what was done and where, never what to check.",
 		parameters: {
 			type: "object",
-			properties: { scope: { type: "string", description: "Optional: a base ref, commit range, or paths to review." } },
+			properties: {
+				scope: { type: "string", description: "Optional: a base ref, commit range, or paths to review. Other text in it is dropped and named back." },
+				task: { type: "string", description: "Optional: one line, the goal and the study task id. Derived from the study in progress when left out." },
+				decisions: { type: "string", description: "Optional: the file that holds the owner decisions, or `none`. Derived from the study in progress when left out." },
+			},
 			additionalProperties: false,
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
 			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }] };
-			const scope = typeof params.scope === "string" ? params.scope : "";
+			const input: BriefInput = {};
+			if (typeof params.scope === "string") input.scope = params.scope;
+			if (typeof params.task === "string") input.task = params.task;
+			if (typeof params.decisions === "string") input.decisions = params.decisions;
 			try {
-				const { text, verdict, key } = await executeReview(pi, session, scope, signal);
+				const { text, verdict, key, notes } = await executeReview(pi, session, { input }, signal);
+				const extra = notes.map((note) => `\n${note}`).join("");
 				return {
-					content: [{ type: "text", text: `${text}\n\nreview key: ${key}` }],
-					details: { verdict, key },
+					content: [{ type: "text", text: `${text}\n\nreview key: ${key}${extra}` }],
+					details: { verdict, key, notes },
 				};
 			} catch (error) {
 				return { content: [{ type: "text", text: `the review could not run: ${(error as Error).message}` }], isError: true };
@@ -746,15 +814,21 @@ export default function personaAgents(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("review", {
-		description: "Run an independent review of the current change",
+		description: "Run an independent review of the current change: a scope, or scope=/task=/decisions= labels",
 		handler: (args, ctx) => {
 			if (!session) {
 				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
 				return;
 			}
-			executeReview(pi, session, args.trim())
-				.then(({ text, verdict }) => {
-					pi.sendMessage({ customType: "persona-agents:review", content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}`, display: true });
+			const parsed = parseReviewArgs(args);
+			executeReview(pi, session, { input: parsed.input, dropped: parsed.dropped })
+				.then(({ text, verdict, notes }) => {
+					const extra = notes.map((note) => `\n${note}`).join("");
+					pi.sendMessage({
+						customType: "persona-agents:review",
+						content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}${extra}`,
+						display: true,
+					});
 				})
 				.catch((error: unknown) => ctx.ui.notify(`the review could not run: ${(error as Error).message}`, "error"));
 		},

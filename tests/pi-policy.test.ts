@@ -443,9 +443,16 @@ describe("pi policy: editing and reporting", () => {
 		}
 	});
 
-	test("the pi agent dir comes from PI_CODING_AGENT, else the home folder", () => {
-		assert.equal(piAgentDir({ PI_CODING_AGENT: "/tmp/agent" }, "/home/x"), "/tmp/agent");
+	test("the pi agent dir comes from PI_CODING_AGENT_DIR, else the home folder", () => {
+		assert.equal(piAgentDir({ PI_CODING_AGENT_DIR: "/tmp/agent" }, "/home/x"), "/tmp/agent");
 		assert.equal(piAgentDir({}, "/home/x"), "/home/x/.pi/agent");
+	});
+
+	test("the PI_CODING_AGENT marker is not a path", () => {
+		// Pi sets PI_CODING_AGENT to the literal "true"; reading it as a path put
+		// the log and the user policy under <cwd>/true/.
+		assert.equal(piAgentDir({ PI_CODING_AGENT: "true" }, "/home/x"), "/home/x/.pi/agent");
+		assert.equal(piAgentDir({ PI_CODING_AGENT: "true", PI_CODING_AGENT_DIR: "/tmp/agent" }, "/home/x"), "/tmp/agent");
 	});
 });
 
