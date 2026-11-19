@@ -77,7 +77,10 @@ export class ReviewPanel implements Component {
 		// The cap is not a silent cut: the last row says what is left.
 		const remaining = all.length - shown.length;
 		if (remaining > 0 && lines.length > 1) {
-			lines[lines.length - 1] = truncateToWidth(this.theme.fg("dim", `… ${remaining} more lines (ctrl+o for all)`), width);
+			lines[lines.length - 1] = truncateToWidth(
+				this.theme.fg("dim", `… ${remaining} more line${remaining === 1 ? "" : "s"} (ctrl+o on the transcript row)`),
+				width,
+			);
 		}
 		return lines;
 	}

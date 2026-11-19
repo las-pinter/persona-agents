@@ -878,7 +878,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			return collapsedRow(theme, reviewLine(summarizeReview(text)));
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }] };
+			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
 			const input: BriefInput = {};
 			if (typeof params.scope === "string") input.scope = params.scope;
 			if (typeof params.task === "string") input.task = params.task;
@@ -946,8 +946,13 @@ export default function personaAgents(pi: ExtensionAPI): void {
 	}
 
 	pi.registerCommand("review-panel", {
-		description: "Fold or unfold the review panel above the editor",
-		handler: (_args, ctx) => {
+		description: "Fold, unfold, or clear the review panel above the editor",
+		handler: (args, ctx) => {
+			if (args.trim() === "clear") {
+				setPanel(ctx, null);
+				ctx.ui.notify("persona-agents: review panel cleared", "info");
+				return;
+			}
 			if (!panel) {
 				ctx.ui.notify("persona-agents: no review panel yet; run a review first", "info");
 				return;

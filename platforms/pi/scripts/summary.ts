@@ -45,8 +45,9 @@ function sectionLines(text: string, heading: string): string[] {
 function isBullet(line: string): boolean {
 	const trimmed = line.trim();
 	if (!trimmed.startsWith("- ")) return false;
-	// `- none` and `- none: the built-in doctrine ...` both mean no bullet.
-	return !trimmed.slice(2).trimStart().toLowerCase().startsWith("none");
+	// `- none` and `- none: the built-in doctrine ...` are placeholders;
+	// `- nonetheless the gate asks` is a real bullet.
+	return !/^none\b/i.test(trimmed.slice(2).trimStart());
 }
 
 /** How many `- ` bullets a section holds. */
@@ -66,10 +67,11 @@ type Severity = (typeof SEVERITIES)[number];
  * would report `no issues` for a review full of findings.
  */
 function severityCount(lines: string[], severity: Severity): number {
-	const needle = severity;
 	return lines.reduce((total, line) => {
 		const words = line.split(/[^A-Za-z]+/).filter((word) => word !== "");
-		return total + words.filter((word) => word.toUpperCase() === needle).length;
+		// Only the written label counts: `important findings` in prose is not a
+		// finding, and `not a blocker` is prose too.
+		return total + words.filter((word) => word === severity).length;
 	}, 0);
 }
 

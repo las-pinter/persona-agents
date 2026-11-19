@@ -117,6 +117,28 @@ describe("pi summary: the other surfaces", () => {
 		assert.equal(permissionsLine(report), "permissions  2 rules · 1 grants · 1 errors");
 	});
 
+	test("prose words and negations are not findings", () => {
+		const text = [
+			"## Issues",
+			"",
+			"1. **CRITICAL** - x.ts:1, not a blocker, and lists important findings",
+			"2. **SUGGESTION** - this suggestion is fine",
+			"",
+			"## Verdict",
+			"Request Changes - one finding.",
+		].join("\n");
+		const summary = summarizeReview(text);
+		assert.equal(summary.critical, 1);
+		assert.equal(summary.blocker, 0, "`not a blocker` is prose");
+		assert.equal(summary.important, 0, "`important findings` is prose");
+		assert.equal(summary.suggestion, 1, "`this suggestion is fine` is prose");
+	});
+
+	test("a bullet that merely starts with the letters of none is real", () => {
+		const report = ["## Rules (first match wins)", "- nonetheless the gate asks before a push", "", "## Session grants (this session only)", "- none"].join("\n");
+		assert.equal(permissionsLine(report), "permissions  1 rules · 0 grants · 0 errors");
+	});
+
 	test("a placeholder bullet is not a rule", () => {
 		const report = ["## Rules (first match wins)", "- none: the built-in doctrine decides every call", "", "## Session grants (this session only)", "- none"].join("\n");
 		assert.equal(permissionsLine(report), "permissions  0 rules · 0 grants · 0 errors");
