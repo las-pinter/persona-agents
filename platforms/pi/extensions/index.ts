@@ -31,7 +31,6 @@ import { hasMaterial, sources, type Payload } from "../scripts/journal-net.ts";
 import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../scripts/notes.ts";
-import { prettyResult } from "../ui/render.ts";
 import {
 	BUILTIN_TOOLS,
 	journalLine,
@@ -139,8 +138,6 @@ interface Session {
 	reviews: Map<string, ReviewVerdict>;
 	/** Set when the owner chose to stop asking about commits this session. */
 	skipReview: boolean;
-	/** True while results render highlighted; /pretty off turns it off. */
-	pretty: boolean;
 }
 
 function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
@@ -213,7 +210,6 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 		manifest: null,
 		reviews: new Map(),
 		skipReview: false,
-		pretty: true,
 	};
 
 	// Tools: add what the profile needs, remove what it must not hold, keep the
@@ -906,14 +902,6 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				if (context?.expanded) return base?.renderCall?.(args, theme, context) ?? new Text(toolCallLine(toolName, args), 0, 0);
 				return collapsedRow(theme, toolCallLine(toolName, args));
 			},
-			renderResult: (result, options, theme, context) => {
-				// Expanded, or with /pretty off, the raw text is the only truth.
-				if (options.expanded || !session?.pretty) return base?.renderResult?.(result, options, theme, context) ?? new Text(bodyText(result.content), 0, 0);
-				const text = bodyText(result.content);
-				if (result.isError) return new Text(text, 0, 0);
-				const rows = prettyResult(toolName, text, context?.args, theme);
-				return new Text(rows?.join("\n") ?? text, 0, 0);
-			},
 		};
 	});
 
@@ -942,24 +930,6 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			return collapsedRow(theme, listLine(name, text));
 		});
 	}
-
-	pi.registerCommand("pretty", {
-		description: "Turn the highlighted results on or off for this session",
-		handler: (args, ctx) => {
-			if (!session) {
-				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
-				return;
-			}
-			const wanted = args.trim().toLowerCase();
-			if (wanted === "on") session.pretty = true;
-			else if (wanted === "off") session.pretty = false;
-			else if (wanted !== "") {
-				ctx.ui.notify("persona-agents: /pretty on|off", "warning");
-				return;
-			}
-			ctx.ui.notify(`persona-agents: pretty results ${session.pretty ? "on" : "off"}`, "info");
-		},
-	});
 
 	pi.registerCommand("persona", {
 		description: "Show or change the persona theme for this session",

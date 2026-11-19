@@ -125,22 +125,6 @@ There is no panel and no click handling: Pi sends mouse events only in fullscree
 mode and only to components that implement `handleMouse`, and `ctrl+o` reaches
 every terminal.
 
-## Pretty results
-
-With `/pretty` on (the default), five surfaces are drawn rather than dumped:
-
-- **read** - the path and line count, then numbered lines with keywords, strings,
-  numbers, and comments coloured. `scripts/highlight.ts` tokenizes TypeScript,
-  Rust, Python, JSON, Markdown, and shell; any other path stays plain.
-- **ls / find** - a tree, one shared root, sorted, directories before files.
-- **grep** - matches grouped under their file.
-- **bash** - failure lines red, passes green, warnings amber, the rest plain.
-
-`platforms/pi/ui/render.ts` maps the spans to theme colours; a colour the theme
-does not name renders unstyled rather than throwing. A result longer than 200
-lines ends with a marker, `ctrl+o` always shows the raw text, and an error result
-is never prettified. `/pretty off` turns the whole thing off for the session.
-
 ## Compaction
 
 A summary is lossy; the files are not. Before Pi compacts, the companion
