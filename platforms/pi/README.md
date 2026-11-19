@@ -12,8 +12,9 @@ behind one Pi extension. Nothing in `content/` knows which harness runs it.
 ## Layout
 
 - **Extension** (`platforms/pi/extensions/index.ts`): the wiring only. It
-  registers `--agent` and `--persona`, then connects four events and two
-  commands to the pure modules below. All logic lives in `scripts/`.
+  registers `--agent` and `--persona`, connects the events and commands to the
+  pure modules below, and collapses every surface it prints. All logic lives in
+  `scripts/`.
 - **Scripts** (`platforms/pi/scripts/`): pure TypeScript, no Pi imports, so
   `node:test` can exercise every decision without starting a Pi process.
   - `profile.ts` — the agent ids, their tools, and what they may do.
@@ -110,6 +111,19 @@ two files and forty changed lines) or an `Approve` covers that exact key. The
 dialog offers: run the review now, commit anyway, stop asking for this session,
 or cancel. The gate never blocks a commit on its own tooling: if git fails, the
 commit proceeds.
+
+## Collapsed output
+
+Every persona-agents surface prints one line in the transcript: the review tool
+result, the `/review` notice, the commit-gate message, `/permissions`, `/retro`,
+the `journal` tool result, and the read and reload lists. `scripts/summary.ts`
+builds each line from the text the surface already prints, and the renderers in
+the extension return it; `ctrl+o` (`app.tools.expand`) opens the full text. A
+long line is truncated to the width, never wrapped, so one surface is one row.
+
+There is no panel and no click handling: Pi sends mouse events only in fullscreen
+mode and only to components that implement `handleMouse`, and `ctrl+o` reaches
+every terminal.
 
 ## Compaction
 
