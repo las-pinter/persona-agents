@@ -41,22 +41,36 @@ function sectionLines(text: string, heading: string): string[] {
 	return end === -1 ? rest : rest.slice(0, end);
 }
 
+/** True for a bullet that states something, false for a placeholder. */
+function isBullet(line: string): boolean {
+	const trimmed = line.trim();
+	if (!trimmed.startsWith("- ")) return false;
+	// `- none` and `- none: the built-in doctrine ...` both mean no bullet.
+	return !trimmed.slice(2).trimStart().toLowerCase().startsWith("none");
+}
+
 /** How many `- ` bullets a section holds. */
 function bulletsIn(text: string, heading: string): number {
-	return sectionLines(text, heading).filter((line) => {
-		const trimmed = line.trim();
-		return trimmed.startsWith("- ") && trimmed !== "- none";
-	}).length;
+	return sectionLines(text, heading).filter(isBullet).length;
 }
 
 /** The severities a review may state, as they are spelled in the output. */
 const SEVERITIES = ["BLOCKER", "CRITICAL", "IMPORTANT", "SUGGESTION", "NIT"] as const;
 type Severity = (typeof SEVERITIES)[number];
 
-/** How many times a severity is named in the given lines. */
+/**
+ * How many times a severity is named in the given lines.
+ *
+ * The word counts with or without emphasis: the reviewer template writes
+ * `Severity (BLOCKER | CRITICAL | ...)` in plain text, and a bold-only match
+ * would report `no issues` for a review full of findings.
+ */
 function severityCount(lines: string[], severity: Severity): number {
-	const marker = `**${severity}**`;
-	return lines.reduce((total, line) => total + line.split(marker).length - 1, 0);
+	const needle = severity;
+	return lines.reduce((total, line) => {
+		const words = line.split(/[^A-Za-z]+/).filter((word) => word !== "");
+		return total + words.filter((word) => word.toUpperCase() === needle).length;
+	}, 0);
 }
 
 /**
@@ -131,10 +145,7 @@ export function retroLine(facts: string): string {
 
 /** `read list  6 paths · 18 lines` */
 export function listLine(name: string, text: string): string {
-	const paths = text.split("\n").filter((line) => {
-		const trimmed = line.trim();
-		return trimmed.startsWith("- ") && trimmed !== "- none";
-	}).length;
+	const paths = text.split("\n").filter(isBullet).length;
 	return `${name}  ${paths} paths · ${text.split("\n").length} lines`;
 }
 

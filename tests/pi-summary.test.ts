@@ -63,6 +63,22 @@ describe("pi summary: a review", () => {
 		assert.equal(summary.important, 1, "the IMPORTANT under Not verified must not count");
 	});
 
+	test("a severity written in plain words still counts", () => {
+		const text = [
+			"## Issues",
+			"",
+			"1. Severity: CRITICAL",
+			"2. Severity: `IMPORTANT`",
+			"",
+			"## Verdict",
+			"Reject - two findings.",
+		].join("\n");
+		const summary = summarizeReview(text);
+		assert.equal(summary.critical, 1);
+		assert.equal(summary.important, 1);
+		assert.equal(reviewLine(summary), "review  Reject · 1 crit · 1 imp · unknown");
+	});
+
 	test("an approving review with no issues still names its key", () => {
 		const text = ["## Summary", "Fine.", "", "## Issues", "No issues found.", "", "## Verdict", "Approve - clean.", "", "review key: 7d24abf962839fd3"].join("\n");
 		const summary = summarizeReview(text);
@@ -99,6 +115,11 @@ describe("pi summary: the other surfaces", () => {
 			"- the file is not valid JSON",
 		].join("\n");
 		assert.equal(permissionsLine(report), "permissions  2 rules · 1 grants · 1 errors");
+	});
+
+	test("a placeholder bullet is not a rule", () => {
+		const report = ["## Rules (first match wins)", "- none: the built-in doctrine decides every call", "", "## Session grants (this session only)", "- none"].join("\n");
+		assert.equal(permissionsLine(report), "permissions  0 rules · 0 grants · 0 errors");
 	});
 
 	test("a retro's facts count tool calls, files, and reviews", () => {

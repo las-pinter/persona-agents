@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
 import { dayOf, entryPath, findEntry, recentJournal } from "../scripts/journal.ts";
 import { hasMaterial, sources, type Payload } from "../scripts/journal-net.ts";
@@ -119,9 +119,24 @@ function bodyText(content: unknown): string {
 		.join("\n");
 }
 
+/** One line that never wraps, whatever the terminal width. */
+class CollapsedRow implements Component {
+	private readonly text: string;
+
+	constructor(text: string) {
+		this.text = text;
+	}
+
+	render(width: number): string[] {
+		return [truncateToWidth(this.text, width)];
+	}
+
+	invalidate(): void {}
+}
+
 /** A collapsed row: the mark, then the one line the summarizer built. */
-function collapsedRow(theme: { fg(color: string, text: string): string }, line: string): Text {
-	return new Text(`${theme.fg("accent", "▸ ")}${line}`, 0, 0);
+function collapsedRow(theme: { fg(color: string, text: string): string }, line: string): Component {
+	return new CollapsedRow(`${theme.fg("accent", "▸ ")}${line}`);
 }
 
 interface Session {
@@ -516,13 +531,18 @@ interface ReviewRequest {
 	dropped?: string;
 }
 
-/** Run a review, remember its verdict for the exact change, and return the text. */
+/**
+ * Run a review, remember its verdict for the exact change, and return the text.
+ *
+ * `line` is the panel line, built here because this is where the review key is
+ * known: the reviewer's own output carries no `review key:` line.
+ */
 async function executeReview(
 	pi: ExtensionAPI,
 	session: Session,
 	request: ReviewRequest,
 	signal?: AbortSignal,
-): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[] }> {
+): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[]; line: string }> {
 	const change = await readChange(pi, session.env.cwd);
 	const key = reviewKey(change);
 	const prepared = await prepareBrief(pi, session, request.input);
@@ -530,18 +550,12 @@ async function executeReview(
 	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
 	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
 	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
+	const line = reviewLine({ ...summarizeReview(text), key });
 	if (verdict) {
 		session.reviews.set(key, verdict);
-		pi.appendEntry("persona-agents:review", {
-			at: new Date().toISOString(),
-			key,
-			verdict,
-			files: change.files,
-			line: reviewLine(summarizeReview(text)),
-			text,
-		});
+		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files, line, text });
 	}
-	return { text, verdict, key, notes };
+	return { text, verdict, key, notes, line };
 }
 
 /** The ask when a commit has no covering review. */
@@ -620,7 +634,8 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			}
 			if (typeof data?.line === "string" && data.line !== "") newest = { line: data.line, text: typeof data.text === "string" ? data.text : "" };
 		}
-		if (newest) setPanel(ctx, newest);
+		panel = null;
+		setPanel(ctx, newest);
 		ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
 	});
 
@@ -858,6 +873,8 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		renderResult(result, { expanded }, theme) {
 			const text = bodyText(result.content);
 			if (expanded) return new Text(text, 0, 0);
+			// A failed review is never summarized into a clean-looking row.
+			if (result.isError) return collapsedRow(theme, `review  failed: ${oneLine(text, 120)}`);
 			return collapsedRow(theme, reviewLine(summarizeReview(text)));
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -867,8 +884,8 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			if (typeof params.task === "string") input.task = params.task;
 			if (typeof params.decisions === "string") input.decisions = params.decisions;
 			try {
-				const { text, verdict, key, notes } = await executeReview(pi, session, { input }, signal);
-				setPanel(ctx, { line: reviewLine(summarizeReview(text)), text });
+				const { text, verdict, key, notes, line } = await executeReview(pi, session, { input }, signal);
+				setPanel(ctx, { line, text });
 				const extra = notes.map((note) => `\n${note}`).join("");
 				return {
 					content: [{ type: "text", text: `${text}\n\nreview key: ${key}${extra}` }],
@@ -889,12 +906,12 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			}
 			const parsed = parseReviewArgs(args);
 			executeReview(pi, session, { input: parsed.input, dropped: parsed.dropped })
-				.then(({ text, verdict, notes }) => {
-					setPanel(ctx, { line: reviewLine(summarizeReview(text)), text });
+				.then(({ text, verdict, notes, line, key }) => {
+					setPanel(ctx, { line, text });
 					const extra = notes.map((note) => `\n${note}`).join("");
 					pi.sendMessage({
 						customType: "persona-agents:review",
-						content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}${extra}`,
+						content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}${extra}\n\nreview key: ${key}`,
 						display: true,
 					});
 				})

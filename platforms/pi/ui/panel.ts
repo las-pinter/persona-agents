@@ -71,8 +71,14 @@ export class ReviewPanel implements Component {
 		const head = this.theme.fg("accent", this.expanded ? UNFOLDED : FOLDED) + this.model.line;
 		const lines = [truncateToWidth(head, width)];
 		if (!this.expanded) return lines;
-		const body = this.model.text.split("\n").slice(0, PANEL_LINES - lines.length);
-		for (const line of body) lines.push(truncateToWidth(line === "" ? " " : line, width));
+		const all = this.model.text.split("\n");
+		const shown = all.slice(0, PANEL_LINES - lines.length);
+		for (const line of shown) lines.push(truncateToWidth(line === "" ? " " : line, width));
+		// The cap is not a silent cut: the last row says what is left.
+		const remaining = all.length - shown.length;
+		if (remaining > 0 && lines.length > 1) {
+			lines[lines.length - 1] = truncateToWidth(this.theme.fg("dim", `… ${remaining} more lines (ctrl+o for all)`), width);
+		}
 		return lines;
 	}
 
