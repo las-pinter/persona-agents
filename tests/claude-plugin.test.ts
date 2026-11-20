@@ -113,7 +113,8 @@ function runContext(
 		if (settings.noConfigDir) delete env.CLAUDE_CONFIG_DIR;
 		if (theme !== undefined) env.CLAUDE_PLUGIN_OPTION_THEME = theme;
 		// The test seam: a hook argument, which a settings env block cannot set.
-		const args = [...(settings.nodeArgs ?? []), contextScript, part, `--managed-settings=${managedFile}`];
+		// The hook imports shared TypeScript, so it runs exactly as hooks.json does.
+		const args = ["--experimental-strip-types", "--no-warnings", ...(settings.nodeArgs ?? []), contextScript, part, `--managed-settings=${managedFile}`];
 		result = spawnSync(process.execPath, args, {
 			input: JSON.stringify(input),
 			env,
@@ -370,10 +371,10 @@ describe("claude plugin: context hook", () => {
 			assert.equal(themeOf(run), themeA);
 		});
 
-		test("an unknown theme from the settings file still warns", () => {
+		test("an unknown theme from the settings file still warns and keeps the persona-free rule", () => {
 			const run = runContext("persona", companionInput(), themeA, { user: themeSettings("nosuch") });
 			assert.equal(run.status, 0);
-			assert.equal(run.context, null);
+			assert.match(run.context ?? "", /persona-free-documents/);
 			assert.match(run.stderr, /no nosuch persona for the companion/);
 		});
 	});
@@ -381,7 +382,7 @@ describe("claude plugin: context hook", () => {
 	test("an unknown theme warns and still sends the profession", () => {
 		const persona = runContext("persona", companionInput(), "nosuch");
 		assert.equal(persona.status, 0);
-		assert.equal(persona.context, null);
+		assert.match(persona.context ?? "", /persona-free-documents/);
 		assert.match(persona.stderr, /no nosuch persona for the companion/);
 		assert.ok(runContext("profession", companionInput(), "nosuch").context);
 	});

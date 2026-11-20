@@ -147,6 +147,19 @@ business logic or utility code is a goal, not a failure.
 
 ---
 
+## Gap to Test Level
+
+The level for a gap a change leaves behind:
+
+| Gap Type | Best Level | Why |
+|----------|-----------|-----|
+| New logic path | Unit | Fast, precise, isolated |
+| Changed behavior | Unit + Integration | Verifies behavior AND integration |
+| Bug fix | Unit (reproduces the bug) | Prevents regression |
+| API change | Contract | Catches consumer/provider mismatch |
+
+---
+
 ## Core Rules
 
 1. Mock external deps in unit tests; use real ones in integration tests.

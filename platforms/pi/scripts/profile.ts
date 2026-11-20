@@ -4,7 +4,8 @@
  * One profile per agent under the `persona-agents:` namespace. The profile
  * decides what the agent is allowed to do, and which tools it gets; the persona
  * decides only how it sounds. A Pi identity is therefore data, not code: adding
- * an agent means adding an entry here and a markdown file under agents/.
+ * an agent means adding an entry here and, for a persona-bearing agent, a
+ * persona file under content/personas/.
  *
  * `pi --agent persona-agents:companion` resolves at session start. An unknown
  * value refuses the session instead of guessing a profile: a silently wrong
@@ -23,8 +24,9 @@ export interface Profile {
 	/** The full agent id, as passed to --agent. */
 	id: string;
 	/**
-	 * The content/professions file that holds the work rules, or null for an
-	 * agent whose prompt is its own agent file (the reviewer, as a subagent).
+	 * The content/professions file that holds the work rules, or null when the
+	 * adapter composes them itself (the reviewer reads the shared profession
+	 * through `review-body.ts`).
 	 */
 	profession: string | null;
 	/** Whether the theme persona is added to the prompt. */

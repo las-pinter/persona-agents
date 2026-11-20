@@ -12,10 +12,11 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
   - `companion.md` holds frontmatter only. The body stays empty on purpose: a
     body replaces the Claude Code system prompt when the agent runs as the main
     session. The instructions come from the context hook instead.
-  - `reviewer.md` is a subagent, so its body is its prompt. It has no Edit,
-    Write, NotebookEdit, or Agent tool. The `review` skill
-    (`content/skills/review/`, `context: fork`, `agent: persona-agents:reviewer`)
-    starts it in the foreground.
+  - `reviewer.md` is a subagent wrapper: its body points at
+    `content/professions/reviewer.md`, the one home for the reviewer rules and
+    output format, and it has no Edit, Write, NotebookEdit, or Agent tool. The
+    `review` skill (`content/skills/review/`, `context: fork`,
+    `agent: persona-agents:reviewer`) starts it in the foreground.
 - **Skills** load in place from `content/skills/<name>/`. `plugin.json` lists
   each skill folder; `tests/doc-lint.test.ts` keeps the list and the folders
   equal.
@@ -71,10 +72,10 @@ today or yesterday. The `wrap-up` skill calls it with the session id from the
 `doctrine.ts` adds what settings rules cannot express. `AGENTS.md` owns the
 rule; `tests/claude-doctrine.test.ts` holds the matrix.
 
-- The companion: a plain `git add`, `commit`, `pull`, `merge`, `rebase`, or
-  `tag` is allowed when every part of the command is one of those. A push, a
-  `gh pr` / `run` / `release`, a tag delete or force-move, `commit --amend`, a
-  git config override, and any wrapped or runtime-shaped history command ask.
+- The companion: any git command is allowed when every part of the command is
+  git work. A push, a `gh pr` / `run` / `release`, a git config override, an
+  upload-pack or transport helper URL, a merge strategy, and any wrapped or
+  runtime-shaped command ask.
 - Every other plugin agent (the reviewer) is denied all of those, and every
   shell write the hook can see: file-changing commands, git and gh writes, and
   output redirects to a file.

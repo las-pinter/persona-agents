@@ -53,9 +53,10 @@ function personaContext() {
 	const registry = JSON.parse(readFileSync(join(content, "agents.json"), "utf8"));
 	const entry = registry[theme]?.[PROFESSION];
 	if (!entry) {
-		// A missing mapping must not block the session: warn the owner and run plain.
+		// A missing mapping must not block the session: warn the owner, and still
+		// carry the persona-free rule, which travels with the persona.
 		process.stderr.write(`persona-agents: no ${theme} persona for the ${PROFESSION}; running without one\n`);
-		return null;
+		return `# Running in Claude Code (no persona)\n\n${PERSONA_FREE_RULE}`;
 	}
 	const persona = readFileSync(join(content, "personas", theme, entry.personaFile), "utf8").trim();
 	const lines = [

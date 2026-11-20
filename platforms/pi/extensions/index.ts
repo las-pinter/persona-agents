@@ -656,9 +656,8 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			else delete options.sections[name];
 		}
 		options.promptGuidelines.push(
-			"Do the work yourself in one context; use a subagent only for an independent review or a wide read-only search.",
+			"Do the implementation, the tests, and the small look-ups yourself; send wide or costly research to a subagent and work from its summary.",
 			"Keep chat short: what changed, what you verified, what is next.",
-			"Code, commits, notes, studies, and journals stay persona-free.",
 		);
 		if (session.startupSent && !session.reloadPending) return undefined;
 		session.startupSent = true;
