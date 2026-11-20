@@ -10,7 +10,8 @@
 //   git push, gh pr, gh release, gh run, any git global option outside
 //   GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS (-c, --config-env, --exec-path,
 //   --attr-source, ...), git pull --upload-pack, a `::` transport URL, a merge
-//   strategy (-s, --strategy), and any wrapped or runtime-shaped command
+//   strategy (-s, --strategy), a git verb that runs another program, writes
+//   config, or reaches a remote, and any wrapped or runtime-shaped command
 //                     companion: ask; every other agent: deny
 //   a write: a file-changing command (cp, mv, rm, tee, sed -i, ...), a git
 //   verb outside the read list, a gh command that is not a read, or an

@@ -74,7 +74,8 @@ rule; `tests/claude-doctrine.test.ts` holds the matrix.
 
 - The companion: any git command is allowed when every part of the command is
   git work. A push, a `gh pr` / `run` / `release`, a git config override, an
-  upload-pack or transport helper URL, a merge strategy, and any wrapped or
+  upload-pack or transport helper URL, a merge strategy, a git verb that runs
+  another program, writes config, or reaches a remote, and any wrapped or
   runtime-shaped command ask.
 - Every other plugin agent (the reviewer) is denied all of those, and every
   shell write the hook can see: file-changing commands, git and gh writes, and

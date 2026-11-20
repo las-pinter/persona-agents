@@ -58,7 +58,8 @@ The doctrine lives in three places:
   drift apart. The companion runs any git command with no prompt when every
   part of the command is git work. A push, a `gh pr` / `run` / `release`, a
   `git -c` override, an unknown git global option, an upload-pack or transport
-  helper URL, a merge strategy, and any wrapped or substituted command ask.
+  helper URL, a merge strategy, a git verb that runs another program, writes
+  config, or reaches a remote, and any wrapped or substituted command ask.
   Every other plugin agent is denied all of these and every shell write the
   hook can see.
 - The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and

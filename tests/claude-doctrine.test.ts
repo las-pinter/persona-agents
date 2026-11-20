@@ -80,6 +80,10 @@ const ALLOWED = [
 	"git branch -D topic",
 	// `-l` after a value-taking option is a message, not the list flag.
 	"git tag -m msg -l v1",
+	"git tag -m -l v1",
+	"git tag -fm -l v1",
+	"git tag --mess -l v1",
+	"git commit -m 'fix: std::vector'",
 ];
 
 /** Publish commands and the ask exceptions. */
@@ -121,6 +125,10 @@ const ASKED = [
 	"git fetch --upload-pack='touch x' origin",
 	"git lfs push origin",
 	"git send-email patch",
+	"git pull --upload='touch x' origin",
+	"git archive --remote=ext::sh --output=/tmp/x HEAD",
+	"git config --unset core.x",
+	"git config --add core.x y",
 	// A dup redirect to a word that is not a plain fd writes a file.
 	"git commit -m m >&0file",
 	// Transport helper URLs and merge strategies run a program of the caller's choice.
@@ -257,6 +265,9 @@ const READS = [
 	"git config --list",
 	"git remote -v",
 	"git remote",
+	"git config user.name",
+	"git remote show origin",
+	"git remote get-url origin",
 	"gh issue list",
 	"echo 'git push is gated'",
 	"grep -r 'git commit' docs",

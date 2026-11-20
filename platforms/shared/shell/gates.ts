@@ -31,6 +31,8 @@ export type Hit = "history" | "publish" | "write" | typeof UNGATED;
 export const UNGATED = "ungated";
 
 const GIT_PUBLISH = new Set(["push"]);
+/** Git verbs that take a repository or a remote, where a transport URL matters. */
+const GIT_REMOTE_VERBS = new Set(["pull", "merge", "fetch", "clone", "ls-remote", "submodule", "archive", "push", "remote", "lfs", "svn", "p4", "send-email"]);
 /** Git verbs that run another program, write config, or reach a remote: an ask. */
 const GIT_PROGRAM = new Set([
 	"config", "remote", "bisect", "submodule", "difftool", "mergetool", "filter-branch", "credential",
@@ -77,9 +79,20 @@ const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-
 /** `git tag` with no options or only listing options, and no tag-creating option. */
 function isTagListing(rest: string[]): boolean {
 	const options = rest.filter((arg) => arg.startsWith("-"));
-	// `-m`, `-F`, and `-a` take the next word as a value or annotate, so an `-l`
-	// after one of them is a value, not the list flag.
-	if (rest.some((arg) => /^-(m|F|a|s)/.test(arg) || ["--message", "--file", "--annotate", "--sign"].some((name) => arg.split("=")[0] === name))) return false;
+	// `-m`, `-F`, `-a`, and `-s` take a value or annotate, so an `-l` after one
+	// of them is a value, not the list flag. A cluster or an abbreviation counts.
+	if (
+		rest.some(
+			(arg) =>
+				(/^-[^-]/.test(arg) && ["m", "F", "a", "s"].some((letter) => arg.includes(letter))) ||
+				longOption(arg, "--message", 5) ||
+				longOption(arg, "--file", 4) ||
+				longOption(arg, "--annotate", 6) ||
+				longOption(arg, "--sign", 5),
+		)
+	) {
+		return false;
+	}
 	return (
 		rest.length === 0 ||
 		rest.includes("-l") ||
@@ -406,22 +419,30 @@ function classify(command: string, args: string[]): Hit[] {
 	if (unknown) return ["publish"];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
 	if (!sub) return [UNGATED];
+	// `--upload-pack` and a `::` transport helper run or fetch a program of the
+	// caller's choice. Checked before the read and output paths, and only for a
+	// verb that takes a repository or a remote, so a commit message may hold `::`.
+	if (GIT_REMOTE_VERBS.has(sub) && rest.some((arg) => arg.includes("::") || longOption(arg, "--upload-pack", 5))) return ["publish"];
 	// A read that writes its output to a file (`git diff --output=x`) is a write.
 	if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
 	// Reads stay ungated, so a read-only agent keeps them.
 	if (GIT_READ.has(sub) || (sub === "branch" && isBranchListing(rest)) || (sub === "tag" && isTagListing(rest))) return [UNGATED];
-	// A read form of a verb that can also write config or a remote.
-	if (sub === "config" && rest.some((arg) => ["--get", "--get-all", "--get-regexp", "--list", "-l"].includes(arg.split("=")[0]))) return [UNGATED];
-	if (sub === "remote" && (rest.length === 0 || rest.every((arg) => arg === "-v" || arg === "--verbose" || arg === "show" || arg === "get-url"))) return [UNGATED];
+	// Read forms of a verb that can also write config or a remote.
+	const firstWord = rest.find((arg) => !arg.startsWith("-"));
+	if (sub === "config") {
+		const writeAction = rest.some((arg) => /^--(unset|add|replace-all|rename-section|remove-section|edit|set)/.test(arg) || arg === "-e");
+		const readAction = rest.some((arg) => /^--(get|list)/.test(arg) || arg === "-l");
+		const words = rest.filter((arg) => !arg.startsWith("-"));
+		// `git config user.name` reads one key; `git config key=value` writes.
+		if (!writeAction && (readAction || (words.length === 1 && !words[0].includes("=")))) return [UNGATED];
+	}
+	if (sub === "remote" && (firstWord === undefined || firstWord === "show" || firstWord === "get-url")) return [UNGATED];
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
 	const short = (letters: string): boolean => rest.some((arg) => /^-[^-]/.test(arg) && [...letters].some((l) => arg.includes(l)));
 	const long = (name: string, min: number): boolean => rest.some((arg) => longOption(arg, name, min));
 	// A verb that runs another program, writes config, or reaches a remote.
 	if (GIT_PROGRAM.has(sub)) return ["publish"];
-	// `--upload-pack` and a `::` transport helper run or fetch a program of the
-	// caller's choice, in any subcommand that takes a repository or a remote.
-	if (rest.some((arg) => arg.includes("::") || arg.split("=")[0] === "--upload-pack")) return ["publish"];
 	if (sub === "pull" || sub === "merge" || sub === "rebase") {
 		// A merge strategy (`git-merge-<name>` from PATH) runs a program of the
 		// caller's choice. A rebase strategy is caught only in the short flags
