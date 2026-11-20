@@ -42,8 +42,11 @@ export function signatureOf(cwd: string, files: string[]): string {
 		.sort()
 		.map((path) => {
 			try {
-				// Git tracks only the executable bit, so the key does too.
-				const mode = statSync(join(cwd, path)).mode & 0o111 ? "exec" : "file";
+				// Git tracks only the executable bit, so the key does too. A file
+				// over the cap is measured by size and mtime, not read whole.
+				const stat = statSync(join(cwd, path));
+				const mode = stat.mode & 0o111 ? "exec" : "file";
+				if (stat.size > 1024 * 1024) return `${path}:${mode}:${stat.size}:${stat.mtimeMs}`;
 				const content = createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex");
 				return `${path}:${mode}:${content}`;
 			} catch {

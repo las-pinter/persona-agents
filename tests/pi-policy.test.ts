@@ -112,7 +112,12 @@ describe("pi policy: the built-in doctrine", () => {
 		assert.equal(bash(reviewer, "git commit -m 'x'"), "deny");
 		assert.equal(bash(reviewer, "git push"), "deny");
 		assert.equal(bash(reviewer, "rm -f x"), "deny");
+		assert.equal(bash(reviewer, "find . -delete"), "deny");
+		assert.equal(bash(reviewer, "tar -xf a.tar"), "deny");
+		assert.equal(bash(reviewer, "npm install"), "deny");
 		assert.equal(bash(reviewer, "npm test"), "allow");
+		assert.equal(bash(reviewer, "find . -name '*.ts'"), "allow");
+		assert.equal(bash(reviewer, "node --test tests/x.test.ts"), "allow");
 		assert.equal(bash(reviewer, "git status"), "allow");
 	});
 

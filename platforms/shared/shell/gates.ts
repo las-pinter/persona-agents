@@ -67,6 +67,7 @@ const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-
 const WRITE_COMMANDS = new Set([
 	"cp", "mv", "rsync", "rm", "rmdir", "tee", "dd", "truncate", "install", "ln", "mkdir", "touch",
 	"chmod", "chown", "chgrp", "patch", "shred", "unlink", "scp", "curl", "wget",
+	"unzip", "gunzip", "bunzip2", "xz", "zstd",
 ]);
 /** Commands that change files only with an in-place flag (`sed -i`, `perl -pi`). */
 const IN_PLACE_COMMANDS = new Set(["sed", "perl", "ruby"]);
@@ -363,6 +364,8 @@ function longOption(arg: string, long: string, min: number): boolean {
 function classify(command: string, args: string[]): Hit[] {
 	if (WRITE_COMMANDS.has(command)) return ["write"];
 	if (IN_PLACE_COMMANDS.has(command) && args.some((arg) => /^-[a-zA-Z]*i/.test(arg) || arg.startsWith("--in-place"))) return ["write"];
+	if (command === "find" && args.some((arg) => ["-delete", "-exec", "-execdir", "-ok", "-okdir"].includes(arg))) return ["write"];
+	if (command === "tar" && args.some((arg) => /^-[a-zA-Z]*x/.test(arg) || arg === "--extract")) return ["write"];
 	if (command === "gh") {
 		// A global option before the subcommand (`gh -R owner/repo run list`) moves the
 		// word the gate reads, so skip the options first. `-R` and `--repo` take the

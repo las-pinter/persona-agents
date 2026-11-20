@@ -59,7 +59,7 @@ export function themeNames(registry: Registry): string[] {
 /** The theme to run, validated against the registry. */
 export function resolveTheme(registry: Registry, wanted: string | undefined | null): string {
 	if (!wanted) return DEFAULT_THEME;
-	if (wanted in registry) return wanted;
+	if (Object.hasOwn(registry, wanted)) return wanted;
 	throw new ContentError(`persona-agents: unknown persona theme "${wanted}"; known themes: ${themeNames(registry).join(", ")}`);
 }
 

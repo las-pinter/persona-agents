@@ -389,6 +389,25 @@ function outsideWriteTarget(command: string, env: PolicyEnv): string | null {
 	return null;
 }
 
+/** The shell verbs a read-only profile may run, beyond the gated check. */
+const READ_SHELL_VERBS = new Set([
+	"ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "find", "tree", "file", "stat",
+	"diff", "jq", "git", "gh", "true", "echo", "printf", "which", "type", "test",
+]);
+
+/** True when every segment of a command is a read or a test. */
+function readOnlyShell(command: string): boolean {
+	for (const raw of commandSegments(command)) {
+		const words = shellWords(unwrapSegment(raw));
+		const verb = words[0] ?? "";
+		if (verb === "node" && words.slice(1).some((word) => word === "--test" || word.startsWith("--test="))) continue;
+		if (verb === "npx" && ["tsc", "shellcheck"].includes(words[1] ?? "")) continue;
+		if (verb === "npm" && words[1] === "test") continue;
+		if (!READ_SHELL_VERBS.has(verb)) return false;
+	}
+	return true;
+}
+
 /** The built-in verdict for a tool call, with no policy file involved. */
 export function doctrineDecision(profile: Profile, tool: string, input: Record<string, unknown>, env: PolicyEnv): Decision {
 	if (tool === "bash") {
@@ -400,6 +419,14 @@ export function doctrineDecision(profile: Profile, tool: string, input: Record<s
 				return {
 					verdict: "deny",
 					reason: "this agent is read-only: it may run reads and tests, not history, publishes, or shell writes",
+					source: "doctrine",
+					matched: command,
+				};
+			}
+			if (!readOnlyShell(command)) {
+				return {
+					verdict: "deny",
+					reason: "this agent is read-only: it may run reads and tests only",
 					source: "doctrine",
 					matched: command,
 				};
