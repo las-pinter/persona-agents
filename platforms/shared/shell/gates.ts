@@ -40,6 +40,7 @@ const GIT_REMOTE_VERBS = new Set([
 const GIT_PROGRAM = new Set([
 	"config", "remote", "bisect", "submodule", "difftool", "mergetool", "filter-branch", "credential",
 	"fetch", "clone", "ls-remote", "archive", "lfs", "svn", "p4", "send-email",
+	"fetch-pack", "send-pack", "http-push", "http-fetch",
 ]);
 const GH_PUBLISH = new Set(["pr", "release", "run"]);
 /**
@@ -84,11 +85,12 @@ function withoutMessage(rest: string[]): string[] {
 	const out: string[] = [];
 	for (let i = 0; i < rest.length; i += 1) {
 		const arg = rest[i];
-		if (arg === "-m" || arg === "--message") {
+		if ((arg === "-m" || longOption(arg, "--message", 4)) && !arg.includes("=")) {
 			i += 1;
 			continue;
 		}
-		if (arg.startsWith("--message=")) continue;
+		if (/^-[^-]./.test(arg) && arg.startsWith("-m")) continue;
+		if (longOption(arg, "--message", 4)) continue;
 		out.push(arg);
 	}
 	return out;
@@ -449,8 +451,9 @@ function classify(command: string, args: string[]): Hit[] {
 	const firstWord = rest.find((arg) => !arg.startsWith("-"));
 	if (sub === "config") {
 		const writeActions = ["--unset", "--add", "--replace-all", "--rename-section", "--remove-section", "--edit", "--set"];
-		const writeAction = rest.some((arg) => (arg === "-e" || writeActions.some((name) => longOption(arg, name, 4))));
-		const readAction = rest.some((arg) => longOption(arg, "--get", 4) || longOption(arg, "--list", 4) || arg === "-l");
+		const nameOf = (arg: string): string => arg.split("=")[0];
+		const writeAction = rest.some((arg) => arg === "-e" || writeActions.some((action) => action.startsWith(nameOf(arg)) || nameOf(arg).startsWith(action)));
+		const readAction = rest.some((arg) => arg === "-l" || nameOf(arg).startsWith("--get") || nameOf(arg).startsWith("--list"));
 		const words = rest.filter((arg) => !arg.startsWith("-"));
 		// `git config user.name` reads one key; `git config key=value` writes.
 		if (!writeAction && (readAction || (words.length === 1 && !words[0].includes("=")))) return [UNGATED];

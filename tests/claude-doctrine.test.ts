@@ -85,6 +85,7 @@ const ALLOWED = [
 	"git tag --mess -l v1",
 	"git commit -m 'fix: std::vector'",
 	"git merge -m 'note::x' feature",
+	"git merge --mess 'note::x' feature",
 ];
 
 /** Publish commands and the ask exceptions. */
@@ -131,6 +132,11 @@ const ASKED = [
 	"git config --unset core.x",
 	"git config --add core.x y",
 	"git config --rem core.x",
+	"git config --unset-all core.x",
+	"git config --unset-a core.x",
+	"git send-pack origin main",
+	"git http-push origin main",
+	"git fetch-pack origin",
 	"git config --remove core.x",
 	"git fetch-pack --upload-pack='touch x' origin",
 	"git send-pack ext::sh origin main",
@@ -273,6 +279,7 @@ const READS = [
 	"git config user.name",
 	"git remote show origin",
 	"git remote get-url origin",
+	"git config --get-regexp '^user' name",
 	"gh issue list",
 	"echo 'git push is gated'",
 	"grep -r 'git commit' docs",
