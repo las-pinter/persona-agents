@@ -19,7 +19,7 @@ import {
 	reloadContext,
 	summaryInstructions,
 } from "../platforms/claude/scripts/compact.mjs";
-import { pinnedDocs, studyPath } from "../platforms/shared/notes/notes.ts";
+import { notesListsSession, pinnedDocs, studyPath } from "../platforms/shared/notes/notes.ts";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "compact.mjs");
 const COMPANION = "persona-agents:companion";
@@ -168,6 +168,13 @@ describe("compact: manifest scan", () => {
 			write(path.join(notes, "sessions", "2026-01-02-second.md"), sessionNotesText("none", []));
 			assert.equal(buildManifest([], notes, "sess-unknown").sessionNotes, "");
 		});
+	});
+
+	test("the Sessions line matches a whole id, not a substring", () => {
+		const text = "- **Sessions:** abc-1, abc-10\n";
+		assert.equal(notesListsSession(text, "abc-1"), true);
+		assert.equal(notesListsSession(text, "abc"), false);
+		assert.equal(notesListsSession("- **Status:** open\n", "abc-1"), false);
 	});
 
 	test("pins and the study line accept only absolute paths", () => {
