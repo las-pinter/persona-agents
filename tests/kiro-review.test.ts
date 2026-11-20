@@ -147,6 +147,15 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
+	test("a failed git read is not a trivial change", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "not-a-repo");
+			fs.mkdirSync(cwd);
+			const { change } = changeKey(cwd);
+			assert.equal(isTrivial(change), false);
+		});
+	});
+
 	test("the CLI prints the reviewer task and its warnings", () => {
 		withTemp((root) => {
 			const cwd = repoWithChange(root);

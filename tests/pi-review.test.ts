@@ -13,6 +13,7 @@ import {
 	deriveDecisions,
 	deriveTask,
 	diffFiles,
+	failedChange,
 	isCommitCommand,
 	isTrivial,
 	makeChange,
@@ -61,6 +62,11 @@ describe("pi review: reading a change", () => {
 		assert.deepEqual(countDiffLines(DIFF), { addedLines: 3, removedLines: 2 });
 	});
 
+	test("a body line that starts with -- or ++ still counts", () => {
+		const diff = ["diff --git a/x b/x", "@@ -1,2 +1,3 @@", " keep", "--old flag", "++new flag", "+--added", ""].join("\n");
+		assert.deepEqual(countDiffLines(diff), { addedLines: 2, removedLines: 1 });
+	});
+
 	test("a new file's diff names it even though the old side is /dev/null", () => {
 		const added = ["--- /dev/null", "+++ b/src/new.ts", "+hello", ""].join("\n");
 		assert.deepEqual(diffFiles(added), ["src/new.ts"]);
@@ -83,6 +89,17 @@ describe("pi review: reading a change", () => {
 		const change = makeChange("", "?? src/new.ts\n", "", [big]);
 		assert.equal(change.addedLines, 100);
 		assert.equal(isTrivial(change), false);
+	});
+
+	test("a large single-line untracked file is not trivial either", () => {
+		const blob = "x".repeat(100 * 1024);
+		const change = makeChange("", "?? bundle.js\n", "", [blob]);
+		assert.ok(change.addedLines > 40);
+		assert.equal(isTrivial(change), false);
+	});
+
+	test("a failed git read asks, it never looks trivial", () => {
+		assert.equal(isTrivial(failedChange()), false);
 	});
 });
 

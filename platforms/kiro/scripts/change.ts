@@ -13,7 +13,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { makeChange, reviewKey, untrackedFiles, type Change } from "../../shared/review/review.ts";
+import { makeChange, reviewKey, untrackedFiles, failedChange, type Change } from "../../shared/review/review.ts";
 
 /** The output of one git call. */
 export interface GitResult {
@@ -24,7 +24,7 @@ export interface GitResult {
 
 /** Run git in a folder; a missing git binary is a failed call, not an exception. */
 export function git(cwd: string, args: string[]): GitResult {
-	const run = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+	const run = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 	return { status: run.status ?? 1, stdout: run.stdout ?? "", stderr: run.stderr ?? "" };
 }
 
@@ -47,6 +47,8 @@ export function readChange(cwd: string): Change {
 	const status = git(cwd, ["status", "--porcelain"]);
 	let diff = git(cwd, ["diff", "HEAD", "--no-color"]);
 	if (diff.stdout.trim() === "") diff = git(cwd, ["show", "HEAD", "--format=", "--no-color"]);
+	// A failed read is not a small change; the gate must ask.
+	if (status.status !== 0 || diff.status !== 0) return failedChange();
 	// An untracked file is not in the diff; its lines still count toward the
 	// trivial-change limit. A file that cannot be read adds nothing.
 	const untrackedTexts = untrackedFiles(status.stdout).map((path) => {

@@ -41,6 +41,8 @@ export const PUBLISH_ASK =
 	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
 /** Why an unreviewed commit asks the owner. */
 export const REVIEW_ASK = "this change has no independent review, so the commit needs your approval";
+/** Why a command that is not a plain history command asks the owner. */
+export const UNGATED_ASK = "this command is not a plain history command, so it needs your approval";
 /** Why a command that mixes gated and ungated segments asks. */
 const MIXED_ASK = "this command mixes a history command with another segment, so it needs your approval";
 
@@ -85,7 +87,8 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 	}
 
 	if (gated.includes("publish")) return { verdict: "ask", reason: PUBLISH_ASK };
-	const plainHistory = gated.length > 0 && gated.every((hit) => hit === "history") && !hits.includes(UNGATED);
+	if (gated.length === 0) return { verdict: "ask", reason: UNGATED_ASK };
+	const plainHistory = gated.every((hit) => hit === "history") && !hits.includes(UNGATED);
 	if (!plainHistory) return { verdict: "ask", reason: MIXED_ASK };
 
 	if (!isCommitCommand(command)) return { verdict: "allow", reason: "a plain git add, commit, pull, merge, rebase, or tag" };

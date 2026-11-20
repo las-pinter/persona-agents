@@ -137,6 +137,7 @@ describe("kiro install: a fresh install", () => {
 			assert.match(command, /--kiro-home=/);
 			assert.match(command, /--kiro-cli=/);
 			const rules = (agent.permissions as { rules: Array<Record<string, unknown>> }).rules;
+			assert.equal(rules[0].effect, "deny", "a deny rule comes first");
 			const shell = rules.find((rule) => rule.capability === "shell");
 			assert.ok((shell?.match as string[]).includes("node *"), "the companion may run the adapter scripts");
 		});
@@ -340,6 +341,16 @@ describe("kiro install: the version check", () => {
 			const run = runInstaller([`--kiro-home=${temp.kiro}`, `--kiro-cli=${path.join(temp.root, "missing")}`]);
 			assert.equal(run.status, 1);
 			assert.match(run.stderr, /cannot run/);
+			assert.ok(!fs.existsSync(temp.kiro));
+		});
+	});
+
+	test("--dry-run previews without a working kiro-cli", () => {
+		withTemp((temp) => {
+			const run = runInstaller([`--kiro-home=${temp.kiro}`, `--kiro-cli=${path.join(temp.root, "missing")}`, "--dry-run"]);
+			assert.equal(run.status, 0, run.stderr);
+			assert.match(run.stdout, /Dry run: payload:/);
+			assert.match(run.stderr, /a real install would refuse/);
 			assert.ok(!fs.existsSync(temp.kiro));
 		});
 	});

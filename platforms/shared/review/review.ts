@@ -56,13 +56,31 @@ export function isTrivial(change: Pick<Change, "files" | "addedLines" | "removed
 	return change.files.length <= TRIVIAL_FILES && change.addedLines + change.removedLines <= TRIVIAL_LINES;
 }
 
+/**
+ * The change a failed git read yields: non-trivial, so the gate asks. A failed
+ * read must never look like a small change.
+ */
+export function failedChange(): Change {
+	return { diffText: "", files: [], untracked: [], addedLines: TRIVIAL_LINES + 1, removedLines: 0, signature: "" };
+}
+
 /** Count the added and removed lines of a unified diff. */
 export function countDiffLines(diffText: string): { addedLines: number; removedLines: number } {
 	let addedLines = 0;
 	let removedLines = 0;
+	let inHunk = false;
 	for (const line of diffText.split("\n")) {
-		// A file header (`+++ b/x`, `--- a/x`) is not a changed line.
-		if (line.startsWith("+++") || line.startsWith("---")) continue;
+		if (line.startsWith("diff --git ")) {
+			inHunk = false;
+			continue;
+		}
+		if (line.startsWith("@@")) {
+			inHunk = true;
+			continue;
+		}
+		// A file header (`+++ b/x`, `--- a/x`) is not a changed line. Inside a
+		// hunk, a body line may itself start with `++` or `--`.
+		if (!inHunk && (line.startsWith("+++") || line.startsWith("---"))) continue;
 		if (line.startsWith("+")) addedLines++;
 		else if (line.startsWith("-")) removedLines++;
 	}
@@ -108,7 +126,9 @@ export function makeChange(diffText: string, statusText: string, signature = "",
 	const untracked = untrackedFiles(statusText);
 	const files = [...new Set([...diffFiles(diffText), ...untracked])];
 	const counts = countDiffLines(diffText);
-	const untrackedLines = untrackedTexts.reduce((sum, text) => sum + countLines(text), 0);
+	// A kilobyte counts as one line-equivalent, so a large single-line file (a
+	// bundle, a blob) cannot pass the line limit by having one line.
+	const untrackedLines = untrackedTexts.reduce((sum, text) => sum + countLines(text) + Math.floor(Buffer.byteLength(text, "utf8") / 1024), 0);
 	return {
 		diffText,
 		files,

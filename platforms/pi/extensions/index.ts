@@ -54,6 +54,7 @@ import {
 	buildBrief,
 	commitGate,
 	deriveTask,
+	failedChange,
 	finalizeBrief,
 	isCommitCommand,
 	isTrivial,
@@ -389,6 +390,8 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 		// trivial-change limit.
 		untrackedFiles(status.stdout).map((path) => readText(join(cwd, path)) ?? ""),
 	);
+	// A failed read is not a small change; the gate must ask.
+	if (status.code !== 0 || diff.code !== 0) return failedChange();
 	const signature = change.untracked
 		.map((path) => {
 			try {

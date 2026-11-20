@@ -208,10 +208,11 @@ export function companionRules(payload: string, kiroHome: string): unknown[] {
 	const agents = join(kiroHome, "agents");
 	const skills = join(kiroHome, "skills");
 	return [
-		{ capability: "fs_read", match: ["./**", "~/agent-notes/**", `${payload}/**`], effect: "allow" },
+		// Denies first, so a first-match engine and a deny-overrides engine agree.
 		{ capability: "fs_read", match: SECRET_PATHS, effect: "deny" },
-		{ capability: "fs_write", match: ["./**", "~/agent-notes/**"], effect: "allow" },
 		{ capability: "fs_write", match: [`${payload}/**`, `${agents}/pa-*`, `${skills}/**`, `${kiroHome}/settings/**`], effect: "deny" },
+		{ capability: "fs_read", match: ["./**", "~/agent-notes/**", `${payload}/**`], effect: "allow" },
+		{ capability: "fs_write", match: ["./**", "~/agent-notes/**"], effect: "allow" },
 		{ capability: "skill", match: ["*"], effect: "allow" },
 		{ capability: "subagent", match: ["pa-reviewer"], effect: "allow" },
 		{ capability: "shell", match: [...READ_COMMANDS, ...TEST_COMMANDS, ...SCRIPT_COMMANDS], effect: "allow" },
@@ -221,9 +222,9 @@ export function companionRules(payload: string, kiroHome: string): unknown[] {
 /** The reviewer's capability rules: reads and the test suite, no writes. */
 export function reviewerRules(payload: string): unknown[] {
 	return [
-		{ capability: "fs_read", match: ["./**", "~/agent-notes/**", `${payload}/**`], effect: "allow" },
-		{ capability: "fs_read", match: SECRET_PATHS, effect: "deny" },
 		{ capability: "fs_write", match: ["**"], effect: "deny" },
+		{ capability: "fs_read", match: SECRET_PATHS, effect: "deny" },
+		{ capability: "fs_read", match: ["./**", "~/agent-notes/**", `${payload}/**`], effect: "allow" },
 		{ capability: "skill", match: ["*"], effect: "allow" },
 		{ capability: "shell", match: [...READ_COMMANDS, ...TEST_COMMANDS], effect: "allow" },
 	];
@@ -445,16 +446,21 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 		process.exit(1);
 	}
 	const kiroCli = option("kiro-cli", process.argv) ?? "kiro-cli";
+	const dryRun = process.argv.includes("--dry-run");
 	const check = checkKiroVersion(kiroCli);
 	if (!check.ok) {
-		process.stderr.write(`Kiro install: ${check.error}\n`);
-		process.exit(1);
+		if (!dryRun) {
+			process.stderr.write(`Kiro install: ${check.error}\n`);
+			process.exit(1);
+		}
+		// A preview needs no working kiro-cli; a real install would refuse.
+		process.stderr.write(`Warning: ${check.error}; a real install would refuse.\n`);
 	}
 	const result = install({
 		root,
 		kiroHome,
 		theme: option("theme", process.argv),
-		dryRun: process.argv.includes("--dry-run"),
+		dryRun,
 		force: process.argv.includes("--force"),
 		kiroCli,
 	});
@@ -463,9 +469,9 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 		process.exit(1);
 	}
 	for (const warning of result.plan?.warnings ?? []) process.stderr.write(`Warning: ${warning}\n`);
-	const prefix = result.actions.length && process.argv.includes("--dry-run") ? "Dry run: " : "";
+	const prefix = result.actions.length && dryRun ? "Dry run: " : "";
 	for (const action of result.actions) process.stdout.write(`${prefix}${action}\n`);
-	if (!process.argv.includes("--dry-run")) {
+	if (!dryRun) {
 		process.stdout.write(`Kiro installed for ${basename(kiroHome)} (kiro-cli ${check.version}).\n`);
 		process.stdout.write("Start the companion: kiro-cli --agent pa-companion\n");
 		process.stdout.write("Update: git pull, then rerun ./install.sh\n");

@@ -114,7 +114,7 @@ session.
 
 | Agent | Trigger | Job |
 | --- | --- | --- |
-| companion | `SessionStart` | `context.ts session`: the persona, the profession, and the platform note. |
+| companion | `SessionStart` | `context.ts session`: the platform note and the theme persona (the profession is the agent prompt). |
 | companion | `SessionStart` | `context.ts startup`: the session id and the read list. |
 | companion | `PermissionRequest` | `gate.ts permission`: allow a plain history command or a reviewed/trivial commit; return no decision otherwise, so Kiro shows its own prompt. |
 | companion | `Stop` | `review-record.ts`: scan the V3 store for a `sub_agent_complete` from `pa-reviewer` and store its verdict against the change key. |

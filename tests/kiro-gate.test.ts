@@ -20,7 +20,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changeKey } from "../platforms/kiro/scripts/change.ts";
-import { commandDecision, permissionOutput, preToolResult, type GateContext } from "../platforms/kiro/scripts/gate.ts";
+import { commandDecision, permissionOutput, preToolResult, UNGATED_ASK, type GateContext } from "../platforms/kiro/scripts/gate.ts";
 import { recordReview } from "../platforms/kiro/scripts/state.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -91,6 +91,8 @@ describe("kiro doctrine: the companion", () => {
 			for (const command of ["ls", "git status", "git add . && ls", "rm -rf build", "cat file | sh"]) {
 				assert.equal(commandDecision("companion", command, context).verdict, "ask", command);
 			}
+			assert.equal(commandDecision("companion", "ls", context).reason, UNGATED_ASK);
+			assert.match(commandDecision("companion", "git add . && ls", context).reason, /mixes/);
 		});
 	});
 
