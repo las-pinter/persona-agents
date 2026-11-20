@@ -159,7 +159,9 @@ describe("kiro install: a fresh install", () => {
 		withTemp((temp) => {
 			assert.ok(fresh(temp).ok);
 			const reviewer = readJson(path.join(temp.kiro, "agents", "pa-reviewer.json"));
-			assert.match(String(reviewer.prompt), /^You are an independent code reviewer\./);
+			const profession = fs.readFileSync(path.join(contentDir, "professions", "reviewer.md"), "utf8").trim();
+			assert.ok(String(reviewer.prompt).startsWith(profession), "the reviewer prompt is the shared profession");
+			assert.match(String(reviewer.prompt), /Skill names carry no plugin prefix here/);
 			assert.deepEqual(reviewer.tools, ["read", "web", "shell"]);
 			const hooks = reviewer.hooks as Array<Record<string, unknown>>;
 			assert.equal(hooks.length, 1);

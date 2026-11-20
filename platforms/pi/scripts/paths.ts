@@ -24,11 +24,6 @@ export function contentDir(): string {
 	return join(repoRoot(), "content");
 }
 
-/** The Pi subagent definitions. */
-export function agentsDir(): string {
-	return join(repoRoot(), "platforms", "pi", "agents");
-}
-
 /** The owner's home folder, read once per call so a test can pass its own. */
 export function homeDir(): string {
 	return homedir();

@@ -318,7 +318,12 @@ export function reviewerAgent(plan: Plan): Record<string, unknown> {
 	return {
 		name: "pa-reviewer",
 		description: "Independent, read-only review of a change, in a separate context. Returns findings with severity and location and a verdict. Started by the companion's review skill.",
-		prompt: readFileSync(join(plan.payload, "platforms", "kiro", "agents", "reviewer-prompt.md"), "utf8"),
+		prompt: [
+			readFileSync(join(plan.payload, "content", "professions", "reviewer.md"), "utf8").trim(),
+			"",
+			"Skill names carry no plugin prefix here: the checklist skill is `code-review-checklist`.",
+			"You are read-only: the agent profile has no file-write tool, and the shell gate blocks every write it can see.",
+		].join("\n"),
 		tools: ["read", "web", "shell"],
 		resources: plan.skillNames.map((name) => `skill://${join(plan.kiroHome, "skills", name, "SKILL.md")}`),
 		permissions: { rules: reviewerRules(plan.payload) },

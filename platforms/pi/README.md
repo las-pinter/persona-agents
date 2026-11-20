@@ -79,10 +79,11 @@ studies.
 The reviewer is a separate Pi process with its own context, so it judges the
 code without the author's reasoning.
 
-- **`agents/reviewer.md`** holds the prompt body byte-for-byte as the Claude
-  agent file (`tests/pi-package.test.ts` fails when they drift) plus Pi
-  frontmatter: `tools: read, grep, find, ls, bash`. Bash stays because the
-  reviewer runs the test suite once; there is no Edit or Write tool at all.
+- **`content/professions/reviewer.md`** is the reviewer's prompt, read at run
+  time and passed with `--append-system-prompt`, so Pi, Kiro, and Claude Code
+  all review under one set of rules. The reader is spawned with
+  `--tools read,grep,find,ls,bash`: bash stays because the reviewer runs the
+  test suite once; there is no Edit or Write tool at all.
 - **`platforms/shared/review/review.ts`** is pure: it reads a diff and a status
   into a `Change`, names it with a 16-character hash (`reviewKey`), parses the
   verdict, and decides the gate.

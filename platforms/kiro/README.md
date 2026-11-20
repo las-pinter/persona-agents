@@ -79,9 +79,10 @@ kiro-cli --agent pa-companion
   - `compact.ts` — the pre-compaction manifest and the post-compaction reload.
   - `journal-end.ts` — the SessionEnd safety net and its detached writer.
   - `retro.ts` — the session facts.
-- **Agents** (`platforms/kiro/agents/reviewer-prompt.md`): the reviewer prompt
-  body, the Claude reviewer text plus a Kiro note (skills have no namespace;
-  the checklist skill is `code-review-checklist`).
+- **Agents**: the `pa-reviewer` prompt is the shared
+  `content/professions/reviewer.md`, read from the payload at install time,
+  plus a Kiro note (skills have no namespace; the checklist skill is
+  `code-review-checklist`).
 - **Shared modules** (`platforms/shared/`): the logic every adapter uses —
   shell classification, notes, compaction manifest, review, retro facts, and
   the prompt sections. See [platforms/pi/README.md](../pi/README.md#layout)

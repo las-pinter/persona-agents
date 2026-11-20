@@ -46,7 +46,8 @@ import {
 	summarizeReview,
 	toolCallLine,
 } from "../scripts/summary.ts";
-import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
+import { contentDir, homeDir } from "../scripts/paths.ts";
+import { reviewerBody } from "../scripts/review-body.ts";
 import {
 	addRule,
 	appendDecision,
@@ -409,14 +410,6 @@ function piInvocation(): { command: string; args: string[] } {
 	const script = process.argv[1];
 	if (script && existsSync(script)) return { command: process.execPath, args: [script] };
 	return { command: "pi", args: [] };
-}
-
-/** The reviewer's prompt: the agent file body, without its frontmatter. */
-function reviewerBody(dir: string = agentsDir()): string {
-	const file = join(dir, "reviewer.md");
-	const text = readFileSync(file, "utf8");
-	const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
-	return (match ? text.slice(match[0].length) : text).trim();
 }
 
 /** The change a commit would record: the diff, the untracked paths, and their fingerprint. */

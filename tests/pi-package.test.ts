@@ -14,6 +14,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { reviewerBody } from "../platforms/pi/scripts/review-body.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file: string): string => fs.readFileSync(path.join(repoRoot, file), "utf8");
@@ -94,26 +95,24 @@ describe("pi package: the manifest", () => {
 
 describe("pi package: the reviewer agent", () => {
 	const read = (file: string): string => fs.readFileSync(path.join(repoRoot, file), "utf8");
-	/** The body after the leading `---` frontmatter block. */
-	const bodyOf = (text: string): string => {
-		const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
-		return (match ? text.slice(match[0].length) : text).trim();
-	};
 
-	test("the agent file exists with the reviewer's tool list", () => {
-		const text = read("platforms/pi/agents/reviewer.md");
-		assert.match(text, /^---\nname: reviewer\n/);
-		const tools = /^tools:\s*(.+)$/m.exec(text)?.[1] ?? "";
-		const names = tools.split(",").map((tool) => tool.trim());
-		assert.ok(names.includes("bash"), "the reviewer runs the test suite once");
-		assert.equal(names.includes("edit"), false, "read-only: no edit");
-		assert.equal(names.includes("write"), false, "read-only: no write");
+	test("the reviewer prompt is the shared profession", () => {
+		const profession = read("content/professions/reviewer.md");
+		assert.match(profession, /^# Reviewer\n/);
+		assert.match(profession, /is opinion from someone with/);
+		assert.match(profession, /## Output Format/);
 	});
 
-	test("the prompt body is the Claude reviewer's body, byte for byte", () => {
-		// One prompt, two platforms. Editing it means editing both files, and
-		// this test is what tells you when they drift.
-		assert.equal(bodyOf(read("platforms/pi/agents/reviewer.md")), bodyOf(read("platforms/claude/agents/reviewer.md")));
+	test("the Pi extension reads that file at run time", () => {
+		assert.equal(reviewerBody(), read("content/professions/reviewer.md").trim());
+	});
+
+	test("no adapter keeps its own copy of the reviewer rules", () => {
+		assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "pi", "agents", "reviewer.md")), false);
+		assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "kiro", "agents", "reviewer-prompt.md")), false);
+		const wrapper = read("platforms/claude/agents/reviewer.md");
+		assert.match(wrapper, /\$\{CLAUDE_PLUGIN_ROOT\}\/content\/professions\/reviewer\.md/);
+		assert.equal(wrapper.includes("Build your own risk list"), false, "the wrapper restates no rule");
 	});
 });
 

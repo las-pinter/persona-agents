@@ -140,8 +140,8 @@ function companionInput(source = "startup"): Record<string, unknown> {
 }
 
 describe("claude plugin: context hook", () => {
-	test("there is exactly one profession, the companion", () => {
-		assert.deepEqual(professions, ["companion"]);
+	test("the content holds the companion and the reviewer professions", () => {
+		assert.deepEqual(professions, ["companion", "reviewer"]);
 	});
 
 	test("the profession part is the file, verbatim, under the cap", () => {

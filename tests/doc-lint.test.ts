@@ -96,12 +96,15 @@ describe("condition 3: the plugin manifest ships every skill folder", () => {
 });
 
 describe("condition 4: agents.json matches content/professions and content/personas", () => {
+	/** Professions that carry no voice, so no theme maps them to a persona. */
+	const VOICELESS = ["reviewer"];
+
 	test("every theme maps exactly the professions, to persona files that exist", () => {
 		const registry = JSON.parse(readText(path.join(contentDir, "agents.json"))) as Record<
 			string,
 			Record<string, { personaFile?: string }>
 		>;
-		const expected = professionNames();
+		const expected = professionNames().filter((name) => !VOICELESS.includes(name));
 		assert.ok(Object.keys(registry).length > 0, "agents.json must hold at least one theme");
 		const bad: string[] = [];
 		for (const [theme, professions] of Object.entries(registry)) {
