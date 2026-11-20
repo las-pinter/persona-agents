@@ -14,7 +14,7 @@
  * so a typo fix does not nag.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { commandSegments, gitSubcommand, shellWords, unwrapSegment } from "../shell/gates.ts";
 import { studyIndexRows } from "../notes/notes.ts";
@@ -69,10 +69,11 @@ export function isTrivial(change: Pick<Change, "files" | "addedLines" | "removed
 
 /**
  * The change a failed git read yields: non-trivial, so the gate asks. A failed
- * read must never look like a small change.
+ * read must never look like a small change, and its key is unique, so no
+ * stored approval can cover it.
  */
 export function failedChange(): Change {
-	return { diffText: "", files: [], untracked: [], addedLines: TRIVIAL_LINES + 1, removedLines: 0, signature: "" };
+	return { diffText: "", files: [], untracked: [], addedLines: TRIVIAL_LINES + 1, removedLines: 0, signature: `failed:${randomUUID()}` };
 }
 
 /** Count the added and removed lines of a unified diff. */

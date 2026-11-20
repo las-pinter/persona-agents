@@ -176,6 +176,14 @@ install_kiro() {
         echo "Kiro CLI not found ($KIRO_CLI_ARG); skipping the Kiro adapter."
         return 0
     fi
+    if ((KIRO_EXPLICIT == 0)); then
+        local version
+        version="$("$KIRO_CLI_ARG" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || version=""
+        if [[ -z "$version" ]] || [[ "$(printf '%s\n' "3.4.0" "$version" | sort -V | head -1)" != "3.4.0" ]]; then
+            echo "Kiro CLI ${version:-unknown} is below 3.4.0; skipping the Kiro adapter. Use --kiro to run the installer anyway."
+            return 0
+        fi
+    fi
     if ! command -v node >/dev/null 2>&1; then
         echo "Error: Node is required for the Kiro adapter." >&2
         exit 1

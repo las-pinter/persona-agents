@@ -198,6 +198,11 @@ export const TEST_COMMANDS = [
 	"npx shellcheck *",
 ];
 /**
+ * The reviewer's test commands. It keeps `npm test` and the two checks, but not
+ * `npm run *`: an arbitrary project script could write.
+ */
+export const REVIEWER_COMMANDS = ["npm test", "npm test *", "npm run lint", "npm run typecheck", "node --test*", "node --experimental-strip-types --test *", "npx tsc *", "npx shellcheck *"];
+/**
  * The companion runs the adapter scripts (`review.ts`, `retro.ts`, `journal.ts`)
  * through node, and a project script is the same trust as the write access it
  * already has. The reviewer keeps the narrower test commands.
@@ -227,7 +232,7 @@ export function reviewerRules(payload: string): unknown[] {
 		{ capability: "fs_read", match: SECRET_PATHS, effect: "deny" },
 		{ capability: "fs_read", match: ["./**", "~/agent-notes/**", `${payload}/**`], effect: "allow" },
 		{ capability: "skill", match: ["*"], effect: "allow" },
-		{ capability: "shell", match: [...READ_COMMANDS, ...TEST_COMMANDS], effect: "allow" },
+		{ capability: "shell", match: [...READ_COMMANDS, ...REVIEWER_COMMANDS], effect: "allow" },
 	];
 }
 

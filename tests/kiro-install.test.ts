@@ -156,6 +156,8 @@ describe("kiro install: a fresh install", () => {
 			assert.ok(rules.some((rule) => rule.capability === "fs_write" && rule.effect === "deny"));
 			const shell = rules.find((rule) => rule.capability === "shell");
 			assert.ok(!(shell?.match as string[]).includes("node *"), "the reviewer keeps the narrow test commands");
+			assert.ok((shell?.match as string[]).includes("npm test"));
+			assert.ok(!(shell?.match as string[]).includes("npm run *"), "the reviewer may not run an arbitrary project script");
 			const writer = readJson(path.join(temp.kiro, "agents", "pa-writer.json"));
 			assert.deepEqual(writer.tools, []);
 		});
@@ -418,6 +420,18 @@ describe("install.sh: the adapter flags", () => {
 			const run = runShell([`--kiro-cli=${path.join(temp.root, "missing")}`], { HOME: temp.home, CLAUDE_CONFIG_DIR: config });
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /skipping the Kiro adapter/);
+			assert.ok(!fs.existsSync(path.join(temp.home, ".kiro")));
+		});
+	});
+
+	test("an old kiro-cli is skipped with a message in the default run", () => {
+		withTemp((temp) => {
+			const cli = fakeCli(temp, "kiro-cli 3.3.0");
+			const config = path.join(temp.root, "config");
+			const run = runShell([`--kiro-cli=${cli}`], { HOME: temp.home, CLAUDE_CONFIG_DIR: config });
+			assert.equal(run.status, 0, run.stderr);
+			assert.match(run.stdout, /below 3\.4\.0; skipping/);
+			assert.ok(fs.existsSync(path.join(config, "settings.json")));
 			assert.ok(!fs.existsSync(path.join(temp.home, ".kiro")));
 		});
 	});
