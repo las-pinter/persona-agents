@@ -85,7 +85,7 @@ describe("kiro doctrine: the companion", () => {
 		});
 	});
 
-	test("an ungated or mixed command asks, and a plain read steps aside", () => {
+	test("an ungated or mixed command asks the owner", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));
 			for (const command of ["ls", "git status", "git add . && ls", "rm -rf build", "cat file | sh"]) {

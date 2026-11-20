@@ -38,7 +38,7 @@ The installer (`install.ts`) writes:
 - `<kiro home>/persona-agents/` — the payload: `content/`, `platforms/shared/`,
   `platforms/kiro/`, and `config.json` (`{ "theme": "<name>" }`). `state/` is
   never removed.
-- `<kiro home>/skills/<name>/` — the 21 skills, with
+- `<kiro home>/skills/<name>/` — the skills, with
   `{{PERSONA_AGENTS_KIRO_SKILL_DIR}}` and `{{PERSONA_AGENTS_KIRO_ROOT}}`
   substituted for the installed paths.
 - `<kiro home>/agents/pa-companion.json`, `pa-reviewer.json`,
@@ -98,7 +98,7 @@ The payload keeps the repository layout so the relative imports between
 - **`pa-companion`** — the main session. The prompt is
   `content/professions/companion.md`, inlined into the config because Kiro
   rejects an absolute `file://` prompt; tools `read`, `write`, `shell`, `web`,
-  `subagent/pa-reviewer`; resources are the 21 installed `skill://` files. No
+  `subagent/pa-reviewer`; resources are the installed `skill://` files. No
   model is pinned: the owner's session model is used.
 - **`pa-reviewer`** — read-only, separate context. Tools `read`, `web`,
   `shell`; no file-write tool. Its `permissions.rules` deny every `fs_write`,

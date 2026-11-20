@@ -62,9 +62,12 @@ export function readChange(cwd: string): Change {
 	// A failed read is not a small change; the gate must ask.
 	if (status.status !== 0 || diff.status !== 0) return failedChange();
 	// An untracked file is not in the diff; its lines still count toward the
-	// trivial-change limit. A file that cannot be read adds nothing.
+	// trivial-change limit. A file over the cap is measured by size, not read,
+	// so a huge artifact cannot stall the hook.
 	const untrackedTexts = untrackedFiles(status.stdout).map((path) => {
 		try {
+			const size = statSync(join(cwd, path)).size;
+			if (size > 1024 * 1024) return "\n".repeat(Math.ceil(size / 1024));
 			return readFileSync(join(cwd, path), "utf8");
 		} catch {
 			return "";

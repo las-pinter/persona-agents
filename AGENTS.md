@@ -74,12 +74,14 @@ The doctrine lives in three places:
 details.
 
 Accepted risks: `rebase --exec` and `rebase -i` are allowed. `git -C` to
-another repository is allowed, and the hooks and config of that repository
-run. `gh workflow run` and `gh api` carry no gate entry by owner choice, so
-Claude Code's own permission flow decides them. The Kiro companion may run a
-`node` script, so a determined companion can write the review store; the gate
-ignores a record with no sub-session, but it guards against mistakes, not
-against the agent itself.
+another repository is allowed on Claude Code and Pi, and the hooks and config
+of that repository run; the Kiro gate asks for a commit that names another
+repository, because it reads the change in the session's directory. `gh
+workflow run` and `gh api` carry no gate entry by owner choice, so Claude
+Code's own permission flow decides them. The Kiro companion may run a `node`
+script, so a determined companion can write the review store; the gate ignores
+a record with no sub-session, but it guards against mistakes, not against the
+agent itself.
 
 ## Adding content
 

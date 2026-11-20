@@ -49,8 +49,8 @@ Then merge the recommended settings into your user `settings.json`:
 
 ```bash
 git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents
-~/persona-agents/install.sh --dry-run   # preview
-~/persona-agents/install.sh
+~/persona-agents/install.sh --claude --dry-run   # preview
+~/persona-agents/install.sh --claude
 ```
 
 > **Review `install.sh` before you run it.** It changes
@@ -118,7 +118,7 @@ kiro-cli --agent pa-companion
 - `--theme <name>` picks the persona theme; a first install defaults to
   `goblin`, and a rerun without the flag keeps the current theme. The next
   session picks it up.
-- The installer writes `~/.kiro/persona-agents/`, the 21 skills in
+- The installer writes `~/.kiro/persona-agents/`, the skills in
   `~/.kiro/skills/`, and the agents `pa-companion`, `pa-reviewer`, and
   `pa-writer`. It never changes `chat.defaultAgent`; it warns when that setting
   names an agent that does not exist.

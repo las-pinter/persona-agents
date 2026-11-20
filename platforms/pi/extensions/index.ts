@@ -392,8 +392,17 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 		status.stdout,
 		"",
 		// An untracked file is not in the diff; its lines still count toward the
-		// trivial-change limit.
-		untrackedFiles(status.stdout).map((path) => readText(join(cwd, path)) ?? ""),
+		// trivial-change limit. A file over the cap is measured by size, not read.
+		untrackedFiles(status.stdout).map((path) => {
+			const full = join(cwd, path);
+			try {
+				const size = statSync(full).size;
+				if (size > 1024 * 1024) return "\n".repeat(Math.ceil(size / 1024));
+				return readText(full) ?? "";
+			} catch {
+				return "";
+			}
+		}),
 	);
 	// A failed read is not a small change; the gate must ask.
 	if (status.code !== 0 || diff.code !== 0) return failedChange();

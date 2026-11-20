@@ -109,7 +109,6 @@ describe("kiro install: a fresh install", () => {
 			}
 			const installed = fs.readdirSync(path.join(temp.kiro, "skills")).sort();
 			assert.deepEqual(installed, skillFolders(contentDir));
-			assert.equal(installed.length, 21);
 			for (const name of installed) {
 				assert.deepEqual(readJson(path.join(temp.kiro, "skills", name, SKILL_MARKER)), {
 					name: "persona-agents",
@@ -125,7 +124,7 @@ describe("kiro install: a fresh install", () => {
 			const agent = readJson(path.join(temp.kiro, "agents", "pa-companion.json"));
 			assert.match(String(agent.prompt), /^# Companion\n/);
 			assert.deepEqual(agent.tools, ["read", "write", "shell", "web", "subagent/pa-reviewer"]);
-			assert.equal((agent.resources as string[]).length, 21);
+			assert.equal((agent.resources as string[]).length, skillFolders(contentDir).length);
 			assert.ok((agent.resources as string[]).every((resource) => resource.includes(`/skills/`) && resource.endsWith("/SKILL.md")));
 			const triggers = (agent.hooks as Array<Record<string, unknown>>).map((hook) => hook.trigger);
 			for (const trigger of ["SessionStart", "PermissionRequest", "Stop", "PreCompact", "PostCompact", "SessionEnd"]) {
@@ -237,7 +236,7 @@ describe("kiro install: dry run and conflicts", () => {
 			const result = install({ root: repoRoot, kiroHome: temp.kiro, dryRun: true, now: FIXED });
 			assert.ok(result.ok, result.error);
 			assert.ok(result.actions.some((action) => action.startsWith("payload: ")));
-			assert.ok(result.actions.some((action) => action === "skills: 21"));
+			assert.ok(result.actions.some((action) => action === `skills: ${skillFolders(contentDir).length}`));
 			assert.ok(!fs.existsSync(temp.kiro));
 		});
 	});
@@ -398,7 +397,7 @@ describe("install.sh: the adapter flags", () => {
 			assert.equal(run.status, 0, run.stderr);
 			assert.ok(fs.existsSync(path.join(config, "settings.json")));
 			assert.ok(fs.existsSync(path.join(temp.home, ".kiro", "agents", "pa-companion.json")));
-			assert.equal(fs.readdirSync(path.join(temp.home, ".kiro", "skills")).length, 21);
+			assert.equal(fs.readdirSync(path.join(temp.home, ".kiro", "skills")).length, skillFolders(contentDir).length);
 		});
 	});
 
