@@ -53,7 +53,8 @@ describe("kiro skills: the platform branch", () => {
 		test(`${name}: the branch names the reference and the reference names the script`, () => {
 			const skill = fs.readFileSync(path.join(skillsRoot, name, "SKILL.md"), "utf8");
 			assert.match(skill, new RegExp(BRANCH));
-			assert.ok(skill.includes(SKILL_DIR), `${name} does not point at ${SKILL_DIR}`);
+			assert.ok(skill.includes("references/kiro.md"), `${name} does not name the reference`);
+			assert.ok(skill.includes(SKILL_DIR) || skill.includes(ROOT_TOKEN), `${name} has no installed path token`);
 			const file = path.join(skillsRoot, name, "references", "kiro.md");
 			assert.ok(fs.existsSync(file), `${file} is missing`);
 			const reference = fs.readFileSync(file, "utf8");

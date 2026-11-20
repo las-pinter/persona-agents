@@ -136,6 +136,9 @@ describe("kiro install: a fresh install", () => {
 			assert.match(command, /journal-end\.ts/);
 			assert.match(command, /--kiro-home=/);
 			assert.match(command, /--kiro-cli=/);
+			const rules = (agent.permissions as { rules: Array<Record<string, unknown>> }).rules;
+			const shell = rules.find((rule) => rule.capability === "shell");
+			assert.ok((shell?.match as string[]).includes("node *"), "the companion may run the adapter scripts");
 		});
 	});
 
@@ -151,6 +154,8 @@ describe("kiro install: a fresh install", () => {
 			assert.match(String((hooks[0].action as Record<string, unknown>).command), /pretool.*reviewer/);
 			const rules = (reviewer.permissions as { rules: Array<Record<string, unknown>> }).rules;
 			assert.ok(rules.some((rule) => rule.capability === "fs_write" && rule.effect === "deny"));
+			const shell = rules.find((rule) => rule.capability === "shell");
+			assert.ok(!(shell?.match as string[]).includes("node *"), "the reviewer keeps the narrow test commands");
 			const writer = readJson(path.join(temp.kiro, "agents", "pa-writer.json"));
 			assert.deepEqual(writer.tools, []);
 		});
@@ -161,7 +166,11 @@ describe("kiro install: a fresh install", () => {
 			assert.ok(fresh(temp).ok);
 			const skills = path.join(temp.kiro, "skills");
 			const branch = fs.readFileSync(path.join(skills, "review", "SKILL.md"), "utf8");
-			assert.ok(branch.includes(path.join(skills, "review", "references", "kiro.md")), "the branch names the installed folder");
+			assert.ok(
+				branch.includes(path.join(temp.kiro, "persona-agents", "platforms", "kiro", "scripts", "review.ts")),
+				"the branch names the installed script",
+			);
+			assert.ok(branch.includes("references/kiro.md"), "the branch names the reference");
 			for (const [file, text] of Object.entries(tree(skills))) {
 				if (!file.endsWith(".md")) continue;
 				assert.ok(!text.includes("{{PERSONA_AGENTS_KIRO_"), `${file} keeps no token`);

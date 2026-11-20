@@ -37,7 +37,10 @@ export function platformNote(sessionId: string, theme?: string): string {
 		theme ? `## Running in Kiro CLI (persona theme: ${theme})` : "## Running in Kiro CLI",
 		"",
 		"- Load a skill with the `load_resource` tool: `{\"id\": \"skill::<name>\"}`. Skills also run as `/<name>`.",
+		"- To review a change, load the `review` skill first; its Kiro branch builds the brief and the change key the commit gate needs.",
 		"- Ask the owner in chat and wait; Kiro has no question tool.",
+		"- The shell tool takes a `cwd`; pass it instead of prefixing a command with `cd`, so the permission rules match the command.",
+		"- The adapter scripts are TypeScript: run them with `node --experimental-strip-types --no-warnings <path> <args>`.",
 		"- A wide read-only search is a `subagent` run when one is configured; otherwise read the files yourself.",
 		`- Your session id is \`${sessionId}\`; the wrap-up and retro reference files use it.`,
 	].join("\n");

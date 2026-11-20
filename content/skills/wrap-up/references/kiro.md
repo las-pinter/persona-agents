@@ -7,7 +7,7 @@ The session id is in your system context, on the line `Session id: <id>`.
 1. Get this session's entry path. Run this with the shell tool:
 
    ```sh
-   node {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/journal.ts path --session=<id>
+   node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/journal.ts path --session=<id>
    ```
 
    The path is this session's existing entry (today or yesterday) or a new

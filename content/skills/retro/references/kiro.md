@@ -6,7 +6,7 @@ The session id is in your system context, on the line `Session id: <id>`.
 Run this with the shell tool, from the repository root:
 
 ```sh
-node {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/retro.ts --session=<id>
+node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/retro.ts --session=<id>
 ```
 
 It prints the retro instruction and the session facts: tool calls, changed

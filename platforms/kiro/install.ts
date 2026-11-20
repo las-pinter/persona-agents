@@ -196,6 +196,12 @@ export const TEST_COMMANDS = [
 	"npx tsc *",
 	"npx shellcheck *",
 ];
+/**
+ * The companion runs the adapter scripts (`review.ts`, `retro.ts`, `journal.ts`)
+ * through node, and a project script is the same trust as the write access it
+ * already has. The reviewer keeps the narrower test commands.
+ */
+export const SCRIPT_COMMANDS = ["node *"];
 
 /** The companion's capability rules. */
 export function companionRules(payload: string, kiroHome: string): unknown[] {
@@ -208,7 +214,7 @@ export function companionRules(payload: string, kiroHome: string): unknown[] {
 		{ capability: "fs_write", match: [`${payload}/**`, `${agents}/pa-*`, `${skills}/**`, `${kiroHome}/settings/**`], effect: "deny" },
 		{ capability: "skill", match: ["*"], effect: "allow" },
 		{ capability: "subagent", match: ["pa-reviewer"], effect: "allow" },
-		{ capability: "shell", match: [...READ_COMMANDS, ...TEST_COMMANDS], effect: "allow" },
+		{ capability: "shell", match: [...READ_COMMANDS, ...TEST_COMMANDS, ...SCRIPT_COMMANDS], effect: "allow" },
 	];
 }
 
