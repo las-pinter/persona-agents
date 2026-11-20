@@ -39,6 +39,7 @@ plain kebab-case slug.
 - **Started:** YYYY-MM-DD
 - **Status:** open | done
 - **Study:** <path to study.md, or none>
+- **Sessions:** <session id>, <session id>
 
 ## Goal
 
@@ -64,6 +65,10 @@ plain kebab-case slug.
 
 ## Rules
 
+- **Name the session.** Write the session id from the session start text on
+  the `Sessions` line when you create the file. When a new session picks the
+  task up, append its id to that line first, before any other edit. The id is
+  how the file is found after a compaction.
 - **Update the plan first.** When the facts change the plan, edit `## Plan`
   before you continue the work. Mark the current step.
 - **Record decisions** the owner makes, with the date.
