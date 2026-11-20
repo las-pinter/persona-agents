@@ -49,7 +49,7 @@ export function studyPath(text: string): string {
 
 /** The session ids on the `Sessions:` line of a session notes text, in order. */
 export function sessionsOf(text: string): string[] {
-	const match = /^-\s+\*\*Sessions:\*\*\s*(.+)$/m.exec(text);
+	const match = /^-\s+\*\*Sessions:\*\*\s*(.+)$/im.exec(text);
 	if (!match) return [];
 	return match[1]
 		.split(/[\s,]+/)

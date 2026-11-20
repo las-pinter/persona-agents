@@ -113,7 +113,8 @@ export function buildManifest(entries: EntryLike[], notesDir: string, sessionId 
 	const skillsFromText = messageTexts(entries).flatMap((text) => [...text.matchAll(/\/skill:([a-z0-9-]+)/g)].map((match) => match[1]));
 	const skills = lastDistinct([...skillsFromReads, ...skillsFromText], MAX_SKILLS);
 
-	// The session notes file: the last one written under sessions/.
+	// The active notes file: the session-id match first, then the last one the
+	// session wrote, then the only open notes file.
 	const sessionsDir = join(notesDir, "sessions") + sep;
 	const written = calls
 		.filter((call) => ["write", "edit", "patch", "apply_patch"].includes(call.name))

@@ -175,6 +175,7 @@ describe("compact: manifest scan", () => {
 		assert.equal(notesListsSession(text, "abc-1"), true);
 		assert.equal(notesListsSession(text, "abc"), false);
 		assert.equal(notesListsSession("- **Status:** open\n", "abc-1"), false);
+		assert.equal(notesListsSession("- **sessions:** abc-1\n", "abc-1"), true);
 	});
 
 	test("pins and the study line accept only absolute paths", () => {
