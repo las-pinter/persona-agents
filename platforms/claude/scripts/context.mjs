@@ -8,12 +8,14 @@
 //   context.mjs profession   content/professions/companion.md, verbatim
 //   context.mjs persona      a short Claude Code note + the persona that
 //                            content/agents.json picks for the selected theme
+//   context.mjs session      the session id, so the companion can name its
+//                            session in the session notes file
 //
-// SessionStart fires on startup, resume, clear, and compact, so both parts
-// come back after a compaction. The two parts run as two hooks because Claude
-// Code caps each hook string at 10,000 characters; tests/claude-plugin.test.ts
-// keeps every part under it. Any other agent, or a session without one, gets
-// no output.
+// SessionStart fires on startup, resume, clear, and compact, so every part
+// comes back after a compaction. The parts run as separate hooks because
+// Claude Code caps each hook string at 10,000 characters;
+// tests/claude-plugin.test.ts keeps every part under it. Any other agent, or
+// a session without one, gets no output.
 //
 // Set PERSONA_AGENTS_DEBUG=1 to append each hook input to
 // $CLAUDE_PLUGIN_DATA/hook-input.log. plugin-options.mjs reads the theme option
@@ -65,7 +67,14 @@ function personaContext() {
 	return `${lines.join("\n")}\n\n${persona}`;
 }
 
-const text = part === "profession" ? professionContext() : part === "persona" ? personaContext() : null;
+/** The session id, or null when the hook input holds none. */
+function sessionContext(input) {
+	const id = typeof input.session_id === "string" ? input.session_id : "";
+	return id ? `Session id: ${id}` : null;
+}
+
+const text =
+	part === "profession" ? professionContext() : part === "persona" ? personaContext() : part === "session" ? sessionContext(input) : null;
 if (!text) process.exit(0);
 
 process.stdout.write(

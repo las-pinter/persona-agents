@@ -136,7 +136,7 @@ function runContext(
 
 /** A companion SessionStart input; compaction restarts the session with source "compact". */
 function companionInput(source = "startup"): Record<string, unknown> {
-	return { hook_event_name: "SessionStart", source, agent_type: "persona-agents:companion" };
+	return { hook_event_name: "SessionStart", source, agent_type: "persona-agents:companion", session_id: "sess-1" };
 }
 
 describe("claude plugin: context hook", () => {
@@ -161,10 +161,24 @@ describe("claude plugin: context hook", () => {
 		}
 	});
 
-	test("both parts come back after a compaction", () => {
-		for (const part of ["profession", "persona"]) {
+	test("every part comes back after a compaction", () => {
+		for (const part of ["profession", "persona", "session"]) {
 			assert.ok(runContext(part, companionInput("compact")).context, part);
 		}
+	});
+
+	test("the session part names the id on every session source", () => {
+		for (const source of ["startup", "resume", "clear", "compact", "fork"]) {
+			const run = runContext("session", companionInput(source));
+			assert.equal(run.context, "Session id: sess-1", source);
+			assert.ok((run.context ?? "").length < HOOK_STRING_CAP);
+		}
+	});
+
+	test("the session part is silent without a session id", () => {
+		const run = runContext("session", { hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:companion" });
+		assert.equal(run.status, 0);
+		assert.equal(run.context, null);
 	});
 
 	test("no option set means the goblin theme", () => {
@@ -177,7 +191,7 @@ describe("claude plugin: context hook", () => {
 			{ hook_event_name: "SessionStart", source: "startup", agent_type: "Explore" },
 			{ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:reviewer" },
 		]) {
-			for (const part of ["profession", "persona"]) {
+			for (const part of ["profession", "persona", "session"]) {
 				const run = runContext(part, input);
 				assert.equal(run.status, 0);
 				assert.equal(run.context, null, `${part}: ${JSON.stringify(input)}`);
