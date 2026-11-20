@@ -59,6 +59,25 @@ const ALLOWED = [
 	"git rebase -x 'npm test' main",
 	"git add . && git commit -m m",
 	"git add .; git commit -m m",
+	// Local git work the owner allowed: tag writes, amend, and the destructive verbs.
+	"git tag -d v1",
+	"git tag --delete v1",
+	"git tag -f v1",
+	"git tag --force v1",
+	"git tag -fa v1 -m x",
+	"git tag --del v1",
+	"git tag -fm1 v1",
+	"git tag -fFmsg v1",
+	"git tag -fm. v1",
+	"git tag -dv1",
+	"git tag -n1 -f v1",
+	"git tag --sort=x --delete v1",
+	"git commit --amend",
+	"git commit --amen",
+	"git checkout -- file.ts",
+	"git stash",
+	"git reset --hard",
+	"git branch -D topic",
 ];
 
 /** Publish commands and the ask exceptions. */
@@ -75,18 +94,10 @@ const ASKED = [
 	"gh -R owner/repo run list",
 	"gh --repo owner/repo run list",
 	"gh --repo=owner/repo run delete 1",
-	"git tag -d v1",
-	"git tag --delete v1",
-	"git tag -f v1",
-	"git tag --force v1",
-	"git tag -fa v1 -m x",
-	"git tag --del v1",
 	"git -c core.hooksPath=/x commit -m m",
 	"git -c user.name=x --no-pager commit -m x",
 	"git --config-env=core.hooksPath=X commit -m m",
 	"git --exec-path=/tmp/x commit -m m",
-	"git commit --amend",
-	"git commit --amen",
 	"git pull --upload-pack='touch x' origin",
 	"git add . && git push",
 	// Unknown global options: the subcommand git runs is not known.
@@ -94,16 +105,6 @@ const ASKED = [
 	"git --attr-source HEAD push",
 	"git --config-env core.hooksPath=X commit -m x",
 	"git --exec-path commit -m m",
-	// Short tag bundles and values that hide -d or -f.
-	"git tag -fm1 v1",
-	"git tag -fFmsg v1",
-	"git tag -fm. v1",
-	"git tag -dv1",
-	"git tag -n1 -f v1",
-	"git tag -l -f v1",
-	"git tag --list -d v1",
-	"git tag -l v1 -d",
-	"git tag --sort=x --delete v1",
 	// A dup redirect to a word that is not a plain fd writes a file.
 	"git commit -m m >&0file",
 	// Transport helper URLs and merge strategies run a program of the caller's choice.
@@ -233,6 +234,9 @@ const READS = [
 	"git tag --list 'v*'",
 	"git log | grep commit",
 	"git tag --contains HEAD",
+	"git tag -l -f v1",
+	"git tag --list -d v1",
+	"git tag -l v1 -d",
 	"gh issue list",
 	"echo 'git push is gated'",
 	"grep -r 'git commit' docs",
@@ -389,7 +393,8 @@ describe("doctrine: fail closed", () => {
 		const reason = (profession: string, command: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
 		assert.match(reason("companion", "git push"), /needs your approval/);
-		assert.match(reason("companion", "git commit --amend"), /needs your approval/);
+		assert.match(reason("companion", "git commit --amend"), /without a prompt/);
+		assert.match(reason("companion", "git pull --upload-pack='touch x' origin"), /needs your approval/);
 		assert.match(reason("companion", "git commit -m m"), /without a prompt/);
 		assert.match(reason("reviewer", "git push"), /only the companion/);
 		assert.match(reason("reviewer", "git commit -m m"), /only the companion/);
@@ -488,10 +493,6 @@ const WRITES = [
 	"cp a b",
 	"bash -c 'mv a b'",
 	"tee log.txt < input",
-	"git checkout -- file.ts",
-	"git stash",
-	"git reset --hard",
-	"git branch -D topic",
 	"gh issue create -t x",
 	"curl -o x https://example.com",
 	"cat <<EOF > notes.txt\nhello\nEOF",

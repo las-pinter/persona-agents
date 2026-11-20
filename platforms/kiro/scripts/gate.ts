@@ -6,13 +6,13 @@
  * shared with the Claude and Pi adapters.
  *
  *   permission (companion)  PermissionRequest: return an allow decision for a
- *                           plain history command or a reviewed/trivial commit.
+ *                           git command or a reviewed/trivial commit.
  *                           Anything else returns no decision, so Kiro shows its
  *                           own prompt: an unmatched call is ask.
  *   pretool (reviewer)      PreToolUse: block every history, publish, or write
  *                           segment the gate can see. Reads pass.
  *
- * A plain history command is allowed only when every segment is history; one
+ * A git command is allowed only when every segment is history; one
  * ungated segment next to it leaves the call to Kiro's prompt, exactly like the
  * Claude doctrine.
  *
@@ -38,13 +38,13 @@ export const HISTORY_DENY =
 	"only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 /** Why a publish command asks the owner. */
 export const PUBLISH_ASK =
-	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
+	"git push, gh pr, gh release, gh run, a git config override, or a wrapped git command needs your approval";
 /** Why an unreviewed commit asks the owner. */
 export const REVIEW_ASK = "this change has no independent review, so the commit needs your approval";
 /** Why a commit against another repository asks the owner. */
 export const OTHER_REPO_ASK = "a commit against another repository needs your approval";
-/** Why a command that is not a plain history command asks the owner. */
-export const UNGATED_ASK = "this command is not a plain history command, so it needs your approval";
+/** Why a command that is not git work asks the owner. */
+export const UNGATED_ASK = "this command is not git work, so it needs your approval";
 /** Why a command that mixes gated and ungated segments asks. */
 const MIXED_ASK = "this command mixes a history command with another segment, so it needs your approval";
 
@@ -110,7 +110,7 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 	const plainHistory = gated.every((hit) => hit === "history") && !hits.includes(UNGATED);
 	if (!plainHistory) return { verdict: "ask", reason: MIXED_ASK };
 
-	if (!isCommitCommand(command)) return { verdict: "allow", reason: "a plain git add, commit, pull, merge, rebase, or tag" };
+	if (!isCommitCommand(command)) return { verdict: "allow", reason: "a git command" };
 
 	// The gate reads the change in the session's cwd. A commit aimed at another
 	// repository would be judged against the wrong tree, so it asks.

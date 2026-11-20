@@ -218,8 +218,8 @@ hit wins:
    - `<repo>/.pi/persona-agents/policy.json` (only when the project is trusted)
 3. **Session grants** — the rules added from an ask with "Always this
    session".
-4. **Doctrine** — the built-in default for the profile: the companion runs
-   plain git history, asks on a publish, and writes inside the project and the
+4. **Doctrine** — the built-in default for the profile: the companion runs git
+   commands, asks on a publish, and writes inside the project and the
    notes; the reviewer is read-only.
 
 A shell redirect is a write: `> out.log` inside the project is allowed, `>

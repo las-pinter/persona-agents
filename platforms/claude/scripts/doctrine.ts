@@ -5,14 +5,12 @@
 // base permission rules. This hook adds what settings rules cannot express,
 // for the persona-agents agents (agent type `persona-agents:<name>`):
 //
-//   plain git add/commit/pull/merge/rebase/tag
+//   any local git command that is not a read and not a push
 //                     companion: allow; every other agent: deny
-//   git push, gh pr, gh release, gh run, git tag -d/--delete/-f/--force,
-//   any git global option outside GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS
-//   (-c, --config-env, --exec-path, --attr-source, ...), git commit --amend,
-//   git pull --upload-pack, git pull/merge with a `::` transport URL or a
-//   merge strategy (-s, --strategy), and any wrapped or runtime-shaped
-//   history command
+//   git push, gh pr, gh release, gh run, any git global option outside
+//   GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS (-c, --config-env, --exec-path,
+//   --attr-source, ...), git pull --upload-pack, a `::` transport URL, a merge
+//   strategy (-s, --strategy), and any wrapped or runtime-shaped command
 //                     companion: ask; every other agent: deny
 //   a write: a file-changing command (cp, mv, rm, tee, sed -i, ...), a git
 //   verb outside the read list, a gh command that is not a read, or an
@@ -22,7 +20,7 @@
 // The reviewer is read-only: it has no Edit or Write tool (its agent file),
 // and this hook denies it every shell write it can see.
 //
-// Allow is given only when every segment of the command is a plain history
+// Allow is given only when every segment of the command is git work.
 // command. A command that mixes an allowed segment with an ungated one
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
@@ -71,7 +69,7 @@ export interface HookInput {
 }
 
 /**
- * history: a plain git add/commit/pull/merge/rebase/tag.
+ * history: a git command that is not a read and not publish.
  * publish: git push, and gh pr, gh release, or gh run, also when a gh global option
  * comes first, plus every history command that is an ask exception or comes
  * wrapped (see the header).
@@ -88,12 +86,12 @@ const COMPANION_RULES: Record<Gate, Verdict | null> = {
 
 const HISTORY_DENY = "only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
 const PUBLISH_ASK =
-	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
+	"git push, gh pr, gh release, gh run, a git config override, an upload-pack or transport helper URL, a merge strategy, or a wrapped git command needs your approval";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 	history: {
-		allow: "a plain git add, commit, pull, merge, rebase, or tag runs without a prompt for the companion",
+		allow: "a git command runs without a prompt for the companion",
 		ask: PUBLISH_ASK,
 		deny: HISTORY_DENY,
 	},

@@ -361,7 +361,7 @@ export function matchGrant(
 /** The doctrine reason for one gate, per verdict. */
 function gateReason(hit: Hit): string {
 	if (hit === "publish") return "publishing (push, pr, release, run, tag change) needs your approval";
-	if (hit === "history") return "a plain git history command runs without a prompt";
+	if (hit === "history") return "a git command runs without a prompt";
 	if (hit === "write") return "a shell write is allowed for a writable agent";
 	return "a command outside the gates";
 }

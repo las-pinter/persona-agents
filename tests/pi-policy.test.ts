@@ -88,7 +88,8 @@ describe("pi policy: the built-in doctrine", () => {
 		assert.equal(bash(companion, "git add . && git commit -m 'x'"), "allow");
 		assert.equal(bash(companion, "git push origin main"), "ask");
 		assert.equal(bash(companion, "gh pr create --fill"), "ask");
-		assert.equal(bash(companion, "git tag -d v1"), "ask");
+		assert.equal(bash(companion, "git tag -d v1"), "allow");
+		assert.equal(bash(companion, "git reset --hard"), "allow");
 		assert.equal(bash(companion, "rm -rf dist"), "allow");
 		assert.equal(bash(companion, "npm test"), "allow");
 	});

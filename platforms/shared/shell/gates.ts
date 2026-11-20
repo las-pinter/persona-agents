@@ -5,9 +5,10 @@
  * unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`), and
  * classified into one of three gates:
  *
- *   history: a plain git add/commit/pull/merge/rebase/tag
- *   publish: git push, gh pr/release/run, a history command that is an ask
- *            exception, or any wrapped or runtime-shaped history command
+ *   history: a git command that is not a read and not publish (add, commit,
+ *            reset, rebase, tag writes, ...)
+ *   publish: git push, gh pr/release/run, a git option that runs a program of
+ *            the caller's choice, or any wrapped or runtime-shaped command
  *   write:   a file-changing command or an output redirect to a file
  *
  * A segment no gate covers is `ungated`. A platform decides the verdict for
@@ -29,7 +30,6 @@ export type Hit = "history" | "publish" | "write" | typeof UNGATED;
 /** A segment that runs a command no gate covers. */
 export const UNGATED = "ungated";
 
-const GIT_HISTORY = new Set(["add", "commit", "pull", "merge", "rebase", "tag"]);
 const GIT_PUBLISH = new Set(["push"]);
 const GH_PUBLISH = new Set(["pr", "release", "run"]);
 /**
@@ -69,6 +69,16 @@ export function gitSubcommand(args: string[]): { sub: string; rest: string[]; un
 }
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);
+/** `git tag` with no options or only listing options. */
+function isTagListing(rest: string[]): boolean {
+	const options = rest.filter((arg) => arg.startsWith("-"));
+	return (
+		rest.length === 0 ||
+		rest.includes("-l") ||
+		rest.includes("--list") ||
+		(options.length > 0 && options.every((arg) => GIT_TAG_LIST_OPTIONS.has(arg.split("=")[0])))
+	);
+}
 /** Commands that change files. */
 const WRITE_COMMANDS = new Set([
 	"cp", "mv", "rsync", "rm", "rmdir", "tee", "dd", "truncate", "install", "ln", "mkdir", "touch",
@@ -388,34 +398,27 @@ function classify(command: string, args: string[]): Hit[] {
 	if (unknown) return ["publish"];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
 	if (!sub) return [UNGATED];
-	if (!GIT_HISTORY.has(sub)) {
-		// A read that writes its output to a file (`git diff --output=x`) is a write.
-		if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
-		return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(rest)) ? [UNGATED] : ["write"];
-	}
+	// A read that writes its output to a file (`git diff --output=x`) is a write.
+	if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
+	// Reads stay ungated, so a read-only agent keeps them.
+	if (GIT_READ.has(sub) || (sub === "branch" && isBranchListing(rest)) || (sub === "tag" && isTagListing(rest))) return [UNGATED];
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
 	const short = (letters: string): boolean => rest.some((arg) => /^-[^-]/.test(arg) && [...letters].some((l) => arg.includes(l)));
 	const long = (name: string, min: number): boolean => rest.some((arg) => longOption(arg, name, min));
-	if (sub === "tag") {
-		if (short("df") || long("--delete", 3) || long("--force", 3)) return ["publish"];
-		// `git tag`, `git tag -l 'v*'`, and `git tag --contains HEAD` list tags.
-		const options = rest.filter((arg) => arg.startsWith("-"));
-		const listing = rest.includes("-l") || rest.includes("--list") || (options.length > 0 && options.every((arg) => GIT_TAG_LIST_OPTIONS.has(arg.split("=")[0])));
-		if (rest.length === 0 || listing) return [UNGATED];
-	}
-	if (sub === "commit" && long("--amend", 3)) return ["publish"];
-	if (sub === "pull" || sub === "merge") {
+	if (sub === "pull" || sub === "merge" || sub === "rebase") {
 		// `--upload-pack`, a transport helper URL (`ext::sh -c ...`, `fd::`), and
 		// a merge strategy (`git-merge-<name>` from PATH) run a program of the
-		// caller's choice.
+		// caller's choice. A rebase strategy is caught only in the short flags
+		// before an `s`, so `-Xours` and `-x 'cmd'` stay plain.
 		if (sub === "pull" && long("--upload-pack", 5)) return ["publish"];
 		if (rest.some((arg) => arg.includes("::"))) return ["publish"];
-		if (short("s") || long("--strategy", 3)) return ["publish"];
+		if (sub === "rebase" ? rest.some((arg) => /^-[iqvnmfrk]*s/.test(arg)) || long("--strategy", 3) : short("s") || long("--strategy", 3)) {
+			return ["publish"];
+		}
 	}
-	// A rebase strategy runs `git-merge-<name>` from PATH. Only no-value short
-	// flags may come before the `s`, so `-Xours` and `-x 'cmd'` stay plain.
-	if (sub === "rebase" && (rest.some((arg) => /^-[iqvnmfrk]*s/.test(arg)) || long("--strategy", 3))) return ["publish"];
+	// Every other git command is local work: the owner allows it, the reviewer
+	// still has no shell write, and publishing stays an ask.
 	return ["history"];
 }
 
@@ -443,7 +446,7 @@ function gatedFormFollows(program: "git" | "gh", after: string): boolean {
 			} else if (program === "git" && !GIT_PLAIN_OPTIONS.has(word)) return true;
 			continue;
 		}
-		const gated = program === "git" ? GIT_HISTORY.has(word) || GIT_PUBLISH.has(word) : GH_PUBLISH.has(word);
+		const gated = program === "git" ? !GIT_READ.has(word) : GH_PUBLISH.has(word);
 		return gated || !/^[a-z][a-z0-9-]*$/.test(word);
 	}
 	return false;

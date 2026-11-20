@@ -117,7 +117,7 @@ session.
 | --- | --- | --- |
 | companion | `SessionStart` | `context.ts session`: the platform note and the theme persona (the profession is the agent prompt). |
 | companion | `SessionStart` | `context.ts startup`: the session id and the read list. |
-| companion | `PermissionRequest` | `gate.ts permission`: allow a plain history command or a reviewed/trivial commit; return no decision otherwise, so Kiro shows its own prompt. |
+| companion | `PermissionRequest` | `gate.ts permission`: allow a git command or a reviewed/trivial commit; return no decision otherwise, so Kiro shows its own prompt. |
 | companion | `Stop` | `review-record.ts`: scan the V3 store for a `sub_agent_complete` from `pa-reviewer` and store its verdict against the change key. |
 | companion | `PreCompact` | `compact.ts pre`: store the manifest and print guidance for the summarizer. |
 | companion | `PostCompact` | `compact.ts post`: store the summary and print the ordered reload list. |
@@ -163,13 +163,11 @@ on, so a commit later in the session sees it.
 `PermissionRequest` runs only when the native policy would prompt. The gate
 reads the same change key the review saw:
 
-- a plain `git add`, `git commit`, `git pull`, `git merge`, `git rebase`, or
-  `git tag` — allow;
+- any git command — allow;
 - a commit of a trivial change (at most two files and forty changed lines) or of
   a change with a stored `Approve` — allow;
 - an unreviewed or rejected commit, a mixed command, a push, a `gh pr` /
-  `release` / `run`, an amend, a tag delete or force-move — no decision, so
-  Kiro asks natively.
+  `release` / `run`, a config override — no decision, so Kiro asks natively.
 
 Kiro's unmatched default is `ask`; that is the mechanism the gate relies on.
 The native permission rules never give the companion a blanket shell allow.

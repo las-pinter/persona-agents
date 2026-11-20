@@ -67,21 +67,24 @@ describe("kiro doctrine: the companion", () => {
 		});
 	});
 
-	test("publish, amend, tag delete, a config override, and a gh publish ask", () => {
+	test("a publish, a config override, and a tag or amend allow", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));
 			for (const command of [
 				"git push origin main",
-				"git tag -d v1",
-				"git tag -f v1",
-				"git commit --amend --no-edit",
 				"git -c core.hooksPath=/tmp commit -m x",
+				"git pull --upload-pack='touch x' origin",
 				"gh pr create",
 				"gh release create v1",
 				"gh run list",
 			]) {
 				assert.equal(commandDecision("companion", command, context).verdict, "ask", command);
 			}
+			for (const command of ["git tag -d v1", "git tag -f v1", "git reset --hard"]) {
+				assert.equal(commandDecision("companion", command, context).verdict, "allow", command);
+			}
+			// An amend is still a commit, so the review gate owns it.
+			assert.equal(commandDecision("companion", "git commit --amend --no-edit", context).verdict, "ask");
 		});
 	});
 

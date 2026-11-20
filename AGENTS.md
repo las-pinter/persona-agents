@@ -55,12 +55,10 @@ The doctrine lives in three places:
   persona-agents agents. The command classification it uses lives in
   `platforms/shared/shell/` and is shared with the Pi gate
   (`platforms/pi/scripts/policy.ts`) and the Kiro gate, so the adapters cannot
-  drift apart. The companion runs a plain `git add`, `git commit`,
-  `git pull`, `git merge`, `git rebase`, or `git tag` with no prompt, when
-  every part of the command is one of those. A push, a `gh pr` / `run` /
-  `release`, a tag delete or force-move, `commit --amend`, a `git -c`
-  override, an unknown git global option, an upload-pack or transport helper
-  URL, a merge strategy, and any wrapped or substituted history command ask.
+  drift apart. The companion runs any git command with no prompt when every
+  part of the command is git work. A push, a `gh pr` / `run` / `release`, a
+  `git -c` override, an unknown git global option, an upload-pack or transport
+  helper URL, a merge strategy, and any wrapped or substituted command ask.
   Every other plugin agent is denied all of these and every shell write the
   hook can see.
 - The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and
