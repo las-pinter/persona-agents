@@ -84,6 +84,7 @@ const ALLOWED = [
 	"git tag -fm -l v1",
 	"git tag --mess -l v1",
 	"git commit -m 'fix: std::vector'",
+	"git merge -m 'note::x' feature",
 ];
 
 /** Publish commands and the ask exceptions. */
@@ -129,6 +130,10 @@ const ASKED = [
 	"git archive --remote=ext::sh --output=/tmp/x HEAD",
 	"git config --unset core.x",
 	"git config --add core.x y",
+	"git config --rem core.x",
+	"git config --remove core.x",
+	"git fetch-pack --upload-pack='touch x' origin",
+	"git send-pack ext::sh origin main",
 	// A dup redirect to a word that is not a plain fd writes a file.
 	"git commit -m m >&0file",
 	// Transport helper URLs and merge strategies run a program of the caller's choice.

@@ -32,7 +32,10 @@ export const UNGATED = "ungated";
 
 const GIT_PUBLISH = new Set(["push"]);
 /** Git verbs that take a repository or a remote, where a transport URL matters. */
-const GIT_REMOTE_VERBS = new Set(["pull", "merge", "fetch", "clone", "ls-remote", "submodule", "archive", "push", "remote", "lfs", "svn", "p4", "send-email"]);
+const GIT_REMOTE_VERBS = new Set([
+	"pull", "merge", "fetch", "clone", "ls-remote", "submodule", "archive", "push", "remote", "lfs", "svn", "p4",
+	"send-email", "fetch-pack", "send-pack", "upload-pack", "receive-pack", "http-push", "http-fetch", "daemon",
+]);
 /** Git verbs that run another program, write config, or reach a remote: an ask. */
 const GIT_PROGRAM = new Set([
 	"config", "remote", "bisect", "submodule", "difftool", "mergetool", "filter-branch", "credential",
@@ -76,6 +79,21 @@ export function gitSubcommand(args: string[]): { sub: string; rest: string[]; un
 }
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);
+/** The words that are not the value of `-m` / `--message`. */
+function withoutMessage(rest: string[]): string[] {
+	const out: string[] = [];
+	for (let i = 0; i < rest.length; i += 1) {
+		const arg = rest[i];
+		if (arg === "-m" || arg === "--message") {
+			i += 1;
+			continue;
+		}
+		if (arg.startsWith("--message=")) continue;
+		out.push(arg);
+	}
+	return out;
+}
+
 /** `git tag` with no options or only listing options, and no tag-creating option. */
 function isTagListing(rest: string[]): boolean {
 	const options = rest.filter((arg) => arg.startsWith("-"));
@@ -422,7 +440,7 @@ function classify(command: string, args: string[]): Hit[] {
 	// `--upload-pack` and a `::` transport helper run or fetch a program of the
 	// caller's choice. Checked before the read and output paths, and only for a
 	// verb that takes a repository or a remote, so a commit message may hold `::`.
-	if (GIT_REMOTE_VERBS.has(sub) && rest.some((arg) => arg.includes("::") || longOption(arg, "--upload-pack", 5))) return ["publish"];
+	if (GIT_REMOTE_VERBS.has(sub) && withoutMessage(rest).some((arg) => arg.includes("::") || longOption(arg, "--upload-pack", 5))) return ["publish"];
 	// A read that writes its output to a file (`git diff --output=x`) is a write.
 	if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
 	// Reads stay ungated, so a read-only agent keeps them.
@@ -430,8 +448,9 @@ function classify(command: string, args: string[]): Hit[] {
 	// Read forms of a verb that can also write config or a remote.
 	const firstWord = rest.find((arg) => !arg.startsWith("-"));
 	if (sub === "config") {
-		const writeAction = rest.some((arg) => /^--(unset|add|replace-all|rename-section|remove-section|edit|set)/.test(arg) || arg === "-e");
-		const readAction = rest.some((arg) => /^--(get|list)/.test(arg) || arg === "-l");
+		const writeActions = ["--unset", "--add", "--replace-all", "--rename-section", "--remove-section", "--edit", "--set"];
+		const writeAction = rest.some((arg) => (arg === "-e" || writeActions.some((name) => longOption(arg, name, 4))));
+		const readAction = rest.some((arg) => longOption(arg, "--get", 4) || longOption(arg, "--list", 4) || arg === "-l");
 		const words = rest.filter((arg) => !arg.startsWith("-"));
 		// `git config user.name` reads one key; `git config key=value` writes.
 		if (!writeAction && (readAction || (words.length === 1 && !words[0].includes("=")))) return [UNGATED];
