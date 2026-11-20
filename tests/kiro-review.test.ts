@@ -202,6 +202,24 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
+	test("a non-ASCII path keeps the key stable across git add", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "unicode-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			git(cwd, ["commit", "--allow-empty", "-m", "baseline"]);
+			const file = path.join(cwd, "héllo.txt");
+			fs.writeFileSync(file, "one\n");
+			const before = changeKey(cwd).key;
+			git(cwd, ["add", "."]);
+			assert.equal(changeKey(cwd).key, before);
+			fs.writeFileSync(file, "two\n");
+			assert.notEqual(changeKey(cwd).key, before);
+		});
+	});
+
 	test("an untracked directory's files all count", () => {		withTemp((root) => {
 			const cwd = path.join(root, "dir-repo");
 			fs.mkdirSync(cwd);

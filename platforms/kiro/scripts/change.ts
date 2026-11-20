@@ -25,7 +25,8 @@ export interface GitResult {
 
 /** Run git in a folder; a missing git binary is a failed call, not an exception. */
 export function git(cwd: string, args: string[]): GitResult {
-	const run = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+	// Keep non-ASCII paths readable; a space still quotes, and `unquotePath` undoes it.
+	const run = spawnSync("git", ["-C", cwd, "-c", "core.quotePath=false", ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 	return { status: run.status ?? 1, stdout: run.stdout ?? "", stderr: run.stderr ?? "" };
 }
 

@@ -380,12 +380,14 @@ function reviewerBody(dir: string = agentsDir()): string {
 
 /** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
 async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
+	// Keep non-ASCII paths readable; a space still quotes, and `unquotePath` undoes it.
+	const quote = ["-c", "core.quotePath=false"];
 	// `-uall` lists each file of an untracked directory, not just the folder.
-	const status = await pi.exec("git", ["status", "--porcelain", "-uall"], { cwd });
-	let diff = await pi.exec("git", ["diff", "HEAD"], { cwd });
+	const status = await pi.exec("git", [...quote, "status", "--porcelain", "-uall"], { cwd });
+	let diff = await pi.exec("git", [...quote, "diff", "HEAD"], { cwd });
 	if (diff.stdout.trim() === "" && status.stdout.trim() === "") {
 		// A clean tree commits nothing, so review the last commit instead.
-		diff = await pi.exec("git", ["show", "HEAD", "--format="], { cwd });
+		diff = await pi.exec("git", [...quote, "show", "HEAD", "--format="], { cwd });
 	}
 	const change = makeChange(
 		diff.stdout,

@@ -41,6 +41,7 @@ export function platformNote(profile: Profile): string {
 		"## Running in Pi",
 		"",
 		"- A skill loads by reading its `SKILL.md` at the path Pi lists, or with `/skill:<name>`.",
+		"- To review a change, call the `review` tool; do not review it in place.",
 		"- Ask the owner with the `ask_user_question` tool when it is available; otherwise ask in chat and wait.",
 		"- A wide read-only search is the `scout` subagent when it exists; otherwise read the files yourself.",
 	];

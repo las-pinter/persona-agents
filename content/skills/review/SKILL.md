@@ -22,6 +22,10 @@ with the printed text verbatim, including the final `Change key:` line. Read
 `references/kiro.md` for the rest. The text below is the reviewer's own prompt;
 it is not the companion's instructions.
 
+If your system context says `Running in Pi`, call the `review` tool with the
+scope (or run `/review`); do not review the change yourself and do not follow
+the text below. The tool starts the reviewer in its own process.
+
 # Review
 
 You are the independent reviewer of one change in this repository. You did not

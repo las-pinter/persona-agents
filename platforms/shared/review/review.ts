@@ -98,12 +98,44 @@ export function countDiffLines(diffText: string): { addedLines: number; removedL
 	return { addedLines, removedLines };
 }
 
+/**
+ * Undo git's C-style path quoting in a porcelain or diff path.
+ *
+ * Git quotes a path with spaces, non-ASCII bytes, or control characters as
+ * `"a b\\n"`. The adapters disable `core.quotePath` for non-ASCII, but a space
+ * still quotes, so the signature and the file list need the unquoted name.
+ */
+export function unquotePath(path: string): string {
+	if (!path.startsWith('"') || !path.endsWith('"')) return path;
+	const body = path.slice(1, -1);
+	return body.replace(/\\(["\\abfnrtv]|[0-7]{3})/g, (_match, escape: string) => {
+		switch (escape) {
+			case "a":
+				return "\x07";
+			case "b":
+				return "\b";
+			case "f":
+				return "\f";
+			case "n":
+				return "\n";
+			case "r":
+				return "\r";
+			case "t":
+				return "\t";
+			case "v":
+				return "\v";
+			default:
+				return /^[0-7]{3}$/.test(escape) ? String.fromCharCode(parseInt(escape, 8)) : escape;
+		}
+	});
+}
+
 /** The changed paths a `git diff` names, in order. */
 export function diffFiles(diffText: string): string[] {
 	const files: string[] = [];
 	for (const line of diffText.split("\n")) {
 		if (!line.startsWith("+++ ")) continue;
-		const path = line.slice(4).trim().replace(/^b\//, "");
+		const path = unquotePath(line.slice(4).trim()).replace(/^b\//, "");
 		if (path !== "" && path !== "/dev/null" && !files.includes(path)) files.push(path);
 	}
 	return files;
@@ -114,7 +146,7 @@ export function untrackedFiles(statusText: string): string[] {
 	return statusText
 		.split("\n")
 		.filter((line) => line.startsWith("?? "))
-		.map((line) => line.slice(3).trim())
+		.map((line) => unquotePath(line.slice(3).trim()))
 		.filter((path) => path !== "" && !path.endsWith("/"));
 }
 
@@ -137,10 +169,10 @@ export function statusFiles(statusText: string): string[] {
 		if (rest === "") continue;
 		if (x === "R" || y === "R" || x === "C" || y === "C") {
 			const [from, to] = rest.split(" -> ");
-			if (from) paths.push(from);
-			if (to) paths.push(to);
+			if (from) paths.push(unquotePath(from));
+			if (to) paths.push(unquotePath(to));
 		} else {
-			paths.push(rest);
+			paths.push(unquotePath(rest));
 		}
 	}
 	return paths;

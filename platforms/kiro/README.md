@@ -236,6 +236,9 @@ tune the rules; a new session picks the change up.
   global skills are visible to every Kiro session. The installer avoids
   surprises with its marker and its refusal to overwrite an unowned folder, and
   the reviewer prompt names the checklist skill without a prefix.
+- **The secret deny list covers templates.** `**/.env.*` also denies
+  `.env.example` and `.env.sample`. Have the owner copy the template into the
+  project or loosen the rule when the companion needs to read one.
 - **SessionEnd is interactive only.** A headless run gets no automatic journal
   entry; use the wrap-up skill.
 - **No PostToolUse for a sub-agent run.** Verdicts are recorded by scanning the

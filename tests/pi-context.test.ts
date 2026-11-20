@@ -78,6 +78,13 @@ describe("pi context: the content tree", () => {
 		assert.match(note, /## Running in Pi/);
 		assert.match(note, /SKILL\.md/);
 		assert.match(note, /ask_user_question/);
+		assert.match(note, /`review` tool/);
+	});
+
+	test("the review skill tells a Pi companion to call the review tool", () => {
+		const skill = fs.readFileSync(path.join(contentDir, "skills", "review", "SKILL.md"), "utf8");
+		assert.match(skill, /Running in Pi/);
+		assert.match(skill, /`review` tool/);
 	});
 });
 
