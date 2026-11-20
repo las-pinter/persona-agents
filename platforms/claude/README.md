@@ -32,17 +32,21 @@ is unchanged.
 
 | Event | Script | Job |
 |-------|--------|-----|
-| SessionStart (all) | `context.mjs profession`, `context.mjs persona` | The companion profession and the theme persona, also after a compaction. Two hooks, because Claude Code caps each hook string at 10,000 characters. |
+| SessionStart (all) | `context.mjs profession`, `context.mjs persona`, `context.mjs session` | The companion profession, the theme persona, and the session id, also after a compaction and on resume. Separate hooks, because Claude Code caps each hook string at 10,000 characters. |
 | SessionStart (startup, clear) | `startup.mjs` | The read list: project rules and summary, the last three journal days, open session notes, unfinished studies. Paths only. |
-| PreCompact | `compact.mjs pre` | Scans the transcript for the invoked skills, the active session notes (the last file written under `sessions/`), and the reference documents; saves a reload manifest; prints the summary instructions. |
-| PostCompact | `compact.mjs post` | Keeps the summary for the journal writer, appends a metrics line, and logs the compaction in the session notes. |
+| PreCompact | `compact.mjs pre` | Reads the transcript for the invoked skills (a `Skill` tool call or a typed `/persona-agents:<skill>` command) and the reference documents; finds the active session notes file by the session id on its `Sessions` line, then the last file written under `sessions/`, then the only open notes file; saves a reload manifest; prints the summary instructions; warns once when a non-empty transcript yields no tool calls. |
+| PostCompact | `compact.mjs post` | Keeps the summary for the journal writer, appends a metrics line with the scan counts, and logs the compaction in the session notes. |
 | SessionStart (compact) | `compact.mjs reload` | Sends the reload list. The profession requires the companion to work through it. |
 | SessionEnd | `journal-end.mjs hook` | When the session has no journal entry, starts a detached writer (a small headless model run with no tools) and returns at once. |
 | PreToolUse (Bash) | `doctrine.ts` | The commit doctrine (see below). |
 
 State that is not a note lives in `$CLAUDE_PLUGIN_DATA/compact/`: the reload
 manifests, the compaction summaries, and `metrics.ndjson` (one line per
-compaction, for tuning the threshold).
+compaction, with the transcript scan counts, for tuning the threshold).
+
+`compact.mjs`, `startup.mjs`, and `journal-end.mjs` import the shared session
+notes parser at `platforms/shared/notes/notes.ts`, so their hook entries pass
+`--experimental-strip-types`; the minimum supported Node, 22.6, needs it.
 
 The hooks that read the notes tree take a `--home=<path>` argument, and the
 journal writer a `--claude=<path>` argument. These are test seams. They are
