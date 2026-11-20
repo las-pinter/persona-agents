@@ -121,8 +121,8 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 	const { change, key } = changeKey(ctx.cwd);
 	if (isTrivial(change)) return { verdict: "allow", reason: "a trivial change needs no review before a commit", key };
 	const review = reviewFor(ctx.stateDir, key);
-	// Only a record the Stop hook wrote carries a sub-session. A hand-written
-	// entry (the companion can run node) does not unlock a commit.
+	// The Stop hook writes the sub-session. A hand-written entry that omits it
+	// is ignored; one that sets it is indistinguishable from a real record.
 	const usable = review && review.subSession ? review : null;
 	if (usable?.verdict === "Approve") return { verdict: "allow", reason: "an independent review approved this exact change", key };
 	if (usable) return { verdict: "ask", reason: `the review returned ${usable.verdict}, so this commit needs your approval`, key };
