@@ -354,6 +354,18 @@ describe("kiro install: the version check", () => {
 			assert.ok(!fs.existsSync(temp.kiro));
 		});
 	});
+
+	test("a root or home kiro home is refused", () => {
+		withTemp((temp) => {
+			const cli = fakeCli(temp);
+			for (const home of ["/", temp.home]) {
+				const run = runInstaller([`--kiro-home=${home}`, `--kiro-cli=${cli}`], { HOME: temp.home });
+				assert.equal(run.status, 1, home);
+				assert.match(run.stderr, /must be an absolute path/);
+			}
+			assert.ok(!fs.existsSync(path.join(temp.home, "agents")), "nothing was written into the home");
+		});
+	});
 });
 
 describe("install.sh: the adapter flags", () => {

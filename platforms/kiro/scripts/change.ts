@@ -11,7 +11,8 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeChange, reviewKey, untrackedFiles, failedChange, type Change } from "../../shared/review/review.ts";
 
@@ -28,13 +29,18 @@ export function git(cwd: string, args: string[]): GitResult {
 	return { status: run.status ?? 1, stdout: run.stdout ?? "", stderr: run.stderr ?? "" };
 }
 
-/** The untracked-file signature: path, size, and mtime. */
-export function signatureOf(cwd: string, untracked: string[]): string {
-	return untracked
+/**
+ * The worktree fingerprint: a content hash per changed file, in path order.
+ *
+ * It hashes every changed file, tracked or not, and ignores the index, so the
+ * same review key covers a change before and after `git add`.
+ */
+export function signatureOf(cwd: string, files: string[]): string {
+	return [...files]
+		.sort()
 		.map((path) => {
 			try {
-				const stat = statSync(join(cwd, path));
-				return `${path}:${stat.size}:${stat.mtimeMs}`;
+				return `${path}:${createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex")}`;
 			} catch {
 				return `${path}:missing`;
 			}
@@ -44,9 +50,10 @@ export function signatureOf(cwd: string, untracked: string[]): string {
 
 /** The change a commit would record: the diff, the untracked paths, and their signature. */
 export function readChange(cwd: string): Change {
-	const status = git(cwd, ["status", "--porcelain"]);
+	// `-uall` lists each file of an untracked directory, not just the folder.
+	const status = git(cwd, ["status", "--porcelain", "-uall"]);
 	let diff = git(cwd, ["diff", "HEAD", "--no-color"]);
-	if (diff.stdout.trim() === "") diff = git(cwd, ["show", "HEAD", "--format=", "--no-color"]);
+	if (diff.stdout.trim() === "" && status.stdout.trim() === "") diff = git(cwd, ["show", "HEAD", "--format=", "--no-color"]);
 	// A failed read is not a small change; the gate must ask.
 	if (status.status !== 0 || diff.status !== 0) return failedChange();
 	// An untracked file is not in the diff; its lines still count toward the
@@ -59,7 +66,7 @@ export function readChange(cwd: string): Change {
 		}
 	});
 	const change = makeChange(diff.stdout, status.stdout, "", untrackedTexts);
-	return { ...change, signature: signatureOf(cwd, change.untracked) };
+	return { ...change, signature: signatureOf(cwd, change.files) };
 }
 
 /** The change and its key. */

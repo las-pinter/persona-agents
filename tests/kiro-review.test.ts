@@ -147,6 +147,41 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
+	test("the key survives git add, so a review still covers the commit", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "add-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			git(cwd, ["commit", "--allow-empty", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "new.ts"), "const a = 1;\n");
+			const before = changeKey(cwd).key;
+			git(cwd, ["add", "."]);
+			assert.equal(changeKey(cwd).key, before);
+			fs.writeFileSync(path.join(cwd, "new.ts"), "const a = 2;\n");
+			assert.notEqual(changeKey(cwd).key, before);
+		});
+	});
+
+	test("an untracked directory's files all count", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "dir-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			git(cwd, ["commit", "--allow-empty", "-m", "baseline"]);
+			fs.mkdirSync(path.join(cwd, "feature"));
+			for (const name of ["a.ts", "b.ts"]) {
+				fs.writeFileSync(path.join(cwd, "feature", name), Array.from({ length: 30 }, (_, index) => `line ${index}`).join("\n"));
+			}
+			const { change } = changeKey(cwd);
+			assert.deepEqual(change.files, ["feature/a.ts", "feature/b.ts"]);
+			assert.equal(isTrivial(change), false);
+		});
+	});
+
 	test("a failed git read is not a trivial change", () => {
 		withTemp((root) => {
 			const cwd = path.join(root, "not-a-repo");

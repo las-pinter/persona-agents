@@ -72,9 +72,9 @@ describe("pi review: reading a change", () => {
 		assert.deepEqual(diffFiles(added), ["src/new.ts"]);
 	});
 
-	test("untracked paths come from git status", () => {
+	test("untracked paths come from git status, and a folder placeholder is ignored", () => {
 		const status = [" M src/gate.ts", "?? src/new.ts", "?? notes/", "A  staged.ts", ""].join("\n");
-		assert.deepEqual(untrackedFiles(status), ["src/new.ts", "notes/"]);
+		assert.deepEqual(untrackedFiles(status), ["src/new.ts"]);
 	});
 
 	test("a change merges the diff files and the untracked ones", () => {
@@ -133,7 +133,8 @@ describe("pi review: the verdict a reviewer states", () => {
 		assert.equal(parseVerdict("[Request Changes] — scope too wide"), "Request Changes");
 		assert.equal(parseVerdict("I cannot approve this change.\n\nVerdict: Request Changes — fix it."), "Request Changes");
 		assert.equal(parseVerdict("This is not an Approve.\n\nVerdict: Reject — wrong approach."), "Reject");
-		assert.equal(parseVerdict("Approve-ish at first; the final answer is Request Changes."), "Request Changes");
+		assert.equal(parseVerdict("Approve-ish at first; the final answer is Request Changes."), null);
+		assert.equal(parseVerdict("The change was not approved as-is."), null);
 	});
 
 	test("the Verdict section wins over an earlier mention", () => {

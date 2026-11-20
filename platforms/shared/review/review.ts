@@ -5,6 +5,10 @@
  * owner; this module decides what a change is, how to name it, what the reviewer
  * concluded, and whether a commit may go ahead.
  *
+ * It stays one module because those four are one contract: the key names the
+ * change the verdict covers, and the gate reads both. Splitting them would
+ * duplicate the change shape across files.
+ *
  * The gate is an ask, never a silent allow: a non-trivial change with no
  * covering review prompts. A trivial change (two files, forty lines) does not,
  * so a typo fix does not nag.
@@ -38,16 +42,22 @@ export interface Change {
 export const TRIVIAL_FILES = 2;
 export const TRIVIAL_LINES = 40;
 
-/** A stable key for one exact change, so a review covers what it reviewed. */
+/**
+ * A stable key for one exact change, so a review covers what it reviewed.
+ *
+ * A real adapter passes a signature that hashes each changed file's worktree
+ * content; the key then ignores the index and the diff text, so `git add` does
+ * not change it. A caller with no signature falls back to the diff text.
+ */
 export function reviewKey(change: Pick<Change, "diffText" | "untracked" | "files" | "signature">): string {
 	const hash = createHash("sha256");
 	hash.update([...change.files].sort().join("\n"));
 	hash.update("\u0000");
-	hash.update(change.diffText);
-	hash.update("\u0000");
-	hash.update([...change.untracked].sort().join("\n"));
-	hash.update("\u0000");
 	hash.update(change.signature ?? "");
+	if (!change.signature) {
+		hash.update("\u0000");
+		hash.update(change.diffText);
+	}
 	return hash.digest("hex").slice(0, 16);
 }
 
@@ -98,13 +108,13 @@ export function diffFiles(diffText: string): string[] {
 	return files;
 }
 
-/** The untracked paths from `git status --porcelain`. */
+/** The untracked paths from `git status --porcelain` (`-uall` lists files). */
 export function untrackedFiles(statusText: string): string[] {
 	return statusText
 		.split("\n")
 		.filter((line) => line.startsWith("?? "))
 		.map((line) => line.slice(3).trim())
-		.filter((path) => path !== "");
+		.filter((path) => path !== "" && !path.endsWith("/"));
 }
 
 /** The number of lines in a text; a trailing newline does not add a line. */
@@ -144,27 +154,26 @@ export function makeChange(diffText: string, statusText: string, signature = "",
  * `[Approve | Request Changes | Reject] — reason` line, a `Verdict: X` line,
  * and bold or bracketed forms.
  *
- * A `## Verdict` section wins. Failing that, a line labelled `Verdict:` is the
- * verdict, so an earlier "not an Approve" cannot win. Without either, the last
- * verdict word in the text is the result: a reviewer's final sentence states
- * the verdict, and an early mention is usually its negation.
+ * A `## Verdict` section wins, then a line labelled `Verdict:`, then a line
+ * that starts with the verdict word. Prose that merely mentions a verdict is
+ * not a verdict: "not approved as-is" must not read as approval, and an
+ * unlabelled review makes the commit ask.
  */
 export function parseVerdict(text: string): Verdict | null {
 	const plain = text.replace(/[*_`[\]]/g, "");
-	const pattern = /(Request Changes|Approve|Reject)/i;
+	const word = /\b(Request Changes|Approve|Reject)\b/i;
 	const section = /^##\s+Verdict\s*$/im.exec(plain);
 	if (section) {
-		const found = pattern.exec(plain.slice(section.index));
+		const found = word.exec(plain.slice(section.index));
 		return found ? verdictOf(found[1]) : null;
 	}
 	const labelled = /^\s*(?:#{1,6}\s*)?Verdict\s*:\s*(.+)$/im.exec(plain);
 	if (labelled) {
-		const found = pattern.exec(labelled[1]);
+		const found = word.exec(labelled[1]);
 		if (found) return verdictOf(found[1]);
 	}
-	let last = "";
-	for (const match of plain.matchAll(/(Request Changes|Approve|Reject)/gi)) last = match[1];
-	return last === "" ? null : verdictOf(last);
+	const lineForm = /^\s*(Request Changes|Approve|Reject)(?=\s|$|[—–:.,;!)\]])/im.exec(plain);
+	return lineForm ? verdictOf(lineForm[1]) : null;
 }
 
 /** The canonical verdict for a matched word. */

@@ -20,10 +20,11 @@
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadRegistry, resolveTheme, type Registry } from "../shared/context/context.ts";
-import { readTheme } from "./scripts/paths.ts";
+import { readTheme, validKiroHome } from "./scripts/paths.ts";
 
 /** The minimum Kiro CLI version with PermissionRequest and the compaction hooks. */
 export const MIN_VERSION: [number, number, number] = [3, 4, 0];
@@ -441,8 +442,8 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 	const named = option("kiro-home", process.argv);
 	const envHome = process.env.HOME ?? "";
 	const kiroHome = named ?? (envHome.startsWith("/") ? join(envHome, ".kiro") : "");
-	if (!kiroHome || !kiroHome.startsWith("/")) {
-		process.stderr.write("Kiro install: cannot determine the Kiro home; pass --kiro-home=<absolute path>\n");
+	if (!kiroHome || !validKiroHome(kiroHome, envHome || homedir())) {
+		process.stderr.write("Kiro install: the Kiro home must be an absolute path that is not a root, the home folder, or an ancestor of it; pass --kiro-home=<path>\n");
 		process.exit(1);
 	}
 	const kiroCli = option("kiro-cli", process.argv) ?? "kiro-cli";

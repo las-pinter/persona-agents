@@ -20,17 +20,24 @@ import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_THEME } from "../../shared/context/context.ts";
 
+/**
+ * True when Kiro accepts this as its global directory: absolute, not a
+ * filesystem root, and not the home folder or one of its ancestors.
+ */
+export function validKiroHome(value: string, home: string = homedir()): boolean {
+	if (!isAbsolute(value)) return false;
+	const candidate = resolve(value);
+	const realHome = resolve(home);
+	const isRoot = candidate === resolve("/") || /^[A-Za-z]:[\\/]?$/.test(candidate);
+	const holdsHome = realHome === candidate || realHome.startsWith(candidate + sep);
+	return !isRoot && !holdsHome;
+}
+
 /** The global Kiro directory: a valid KIRO_HOME, else `<home>/.kiro`. */
 export function kiroHome(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
 	const wanted = env.KIRO_HOME;
-	const realHome = resolve(home);
-	if (typeof wanted === "string" && isAbsolute(wanted)) {
-		const candidate = resolve(wanted);
-		const isRoot = candidate === resolve("/") || /^[A-Za-z]:[\\/]?$/.test(candidate);
-		const holdsHome = realHome === candidate || realHome.startsWith(candidate + sep);
-		if (!isRoot && !holdsHome) return candidate;
-	}
-	return join(realHome, ".kiro");
+	if (typeof wanted === "string" && validKiroHome(wanted, home)) return resolve(wanted);
+	return join(resolve(home), ".kiro");
 }
 
 /** The installed payload folder. */

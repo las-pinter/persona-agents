@@ -17,10 +17,14 @@
  * and no commands: a plain Pi session is unchanged. Every fault is contained:
  * a bad theme or an unreadable policy refuses the agent and says why, rather
  * than running half-configured.
+ *
+ * The file stays one module because every event handler shares the one session
+ * object; splitting it would thread that state through several files.
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -376,9 +380,10 @@ function reviewerBody(dir: string = agentsDir()): string {
 
 /** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
 async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
-	const status = await pi.exec("git", ["status", "--porcelain"], { cwd });
+	// `-uall` lists each file of an untracked directory, not just the folder.
+	const status = await pi.exec("git", ["status", "--porcelain", "-uall"], { cwd });
 	let diff = await pi.exec("git", ["diff", "HEAD"], { cwd });
-	if (diff.stdout.trim() === "") {
+	if (diff.stdout.trim() === "" && status.stdout.trim() === "") {
 		// A clean tree commits nothing, so review the last commit instead.
 		diff = await pi.exec("git", ["show", "HEAD", "--format="], { cwd });
 	}
@@ -392,11 +397,13 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 	);
 	// A failed read is not a small change; the gate must ask.
 	if (status.code !== 0 || diff.code !== 0) return failedChange();
-	const signature = change.untracked
+	// The signature hashes every changed file's worktree content, so the key is
+	// the same before and after `git add`.
+	const signature = [...change.files]
+		.sort()
 		.map((path) => {
 			try {
-				const stat = statSync(join(cwd, path));
-				return `${path}:${stat.size}:${stat.mtimeMs}`;
+				return `${path}:${createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex")}`;
 			} catch {
 				return `${path}:missing`;
 			}
@@ -664,17 +671,20 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		if (!session) return undefined;
 		const input = event.input ?? {};
 		const decision = decidePolicy(session.profile, event.toolName, input, session.policy, session.env);
-		if (decision.verdict === "allow") {
-			if (logsAllows()) appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
-			return undefined;
+		if (decision.verdict === "deny") {
+			appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
+			return { block: true, reason: decision.reason };
 		}
-		appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
-		if (decision.verdict === "deny") return { block: true, reason: decision.reason };
-		if (decision.verdict === "ask") return handleAsk(ctx, session, event.toolName, input, decision);
+		if (decision.verdict === "ask") {
+			appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
+			return handleAsk(ctx, session, event.toolName, input, decision);
+		}
 		// Allowed by policy: the companion still needs a review for a real commit.
 		if (session.profile.name === "companion" && event.toolName === "bash" && typeof input.command === "string" && isCommitCommand(input.command)) {
-			return reviewGate(pi, ctx, session);
+			const gate = await reviewGate(pi, ctx, session);
+			if (gate) return gate;
 		}
+		if (logsAllows()) appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
 		return undefined;
 	});
 
