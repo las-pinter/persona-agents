@@ -62,7 +62,7 @@ The doctrine lives in three places:
   Every other plugin agent is denied all of these and every shell write the
   hook can see.
 - The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and
-  `pa-reviewer`. A `PermissionRequest` hook allows a plain history command and
+  `pa-reviewer`. A `PermissionRequest` hook allows a git command and
   a reviewed or trivial commit; anything else returns no decision, so Kiro's
   native prompt asks. A PreToolUse hook denies the reviewer every shell write
   and every command that writes history or publishes; reading git history is

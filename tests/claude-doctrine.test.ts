@@ -78,6 +78,8 @@ const ALLOWED = [
 	"git stash",
 	"git reset --hard",
 	"git branch -D topic",
+	// `-l` after a value-taking option is a message, not the list flag.
+	"git tag -m msg -l v1",
 ];
 
 /** Publish commands and the ask exceptions. */
@@ -105,6 +107,20 @@ const ASKED = [
 	"git --attr-source HEAD push",
 	"git --config-env core.hooksPath=X commit -m x",
 	"git --exec-path commit -m m",
+	// A verb that runs another program, writes config, or reaches a remote.
+	"git config core.hooksPath=/tmp/x",
+	"git config alias.x '!sh'",
+	"git bisect run npm test",
+	"git submodule foreach 'rm -rf x'",
+	"git difftool --extcmd=sh",
+	"git filter-branch --tree-filter x",
+	"git fetch ext::sh origin",
+	"git clone 'ext::sh -c x' dir",
+	"git ls-remote ext::x",
+	"git remote add evil ext::x",
+	"git fetch --upload-pack='touch x' origin",
+	"git lfs push origin",
+	"git send-email patch",
 	// A dup redirect to a word that is not a plain fd writes a file.
 	"git commit -m m >&0file",
 	// Transport helper URLs and merge strategies run a program of the caller's choice.
@@ -169,7 +185,7 @@ function nestShell(command: string, levels: number): string {
 	return out;
 }
 
-describe("doctrine: plain git history", () => {
+describe("doctrine: git work", () => {
 	for (const command of ALLOWED) {
 		test(command, () => {
 			assert.equal(bash("companion", command), "allow");
@@ -237,6 +253,10 @@ const READS = [
 	"git tag -l -f v1",
 	"git tag --list -d v1",
 	"git tag -l v1 -d",
+	"git config --get core.hooksPath",
+	"git config --list",
+	"git remote -v",
+	"git remote",
 	"gh issue list",
 	"echo 'git push is gated'",
 	"grep -r 'git commit' docs",

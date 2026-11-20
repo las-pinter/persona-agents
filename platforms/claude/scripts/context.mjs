@@ -47,7 +47,7 @@ function professionContext() {
 	return readFileSync(join(content, "professions", `${PROFESSION}.md`), "utf8").trim();
 }
 
-/** The Claude Code note plus the theme's persona, or null when none is mapped. */
+/** The Claude Code note plus the theme's persona; a missing mapping still carries the persona-free rule. */
 function personaContext() {
 	const theme = pluginOption("theme") || DEFAULT_THEME;
 	const registry = JSON.parse(readFileSync(join(content, "agents.json"), "utf8"));

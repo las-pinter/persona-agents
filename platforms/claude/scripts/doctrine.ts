@@ -20,8 +20,8 @@
 // The reviewer is read-only: it has no Edit or Write tool (its agent file),
 // and this hook denies it every shell write it can see.
 //
-// Allow is given only when every segment of the command is git work.
-// command. A command that mixes an allowed segment with an ungated one
+// Allow is given only when every segment of the command is git work. A
+// command that mixes an allowed segment with an ungated one
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
 // `$(...)` or backtick substitution, an env assignment, a path to git, the

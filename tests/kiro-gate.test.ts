@@ -2,7 +2,7 @@
  * The Kiro commit doctrine (platforms/kiro/scripts/gate.ts).
  *
  * The command classification comes from the shared gates; this suite pins the
- * Kiro verdicts: the companion allows a plain history command and a reviewed or
+ * Kiro verdicts: the companion allows a git command and a reviewed or
  * trivial commit, asks for everything else, and the reviewer denies every
  * history, publish, or write segment it can see.
  *
@@ -58,7 +58,7 @@ function repoWithChange(root: string): string {
 const ctx = (cwd: string, stateDir: string): GateContext => ({ cwd, stateDir, sessionId: "sess_1", now: new Date("2026-11-20T00:00:00Z") });
 
 describe("kiro doctrine: the companion", () => {
-	test("a plain history command is allowed", () => {
+	test("a git command is allowed", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));
 			for (const command of ["git add .", "git pull", "git merge topic", "git rebase main", "git tag v1.0.0"]) {
@@ -67,7 +67,7 @@ describe("kiro doctrine: the companion", () => {
 		});
 	});
 
-	test("a publish, a config override, and a tag or amend allow", () => {
+	test("a publish and a program-running verb ask, while local git work is allowed", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));
 			for (const command of [
@@ -221,7 +221,7 @@ describe("kiro doctrine: the hook entry points", () => {
 			{ input: JSON.stringify(input), encoding: "utf8" },
 		);
 
-	test("the companion's PermissionRequest returns an allow for a plain history command", () => {
+	test("the companion's PermissionRequest returns an allow for a git command", () => {
 		withTemp((root) => {
 			const result = run("permission", "companion", root, {
 				session_id: "sess_1",
