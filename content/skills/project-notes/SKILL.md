@@ -11,10 +11,6 @@ Plain, persona-free records about repositories agents work on. The notes hold
 architecture, conventions, lessons learned, rules, and studies. No flair.
 Every line must earn its place. The companion reads and writes them.
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## Storage
 
 ```

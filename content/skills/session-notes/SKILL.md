@@ -12,8 +12,6 @@ Your context is a cache of it: compaction can drop the context at any time, but
 the file stays. Write the plan here, keep it current, and you can always pick
 the work up again.
 
-Follow the **persona-free-documents** skill: the file holds no persona voice.
-
 ## When to Create One
 
 - Create one when a task needs more than a few steps, or when it will outlive

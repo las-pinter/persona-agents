@@ -10,7 +10,7 @@ description: Language-agnostic structure, naming conventions, and rules for writ
 1. **Describe behavior, not implementation.** Test names say WHAT the code does, not HOW.
 2. **Every test name answers three questions:** What context/input? What action? What outcome?
 3. **Readability over convention.** If a longer name is clearer, use it.
-4. **Name the behavior only.** Follow **persona-free-documents**.
+4. **Name the behavior only.**
 
 ### Good vs Bad Names
 

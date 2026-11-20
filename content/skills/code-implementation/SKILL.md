@@ -55,7 +55,6 @@ Before touching a single line:
 - Comment WHY, not WHAT. The code already says what it does.
 - Keep comments brief. Prefer code that explains itself; a long comment shows the code needs a
   rewrite.
-- Follow **persona-free-documents** for repository artifacts.
 
 **By task type:**
 

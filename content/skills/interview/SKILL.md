@@ -10,10 +10,6 @@ description: Grill the user in frontier rounds until every decision is settled.
 Grill the user before any study is written. The interview turns a vague
 request into a settled set of decisions. It is the only stage before the study.
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## The Design Tree
 
 Model the request as a tree of decisions.

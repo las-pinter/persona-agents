@@ -14,8 +14,6 @@ the write step. Then continue with steps 3 to 5 and the entry format below.
 Write this session's journal entry. The journal records what happened; the
 project notes hold knowledge; the session notes hold the task.
 
-Follow the **persona-free-documents** skill: the entry holds no persona voice.
-
 ## Steps
 
 1. Get the entry path for this session. On Pi, call the `journal` tool with

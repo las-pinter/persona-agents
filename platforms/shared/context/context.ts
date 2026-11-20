@@ -86,6 +86,15 @@ export function personaText(contentDir: string, registry: Registry, theme: strin
 	}
 }
 
+/**
+ * The persona-free rule, written once.
+ *
+ * Every adapter that renders a persona includes this line, so the rule travels
+ * with the persona instead of being repeated in each skill.
+ */
+export const PERSONA_FREE_RULE =
+	"Code, commits, notes, studies, journals, and every other durable artifact stay persona-free. Follow the **persona-free-documents** skill.";
+
 /** The persona section: the voice, with the profession kept in charge. */
 export function personaSection(theme: string, persona: string): string {
 	return [
@@ -93,7 +102,7 @@ export function personaSection(theme: string, persona: string): string {
 		"",
 		"Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself.",
 		"Your profession rules take precedence over the persona on what you do.",
-		"Code, commits, notes, studies, and journals stay persona-free.",
+		PERSONA_FREE_RULE,
 		"",
 		persona,
 	].join("\n");

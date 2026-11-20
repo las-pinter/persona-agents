@@ -23,6 +23,7 @@
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PERSONA_FREE_RULE } from "../../shared/context/context.ts";
 import { pluginOption } from "./plugin-options.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
@@ -60,7 +61,7 @@ function personaContext() {
 	const lines = [
 		`# Running in Claude Code (persona theme: ${theme})`,
 		"",
-		"You are the persona-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. Code, commits, and every durable file stay persona-free.",
+		`You are the persona-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. ${PERSONA_FREE_RULE}`,
 		"",
 		"- Load a skill by name with the Skill tool: the skill `<name>` is `persona-agents:<name>`.",
 	];
