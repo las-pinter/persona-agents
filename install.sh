@@ -177,9 +177,15 @@ install_kiro() {
         return 0
     fi
     if ((KIRO_EXPLICIT == 0)); then
-        local version
+        local version major minor
         version="$("$KIRO_CLI_ARG" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || version=""
-        if [[ -z "$version" ]] || [[ "$(printf '%s\n' "3.4.0" "$version" | sort -V | head -1)" != "3.4.0" ]]; then
+        if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+        else
+            major="" minor=""
+        fi
+        if [[ -z "$major" ]] || ((major < 3)) || ((major == 3 && minor < 4)); then
             echo "Kiro CLI ${version:-unknown} is below 3.4.0; skipping the Kiro adapter. Install kiro-cli 3.4.0 or newer to use it."
             return 0
         fi

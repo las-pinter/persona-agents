@@ -48,18 +48,24 @@ const GIT_PATH_OPTIONS = new Set(["-C", "--git-dir", "--work-tree", "--namespace
 const GIT_INFO_OPTIONS = new Set(["--version", "--help"]);
 
 /** The git subcommand after its global options. */
-export function gitSubcommand(args: string[]): { sub: string; rest: string[]; unknown: boolean } {
+export function gitSubcommand(args: string[]): { sub: string; rest: string[]; unknown: boolean; pathOption: boolean } {
 	let i = 0;
+	let pathOption = false;
 	while (i < args.length && args[i].startsWith("-")) {
 		const arg = args[i];
-		if (GIT_INFO_OPTIONS.has(arg)) return { sub: "", rest: [], unknown: false };
+		if (GIT_INFO_OPTIONS.has(arg)) return { sub: "", rest: [], unknown: false, pathOption };
 		if (GIT_PLAIN_OPTIONS.has(arg)) i += 1;
-		else if (GIT_PATH_OPTIONS.has(arg)) i += 2;
-		else if (arg.startsWith("--") && GIT_PATH_OPTIONS.has(arg.split("=")[0])) i += 1;
+		else if (GIT_PATH_OPTIONS.has(arg)) {
+			pathOption = true;
+			i += 2;
+		} else if (arg.startsWith("--") && GIT_PATH_OPTIONS.has(arg.split("=")[0])) {
+			pathOption = true;
+			i += 1;
+		}
 		// An unknown option may take the next token, so the subcommand is unknown.
-		else return { sub: "", rest: [], unknown: true };
+		else return { sub: "", rest: [], unknown: true, pathOption };
 	}
-	return { sub: args[i] ?? "", rest: args.slice(i + 1), unknown: false };
+	return { sub: args[i] ?? "", rest: args.slice(i + 1), unknown: false, pathOption };
 }
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);

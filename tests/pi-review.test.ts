@@ -142,6 +142,8 @@ describe("pi review: the verdict a reviewer states", () => {
 		assert.equal(parseVerdict("The change was not approved as-is."), null);
 		assert.equal(parseVerdict("## Issues\n- thing\n\nApprove once the test is added"), null);
 		assert.equal(parseVerdict("Approve — fine."), "Approve");
+		assert.equal(parseVerdict("## Verdict\n\nI cannot approve until X; Reject."), null);
+		assert.equal(parseVerdict("## Verdict\n\n[Approve | Request Changes | Reject] — one sentence"), null);
 	});
 
 	test("the Verdict section wins over an earlier mention", () => {

@@ -25,7 +25,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { isCommitCommand, isTrivial } from "../../shared/review/review.ts";
-import { gateCommand, UNGATED, type Hit } from "../../shared/shell/gates.ts";
+import { commandSegments, gateCommand, gitSubcommand, shellWords, unwrapSegment, UNGATED, type Hit } from "../../shared/shell/gates.ts";
 import { changeKey } from "./change.ts";
 import { appendDecision, reviewFor } from "./state.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
@@ -73,6 +73,23 @@ function denyReason(hits: Hit[]): string {
 }
 
 /**
+ * True when a git command names another repository through a leading path
+ * option. `git commit -C <ref>` reuses a message, not a repository, and must
+ * not match.
+ */
+function namesAnotherRepo(command: string): boolean {
+	for (const raw of commandSegments(command)) {
+		const words = shellWords(unwrapSegment(raw));
+		let i = 0;
+		if (words[i] === "sudo") i++;
+		while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
+		if (words[i] !== "git") continue;
+		if (gitSubcommand(words.slice(i + 1)).pathOption) return true;
+	}
+	return false;
+}
+
+/**
  * The doctrine decision for one shell command.
  *
  * A companion write segment is ungated: the companion may write. The reviewer
@@ -97,7 +114,7 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 
 	// The gate reads the change in the session's cwd. A commit aimed at another
 	// repository would be judged against the wrong tree, so it asks.
-	if (/(^|\s)(-C|--git-dir|--work-tree|--namespace)(=|\s)/.test(command)) {
+	if (namesAnotherRepo(command)) {
 		return { verdict: "ask", reason: OTHER_REPO_ASK };
 	}
 

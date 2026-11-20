@@ -229,7 +229,11 @@ export function parseVerdict(text: string): Verdict | null {
 	const word = /\b(Request Changes|Approve|Reject)\b/i;
 	const section = /^##\s+Verdict\s*$/im.exec(plain);
 	if (section) {
-		const found = word.exec(plain.slice(section.index));
+		// Only the section's first non-blank line states the verdict; a template
+		// echo or a sentence that mentions the words must not read as approval.
+		const rest = plain.slice(section.index + section[0].length);
+		const first = rest.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? "";
+		const found = /^(Request Changes|Approve|Reject)\s*(?:$|[—–:.,;!)-])(?=\s|$)/i.exec(first);
 		return found ? verdictOf(found[1]) : null;
 	}
 	const labelled = /^\s*(?:#{1,6}\s*)?Verdict\s*:\s*(.+)$/im.exec(plain);

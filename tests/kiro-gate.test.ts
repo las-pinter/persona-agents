@@ -108,6 +108,7 @@ describe("kiro doctrine: the companion", () => {
 			git(cwd, ["commit", "-m", "baseline"]);
 			fs.writeFileSync(path.join(cwd, "a.txt"), "two\n");
 			assert.equal(commandDecision("companion", "git commit -m x", ctx(cwd, path.join(root, "state"))).verdict, "allow");
+			assert.equal(commandDecision("companion", "git commit -C HEAD -m x", ctx(cwd, path.join(root, "state"))).verdict, "allow");
 		});
 	});
 
