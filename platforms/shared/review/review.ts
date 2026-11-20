@@ -168,11 +168,14 @@ export function makeChange(diffText: string, statusText: string, signature = "",
 	// A kilobyte counts as one line-equivalent, so a large single-line file (a
 	// bundle, a blob) cannot pass the line limit by having one line.
 	const untrackedLines = untrackedTexts.reduce((sum, text) => sum + countLines(text) + Math.floor(Buffer.byteLength(text, "utf8") / 1024), 0);
+	// A binary swap or a mode-only change has no changed text lines; both need a
+	// review, so neither may look trivial.
+	const opaque = /^(GIT binary patch|Binary files .* differ|old mode \d+)$/m.test(diffText) ? TRIVIAL_LINES + 1 : 0;
 	return {
 		diffText,
 		files,
 		untracked,
-		addedLines: counts.addedLines + untrackedLines,
+		addedLines: counts.addedLines + untrackedLines + opaque,
 		removedLines: counts.removedLines,
 		signature,
 	};

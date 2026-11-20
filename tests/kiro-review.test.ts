@@ -292,6 +292,38 @@ describe("kiro review: the verdict recorder", () => {
 		});
 	});
 
+	test("the newest verdict for a key survives a second scan", () => {
+		withTemp((root) => {
+			const kiro = store(root, [
+				{ agent: "pa-reviewer", key: "5555555555555555", response: "## Verdict\nApprove - the first run." },
+				{ agent: "pa-reviewer", key: "5555555555555555", response: "## Verdict\nRequest Changes - the second run." },
+			]);
+			const stateDir = path.join(root, "state");
+			assert.equal(recordSessionReviews(kiro, sessionId, stateDir).length, 2);
+			assert.equal(reviewFor(stateDir, "5555555555555555")?.verdict, "Request Changes");
+			recordSessionReviews(kiro, sessionId, stateDir);
+			assert.equal(reviewFor(stateDir, "5555555555555555")?.verdict, "Request Changes", "a second scan keeps the newest");
+		});
+	});
+
+	test("a named-scope review does not inherit the earlier working-tree key", () => {
+		withTemp((root) => {
+			const kiro = path.join(root, "kiro");
+			const dir = path.join(kiro, "sessions", "hash", sessionId);
+			fs.mkdirSync(dir, { recursive: true });
+			const payloads = [
+				{ type: "tool_result", content: "Output:\nScope: the uncommitted change in this repository\n\nChange key: 6666666666666666\n" },
+				{ type: "tool_result", content: "Output:\nScope: main...HEAD\n\nReview one change.\n" },
+				{ type: "sub_agent_start", subSessionId: "sub-x", subAgentName: "pa-reviewer", prompt: "Review one change." },
+				{ type: "sub_agent_complete", subSessionId: "sub-x", subAgentName: "pa-reviewer", response: "## Verdict\nApprove - nope.", status: "success" },
+			];
+			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${payloads.map((payload) => JSON.stringify({ timestamp: "2026-11-20T00:00:00Z", payload })).join("\n")}\n`);
+			const stateDir = path.join(root, "state");
+			assert.equal(recordSessionReviews(kiro, sessionId, stateDir).length, 0);
+			assert.equal(reviewFor(stateDir, "6666666666666666"), null);
+		});
+	});
+
 	test("a request for changes is recorded, and a non-reviewer or a keyless run is not", () => {
 		withTemp((root) => {
 			const kiro = store(root, [

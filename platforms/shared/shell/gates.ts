@@ -92,7 +92,10 @@ const PREFIX_VALUE_OPTIONS: Record<string, Set<string>> = {
 	xargs: new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"]),
 };
 /** Names a fail-closed scan looks for in a command the parser cannot read. */
-const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync|rm|tee)(?=\s|$|['"])/;
+const GATED_PROGRAMS = ["git", "gh", ...WRITE_COMMANDS, ...IN_PLACE_COMMANDS];
+const GATED_WORD = new RegExp(
+	"(?<=^|[\\s;&|(`$'\"/\\\\])(" + GATED_PROGRAMS.join("|") + ")(?=\\s|$|['\"])",
+);
 /** A plain file path in a heredoc header: no quotes, expansions, or operators. */
 const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
 const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;

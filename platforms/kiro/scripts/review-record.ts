@@ -69,7 +69,11 @@ export function recordSessionReviews(
 		const verdict = parseVerdict(run.response);
 		if (!verdict) continue;
 		if (stored.reviews[key]?.subSession === run.subSessionId) continue;
-		recordReview(stateDir, key, { verdict, at, session: sessionId, subSession: run.subSessionId });
+		const record = { verdict, at, session: sessionId, subSession: run.subSessionId };
+		recordReview(stateDir, key, record);
+		// The scan can cover several runs of one key; the newest wins in this
+		// scan too, or a later scan would re-record an older verdict.
+		stored.reviews[key] = record;
 		recorded.push({ key, verdict, subSession: run.subSessionId });
 	}
 	return recorded;

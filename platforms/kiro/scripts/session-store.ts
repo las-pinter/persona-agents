@@ -22,7 +22,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { EntryLike } from "../../shared/compaction/manifest.ts";
-import { parseVerdict } from "../../shared/review/review.ts";
+import { parseVerdict, UNCOMMITTED } from "../../shared/review/review.ts";
 
 /** The session metadata this adapter reads. */
 export interface SessionMeta {
@@ -230,8 +230,15 @@ export function mapPayloads(
 				});
 			}
 			if (typeof payload.content === "string") {
-				const found = changeKeyIn(payload.content);
-				if (found) lastKey = found;
+				// The review brief prints its scope; only a working-tree brief carries
+				// a key. A ref or path review clears the earlier brief's key so the
+				// next run cannot inherit it.
+				const scope = /^Scope:\s*(.+)$/m.exec(payload.content);
+				if (scope) lastKey = scope[1].trim() === UNCOMMITTED ? changeKeyIn(payload.content) : "";
+				else {
+					const found = changeKeyIn(payload.content);
+					if (found) lastKey = found;
+				}
 			}
 			continue;
 		}
@@ -239,7 +246,11 @@ export function mapPayloads(
 			const subSessionId = typeof payload.subSessionId === "string" ? payload.subSessionId : "";
 			const agent = typeof payload.subAgentName === "string" ? payload.subAgentName : "";
 			const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
-			if (subSessionId) pending.set(subSessionId, { agent, prompt, key: changeKeyIn(prompt) || lastKey });
+			if (subSessionId) {
+				pending.set(subSessionId, { agent, prompt, key: changeKeyIn(prompt) || lastKey });
+				// The brief belongs to one run; a second run must bring its own.
+				lastKey = "";
+			}
 			continue;
 		}
 		if (type === "sub_agent_complete") {

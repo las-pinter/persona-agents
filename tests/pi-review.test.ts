@@ -101,6 +101,11 @@ describe("pi review: reading a change", () => {
 	test("a failed git read asks, it never looks trivial", () => {
 		assert.equal(isTrivial(failedChange()), false);
 	});
+
+	test("a binary swap or a mode-only change is not trivial", () => {
+		assert.equal(isTrivial(makeChange("old mode 100644\nnew mode 100755\n", " M run.sh\n", "")), false);
+		assert.equal(isTrivial(makeChange("GIT binary patch\n", " M logo.png\n", "")), false);
+	});
 });
 
 describe("pi review: the key and the trivial rule", () => {

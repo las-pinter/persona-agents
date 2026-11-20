@@ -41,6 +41,8 @@ export const PUBLISH_ASK =
 	"git push, gh pr, gh release, gh run, a tag delete or force-move, a git config override, commit --amend, or a wrapped git command needs your approval";
 /** Why an unreviewed commit asks the owner. */
 export const REVIEW_ASK = "this change has no independent review, so the commit needs your approval";
+/** Why a commit against another repository asks the owner. */
+export const OTHER_REPO_ASK = "a commit against another repository needs your approval";
 /** Why a command that is not a plain history command asks the owner. */
 export const UNGATED_ASK = "this command is not a plain history command, so it needs your approval";
 /** Why a command that mixes gated and ungated segments asks. */
@@ -92,6 +94,12 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 	if (!plainHistory) return { verdict: "ask", reason: MIXED_ASK };
 
 	if (!isCommitCommand(command)) return { verdict: "allow", reason: "a plain git add, commit, pull, merge, rebase, or tag" };
+
+	// The gate reads the change in the session's cwd. A commit aimed at another
+	// repository would be judged against the wrong tree, so it asks.
+	if (/(^|\s)(-C|--git-dir|--work-tree|--namespace)(=|\s)/.test(command)) {
+		return { verdict: "ask", reason: OTHER_REPO_ASK };
+	}
 
 	const { change, key } = changeKey(ctx.cwd);
 	if (isTrivial(change)) return { verdict: "allow", reason: "a trivial change needs no review before a commit", key };

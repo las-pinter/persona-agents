@@ -20,7 +20,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changeKey } from "../platforms/kiro/scripts/change.ts";
-import { commandDecision, permissionOutput, preToolResult, UNGATED_ASK, type GateContext } from "../platforms/kiro/scripts/gate.ts";
+import { commandDecision, permissionOutput, preToolResult, OTHER_REPO_ASK, UNGATED_ASK, type GateContext } from "../platforms/kiro/scripts/gate.ts";
 import { recordReview } from "../platforms/kiro/scripts/state.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,6 +137,16 @@ describe("kiro doctrine: the companion", () => {
 		});
 	});
 
+	test("a commit against another repository asks", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const context = ctx(cwd, path.join(root, "state"));
+			const decision = commandDecision("companion", "git -C /elsewhere commit -m x", context);
+			assert.equal(decision.verdict, "ask");
+			assert.equal(decision.reason, OTHER_REPO_ASK);
+		});
+	});
+
 	test("a review record without a sub-session does not unlock the commit", () => {
 		withTemp((root) => {
 			const cwd = repoWithChange(root);
@@ -164,6 +174,7 @@ describe("kiro doctrine: the reviewer", () => {
 				"echo x > out.txt",
 				"git diff --output=/tmp/x",
 				"git log --output /tmp/x",
+				"bash <<EOF\nchmod 700 x\nEOF",
 			]) {
 				assert.equal(commandDecision("reviewer", command, context).verdict, "deny", command);
 			}
