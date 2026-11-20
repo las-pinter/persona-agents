@@ -107,16 +107,36 @@ describe("pi manifest: what to reload", () => {
 		}
 	});
 
-	test("an empty branch still gives a usable manifest", () => {
+	test("an empty branch falls back to the only open notes file", () => {
 		const box = fixture();
 		try {
 			const manifest = buildManifest([], box.notesDir);
-			assert.equal(manifest.sessionNotes, "");
+			assert.equal(manifest.sessionNotes, box.sessionNotes);
 			assert.deepEqual(manifest.skills, []);
-			assert.deepEqual(manifest.docs, [path.join(box.notesDir, "rules", "house.md"), path.join(box.notesDir, "summary.md")]);
+			assert.deepEqual(manifest.docs, [
+				path.join(box.notesDir, "rules", "house.md"),
+				path.join(box.notesDir, "summary.md"),
+				box.study,
+				path.join(box.notesDir, "pinned", "api.md"),
+			]);
 			const text = reloadContext(manifest);
-			assert.match(text, /No session notes file was found/);
+			assert.ok(text.includes(box.sessionNotes));
 			assert.match(text, /- none/);
+		} finally {
+			box.cleanup();
+		}
+	});
+
+	test("no id match, no write, and two open files leave no notes file", () => {
+		const box = fixture();
+		try {
+			fs.writeFileSync(
+				path.join(box.notesDir, "sessions", "2026-01-02-other.md"),
+				"# Other\n\n- **Status:** open\n",
+			);
+			const manifest = buildManifest([], box.notesDir);
+			assert.equal(manifest.sessionNotes, "");
+			assert.match(reloadContext(manifest), /No session notes file was found/);
 		} finally {
 			box.cleanup();
 		}

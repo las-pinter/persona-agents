@@ -21,10 +21,11 @@
 //
 // Only the companion (agent_type persona-agents:companion) gets any effect.
 
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../../shared/notes/notes.ts";
 import { projectDir } from "./notes-paths.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
@@ -76,38 +77,20 @@ function lastDistinct(values, max) {
 		.slice(-max);
 }
 
-/** The bullet paths under `## Pinned` in a session notes text. */
-export function pinnedDocs(text) {
-	const match = /^##\s+Pinned\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(text);
-	if (!match) return [];
-	return [...match[1].matchAll(/^-\s+`?([^`\s]+)`?\s*$/gm)].map((m) => m[1]).filter((p) => p.startsWith(sep));
-}
-
-/** The study path on the `Study:` line of a session notes text, or "". */
-export function studyPath(text) {
-	const match = /^- \*\*Study:\*\*\s*`?([^`\s]+)`?/m.exec(text);
-	return match && match[1].startsWith(sep) ? match[1] : "";
-}
-
 /** The rule files and the summary of a project notes folder. */
 function projectStartupDocs(notesDir) {
-	const rules = join(notesDir, "rules");
-	const docs = existsSync(rules)
-		? readdirSync(rules)
-				.filter((name) => name.endsWith(".md"))
-				.sort()
-				.map((name) => join(rules, name))
-		: [];
 	const summary = join(notesDir, "summary.md");
-	return existsSync(summary) ? [...docs, summary] : docs;
+	return existsSync(summary) ? [...projectRules(notesDir), summary] : projectRules(notesDir);
 }
 
 /**
  * The reload manifest for a transcript and a project notes folder.
  * Docs: project rules and summary, the linked study, the pinned docs, then
  * other project notes the session read (not journal entries or other sessions).
+ * The active notes file comes from the session id first, so a resumed session
+ * that only read its notes still finds them.
  */
-export function buildManifest(entries, notesDir) {
+export function buildManifest(entries, notesDir, sessionId = "") {
 	const uses = toolUses(entries);
 	const skills = lastDistinct(
 		uses.filter((use) => use.name === "Skill" && typeof use.input?.skill === "string").map((use) => use.input.skill),
@@ -118,7 +101,7 @@ export function buildManifest(entries, notesDir) {
 		.filter((use) => ["Write", "Edit", "MultiEdit"].includes(use.name))
 		.map((use) => use.input?.file_path)
 		.filter((path) => typeof path === "string" && path.startsWith(sessionsDir) && path.endsWith(".md"));
-	const sessionNotes = written.at(-1) ?? "";
+	const sessionNotes = activeSessionNotes(notesDir, sessionId, written);
 	const notesText = sessionNotes && existsSync(sessionNotes) ? readFileSync(sessionNotes, "utf8") : "";
 	const skip = [join(notesDir, "journal") + sep, sessionsDir];
 	const readNotes = uses
@@ -205,8 +188,10 @@ function run(mode, input) {
 	const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
 	const notesDir = projectDir(cwd, homeArg());
 
+	const sessionId = typeof input.session_id === "string" ? input.session_id : "";
+
 	if (mode === "pre") {
-		const manifest = buildManifest(readTranscript(input.transcript_path), notesDir);
+		const manifest = buildManifest(readTranscript(input.transcript_path), notesDir, sessionId);
 		writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 		process.stdout.write(summaryInstructions(manifest));
 		return;
@@ -214,7 +199,7 @@ function run(mode, input) {
 
 	const manifest = existsSync(manifestFile)
 		? JSON.parse(readFileSync(manifestFile, "utf8"))
-		: buildManifest(readTranscript(input.transcript_path), notesDir);
+		: buildManifest(readTranscript(input.transcript_path), notesDir, sessionId);
 
 	if (mode === "post") {
 		const meta = lastBoundary(readTranscript(input.transcript_path));

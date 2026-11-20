@@ -9,54 +9,21 @@
 //
 // Any other agent, or a session without one, gets no output.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { openSessionNotes, projectRules, unfinishedStudies } from "../../shared/notes/notes.ts";
 import { recentEntries } from "./journal.mjs";
 import { projectDir, projectName } from "./notes-paths.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
 const JOURNAL_DAYS = 3;
-const UNFINISHED = new Set(["draft", "ready", "in-progress"]);
-
-/** The sorted names in a folder that pass `keep`, or [] when the folder is missing. */
-function list(dir, keep) {
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir)
-		.filter((name) => keep(name, join(dir, name)))
-		.sort();
-}
-
-const isFile = (path) => statSync(path).isFile();
-
-/** Session notes files whose Status line says open. */
-export function openSessionNotes(dir) {
-	return list(join(dir, "sessions"), (name, path) => name.endsWith(".md") && isFile(path))
-		.map((name) => join(dir, "sessions", name))
-		.filter((path) => /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
-}
-
-/** Rows of studies/index.md whose stage is not done or abandoned: "title (stage): path". */
-export function unfinishedStudies(dir) {
-	const index = join(dir, "studies", "index.md");
-	if (!existsSync(index)) return [];
-	const rows = [];
-	for (const line of readFileSync(index, "utf8").split("\n")) {
-		const cells = line.split("|").map((cell) => cell.trim());
-		// | title | stage | updated | `path` |  splits to ["", title, stage, updated, path, ""]
-		if (cells.length < 6 || !UNFINISHED.has(cells[2])) continue;
-		rows.push(`${cells[1]} (${cells[2]}): ${join(dir, cells[4].replace(/`/g, ""))}`);
-	}
-	return rows;
-}
 
 /** The startup context text for a working directory. */
 export function startupContext(cwd, home) {
 	const dir = projectDir(cwd, home);
 	const project = projectName(cwd);
-	const rules = list(join(dir, "rules"), (name, path) => name.endsWith(".md") && isFile(path)).map((name) =>
-		join(dir, "rules", name),
-	);
+	const rules = projectRules(dir);
 	const summary = join(dir, "summary.md");
 	const bullets = (items) => (items.length ? items.map((item) => `- ${item}`) : ["- none"]);
 	const lines = [

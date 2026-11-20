@@ -14,8 +14,9 @@
  * assistant tool call is `{ type: "toolCall", name, arguments }`.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
+import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../../shared/notes/notes.ts";
 
 /** The cap on skills reloaded after one compaction. */
 export const MAX_SKILLS = 12;
@@ -97,30 +98,8 @@ function lastDistinct(values: string[], max: number): string[] {
 		.slice(-max);
 }
 
-/** The bullet paths under `## Pinned` in a session notes text. */
-export function pinnedDocs(text: string): string[] {
-	const match = /^##\s+Pinned\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(text);
-	if (!match) return [];
-	return [...match[1].matchAll(/^-\s+`?([^`\s]+)`?\s*$/gm)].map((item) => item[1]).filter((path) => path.startsWith(sep));
-}
-
-/** The study path on the `Study:` line of a session notes text, or "". */
-export function studyPath(text: string): string {
-	const match = /^- \*\*Study:\*\*\s*`?([^`\s]+)`?/m.exec(text);
-	return match && match[1].startsWith(sep) ? match[1] : "";
-}
-
-/** A folder's `.md` files, sorted, or [] when the folder is missing. */
-function mdFiles(dir: string): string[] {
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir)
-		.filter((name) => name.endsWith(".md"))
-		.sort()
-		.map((name) => join(dir, name));
-}
-
 /** The reload manifest for one branch and one project notes folder. */
-export function buildManifest(entries: EntryLike[], notesDir: string): Manifest {
+export function buildManifest(entries: EntryLike[], notesDir: string, sessionId = ""): Manifest {
 	const calls = toolCalls(entries);
 	const readPaths = calls
 		.filter((call) => call.name === "read" || call.name === "grep")
@@ -138,13 +117,13 @@ export function buildManifest(entries: EntryLike[], notesDir: string): Manifest 
 		.filter((call) => ["write", "edit", "patch", "apply_patch"].includes(call.name))
 		.map((call) => (typeof call.arguments.path === "string" ? call.arguments.path : ""))
 		.filter((path) => path.startsWith(sessionsDir) && path.endsWith(".md"));
-	const sessionNotes = written.at(-1) ?? "";
+	const sessionNotes = activeSessionNotes(notesDir, sessionId, written);
 	const notesText = sessionNotes && existsSync(sessionNotes) ? readFileSync(sessionNotes, "utf8") : "";
 
 	// Documents: project rules and summary, notes the session read, the linked
 	// study, then the pinned ones. Journal entries and other sessions are not
 	// reloaded: their content is history, not the plan.
-	const startup = [...mdFiles(join(notesDir, "rules")), join(notesDir, "summary.md")].filter((path) => existsSync(path));
+	const startup = [...projectRules(notesDir), join(notesDir, "summary.md")].filter((path) => existsSync(path));
 	const readNotes = readPaths.filter(
 		(path) =>
 			path.startsWith(notesDir + sep) && !path.startsWith(join(notesDir, "journal") + sep) && !path.startsWith(sessionsDir),

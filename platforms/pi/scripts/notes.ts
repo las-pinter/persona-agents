@@ -7,72 +7,13 @@
  * list), with the session notes file first.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { openSessionNotes, projectRules, unfinishedStudies } from "../../shared/notes/notes.ts";
 import { recentEntries } from "./journal.ts";
 
 /** The most recent journal day folders read at session start. */
 export const JOURNAL_DAYS = 3;
-/** Study stages that count as unfinished. */
-export const UNFINISHED_STAGES = new Set(["draft", "ready", "in-progress"]);
-
-/** The sorted names in a folder that pass `keep`, or [] when the folder is missing. */
-function list(dir: string, keep: (name: string, path: string) => boolean): string[] {
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir)
-		.filter((name) => keep(name, join(dir, name)))
-		.sort();
-}
-
-const isFile = (path: string): boolean => statSync(path).isFile();
-
-/** Session notes files whose Status line says open. */
-export function openSessionNotes(notesDir: string): string[] {
-	return list(join(notesDir, "sessions"), (name) => name.endsWith(".md"))
-		.map((name) => join(notesDir, "sessions", name))
-		.filter((path) => isFile(path) && /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
-}
-
-/** One row of `studies/index.md`, in file order. */
-export interface StudyRow {
-	title: string;
-	stage: string;
-	/** The folder path the index writes, backticks removed. */
-	path: string;
-}
-
-/**
- * The rows of `studies/index.md`. The header row and the separator row are
- * skipped. Both the read list and the review brief read the file this way, so a
- * table change lands in one parser.
- */
-export function studyIndexRows(indexText: string): StudyRow[] {
-	const rows: StudyRow[] = [];
-	for (const line of indexText.split("\n")) {
-		const cells = line.split("|").map((cell) => cell.trim());
-		// | title | stage | updated | `path` |  splits to ["", title, stage, updated, path, ""]
-		if (cells.length < 6) continue;
-		const title = cells[1] ?? "";
-		const stage = cells[2] ?? "";
-		if (title === "" || title === "Study" || /^-+$/.test(stage)) continue;
-		rows.push({ title, stage, path: (cells[4] ?? "").replace(/`/g, "") });
-	}
-	return rows;
-}
-
-/** Rows of studies/index.md whose stage is not done or abandoned: "title (stage): path". */
-export function unfinishedStudies(notesDir: string): string[] {
-	const index = join(notesDir, "studies", "index.md");
-	if (!existsSync(index)) return [];
-	return studyIndexRows(readFileSync(index, "utf8"))
-		.filter((row) => UNFINISHED_STAGES.has(row.stage))
-		.map((row) => `${row.title} (${row.stage}): ${join(notesDir, row.path)}`);
-}
-
-/** The project rules files, in read order. */
-export function projectRules(notesDir: string): string[] {
-	return list(join(notesDir, "rules"), (name) => name.endsWith(".md")).map((name) => join(notesDir, "rules", name));
-}
 
 const bullets = (items: string[]): string[] => (items.length ? items.map((item) => `- ${item}`) : ["- none"]);
 

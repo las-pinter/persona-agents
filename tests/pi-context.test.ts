@@ -27,7 +27,8 @@ import {
 	themeNames,
 } from "../platforms/pi/scripts/context.ts";
 import { entryPath, dayOf, recentEntries } from "../platforms/pi/scripts/journal.ts";
-import { openSessionNotes, startupContext, unfinishedStudies } from "../platforms/pi/scripts/notes.ts";
+import { startupContext } from "../platforms/pi/scripts/notes.ts";
+import { openSessionNotes, unfinishedStudies } from "../platforms/shared/notes/notes.ts";
 import { PROFILES } from "../platforms/pi/scripts/profile.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

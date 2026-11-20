@@ -12,7 +12,7 @@
 
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
-import { studyIndexRows } from "./notes.ts";
+import { studyIndexRows } from "../../shared/notes/notes.ts";
 
 /** The verdict a reviewer may return, in the order the sentence reads. */
 export const VERDICTS = ["Approve", "Request Changes", "Reject"] as const;

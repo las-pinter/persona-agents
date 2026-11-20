@@ -16,11 +16,10 @@ import {
 	appendLog,
 	buildManifest,
 	lastBoundary,
-	pinnedDocs,
 	reloadContext,
-	studyPath,
 	summaryInstructions,
 } from "../platforms/claude/scripts/compact.mjs";
+import { pinnedDocs, studyPath } from "../platforms/shared/notes/notes.ts";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "compact.mjs");
 const COMPANION = "persona-agents:companion";
@@ -174,7 +173,7 @@ describe("compact: texts", () => {
 
 describe("compact: hook processes", () => {
 	function run(env: Env, mode: string, input: Record<string, unknown>) {
-		return spawnSync(process.execPath, [script, mode, `--home=${env.home}`], {
+		return spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", script, mode, `--home=${env.home}`], {
 			input: JSON.stringify({ session_id: "s-1", cwd: env.cwd, agent_type: COMPANION, ...input }),
 			env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data },
 			encoding: "utf8",
@@ -212,7 +211,7 @@ describe("compact: hook processes", () => {
 	test("another agent gets no output and no state", () => {
 		withEnv((env) => {
 			for (const mode of ["pre", "post", "reload"]) {
-				const result = spawnSync(process.execPath, [script, mode, `--home=${env.home}`], {
+				const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", script, mode, `--home=${env.home}`], {
 					input: JSON.stringify({ session_id: "s-2", cwd: env.cwd, agent_type: "Explore", hook_event_name: "PreCompact" }),
 					env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data },
 					encoding: "utf8",
