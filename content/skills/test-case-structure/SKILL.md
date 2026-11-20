@@ -59,23 +59,10 @@ describe('Payment Processing')
 
 ## Test Structure
 
-### Arrange-Act-Assert (AAA)
-
-```
-// Arrange — set up test data and preconditions
-// Act     — execute the behavior under test
-// Assert  — verify the outcome
-```
-
-Rules:
-- **One Act per test** — multiple actions make failure diagnosis ambiguous
-- **Arrange sets up only what's needed** for THIS test
-- **Assert verifies the outcome**, not intermediate state
-- Separate phases with blank lines or comments for readability
-
 ### Given-When-Then (GWT)
 
-Semantically identical to AAA, framed for behavior:
+The same three phases as arrange-act-assert, whose rules live in
+**code-implementation**, framed for behavior:
 
 | AAA | GWT |
 |-----|-----|
@@ -187,8 +174,6 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 
 ## Testing Rules
 
-- Never test only the happy path. Cover failure modes, boundaries, and
-  invalid input.
 - When no test suite exists, start with the highest-risk paths (core logic,
   error handling, boundary input) and state the coverage assumptions.
 - Back every result claim with evidence: the exact command, the exit code, and
