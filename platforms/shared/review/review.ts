@@ -1,7 +1,7 @@
 /**
- * Independent review for the Pi adapter: the change, the verdict, and the gate.
+ * Independent review for the adapters: the change, the verdict, and the gate.
  *
- * Pure functions only. The extension runs git, spawns the reviewer, and asks the
+ * Pure functions only. An adapter runs git, spawns the reviewer, and asks the
  * owner; this module decides what a change is, how to name it, what the reviewer
  * concluded, and whether a commit may go ahead.
  *
@@ -89,11 +89,34 @@ export function untrackedFiles(statusText: string): string[] {
 		.filter((path) => path !== "");
 }
 
-/** Build a Change from git output. */
-export function makeChange(diffText: string, statusText: string, signature = ""): Change {
+/** The number of lines in a text; a trailing newline does not add a line. */
+export function countLines(text: string): number {
+	if (text === "") return 0;
+	const lines = text.split("\n");
+	return text.endsWith("\n") ? lines.length - 1 : lines.length;
+}
+
+/**
+ * Build a Change from git output.
+ *
+ * `git diff` does not list an untracked file, so the caller passes the text of
+ * each untracked file: its lines count toward the trivial-change limit. A new
+ * file of any size must never pass the gate as trivial just because git has not
+ * tracked it yet.
+ */
+export function makeChange(diffText: string, statusText: string, signature = "", untrackedTexts: string[] = []): Change {
 	const untracked = untrackedFiles(statusText);
 	const files = [...new Set([...diffFiles(diffText), ...untracked])];
-	return { diffText, files, untracked, ...countDiffLines(diffText), signature };
+	const counts = countDiffLines(diffText);
+	const untrackedLines = untrackedTexts.reduce((sum, text) => sum + countLines(text), 0);
+	return {
+		diffText,
+		files,
+		untracked,
+		addedLines: counts.addedLines + untrackedLines,
+		removedLines: counts.removedLines,
+		signature,
+	};
 }
 
 /**

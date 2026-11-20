@@ -72,10 +72,17 @@ describe("pi review: reading a change", () => {
 	});
 
 	test("a change merges the diff files and the untracked ones", () => {
-		const change = makeChange(DIFF, "?? src/new.ts\n", "sig");
+		const change = makeChange(DIFF, "?? src/new.ts\n", "sig", ["one\ntwo\nthree\n"]);
 		assert.deepEqual(change.files, ["src/gate.ts", "README.md", "src/new.ts"]);
 		assert.equal(change.signature, "sig");
-		assert.equal(change.addedLines, 3);
+		assert.equal(change.addedLines, 6);
+	});
+
+	test("an untracked file's lines count toward the trivial rule", () => {
+		const big = Array.from({ length: 100 }, (_, index) => `line ${index}`).join("\n");
+		const change = makeChange("", "?? src/new.ts\n", "", [big]);
+		assert.equal(change.addedLines, 100);
+		assert.equal(isTrivial(change), false);
 	});
 });
 

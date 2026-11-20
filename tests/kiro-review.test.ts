@@ -17,7 +17,9 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildReviewBrief, reviewerTask } from "../platforms/kiro/scripts/review.ts";
 import { keyOfPrompt, recordSessionReviews } from "../platforms/kiro/scripts/review-record.ts";
+import { changeKey } from "../platforms/kiro/scripts/change.ts";
 import { reviewFor } from "../platforms/kiro/scripts/state.ts";
+import { isTrivial } from "../platforms/shared/review/review.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const reviewScript = path.join(repoRoot, "platforms", "kiro", "scripts", "review.ts");
@@ -126,6 +128,23 @@ describe("kiro review: the brief", () => {
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}
+	});
+
+	test("a large untracked file is not a trivial change", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "untracked-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(cwd, "base.txt"), "base\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "big.ts"), Array.from({ length: 100 }, (_, index) => `line ${index}`).join("\n"));
+			const { change } = changeKey(cwd);
+			assert.equal(change.untracked.length, 1);
+			assert.equal(isTrivial(change), false);
+		});
 	});
 
 	test("the CLI prints the reviewer task and its warnings", () => {

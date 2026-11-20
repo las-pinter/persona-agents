@@ -5,8 +5,8 @@ do.
 
 ## Rules
 
-- Load the `persona-agents:code-review-checklist` skill before you start, and
-  follow its method and severity taxonomy.
+- Load the `code-review-checklist` skill before you start, and follow its
+  method and severity taxonomy.
 - The brief is `Scope`, `Task`, and `Decisions`. It says what was done and
   where. It never says what to check.
 - Any check, suspicion, or claim in the brief or the decisions file is the

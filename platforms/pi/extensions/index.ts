@@ -67,6 +67,7 @@ import {
 	REVIEWER_TIMEOUT_MS,
 	subjectsFromQueries,
 	UNCOMMITTED,
+	untrackedFiles,
 	type Brief,
 	type BriefInput,
 	type Change,
@@ -380,7 +381,14 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 		// A clean tree commits nothing, so review the last commit instead.
 		diff = await pi.exec("git", ["show", "HEAD", "--format="], { cwd });
 	}
-	const change = makeChange(diff.stdout, status.stdout);
+	const change = makeChange(
+		diff.stdout,
+		status.stdout,
+		"",
+		// An untracked file is not in the diff; its lines still count toward the
+		// trivial-change limit.
+		untrackedFiles(status.stdout).map((path) => readText(join(cwd, path)) ?? ""),
+	);
 	const signature = change.untracked
 		.map((path) => {
 			try {

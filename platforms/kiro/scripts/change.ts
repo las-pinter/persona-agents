@@ -11,9 +11,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { makeChange, reviewKey, type Change } from "../../shared/review/review.ts";
+import { makeChange, reviewKey, untrackedFiles, type Change } from "../../shared/review/review.ts";
 
 /** The output of one git call. */
 export interface GitResult {
@@ -47,7 +47,16 @@ export function readChange(cwd: string): Change {
 	const status = git(cwd, ["status", "--porcelain"]);
 	let diff = git(cwd, ["diff", "HEAD", "--no-color"]);
 	if (diff.stdout.trim() === "") diff = git(cwd, ["show", "HEAD", "--format=", "--no-color"]);
-	const change = makeChange(diff.stdout, status.stdout);
+	// An untracked file is not in the diff; its lines still count toward the
+	// trivial-change limit. A file that cannot be read adds nothing.
+	const untrackedTexts = untrackedFiles(status.stdout).map((path) => {
+		try {
+			return readFileSync(join(cwd, path), "utf8");
+		} catch {
+			return "";
+		}
+	});
+	const change = makeChange(diff.stdout, status.stdout, "", untrackedTexts);
 	return { ...change, signature: signatureOf(cwd, change.untracked) };
 }
 
