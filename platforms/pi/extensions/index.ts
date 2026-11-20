@@ -24,7 +24,7 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -397,13 +397,16 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 	);
 	// A failed read is not a small change; the gate must ask.
 	if (status.code !== 0 || diff.code !== 0) return failedChange();
-	// The signature hashes every changed file's worktree content, so the key is
-	// the same before and after `git add`.
+	// The signature hashes every changed file's worktree content and mode, so
+	// the key is the same before and after `git add` and changes on a chmod.
 	const signature = [...change.files]
 		.sort()
 		.map((path) => {
 			try {
-				return `${path}:${createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex")}`;
+				// Git tracks only the executable bit, so the key does too.
+				const mode = statSync(join(cwd, path)).mode & 0o111 ? "exec" : "file";
+				const content = createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex");
+				return `${path}:${mode}:${content}`;
 			} catch {
 				return `${path}:missing`;
 			}
@@ -524,8 +527,8 @@ async function reviewGate(
 	try {
 		change = await readChange(pi, session.env.cwd);
 	} catch {
-		// Git failed: never block a commit on the gate's own tooling problem.
-		return undefined;
+		// A failed read is unknown, not trivial: ask rather than allow silently.
+		return { block: true, reason: "the change could not be read, so this commit needs your approval" };
 	}
 	const key = reviewKey(change);
 	const gate = commitGate({ trivial: isTrivial(change), reviewed: session.reviews.get(key) ?? null });

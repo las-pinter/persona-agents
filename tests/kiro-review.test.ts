@@ -184,6 +184,24 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
+	test("a mode-only change changes the key", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "mode-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(cwd, "run.sh"), "#!/bin/sh\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			const before = changeKey(cwd).key;
+			fs.chmodSync(path.join(cwd, "run.sh"), 0o755);
+			assert.notEqual(changeKey(cwd).key, before, "a chmod changes the key");
+			fs.chmodSync(path.join(cwd, "run.sh"), 0o644);
+			assert.equal(changeKey(cwd).key, before, "restoring the mode restores the key");
+		});
+	});
+
 	test("an untracked directory's files all count", () => {		withTemp((root) => {
 			const cwd = path.join(root, "dir-repo");
 			fs.mkdirSync(cwd);

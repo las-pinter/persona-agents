@@ -119,17 +119,18 @@ export function untrackedFiles(statusText: string): string[] {
 }
 
 /**
- * The deleted and renamed paths from `git status --porcelain`.
+ * The changed paths from `git status --porcelain`.
  *
- * `git diff` writes `+++ /dev/null` for a deletion and may show a rename as a
- * delete plus an add, so the status text is the reliable source. These paths
- * join `files` and the content signature, so deleting or renaming a file after
- * a review changes the key.
+ * `git diff` writes `+++ /dev/null` for a deletion, may show a rename as a
+ * delete plus an add, and shows no `+++` line for a mode-only change, so the
+ * status text is the reliable source. These paths join `files` and the content
+ * signature, so deleting, renaming, or chmod-ing a file after a review changes
+ * the key.
  */
 export function statusFiles(statusText: string): string[] {
 	const paths: string[] = [];
 	for (const line of statusText.split("\n")) {
-		if (line.length < 4) continue;
+		if (line.length < 4 || line.startsWith("?? ")) continue;
 		const x = line[0];
 		const y = line[1];
 		const rest = line.slice(3).trim();
@@ -138,7 +139,7 @@ export function statusFiles(statusText: string): string[] {
 			const [from, to] = rest.split(" -> ");
 			if (from) paths.push(from);
 			if (to) paths.push(to);
-		} else if (x === "D" || y === "D") {
+		} else {
 			paths.push(rest);
 		}
 	}

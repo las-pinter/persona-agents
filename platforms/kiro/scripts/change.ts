@@ -12,7 +12,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { makeChange, reviewKey, untrackedFiles, failedChange, type Change } from "../../shared/review/review.ts";
 
@@ -30,17 +30,22 @@ export function git(cwd: string, args: string[]): GitResult {
 }
 
 /**
- * The worktree fingerprint: a content hash per changed file, in path order.
+ * The worktree fingerprint: a content hash and the mode per changed file, in
+ * path order.
  *
  * It hashes every changed file, tracked or not, and ignores the index, so the
- * same review key covers a change before and after `git add`.
+ * same review key covers a change before and after `git add`. The mode is part
+ * of the hash, so a `chmod` after a review changes the key.
  */
 export function signatureOf(cwd: string, files: string[]): string {
 	return [...files]
 		.sort()
 		.map((path) => {
 			try {
-				return `${path}:${createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex")}`;
+				// Git tracks only the executable bit, so the key does too.
+				const mode = statSync(join(cwd, path)).mode & 0o111 ? "exec" : "file";
+				const content = createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex");
+				return `${path}:${mode}:${content}`;
 			} catch {
 				return `${path}:missing`;
 			}

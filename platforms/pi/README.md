@@ -120,8 +120,8 @@ code without the author's reasoning.
 the extension reads the change and asks unless the change is trivial (at most
 two files and forty changed lines) or an `Approve` covers that exact key. The
 dialog offers: run the review now, commit anyway, stop asking for this session,
-or cancel. The gate never blocks a commit on its own tooling: if git fails, the
-commit proceeds.
+or cancel. When the change cannot be read, the gate asks rather than allowing
+silently.
 
 ## Compaction
 
