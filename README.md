@@ -115,7 +115,8 @@ git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents
 kiro-cli --agent pa-companion
 ```
 
-- `--theme <name>` picks the persona theme; the default is `goblin`. The next
+- `--theme <name>` picks the persona theme; a first install defaults to
+  `goblin`, and a rerun without the flag keeps the current theme. The next
   session picks it up.
 - The installer writes `~/.kiro/persona-agents/`, the 21 skills in
   `~/.kiro/skills/`, and the agents `pa-companion`, `pa-reviewer`, and
@@ -127,8 +128,10 @@ kiro-cli --agent pa-companion
 
 The native Kiro rules allow the read-only git and test commands. An unreviewed
 non-trivial commit, a push, or a pull request shows Kiro's own permission
-prompt. The automatic journal entry needs an interactive exit; a headless run
-gets none, so run the wrap-up skill there.
+prompt; a change of at most two files and forty changed lines counts as
+trivial. The automatic journal entry needs an interactive exit; a headless run
+gets none, so run the wrap-up skill there. The
+[Kiro adapter docs](platforms/kiro/README.md) hold the hook and gate details.
 
 ## How the companion works
 

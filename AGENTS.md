@@ -22,7 +22,8 @@ When a new version is released:
    - A change to `content/`, `platforms/kiro/`, or `platforms/shared/` needs
      the Kiro adapter update: `git pull` in the clone, then
      `./install.sh --kiro`. The payload under `$KIRO_HOME/persona-agents/` is a
-     copy, so a pull alone leaves the installed adapter on the old code.
+     copy, so a pull alone leaves the installed adapter on the old code. When
+     the clone is gone, re-clone it first; the payload cannot update itself.
    - A change to `platforms/claude/settings/recommended.json` or `install.sh`
      also needs `./install.sh` from an updated clone.
 
@@ -66,7 +67,8 @@ The doctrine lives in three places:
   `pa-reviewer`. A `PermissionRequest` hook allows a plain history command and
   a reviewed or trivial commit; anything else returns no decision, so Kiro's
   native prompt asks. A PreToolUse hook denies the reviewer every shell write
-  and history command.
+  and every command that writes history or publishes; reading git history is
+  allowed.
 
 `platforms/claude/README.md` and `platforms/kiro/README.md` hold the hook
 details.

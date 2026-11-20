@@ -52,8 +52,9 @@ lacks the marker; `--force` renames it to `<name>.bak-<timestamp>` and replaces
 it.
 A version below 3.4.0 is refused before any write.
 
-Update with `git pull` and a rerun of `./install.sh`. A changed file is backed
-up as `<file>.bak-<timestamp>`; an unchanged run writes no backup. Start the
+Update with `git pull` and a rerun of `./install.sh`. A file whose text the
+installer would change is backed up as `<file>.bak-<timestamp>`; a file that
+already matches is left alone, so an unchanged run writes no backup. Start the
 companion with:
 
 ```bash
@@ -101,7 +102,8 @@ The payload keeps the repository layout so the relative imports between
   model is pinned: the owner's session model is used.
 - **`pa-reviewer`** — read-only, separate context. Tools `read`, `web`,
   `shell`; no file-write tool. Its `permissions.rules` deny every `fs_write`,
-  and a PreToolUse hook blocks shell writes, git history, and publish commands.
+  and a PreToolUse hook blocks shell writes and every command that writes
+  history or publishes (commit, tag, push). Reading git history is allowed.
 - **`pa-writer`** — the journal writer. Tools `[]`; no permissions. It writes
   the entry text from the material the SessionEnd net gives it.
 
@@ -124,8 +126,17 @@ session.
 Kiro passes the event as JSON on stdin with `session_id`, `hook_event_name`,
 and `cwd`; a tool event adds `tool_name` and `tool_input`, and
 `PermissionRequest` adds `permission`. `SessionEnd` adds `reason` (`shutdown`
-on interactive teardown). Hooks live in the payload and are called with
-`--kiro-home=<home>`; the scripts also take `--home=` and `--cwd=` in tests.
+on interactive teardown).
+
+```json
+{"session_id":"sess_<uuid>","hook_event_name":"SessionStart","cwd":"/repo"}
+{"session_id":"sess_<uuid>","hook_event_name":"PreToolUse","cwd":"/repo","tool_name":"execute_bash","tool_input":{"command":"git status"}}
+{"session_id":"sess_<uuid>","hook_event_name":"PermissionRequest","cwd":"/repo","tool_name":"execute_bash","tool_input":{"command":"git push"},"permission":{"capability":"shell","command":"git push"}}
+{"session_id":"sess_<uuid>","hook_event_name":"SessionEnd","cwd":"/repo","reason":"shutdown"}
+```
+
+Hooks live in the payload and are called with `--kiro-home=<home>`; the scripts
+also take `--home=` (the notes home, for tests) and `--cwd=` in tests.
 
 ## Review
 
@@ -137,8 +148,11 @@ passes the brief to the `pa-reviewer` sub-agent.
 The verdict is recorded from the session store, not from a PostToolUse hook: a
 sub-agent run is written as `sub_agent_start` / `sub_agent_complete` with
 `subSessionId`, `subAgentName`, `prompt`, `response`, and `status`. The `Stop`
-hook reads the `Change key:` line in the prompt and the `## Verdict` line in
-the response, and stores one record per key and sub-session.
+hook runs after the turn and reads the `Change key:` line (16 lowercase hex
+characters) in the prompt, or the full brief from the tool result before the
+run when the model passed only part of it, and stores one record per key and
+sub-session with the `## Verdict` line. The record exists from the next turn
+on, so a commit later in the session sees it.
 
 ## The commit gate
 
@@ -167,8 +181,10 @@ for a used skill and says not to re-read working source files.
 
 ## Journal
 
-The good path is the `wrap-up` skill: `journal.ts path --session=<id>` names
-this session's entry, and `fs_write` writes it. Each session has its own file.
+The good path is the `wrap-up` skill:
+`node --experimental-strip-types --no-warnings <payload>/platforms/kiro/scripts/journal.ts
+path --session=<id>` names this session's entry, and `fs_write` writes it.
+Each session has its own file.
 
 The safety net runs on `SessionEnd` for an interactive exit. When the session
 has no entry and has material, it writes a payload and detaches
@@ -180,7 +196,8 @@ run the wrap-up there. A failed writer is silent by design.
 
 ## Retro
 
-`/retro` is print-only. The Kiro branch of the shared skill runs `retro.ts
+`/retro` is print-only. The Kiro branch of the shared skill runs
+`node --experimental-strip-types --no-warnings <payload>/platforms/kiro/scripts/retro.ts
 --session=<id>`, which reads the V3 store and the adapter state: tool calls,
 files changed, denied calls, compactions, stored review verdicts, permission
 decisions, credit split, context usage, sub-agent runs, hook invocations, the
@@ -195,8 +212,9 @@ and `subagent`; an unmatched call is `ask`.
 
 - The companion may read the project, `~/agent-notes`, and the payload; it may
   write the project and `~/agent-notes`; it may load any installed skill and
-  spawn `pa-reviewer`; it may run the read-only git commands and the test
-  commands without a prompt.
+  spawn `pa-reviewer`; it may run the read-only git commands, the test
+  commands, and a node script (the adapter scripts include the review brief,
+  the retro facts, and the journal path) without a prompt.
 - Both agents deny secret paths: `**/.env`, `**/.env.*`, `**/.ssh/**`,
   `**/.aws/**`, `**/*.pem`, `**/id_rsa*`, `**/.netrc`.
 - The companion may not write the payload, the `pa-*` agent files, the skill
@@ -206,7 +224,8 @@ and `subagent`; an unmatched call is `ask`.
 
 The decision log is `<state>/decisions.ndjson`; review records are
 `<state>/reviews.json`. State lives in `$KIRO_HOME/persona-agents/state/` and
-survives an update.
+survives an update. Edit `permissions.rules` in the installed agent file to
+tune the rules; a new session picks the change up.
 
 ## Gaps
 
