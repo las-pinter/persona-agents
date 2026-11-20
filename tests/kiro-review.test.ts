@@ -164,8 +164,27 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
-	test("an untracked directory's files all count", () => {
+	test("deleting or renaming a file after a review changes the key", () => {
 		withTemp((root) => {
+			const cwd = path.join(root, "delete-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "a\n");
+			fs.writeFileSync(path.join(cwd, "b.txt"), "b\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "changed\n");
+			const before = changeKey(cwd).key;
+			fs.rmSync(path.join(cwd, "b.txt"));
+			assert.notEqual(changeKey(cwd).key, before, "a deletion changes the key");
+			git(cwd, ["checkout", "--", "b.txt"]);
+			assert.equal(changeKey(cwd).key, before, "restoring the file restores the key");
+		});
+	});
+
+	test("an untracked directory's files all count", () => {		withTemp((root) => {
 			const cwd = path.join(root, "dir-repo");
 			fs.mkdirSync(cwd);
 			git(cwd, ["init"]);

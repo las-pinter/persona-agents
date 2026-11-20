@@ -118,7 +118,7 @@ describe("kiro doctrine: the companion", () => {
 			const context = ctx(cwd, stateDir);
 			assert.equal(commandDecision("companion", "git commit -m x", context).verdict, "ask");
 			const { key } = changeKey(cwd);
-			recordReview(stateDir, key, { verdict: "Approve", at: "2026-11-20T00:00:00Z" });
+			recordReview(stateDir, key, { verdict: "Approve", at: "2026-11-20T00:00:00Z", subSession: "sub-1" });
 			assert.equal(commandDecision("companion", "git commit -m x", context).verdict, "allow");
 			fs.appendFileSync(path.join(cwd, "a.txt"), "more\n");
 			assert.equal(commandDecision("companion", "git commit -m x", context).verdict, "ask");
@@ -130,10 +130,22 @@ describe("kiro doctrine: the companion", () => {
 			const cwd = repoWithChange(root);
 			const stateDir = path.join(root, "state");
 			const { key } = changeKey(cwd);
-			recordReview(stateDir, key, { verdict: "Request Changes", at: "2026-11-20T00:00:00Z" });
+			recordReview(stateDir, key, { verdict: "Request Changes", at: "2026-11-20T00:00:00Z", subSession: "sub-1" });
 			const decision = commandDecision("companion", "git commit -m x", ctx(cwd, stateDir));
 			assert.equal(decision.verdict, "ask");
 			assert.match(decision.reason, /Request Changes/);
+		});
+	});
+
+	test("a review record without a sub-session does not unlock the commit", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const stateDir = path.join(root, "state");
+			const { key } = changeKey(cwd);
+			recordReview(stateDir, key, { verdict: "Approve", at: "2026-11-20T00:00:00Z" });
+			const decision = commandDecision("companion", "git commit -m x", ctx(cwd, stateDir));
+			assert.equal(decision.verdict, "ask");
+			assert.match(decision.reason, /no independent review/);
 		});
 	});
 });

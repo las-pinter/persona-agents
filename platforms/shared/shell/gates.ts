@@ -46,6 +46,21 @@ const GIT_PLAIN_OPTIONS = new Set([
 const GIT_PATH_OPTIONS = new Set(["-C", "--git-dir", "--work-tree", "--namespace"]);
 /** Global options that only print and exit; the rest of the line is not run as a subcommand. */
 const GIT_INFO_OPTIONS = new Set(["--version", "--help"]);
+
+/** The git subcommand after its global options. */
+export function gitSubcommand(args: string[]): { sub: string; rest: string[]; unknown: boolean } {
+	let i = 0;
+	while (i < args.length && args[i].startsWith("-")) {
+		const arg = args[i];
+		if (GIT_INFO_OPTIONS.has(arg)) return { sub: "", rest: [], unknown: false };
+		if (GIT_PLAIN_OPTIONS.has(arg)) i += 1;
+		else if (GIT_PATH_OPTIONS.has(arg)) i += 2;
+		else if (arg.startsWith("--") && GIT_PATH_OPTIONS.has(arg.split("=")[0])) i += 1;
+		// An unknown option may take the next token, so the subcommand is unknown.
+		else return { sub: "", rest: [], unknown: true };
+	}
+	return { sub: args[i] ?? "", rest: args.slice(i + 1), unknown: false };
+}
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);
 /** Commands that change files. */
@@ -357,25 +372,15 @@ function classify(command: string, args: string[]): Hit[] {
 		return ["write"];
 	}
 	if (command !== "git") return [UNGATED];
-	let i = 0;
-	while (i < args.length && args[i].startsWith("-")) {
-		const arg = args[i];
-		if (GIT_INFO_OPTIONS.has(arg)) return [UNGATED];
-		if (GIT_PLAIN_OPTIONS.has(arg)) i += 1;
-		else if (GIT_PATH_OPTIONS.has(arg)) i += 2;
-		else if (arg.startsWith("--") && GIT_PATH_OPTIONS.has(arg.split("=")[0])) i += 1;
-		// An unknown option may take the next token, so the subcommand is unknown.
-		else return ["publish"];
-	}
-	const sub = args[i];
+	const { sub, rest, unknown } = gitSubcommand(args);
+	if (unknown) return ["publish"];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
 	if (!sub) return [UNGATED];
 	if (!GIT_HISTORY.has(sub)) {
 		// A read that writes its output to a file (`git diff --output=x`) is a write.
-		if (args.slice(i + 1).some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
-		return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(args.slice(i + 1))) ? [UNGATED] : ["write"];
+		if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
+		return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(rest)) ? [UNGATED] : ["write"];
 	}
-	const rest = args.slice(i + 1);
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
 	const short = (letters: string): boolean => rest.some((arg) => /^-[^-]/.test(arg) && [...letters].some((l) => arg.includes(l)));

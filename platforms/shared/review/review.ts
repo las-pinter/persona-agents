@@ -16,6 +16,7 @@
 
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
+import { commandSegments, gitSubcommand, shellWords, unwrapSegment } from "../shell/gates.ts";
 import { studyIndexRows } from "../notes/notes.ts";
 
 /** The verdict a reviewer may return, in the order the sentence reads. */
@@ -117,6 +118,33 @@ export function untrackedFiles(statusText: string): string[] {
 		.filter((path) => path !== "" && !path.endsWith("/"));
 }
 
+/**
+ * The deleted and renamed paths from `git status --porcelain`.
+ *
+ * `git diff` writes `+++ /dev/null` for a deletion and may show a rename as a
+ * delete plus an add, so the status text is the reliable source. These paths
+ * join `files` and the content signature, so deleting or renaming a file after
+ * a review changes the key.
+ */
+export function statusFiles(statusText: string): string[] {
+	const paths: string[] = [];
+	for (const line of statusText.split("\n")) {
+		if (line.length < 4) continue;
+		const x = line[0];
+		const y = line[1];
+		const rest = line.slice(3).trim();
+		if (rest === "") continue;
+		if (x === "R" || y === "R" || x === "C" || y === "C") {
+			const [from, to] = rest.split(" -> ");
+			if (from) paths.push(from);
+			if (to) paths.push(to);
+		} else if (x === "D" || y === "D") {
+			paths.push(rest);
+		}
+	}
+	return paths;
+}
+
 /** The number of lines in a text; a trailing newline does not add a line. */
 export function countLines(text: string): number {
 	if (text === "") return 0;
@@ -134,7 +162,7 @@ export function countLines(text: string): number {
  */
 export function makeChange(diffText: string, statusText: string, signature = "", untrackedTexts: string[] = []): Change {
 	const untracked = untrackedFiles(statusText);
-	const files = [...new Set([...diffFiles(diffText), ...untracked])];
+	const files = [...new Set([...diffFiles(diffText), ...untracked, ...statusFiles(statusText)])];
 	const counts = countDiffLines(diffText);
 	// A kilobyte counts as one line-equivalent, so a large single-line file (a
 	// bundle, a blob) cannot pass the line limit by having one line.
@@ -206,9 +234,22 @@ export function commitGate(input: GateInput): { verdict: GateVerdict; reason: st
 	return { verdict: "ask", reason: "this change has no independent review, so the commit needs your approval" };
 }
 
-/** True when a shell command is a plain `git commit`. */
+/**
+ * True when a shell command runs `git commit`, including through `sudo`, an
+ * env assignment, or a git global option (`git --no-pager commit`). The
+ * subcommand comes from the shared shell classifier, so this cannot drift from
+ * the gate.
+ */
 export function isCommitCommand(command: string): boolean {
-	return /(^|[;&|]\s*)(sudo\s+)?git\s+(-[^\s]+\s+\S+\s+)*commit\b/.test(command);
+	for (const raw of commandSegments(command)) {
+		const words = shellWords(unwrapSegment(raw));
+		let i = 0;
+		if (words[i] === "sudo") i++;
+		while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
+		if (words[i] !== "git") continue;
+		if (gitSubcommand(words.slice(i + 1)).sub === "commit") return true;
+	}
+	return false;
 }
 
 /**

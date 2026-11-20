@@ -76,7 +76,10 @@ details.
 Accepted risks: `rebase --exec` and `rebase -i` are allowed. `git -C` to
 another repository is allowed, and the hooks and config of that repository
 run. `gh workflow run` and `gh api` carry no gate entry by owner choice, so
-Claude Code's own permission flow decides them.
+Claude Code's own permission flow decides them. The Kiro companion may run a
+`node` script, so a determined companion can write the review store; the gate
+ignores a record with no sub-session, but it guards against mistakes, not
+against the agent itself.
 
 ## Adding content
 

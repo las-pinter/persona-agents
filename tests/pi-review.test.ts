@@ -169,6 +169,10 @@ describe("pi review: the commit gate", () => {
 		assert.equal(isCommitCommand("git commit -m 'ai: x'"), true);
 		assert.equal(isCommitCommand("cd sub && git commit -m x"), true);
 		assert.equal(isCommitCommand("git -C repo commit -m x"), true);
+		assert.equal(isCommitCommand("git --no-pager commit -m x"), true);
+		assert.equal(isCommitCommand("git -p commit -m x"), true);
+		assert.equal(isCommitCommand("git --git-dir=.git commit -m x"), true);
+		assert.equal(isCommitCommand("sudo git --no-pager commit -m x"), true);
 		assert.equal(isCommitCommand("git status"), false);
 		assert.equal(isCommitCommand("echo 'git commit'"), false);
 		assert.equal(isCommitCommand("git log --grep commit"), false);
