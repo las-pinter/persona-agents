@@ -6,7 +6,7 @@
  * text they are given, so the counts are testable and no renderer holds logic.
  */
 
-import { oneLine, parseVerdict } from "./review.ts";
+import { oneLine, parseVerdict } from "../../shared/review/review.ts";
 
 /** What a review's one line needs. */
 export interface ReviewSummary {

@@ -36,6 +36,7 @@ eyes is the point of a review.
 - **Claude Code**
 - **Node.js** (the minimum is `engines.node` in `package.json`) — for the hooks
 - **`jq`** — for `install.sh`
+- **Kiro CLI 3.4.0+** (optional) — for the Kiro adapter
 
 ## Install
 
@@ -48,8 +49,8 @@ Then merge the recommended settings into your user `settings.json`:
 
 ```bash
 git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents
-~/persona-agents/install.sh --dry-run   # preview
-~/persona-agents/install.sh
+~/persona-agents/install.sh --claude --dry-run   # preview
+~/persona-agents/install.sh --claude
 ```
 
 > **Review `install.sh` before you run it.** It changes
@@ -100,6 +101,38 @@ Policy lives in `~/.pi/agent/persona-agents/policy.json`, and per repository in
 commands, writes to git hooks and the gate's own files) cannot be loosened from
 either file.
 
+## Install on Kiro CLI
+
+The same content runs on [Kiro CLI](https://kiro.dev) 3.4.0 or newer through
+the adapter in [platforms/kiro/](platforms/kiro/README.md). The installer
+copies a self-contained payload, so a moved or deleted clone does not break the
+install.
+
+```bash
+git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents
+~/persona-agents/install.sh --kiro --dry-run   # preview
+~/persona-agents/install.sh --kiro --theme goblin
+kiro-cli --agent pa-companion
+```
+
+- `--theme <name>` picks the persona theme; a first install defaults to
+  `goblin`, and a rerun without the flag keeps the current theme. The next
+  session picks it up.
+- The installer writes `~/.kiro/persona-agents/`, the skills in
+  `~/.kiro/skills/`, and the agents `pa-companion`, `pa-reviewer`, and
+  `pa-writer`. It never changes `chat.defaultAgent`; it warns when that setting
+  names an agent that does not exist.
+- A skill folder it does not own stops the install; `--force` backs it up and
+  replaces it.
+- Update with `git pull` and a rerun of `./install.sh`.
+
+The native Kiro rules allow the read-only git and test commands. An unreviewed
+non-trivial commit, a push, or a pull request shows Kiro's own permission
+prompt; a change of at most two files and forty changed lines counts as
+trivial. The automatic journal entry needs an interactive exit; a headless run
+gets none, so run the wrap-up skill there. The
+[Kiro adapter docs](platforms/kiro/README.md) hold the hook and gate details.
+
 ## How the companion works
 
 - **Session start.** A hook gives the companion its read list: the project
@@ -113,19 +146,21 @@ either file.
   changes there first, then in the code.
 - **Review.** Before a non-trivial commit, the adapter runs a read-only
   reviewer in a separate context. It cannot edit files or run shell writes. On
-  Pi, a commit of an unreviewed non-trivial change asks first.
+  Pi and Kiro CLI, a commit of an unreviewed non-trivial change asks first.
 - **Commits.** The companion commits finished tasks without a prompt. A push, a
   pull request, or a release always asks you.
 - **Compaction.** Before a compaction, the adapter records the skills the
   session used, the session notes, and the pinned documents. After it, the
   companion reloads them before it continues — so the plan, the skills, and the
   key documents survive.
-- **Wrap-up.** On Pi `/skill:wrap-up`, on Claude Code `/persona-agents:wrap-up`;
-  either writes this session's journal entry.
+- **Wrap-up.** On Pi `/skill:wrap-up`, on Claude Code
+  `/persona-agents:wrap-up`, on Kiro CLI `/wrap-up`; each writes this session's
+  journal entry.
   Each session writes its own file, so parallel sessions never collide. If you
   exit without a wrap-up, a background writer creates a shorter entry for you.
-- **Retro.** `/retro` on Pi, `/persona-agents:retro` on Claude Code: a blameless
-  review of the session with findings and actions. It writes no files.
+- **Retro.** `/retro` on Pi and Kiro CLI, `/persona-agents:retro` on Claude
+  Code: a blameless review of the session with findings and actions. It writes
+  no files.
 
 Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
 the repository's folder name (shared by all its worktrees), or `common`
@@ -154,7 +189,8 @@ stay persona-free.
 
 ## Contributing
 
-The plugin internals are in [platforms/claude/README.md](platforms/claude/README.md);
-the Pi adapter is in [platforms/pi/README.md](platforms/pi/README.md).
+The plugin internals are in [platforms/claude/README.md](platforms/claude/README.md),
+the Pi adapter in [platforms/pi/README.md](platforms/pi/README.md), and the
+Kiro CLI adapter in [platforms/kiro/README.md](platforms/kiro/README.md).
 The release ritual and the commit rule live in `AGENTS.md`. The steps to add a
 theme, a persona, or a skill live in [docs/adding-content.md](docs/adding-content.md).

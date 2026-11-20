@@ -1,5 +1,5 @@
 /**
- * Project notes paths for the Pi adapter.
+ * Project notes paths for the adapters.
  *
  *   <home>/agent-notes/project-notes/<project>/
  *

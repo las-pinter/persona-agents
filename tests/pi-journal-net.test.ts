@@ -1,5 +1,5 @@
 /**
- * The journal safety net (platforms/pi/scripts/journal-net.ts and
+ * The journal safety net (platforms/shared/notes/journal-net.ts and
  * journal-writer.ts).
  *
  * The writer runs end to end here with a stub `pi` command, so the suite never
@@ -26,8 +26,8 @@ import {
 	writtenSessionNotes,
 	type EntryLike,
 	type Payload,
-} from "../platforms/pi/scripts/journal-net.ts";
-import { entryPath } from "../platforms/pi/scripts/journal.ts";
+} from "../platforms/shared/notes/journal-net.ts";
+import { entryPath } from "../platforms/shared/notes/journal.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const writer = path.join(repoRoot, "platforms", "pi", "scripts", "journal-writer.ts");

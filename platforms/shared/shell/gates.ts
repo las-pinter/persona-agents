@@ -46,12 +46,34 @@ const GIT_PLAIN_OPTIONS = new Set([
 const GIT_PATH_OPTIONS = new Set(["-C", "--git-dir", "--work-tree", "--namespace"]);
 /** Global options that only print and exit; the rest of the line is not run as a subcommand. */
 const GIT_INFO_OPTIONS = new Set(["--version", "--help"]);
+
+/** The git subcommand after its global options. */
+export function gitSubcommand(args: string[]): { sub: string; rest: string[]; unknown: boolean; pathOption: boolean } {
+	let i = 0;
+	let pathOption = false;
+	while (i < args.length && args[i].startsWith("-")) {
+		const arg = args[i];
+		if (GIT_INFO_OPTIONS.has(arg)) return { sub: "", rest: [], unknown: false, pathOption };
+		if (GIT_PLAIN_OPTIONS.has(arg)) i += 1;
+		else if (GIT_PATH_OPTIONS.has(arg)) {
+			pathOption = true;
+			i += 2;
+		} else if (arg.startsWith("--") && GIT_PATH_OPTIONS.has(arg.split("=")[0])) {
+			pathOption = true;
+			i += 1;
+		}
+		// An unknown option may take the next token, so the subcommand is unknown.
+		else return { sub: "", rest: [], unknown: true, pathOption };
+	}
+	return { sub: args[i] ?? "", rest: args.slice(i + 1), unknown: false, pathOption };
+}
 /** `git tag` with only these options lists tags; anything else writes. */
 const GIT_TAG_LIST_OPTIONS = new Set(["-l", "--list", "-n", "--contains", "--no-contains", "--points-at", "--merged", "--no-merged", "--sort", "--column", "--no-column"]);
 /** Commands that change files. */
 const WRITE_COMMANDS = new Set([
 	"cp", "mv", "rsync", "rm", "rmdir", "tee", "dd", "truncate", "install", "ln", "mkdir", "touch",
 	"chmod", "chown", "chgrp", "patch", "shred", "unlink", "scp", "curl", "wget",
+	"unzip", "gunzip", "bunzip2", "xz", "zstd",
 ]);
 /** Commands that change files only with an in-place flag (`sed -i`, `perl -pi`). */
 const IN_PLACE_COMMANDS = new Set(["sed", "perl", "ruby"]);
@@ -77,7 +99,10 @@ const PREFIX_VALUE_OPTIONS: Record<string, Set<string>> = {
 	xargs: new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"]),
 };
 /** Names a fail-closed scan looks for in a command the parser cannot read. */
-const GATED_WORD = /(?<=^|[\s;&|(`$'"/\\])(git|gh|cp|mv|rsync|rm|tee)(?=\s|$|['"])/;
+const GATED_PROGRAMS = ["git", "gh", ...WRITE_COMMANDS, ...IN_PLACE_COMMANDS];
+const GATED_WORD = new RegExp(
+	"(?<=^|[\\s;&|(`$'\"/\\\\])(" + GATED_PROGRAMS.join("|") + ")(?=\\s|$|['\"])",
+);
 /** A plain file path in a heredoc header: no quotes, expansions, or operators. */
 const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
 const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;
@@ -345,6 +370,8 @@ function longOption(arg: string, long: string, min: number): boolean {
 function classify(command: string, args: string[]): Hit[] {
 	if (WRITE_COMMANDS.has(command)) return ["write"];
 	if (IN_PLACE_COMMANDS.has(command) && args.some((arg) => /^-[a-zA-Z]*i/.test(arg) || arg.startsWith("--in-place"))) return ["write"];
+	if (command === "find" && args.some((arg) => ["-delete", "-exec", "-execdir", "-ok", "-okdir"].includes(arg))) return ["write"];
+	if (command === "tar" && args.some((arg) => /^-[a-zA-Z]*x/.test(arg) || arg === "--extract")) return ["write"];
 	if (command === "gh") {
 		// A global option before the subcommand (`gh -R owner/repo run list`) moves the
 		// word the gate reads, so skip the options first. `-R` and `--repo` take the
@@ -357,21 +384,15 @@ function classify(command: string, args: string[]): Hit[] {
 		return ["write"];
 	}
 	if (command !== "git") return [UNGATED];
-	let i = 0;
-	while (i < args.length && args[i].startsWith("-")) {
-		const arg = args[i];
-		if (GIT_INFO_OPTIONS.has(arg)) return [UNGATED];
-		if (GIT_PLAIN_OPTIONS.has(arg)) i += 1;
-		else if (GIT_PATH_OPTIONS.has(arg)) i += 2;
-		else if (arg.startsWith("--") && GIT_PATH_OPTIONS.has(arg.split("=")[0])) i += 1;
-		// An unknown option may take the next token, so the subcommand is unknown.
-		else return ["publish"];
-	}
-	const sub = args[i];
+	const { sub, rest, unknown } = gitSubcommand(args);
+	if (unknown) return ["publish"];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
 	if (!sub) return [UNGATED];
-	if (!GIT_HISTORY.has(sub)) return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(args.slice(i + 1))) ? [UNGATED] : ["write"];
-	const rest = args.slice(i + 1);
+	if (!GIT_HISTORY.has(sub)) {
+		// A read that writes its output to a file (`git diff --output=x`) is a write.
+		if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
+		return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(rest)) ? [UNGATED] : ["write"];
+	}
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
 	const short = (letters: string): boolean => rest.some((arg) => /^-[^-]/.test(arg) && [...letters].some((l) => arg.includes(l)));

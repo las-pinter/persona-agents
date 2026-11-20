@@ -1,9 +1,9 @@
 /**
  * What a compaction must not lose.
  *
- * Before Pi summarizes, the companion records the skills the session used, the
- * session notes file it wrote, and the documents it must read again. After the
- * summary lands, the reload list names them in order.
+ * Before the harness summarizes, the companion records the skills the session
+ * used, the session notes file it wrote, and the documents it must read again.
+ * After the summary lands, the reload list names them in order.
  *
  * The summary is lossy; the files are not. This manifest is the bridge: it says
  * which files to re-read, so the plan survives a compaction because it is on
@@ -16,7 +16,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
-import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../../shared/notes/notes.ts";
+import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../notes/notes.ts";
 
 /** The cap on skills reloaded after one compaction. */
 export const MAX_SKILLS = 12;

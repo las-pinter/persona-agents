@@ -1,6 +1,6 @@
 /**
  * The Pi reviewer: the change, the verdict, and the commit gate
- * (platforms/pi/scripts/review.ts).
+ * (platforms/shared/review/review.ts).
  *
  * Run: node --experimental-strip-types --test tests/pi-review.test.ts
  */
@@ -13,6 +13,7 @@ import {
 	deriveDecisions,
 	deriveTask,
 	diffFiles,
+	failedChange,
 	isCommitCommand,
 	isTrivial,
 	makeChange,
@@ -28,6 +29,8 @@ import {
 	reviewerPrompt,
 	REVIEWER_TIMEOUT_MS,
 	finalizeBrief,
+	isWorkingTreeScope,
+	UNCOMMITTED,
 	promptForBrief,
 	resolveDecisions,
 	studyRows,
@@ -35,7 +38,7 @@ import {
 	subjectQueries,
 	subjectsFromQueries,
 	untrackedFiles,
-} from "../platforms/pi/scripts/review.ts";
+} from "../platforms/shared/review/review.ts";
 
 const DIFF = [
 	"diff --git a/src/gate.ts b/src/gate.ts",
@@ -61,21 +64,49 @@ describe("pi review: reading a change", () => {
 		assert.deepEqual(countDiffLines(DIFF), { addedLines: 3, removedLines: 2 });
 	});
 
+	test("a body line that starts with -- or ++ still counts", () => {
+		const diff = ["diff --git a/x b/x", "@@ -1,2 +1,3 @@", " keep", "--old flag", "++new flag", "+--added", ""].join("\n");
+		assert.deepEqual(countDiffLines(diff), { addedLines: 2, removedLines: 1 });
+	});
+
 	test("a new file's diff names it even though the old side is /dev/null", () => {
 		const added = ["--- /dev/null", "+++ b/src/new.ts", "+hello", ""].join("\n");
 		assert.deepEqual(diffFiles(added), ["src/new.ts"]);
 	});
 
-	test("untracked paths come from git status", () => {
+	test("untracked paths come from git status, and a folder placeholder is ignored", () => {
 		const status = [" M src/gate.ts", "?? src/new.ts", "?? notes/", "A  staged.ts", ""].join("\n");
-		assert.deepEqual(untrackedFiles(status), ["src/new.ts", "notes/"]);
+		assert.deepEqual(untrackedFiles(status), ["src/new.ts"]);
 	});
 
 	test("a change merges the diff files and the untracked ones", () => {
-		const change = makeChange(DIFF, "?? src/new.ts\n", "sig");
+		const change = makeChange(DIFF, "?? src/new.ts\n", "sig", ["one\ntwo\nthree\n"]);
 		assert.deepEqual(change.files, ["src/gate.ts", "README.md", "src/new.ts"]);
 		assert.equal(change.signature, "sig");
-		assert.equal(change.addedLines, 3);
+		assert.equal(change.addedLines, 6);
+	});
+
+	test("an untracked file's lines count toward the trivial rule", () => {
+		const big = Array.from({ length: 100 }, (_, index) => `line ${index}`).join("\n");
+		const change = makeChange("", "?? src/new.ts\n", "", [big]);
+		assert.equal(change.addedLines, 100);
+		assert.equal(isTrivial(change), false);
+	});
+
+	test("a large single-line untracked file is not trivial either", () => {
+		const blob = "x".repeat(100 * 1024);
+		const change = makeChange("", "?? bundle.js\n", "", [blob]);
+		assert.ok(change.addedLines > 40);
+		assert.equal(isTrivial(change), false);
+	});
+
+	test("a failed git read asks, it never looks trivial", () => {
+		assert.equal(isTrivial(failedChange()), false);
+	});
+
+	test("a binary swap or a mode-only change is not trivial", () => {
+		assert.equal(isTrivial(makeChange("old mode 100644\nnew mode 100755\n", " M run.sh\n", "")), false);
+		assert.equal(isTrivial(makeChange("GIT binary patch\n", " M logo.png\n", "")), false);
 	});
 });
 
@@ -97,6 +128,14 @@ describe("pi review: the key and the trivial rule", () => {
 		assert.equal(isTrivial({ files: ["a"], addedLines: 41, removedLines: 0 }), false);
 		assert.equal(isTrivial(change), true);
 	});
+
+	test("an omitted scope is the working tree, a named scope is not", () => {
+		assert.equal(isWorkingTreeScope(""), true);
+		assert.equal(isWorkingTreeScope(UNCOMMITTED), true);
+		assert.equal(isWorkingTreeScope("main"), false);
+		assert.equal(isWorkingTreeScope("HEAD~1"), false);
+		assert.equal(isWorkingTreeScope("src/"), false);
+	});
 });
 
 describe("pi review: the verdict a reviewer states", () => {
@@ -107,6 +146,14 @@ describe("pi review: the verdict a reviewer states", () => {
 		assert.equal(parseVerdict("Verdict: Approve"), "Approve");
 		assert.equal(parseVerdict("## Verdict\n\n**Approve**"), "Approve");
 		assert.equal(parseVerdict("[Request Changes] — scope too wide"), "Request Changes");
+		assert.equal(parseVerdict("I cannot approve this change.\n\nVerdict: Request Changes — fix it."), "Request Changes");
+		assert.equal(parseVerdict("This is not an Approve.\n\nVerdict: Reject — wrong approach."), "Reject");
+		assert.equal(parseVerdict("Approve-ish at first; the final answer is Request Changes."), null);
+		assert.equal(parseVerdict("The change was not approved as-is."), null);
+		assert.equal(parseVerdict("## Issues\n- thing\n\nApprove once the test is added"), null);
+		assert.equal(parseVerdict("Approve — fine."), "Approve");
+		assert.equal(parseVerdict("## Verdict\n\nI cannot approve until X; Reject."), null);
+		assert.equal(parseVerdict("## Verdict\n\n[Approve | Request Changes | Reject] — one sentence"), null);
 	});
 
 	test("the Verdict section wins over an earlier mention", () => {
@@ -141,6 +188,10 @@ describe("pi review: the commit gate", () => {
 		assert.equal(isCommitCommand("git commit -m 'ai: x'"), true);
 		assert.equal(isCommitCommand("cd sub && git commit -m x"), true);
 		assert.equal(isCommitCommand("git -C repo commit -m x"), true);
+		assert.equal(isCommitCommand("git --no-pager commit -m x"), true);
+		assert.equal(isCommitCommand("git -p commit -m x"), true);
+		assert.equal(isCommitCommand("git --git-dir=.git commit -m x"), true);
+		assert.equal(isCommitCommand("sudo git --no-pager commit -m x"), true);
 		assert.equal(isCommitCommand("git status"), false);
 		assert.equal(isCommitCommand("echo 'git commit'"), false);
 		assert.equal(isCommitCommand("git log --grep commit"), false);

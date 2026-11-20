@@ -7,6 +7,25 @@ agent: persona-agents:reviewer
 background: false
 ---
 
+## Platform branch
+
+If your system context says `Running in Kiro CLI`, do not review the change
+yourself and do not write the brief yourself. Run
+
+```sh
+node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
+```
+
+with the scope the owner named; when none was named, omit the argument (an
+empty scope is the uncommitted change). Then start the `pa-reviewer` sub-agent
+with the printed text verbatim, including the final `Change key:` line. Read
+`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the rest. The text
+below is the reviewer's own prompt; it is not the companion's instructions.
+
+If your system context says `Running in Pi`, call the `review` tool with the
+scope (or run `/review`); do not review the change yourself and do not follow
+the text below. The tool starts the reviewer in its own process.
+
 # Review
 
 You are the independent reviewer of one change in this repository. You did not

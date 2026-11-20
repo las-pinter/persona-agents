@@ -153,7 +153,7 @@ const PIPELINE_FLOORS = [
 	{ re: /\b(curl|wget)\b[^|;&]*\|\s*(sudo\s+)?(ba|z|k|da)?sh\b/, reason: "piping a remote script into a shell is denied by the built-in floor" },
 ];
 /** A policy or extension file may not be rewritten by an agent it governs. */
-const GATE_FILES = /(^|[/\\])(\.git[/\\](hooks|config)([/\\]|$)|settings\.json$)/;
+const GATE_FILES = /(^|[/\\])(\.git[/\\](hooks|config)([/\\]|$))/;
 const GATE_FILES_REASON = "rewriting the gate's own files or git hooks is denied by the built-in floor";
 
 /** The real path when it exists, else the resolved path. */
@@ -366,6 +366,48 @@ function gateReason(hit: Hit): string {
 	return "a command outside the gates";
 }
 
+/**
+ * The first file argument of a write segment that lies outside the project and
+ * the notes, or null.
+ *
+ * The shell gate says a segment writes; this says where. A relative path is
+ * resolved against the session cwd, `~` against the home folder. A
+ * `--flag=value` path (such as `git diff --output=/tmp/x`) is checked by its
+ * value.
+ */
+function outsideWriteTarget(command: string, env: PolicyEnv): string | null {
+	for (const raw of commandSegments(command)) {
+		const segment = unwrapSegment(raw);
+		if (!gateCommand(segment).includes("write")) continue;
+		for (const word of shellWords(segment).slice(1)) {
+			const value = word.includes("=") ? word.slice(word.indexOf("=") + 1) : word;
+			if (value === "" || value.startsWith("-")) continue;
+			const path = absolutePath(value, env);
+			if (!isInside(path, env.cwd) && !isInside(path, env.notesDir)) return path;
+		}
+	}
+	return null;
+}
+
+/** The shell verbs a read-only profile may run, beyond the gated check. */
+const READ_SHELL_VERBS = new Set([
+	"ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "find", "tree", "file", "stat",
+	"diff", "jq", "git", "gh", "true", "echo", "printf", "which", "type", "test",
+]);
+
+/** True when every segment of a command is a read or a test. */
+function readOnlyShell(command: string): boolean {
+	for (const raw of commandSegments(command)) {
+		const words = shellWords(unwrapSegment(raw));
+		const verb = words[0] ?? "";
+		if (verb === "node" && words.slice(1).some((word) => word === "--test" || word.startsWith("--test="))) continue;
+		if (verb === "npx" && ["tsc", "shellcheck"].includes(words[1] ?? "")) continue;
+		if (verb === "npm" && words[1] === "test") continue;
+		if (!READ_SHELL_VERBS.has(verb)) return false;
+	}
+	return true;
+}
+
 /** The built-in verdict for a tool call, with no policy file involved. */
 export function doctrineDecision(profile: Profile, tool: string, input: Record<string, unknown>, env: PolicyEnv): Decision {
 	if (tool === "bash") {
@@ -381,13 +423,24 @@ export function doctrineDecision(profile: Profile, tool: string, input: Record<s
 					matched: command,
 				};
 			}
+			if (!readOnlyShell(command)) {
+				return {
+					verdict: "deny",
+					reason: "this agent is read-only: it may run reads and tests only",
+					source: "doctrine",
+					matched: command,
+				};
+			}
 			return { verdict: "allow", reason: "a read-only shell command", source: "doctrine" };
 		}
 		// A redirect is a write, so the same place rule applies: inside the
-		// project or the notes, nowhere else.
-		const outside = redirectTargets(command)
-			.map((target) => absolutePath(target, env))
-			.find((path) => !isInside(path, env.cwd) && !isInside(path, env.notesDir));
+		// project or the notes, nowhere else. A write command's path arguments
+		// are checked the same way.
+		const outside =
+			outsideWriteTarget(command, env) ??
+			redirectTargets(command)
+				.map((target) => absolutePath(target, env))
+				.find((path) => !isInside(path, env.cwd) && !isInside(path, env.notesDir));
 		if (outside) {
 			return {
 				verdict: "deny",

@@ -7,7 +7,7 @@
  * review the session against evidence instead of its own memory.
  */
 
-import type { EntryLike } from "./manifest.ts";
+import type { EntryLike } from "../compaction/manifest.ts";
 
 /** One line of the decisions log. */
 export interface DecisionLine {

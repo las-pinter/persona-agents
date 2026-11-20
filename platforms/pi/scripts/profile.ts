@@ -13,7 +13,7 @@
 
 export const AGENT_PREFIX = "persona-agents:";
 /** The theme used when neither the flag nor the settings name one. */
-export const DEFAULT_THEME = "goblin";
+export { DEFAULT_THEME } from "../../shared/context/context.ts";
 
 export type ProfileName = "companion" | "reviewer";
 
@@ -78,7 +78,7 @@ export function isAgentId(value: string): boolean {
 export function profileOf(value: string | undefined | null): Profile | null {
 	if (typeof value !== "string" || !isAgentId(value)) return null;
 	const name = value.slice(AGENT_PREFIX.length);
-	return name in PROFILES ? PROFILES[name as ProfileName] : null;
+	return Object.hasOwn(PROFILES, name) ? PROFILES[name as ProfileName] : null;
 }
 
 /** The profiles as an error message lists them. */

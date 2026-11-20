@@ -14,17 +14,26 @@ behind one Pi extension. Nothing in `content/` knows which harness runs it.
 - **Extension** (`platforms/pi/extensions/index.ts`): the wiring only. It
   registers `--agent` and `--persona`, connects the events and commands to the
   pure modules below, and collapses every surface it prints. All logic lives in
-  `scripts/`.
-- **Scripts** (`platforms/pi/scripts/`): pure TypeScript, no Pi imports, so
-  `node:test` can exercise every decision without starting a Pi process.
+  the shared modules and the Pi-only scripts.
+- **Scripts** (`platforms/pi/scripts/`): the Pi-only modules, pure TypeScript
+  with no Pi imports, so `node:test` can exercise every decision without
+  starting a Pi process.
   - `profile.ts` — the agent ids, their tools, and what they may do.
-  - `context.ts` — the prompt sections from `content/`, and the platform note.
-  - `notes.ts`, `journal.ts`, `notes-paths.ts` — the notes tree and read list.
+  - `context.ts` — the Pi platform note over the shared prompt builder.
   - `policy.ts` — the permission gate: floors, rules, grants, doctrine.
   - `commands.ts` — the `/permissions` argument grammar.
-- **Shared parser** (`platforms/shared/shell/`): the shell lexer, the nested
-  construct grammar, and the gate classification. The Claude doctrine hook and
-  the Pi gate both import it, so one parser owns every safety decision.
+  - `paths.ts` — the package paths; `journal-writer.ts` — the detached writer.
+- **Shared modules** (`platforms/shared/`): the logic every adapter uses.
+  - `shell/` — the shell lexer, the nested construct grammar, and the gate
+    classification. The Claude doctrine hook and the Pi gate both import it, so
+    one parser owns every safety decision.
+  - `notes/` — the notes tree, the startup read list, the journal paths, and
+    the journal safety-net material.
+  - `compaction/` — the reload manifest.
+  - `review/` — the change, the brief, the verdict, and the commit gate.
+  - `retro/` — the session facts and the retro instruction.
+  - `context/` — the prompt sections built from `content/`; each adapter adds
+    its platform note.
 - **Types** (`platforms/pi/types/pi-api.d.ts`): a mirror of the Pi extension
   API this package uses, so a renamed event fails `npm run typecheck` instead
   of failing silently in a session. Pi supplies the real module at runtime.
@@ -74,8 +83,8 @@ code without the author's reasoning.
   agent file (`tests/pi-package.test.ts` fails when they drift) plus Pi
   frontmatter: `tools: read, grep, find, ls, bash`. Bash stays because the
   reviewer runs the test suite once; there is no Edit or Write tool at all.
-- **`scripts/review.ts`** is pure: it reads a diff and a status into a
-  `Change`, names it with a 16-character hash (`reviewKey`), parses the
+- **`platforms/shared/review/review.ts`** is pure: it reads a diff and a status
+  into a `Change`, names it with a 16-character hash (`reviewKey`), parses the
   verdict, and decides the gate.
 - The review starts from a **three-field brief**, never a checklist: `Scope`
   (a ref, a range, or paths), `Task` (one line: goal and study task id), and
@@ -103,14 +112,16 @@ code without the author's reasoning.
 - The verdict is read from the reviewer's `## Verdict` line and **stored against
   the key of the exact change** (a session entry, restored on reload), so a
   review covers what it reviewed and nothing else. An untracked file edited
-  after its review changes the key.
+  after its review changes the key. A review with a named ref, range, or path
+  scope names no key: it did not see the whole working tree, so it does not
+  unlock a commit.
 
 **The commit gate.** When the companion runs a `git commit` that policy allows,
 the extension reads the change and asks unless the change is trivial (at most
 two files and forty changed lines) or an `Approve` covers that exact key. The
 dialog offers: run the review now, commit anyway, stop asking for this session,
-or cancel. The gate never blocks a commit on its own tooling: if git fails, the
-commit proceeds.
+or cancel. When the change cannot be read, the gate asks rather than allowing
+silently.
 
 ## Collapsed output
 
@@ -182,9 +193,9 @@ A session that ends without a wrap-up still leaves an entry.
 `/retro` is print-only. It reads the facts rather than the model's memory: the
 decisions log for this session (`verdict`, `source`, `reason` per tool call),
 the tool calls and changed files from the branch entries, the compactions, the
-stored review verdicts, and the journal entry when one exists. `scripts/retro.ts`
-does the counting and the caps; the command sends the facts plus the instruction
-to write nothing durable.
+stored review verdicts, and the journal entry when one exists.
+`platforms/shared/retro/retro.ts` does the counting and the caps; the command
+sends the facts plus the instruction to write nothing durable.
 
 ## Permissions
 

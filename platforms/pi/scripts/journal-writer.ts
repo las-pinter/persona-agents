@@ -17,8 +17,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
-import { entryPath } from "./journal.ts";
-import { hasMaterial, writerPrompt, type Payload } from "./journal-net.ts";
+import { entryPath } from "../../shared/notes/journal.ts";
+import { hasMaterial, writerPrompt, type Payload } from "../../shared/notes/journal-net.ts";
 
 const WRITER_TIMEOUT_MS = 180_000;
 

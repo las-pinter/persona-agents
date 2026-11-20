@@ -4,6 +4,13 @@ description: Print-only blameless retrospective of the current companion session
 disable-model-invocation: true
 ---
 
+## Platform branch
+
+If your system context says `Running in Kiro CLI`, first read
+`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md`. It names the script that
+prints this session's facts and says which parts of this file apply. Write
+nothing durable either way.
+
 # Retro
 
 ## Purpose

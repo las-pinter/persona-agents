@@ -1,5 +1,6 @@
 /**
- * The session notes format and the lookups both adapters share.
+ * The session notes format, the lookups, and the startup read list every
+ * adapter shares.
  *
  * A session notes file names the sessions that worked on its task:
  *
@@ -10,12 +11,17 @@
  * transcript still supplies the skills and the read documents; it is not the
  * only way to the plan.
  *
- * The scans here are pure or read the notes tree only. Each adapter keeps its
- * own startup, summary, and reload wording; only the parsing is shared.
+ * The read list names paths and short facts, never file contents: the
+ * companion reads the files itself. The scans here read the notes tree only;
+ * each adapter keeps its own summary and reload wording.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
+import { recentEntries } from "./journal.ts";
+
+/** The most recent journal day folders read at session start. */
+export const JOURNAL_DAYS = 3;
 
 /** Study stages that count as unfinished. */
 export const UNFINISHED_STAGES = new Set(["draft", "ready", "in-progress"]);
@@ -136,4 +142,32 @@ export function activeSessionNotes(notesDir: string, sessionId: string, written:
 	if (lastWritten) return lastWritten;
 	const open = openSessionNotes(notesDir);
 	return open.length === 1 ? open[0] : "";
+}
+
+const bullets = (items: string[]): string[] => (items.length ? items.map((item) => `- ${item}`) : ["- none"]);
+
+/** The startup context text for a project notes folder. */
+export function startupContext(notesDir: string, project: string, sessionId = ""): string {
+	const summary = join(notesDir, "summary.md");
+	const rules = projectRules(notesDir);
+	const lines = [
+		"# Session start: read list",
+		"",
+		`Project: ${project}`,
+		`Project notes folder: ${notesDir}${existsSync(notesDir) ? "" : " (does not exist yet)"}`,
+		...(sessionId ? [`Session id: ${sessionId}`] : []),
+		"",
+		"Before your first answer, read these in full (rules in this order, then the summary):",
+		...bullets([...rules, ...(existsSync(summary) ? [summary] : [])]),
+		"",
+		`Then read the journal of the last ${JOURNAL_DAYS} days with entries:`,
+		...bullets(recentEntries(notesDir, JOURNAL_DAYS)),
+		"",
+		"Open session notes (read each; offer to resume or close it):",
+		...bullets(openSessionNotes(notesDir)),
+		"",
+		"Unfinished studies (read a study only when the task names it):",
+		...bullets(unfinishedStudies(notesDir)),
+	];
+	return lines.join("\n");
 }

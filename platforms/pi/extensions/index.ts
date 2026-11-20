@@ -17,20 +17,25 @@
  * and no commands: a plain Pi session is unchanged. Every fault is contained:
  * a bad theme or an unreadable policy refuses the agent and says why, rather
  * than running half-configured.
+ *
+ * The file stays one module because every event handler shares the one session
+ * object; splitting it would thread that state through several files.
  */
 
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
-import { dayOf, entryPath, findEntry, recentJournal } from "../scripts/journal.ts";
-import { hasMaterial, sources, type Payload } from "../scripts/journal-net.ts";
-import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../scripts/manifest.ts";
+import { dayOf, entryPath, findEntry, recentJournal } from "../../shared/notes/journal.ts";
+import { hasMaterial, sources, type Payload } from "../../shared/notes/journal-net.ts";
+import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../../shared/compaction/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
-import { startupContext } from "../scripts/notes.ts";
+import { startupContext } from "../../shared/notes/notes.ts";
+import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import {
 	BUILTIN_TOOLS,
 	journalLine,
@@ -41,7 +46,6 @@ import {
 	summarizeReview,
 	toolCallLine,
 } from "../scripts/summary.ts";
-import { projectDir, projectName } from "../scripts/notes-paths.ts";
 import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
 import {
 	addRule,
@@ -60,14 +64,16 @@ import {
 	type Verdict,
 } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
-import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../scripts/retro.ts";
+import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
 import {
 	buildBrief,
 	commitGate,
 	deriveTask,
+	failedChange,
 	finalizeBrief,
 	isCommitCommand,
 	isTrivial,
+	isWorkingTreeScope,
 	makeChange,
 	oneLine,
 	parseReviewArgs,
@@ -77,11 +83,12 @@ import {
 	reviewKey,
 	REVIEWER_TIMEOUT_MS,
 	subjectsFromQueries,
+	untrackedFiles,
 	type Brief,
 	type BriefInput,
 	type Change,
 	type Verdict as ReviewVerdict,
-} from "../scripts/review.ts";
+} from "../../shared/review/review.ts";
 
 /** The message type of the read list, so a renderer can find it later. */
 const READ_LIST = "persona-agents:read-list";
@@ -414,18 +421,47 @@ function reviewerBody(dir: string = agentsDir()): string {
 
 /** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
 async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
-	const status = await pi.exec("git", ["status", "--porcelain"], { cwd });
-	let diff = await pi.exec("git", ["diff", "HEAD"], { cwd });
-	if (diff.stdout.trim() === "") {
+	// Keep non-ASCII paths readable; a space still quotes, and `unquotePath` undoes it.
+	const quote = ["-c", "core.quotePath=false"];
+	// `-uall` lists each file of an untracked directory, not just the folder.
+	const status = await pi.exec("git", [...quote, "status", "--porcelain", "-uall"], { cwd });
+	let diff = await pi.exec("git", [...quote, "diff", "HEAD"], { cwd });
+	if (diff.stdout.trim() === "" && status.stdout.trim() === "") {
 		// A clean tree commits nothing, so review the last commit instead.
-		diff = await pi.exec("git", ["show", "HEAD", "--format="], { cwd });
+		diff = await pi.exec("git", [...quote, "show", "HEAD", "--format="], { cwd });
 	}
-	const change = makeChange(diff.stdout, status.stdout);
-	const signature = change.untracked
+	const change = makeChange(
+		diff.stdout,
+		status.stdout,
+		"",
+		// An untracked file is not in the diff; its lines still count toward the
+		// trivial-change limit. A file over the cap is measured by size, not read.
+		untrackedFiles(status.stdout).map((path) => {
+			const full = join(cwd, path);
+			try {
+				const size = statSync(full).size;
+				if (size > 1024 * 1024) return "\n".repeat(Math.ceil(size / 1024));
+				return readText(full) ?? "";
+			} catch {
+				return "";
+			}
+		}),
+	);
+	// A failed read is not a small change; the gate must ask.
+	if (status.code !== 0 || diff.code !== 0) return failedChange();
+	// The signature hashes every changed file's worktree content and mode, so
+	// the key is the same before and after `git add` and changes on a chmod.
+	const signature = [...change.files]
+		.sort()
 		.map((path) => {
 			try {
+				// Git tracks only the executable bit, so the key does too. A file
+				// over the cap is measured by size and mtime, not read whole.
 				const stat = statSync(join(cwd, path));
-				return `${path}:${stat.size}:${stat.mtimeMs}`;
+				const mode = stat.mode & 0o111 ? "exec" : "file";
+				if (stat.size > 1024 * 1024) return `${path}:${mode}:${stat.size}:${stat.mtimeMs}`;
+				const content = createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex");
+				return `${path}:${mode}:${content}`;
 			} catch {
 				return `${path}:missing`;
 			}
@@ -513,8 +549,8 @@ interface ReviewRequest {
 }
 
 /**
- * Run a review, remember its verdict for the exact change, and return the text.
- *
+ * Run a review, remember its verdict for the exact change, and return the
+ * reviewer's text with the key and the notes that belong beside it.
  */
 async function executeReview(
 	pi: ExtensionAPI,
@@ -523,13 +559,16 @@ async function executeReview(
 	signal?: AbortSignal,
 ): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[] }> {
 	const change = await readChange(pi, session.env.cwd);
-	const key = reviewKey(change);
 	const prepared = await prepareBrief(pi, session, request.input);
+	// Only a review of the whole working tree unlocks a commit of it. A named
+	// ref, range, or path list did not see the uncommitted change.
+	const key = isWorkingTreeScope(prepared.brief.scope) ? reviewKey(change) : "";
 	const notes = [...prepared.notes];
 	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
 	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
+	if (key === "") notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
 	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
-	if (verdict) {
+	if (verdict && key !== "") {
 		session.reviews.set(key, verdict);
 		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
 	}
@@ -547,8 +586,8 @@ async function reviewGate(
 	try {
 		change = await readChange(pi, session.env.cwd);
 	} catch {
-		// Git failed: never block a commit on the gate's own tooling problem.
-		return undefined;
+		// A failed read is unknown, not trivial: ask rather than allow silently.
+		return { block: true, reason: "the change could not be read, so this commit needs your approval" };
 	}
 	const key = reviewKey(change);
 	const gate = commitGate({ trivial: isTrivial(change), reviewed: session.reviews.get(key) ?? null });
@@ -601,7 +640,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		for (const entry of ctx.sessionManager.getEntries()) {
 			if (entry.type !== "custom" || entry.customType !== "persona-agents:theme") continue;
 			const theme = (entry.data as { theme?: unknown } | undefined)?.theme;
-			if (typeof theme === "string" && theme in session.registry) session.theme = theme;
+			if (typeof theme === "string" && Object.hasOwn(session.registry, theme)) session.theme = theme;
 		}
 		for (const entry of ctx.sessionManager.getEntries()) {
 			if (entry.type !== "custom" || entry.customType !== "persona-agents:review") continue;
@@ -695,17 +734,20 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		if (!session) return undefined;
 		const input = event.input ?? {};
 		const decision = decidePolicy(session.profile, event.toolName, input, session.policy, session.env);
-		if (decision.verdict === "allow") {
-			if (logsAllows()) appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
-			return undefined;
+		if (decision.verdict === "deny") {
+			appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
+			return { block: true, reason: decision.reason };
 		}
-		appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
-		if (decision.verdict === "deny") return { block: true, reason: decision.reason };
-		if (decision.verdict === "ask") return handleAsk(ctx, session, event.toolName, input, decision);
+		if (decision.verdict === "ask") {
+			appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
+			return handleAsk(ctx, session, event.toolName, input, decision);
+		}
 		// Allowed by policy: the companion still needs a review for a real commit.
 		if (session.profile.name === "companion" && event.toolName === "bash" && typeof input.command === "string" && isCommitCommand(input.command)) {
-			return reviewGate(pi, ctx, session);
+			const gate = await reviewGate(pi, ctx, session);
+			if (gate) return gate;
 		}
+		if (logsAllows()) appendDecision(logFile(), decisionRecord(session.profile, event.toolName, input, decision, { session: session.id }));
 		return undefined;
 	});
 
@@ -830,7 +872,6 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			);
 		},
 	});
-
 
 	pi.registerTool({
 		name: "review",

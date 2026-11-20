@@ -1,9 +1,9 @@
 /**
- * Journal paths and reads for the Pi adapter.
+ * Journal paths and reads for the adapters.
  *
  *   <project notes>/journal/<YYYY-MM-DD>/<HHMM>-<session id>.md
  *
- * One file per Pi session, so parallel sessions never write the same file. A
+ * One file per session, so parallel sessions never write the same file. A
  * second wrap-up of a session rewrites its own file. The same layout as the
  * Claude adapter, so both harnesses write one journal.
  */

@@ -99,11 +99,25 @@ describe("pi policy: the built-in doctrine", () => {
 		assert.equal(bash(companion, "echo $(git push)"), "ask");
 	});
 
+	test("a shell write stays inside the project and the notes", () => {
+		assert.equal(bash(companion, "rm -rf ~"), "deny");
+		assert.equal(bash(companion, "tee /etc/motd"), "deny");
+		assert.equal(bash(companion, "mv src /tmp/x"), "deny");
+		assert.equal(bash(companion, "git diff --output=/tmp/x"), "deny");
+		assert.equal(bash(companion, "cp -r src dist"), "allow");
+		assert.equal(bash(companion, "cp -r src ../../outside"), "deny");
+	});
+
 	test("the reviewer is read-only through the shell", () => {
 		assert.equal(bash(reviewer, "git commit -m 'x'"), "deny");
 		assert.equal(bash(reviewer, "git push"), "deny");
 		assert.equal(bash(reviewer, "rm -f x"), "deny");
+		assert.equal(bash(reviewer, "find . -delete"), "deny");
+		assert.equal(bash(reviewer, "tar -xf a.tar"), "deny");
+		assert.equal(bash(reviewer, "npm install"), "deny");
 		assert.equal(bash(reviewer, "npm test"), "allow");
+		assert.equal(bash(reviewer, "find . -name '*.ts'"), "allow");
+		assert.equal(bash(reviewer, "node --test tests/x.test.ts"), "allow");
 		assert.equal(bash(reviewer, "git status"), "allow");
 	});
 
@@ -320,6 +334,7 @@ describe("pi policy: shell writes obey the place rule", () => {
 			assert.equal(isGatePath(path.join(box.env.piAgentDir, "extensions", "x.ts"), box.env), true);
 			assert.equal(isGatePath(path.join(box.env.piAgentDir, "settings.json"), box.env), true);
 			assert.equal(isGatePath(path.join(box.env.cwd, "src", "a.ts"), box.env), false);
+			assert.equal(isGatePath(path.join(box.env.cwd, ".vscode", "settings.json"), box.env), false);
 		} finally {
 			box.cleanup();
 		}

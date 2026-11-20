@@ -2,7 +2,7 @@
  * The journal safety net: what a session leaves behind when it ends without a
  * wrap-up.
  *
- * The wrap-up skill is the good path. When it does not run, the extension
+ * The wrap-up skill is the good path. When it does not run, the adapter
  * captures the material a short entry needs — the session notes the session
  * wrote, the compaction summaries, and the conversation after the last
  * compaction — and hands it to a detached writer with no tools. The writer
