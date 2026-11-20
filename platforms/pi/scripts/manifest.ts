@@ -32,7 +32,9 @@ export interface EntryLike {
 }
 
 export interface Manifest {
-	/** The session notes file the session wrote last, or "". */
+	/** The current session id, or "". */
+	session: string;
+	/** The active session notes file, or "". */
 	sessionNotes: string;
 	/** Skill names, in the order they were last used. */
 	skills: string[];
@@ -133,7 +135,7 @@ export function buildManifest(entries: EntryLike[], notesDir: string, sessionId 
 		(path) => path !== sessionNotes,
 	);
 
-	return { sessionNotes, skills, docs };
+	return { session: sessionId, sessionNotes, skills, docs };
 }
 
 /** The focus the summary must follow. Passed to Pi's own summarizer. */
@@ -153,8 +155,9 @@ export function reloadContext(manifest: Manifest): string {
 		"# After compaction: reload before you continue",
 		"",
 		"Do every step below before any other work, even when the summary seems to cover it: the summary is lossy, the files are not.",
-		"",
 	];
+	if (manifest.session) lines.push("", `Session id: ${manifest.session}`);
+	lines.push("");
 	lines.push(
 		manifest.sessionNotes
 			? `1. Read the session notes file first; it holds the plan: ${manifest.sessionNotes}`

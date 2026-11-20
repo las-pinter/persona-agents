@@ -92,6 +92,20 @@ describe("pi manifest: what to reload", () => {
 		}
 	});
 
+	test("a resumed session that only read its notes gets them from the Sessions line", () => {
+		const box = fixture();
+		try {
+			const mine = path.join(box.notesDir, "sessions", "2026-01-03-mine.md");
+			fs.writeFileSync(mine, "# Mine\n\n- **Status:** open\n- **Sessions:** sess-9\n");
+			const manifest = buildManifest([userText("hello")], box.notesDir, "sess-9");
+			assert.equal(manifest.sessionNotes, mine);
+			assert.equal(manifest.session, "sess-9");
+			assert.match(reloadContext(manifest), /Session id: sess-9/);
+		} finally {
+			box.cleanup();
+		}
+	});
+
 	test("a last-write session notes file wins, and a second session file is not stale", () => {
 		const box = fixture();
 		try {

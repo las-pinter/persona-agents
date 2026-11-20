@@ -142,6 +142,17 @@ describe("pi notes: the startup read list", () => {
 		}
 	});
 
+	test("the read list names the session id when it has one", () => {
+		const fixture = notesFixture();
+		try {
+			const text = startupContext(fixture.notesDir, "common", "sess-9");
+			assert.match(text, /^Session id: sess-9$/m);
+			assert.doesNotMatch(startupContext(fixture.notesDir, "common"), /Session id:/);
+		} finally {
+			fixture.cleanup();
+		}
+	});
+
 	test("a missing notes folder still gives a usable list", () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-empty-"));
 		try {

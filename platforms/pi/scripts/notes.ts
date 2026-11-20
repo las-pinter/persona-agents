@@ -18,7 +18,7 @@ export const JOURNAL_DAYS = 3;
 const bullets = (items: string[]): string[] => (items.length ? items.map((item) => `- ${item}`) : ["- none"]);
 
 /** The startup context text for a project notes folder. */
-export function startupContext(notesDir: string, project: string): string {
+export function startupContext(notesDir: string, project: string, sessionId = ""): string {
 	const summary = join(notesDir, "summary.md");
 	const rules = projectRules(notesDir);
 	const lines = [
@@ -26,6 +26,7 @@ export function startupContext(notesDir: string, project: string): string {
 		"",
 		`Project: ${project}`,
 		`Project notes folder: ${notesDir}${existsSync(notesDir) ? "" : " (does not exist yet)"}`,
+		...(sessionId ? [`Session id: ${sessionId}`] : []),
 		"",
 		"Before your first answer, read these in full (rules in this order, then the summary):",
 		...bullets([...rules, ...(existsSync(summary) ? [summary] : [])]),

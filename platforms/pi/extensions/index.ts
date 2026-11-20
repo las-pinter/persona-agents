@@ -613,7 +613,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
 	});
 
-	pi.on("before_agent_start", (event, _ctx) => {
+	pi.on("before_agent_start", (event, ctx) => {
 		if (!session) return undefined;
 		const options = event.systemPromptOptions;
 		const sections = promptSections(contentDir(), session.registry, session.theme, session.profile);
@@ -631,7 +631,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		if (session.startupSent && !session.reloadPending) return undefined;
 		session.startupSent = true;
 		session.reloadPending = false;
-		const text = startupContext(session.env.notesDir, projectName(session.env.cwd));
+		const text = startupContext(session.env.notesDir, projectName(session.env.cwd), ctx.sessionManager.getSessionId());
 		return { message: { customType: READ_LIST, content: text, display: true } };
 	});
 
@@ -640,7 +640,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		// Record what must survive, then let Pi's own summarizer run with our
 		// focus. A model or auth failure here falls back to Pi's default summary;
 		// the reload list still recovers the plan from the files.
-		const manifest = buildManifest((event.branchEntries ?? []) as EntryLike[], session.env.notesDir);
+		const manifest = buildManifest((event.branchEntries ?? []) as EntryLike[], session.env.notesDir, ctx.sessionManager.getSessionId());
 		session.manifest = manifest;
 		const own = summaryInstructions(manifest);
 		const instructions = event.customInstructions ? `${event.customInstructions}\n\n${own}` : own;
@@ -672,7 +672,8 @@ export default function personaAgents(pi: ExtensionAPI): void {
 
 	pi.on("session_compact", (event, ctx) => {
 		if (!session) return;
-		const manifest = session.manifest ?? buildManifest(ctx.sessionManager.getEntries() as EntryLike[], session.env.notesDir);
+		const manifest =
+			session.manifest ?? buildManifest(ctx.sessionManager.getEntries() as EntryLike[], session.env.notesDir, ctx.sessionManager.getSessionId());
 		session.manifest = null;
 		pi.appendEntry("persona-agents:compacted", {
 			at: new Date().toISOString(),
