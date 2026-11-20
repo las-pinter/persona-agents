@@ -444,6 +444,15 @@ describe("install.sh: the adapter flags", () => {
 		});
 	});
 
+	test("--kiro with an old kiro-cli fails", () => {
+		withTemp((temp) => {
+			const cli = fakeCli(temp, "kiro-cli 3.3.0");
+			const run = runShell(["--kiro", `--kiro-cli=${cli}`], { HOME: temp.home });
+			assert.equal(run.status, 1);
+			assert.match(run.stderr, /below the required 3\.4\.0/);
+		});
+	});
+
 	test("--theme reaches the Kiro install", () => {
 		withTemp((temp) => {
 			const cli = fakeCli(temp);

@@ -140,6 +140,8 @@ describe("pi review: the verdict a reviewer states", () => {
 		assert.equal(parseVerdict("This is not an Approve.\n\nVerdict: Reject — wrong approach."), "Reject");
 		assert.equal(parseVerdict("Approve-ish at first; the final answer is Request Changes."), null);
 		assert.equal(parseVerdict("The change was not approved as-is."), null);
+		assert.equal(parseVerdict("## Issues\n- thing\n\nApprove once the test is added"), null);
+		assert.equal(parseVerdict("Approve — fine."), "Approve");
 	});
 
 	test("the Verdict section wins over an earlier mention", () => {

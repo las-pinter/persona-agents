@@ -180,7 +180,7 @@ install_kiro() {
         local version
         version="$("$KIRO_CLI_ARG" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || version=""
         if [[ -z "$version" ]] || [[ "$(printf '%s\n' "3.4.0" "$version" | sort -V | head -1)" != "3.4.0" ]]; then
-            echo "Kiro CLI ${version:-unknown} is below 3.4.0; skipping the Kiro adapter. Use --kiro to run the installer anyway."
+            echo "Kiro CLI ${version:-unknown} is below 3.4.0; skipping the Kiro adapter. Install kiro-cli 3.4.0 or newer to use it."
             return 0
         fi
     fi

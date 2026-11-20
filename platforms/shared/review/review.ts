@@ -237,7 +237,9 @@ export function parseVerdict(text: string): Verdict | null {
 		const found = word.exec(labelled[1]);
 		if (found) return verdictOf(found[1]);
 	}
-	const lineForm = /^\s*(Request Changes|Approve|Reject)(?=\s|$|[—–:.,;!)\]])/im.exec(plain);
+	// An unlabelled verdict must be the whole line (or its own phrase); a
+	// conditional sentence such as "Approve once the test is added" is not one.
+	const lineForm = /^\s*(Request Changes|Approve|Reject)\s*(?:$|[—–:.,;!)-])(?=\s|$)/im.exec(plain);
 	return lineForm ? verdictOf(lineForm[1]) : null;
 }
 
