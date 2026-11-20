@@ -12,9 +12,9 @@ behind one Pi extension. Nothing in `content/` knows which harness runs it.
 ## Layout
 
 - **Extension** (`platforms/pi/extensions/index.ts`): the wiring only. It
-  registers `--agent` and `--persona`, then connects four events and two
-  commands to the pure modules below. All logic lives in the shared modules
-  and the Pi-only scripts.
+  registers `--agent` and `--persona`, connects the events and commands to the
+  pure modules below, and collapses every surface it prints. All logic lives in
+  the shared modules and the Pi-only scripts.
 - **Scripts** (`platforms/pi/scripts/`): the Pi-only modules, pure TypeScript
   with no Pi imports, so `node:test` can exercise every decision without
   starting a Pi process.
@@ -83,8 +83,8 @@ code without the author's reasoning.
   agent file (`tests/pi-package.test.ts` fails when they drift) plus Pi
   frontmatter: `tools: read, grep, find, ls, bash`. Bash stays because the
   reviewer runs the test suite once; there is no Edit or Write tool at all.
-- **`scripts/review.ts`** is pure: it reads a diff and a status into a
-  `Change`, names it with a 16-character hash (`reviewKey`), parses the
+- **`platforms/shared/review/review.ts`** is pure: it reads a diff and a status
+  into a `Change`, names it with a 16-character hash (`reviewKey`), parses the
   verdict, and decides the gate.
 - The review starts from a **three-field brief**, never a checklist: `Scope`
   (a ref, a range, or paths), `Task` (one line: goal and study task id), and
@@ -122,6 +122,19 @@ two files and forty changed lines) or an `Approve` covers that exact key. The
 dialog offers: run the review now, commit anyway, stop asking for this session,
 or cancel. When the change cannot be read, the gate asks rather than allowing
 silently.
+
+## Collapsed output
+
+Every persona-agents surface prints one line in the transcript: the review tool
+result, the `/review` notice, the commit-gate message, `/permissions`, `/retro`,
+the `journal` tool result, and the read and reload lists. `scripts/summary.ts`
+builds each line from the text the surface already prints, and the renderers in
+the extension return it; `ctrl+o` (`app.tools.expand`) opens the full text. A
+long line is truncated to the width, never wrapped, so one surface is one row.
+
+There is no panel and no click handling: Pi sends mouse events only in fullscreen
+mode and only to components that implement `handleMouse`, and `ctrl+o` reaches
+every terminal.
 
 ## Compaction
 
@@ -176,9 +189,9 @@ A session that ends without a wrap-up still leaves an entry.
 `/retro` is print-only. It reads the facts rather than the model's memory: the
 decisions log for this session (`verdict`, `source`, `reason` per tool call),
 the tool calls and changed files from the branch entries, the compactions, the
-stored review verdicts, and the journal entry when one exists. `scripts/retro.ts`
-does the counting and the caps; the command sends the facts plus the instruction
-to write nothing durable.
+stored review verdicts, and the journal entry when one exists.
+`platforms/shared/retro/retro.ts` does the counting and the caps; the command
+sends the facts plus the instruction to write nothing durable.
 
 ## Permissions
 
@@ -234,6 +247,13 @@ There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
 | `PERSONA_AGENTS_DEBUG=1` | Log allowed decisions too. |
 | `PI_CODING_AGENT_DIR` | The Pi agent dir: policy file, decisions log. `PI_CODING_AGENT` is pi's own `"true"` marker and is never a path. |
 | `PI_SESSION_ID` | The session id recorded with each decision and journal line. |
+
+**Upgrade note.** Earlier builds read `PI_CODING_AGENT` as a path, which is
+`"true"`, so the user policy and the decision log were written under
+`<cwd>/true/persona-agents/` in every repository. Those files are no longer
+read. Re-apply any `/permissions` grants you need with
+`/permissions allow <tool> <regex>`, and delete the stray `true/` folder. Add
+this line to the release notes whenever a release carries the fix.
 
 ## Testing
 

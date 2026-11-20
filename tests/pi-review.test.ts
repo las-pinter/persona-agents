@@ -29,6 +29,8 @@ import {
 	reviewerPrompt,
 	REVIEWER_TIMEOUT_MS,
 	finalizeBrief,
+	isWorkingTreeScope,
+	UNCOMMITTED,
 	promptForBrief,
 	resolveDecisions,
 	studyRows,
@@ -126,6 +128,14 @@ describe("pi review: the key and the trivial rule", () => {
 		assert.equal(isTrivial({ files: ["a"], addedLines: 41, removedLines: 0 }), false);
 		assert.equal(isTrivial(change), true);
 	});
+
+	test("an omitted scope is the working tree, a named scope is not", () => {
+		assert.equal(isWorkingTreeScope(""), true);
+		assert.equal(isWorkingTreeScope(UNCOMMITTED), true);
+		assert.equal(isWorkingTreeScope("main"), false);
+		assert.equal(isWorkingTreeScope("HEAD~1"), false);
+		assert.equal(isWorkingTreeScope("src/"), false);
+	});
 });
 
 describe("pi review: the verdict a reviewer states", () => {
@@ -218,9 +228,18 @@ describe("pi review: the reviewer task", () => {
 		assert.deepEqual(normalizeScope("main --all").scope, "main");
 	});
 
-	test("a `--` separator keeps the paths after it", () => {
-		assert.equal(normalizeScope("-- src/a.ts src/b.ts").scope, "src/a.ts src/b.ts");
-		assert.equal(normalizeScope("main -- src/a.ts").scope, "main src/a.ts");
+	test("a claim after the separator is cut too, before git can read it as a path", () => {
+		const cut = normalizeScope("main -- src/a.ts Check: the tests");
+		assert.equal(cut.scope, "main -- src/a.ts");
+		assert.equal(cut.dropped, "Check: the tests");
+		assert.equal(normalizeScope("main -- src/a.ts --all").dropped, "--all");
+	});
+
+	test("a `--` separator is kept, so git reads a path as a path", () => {
+		assert.equal(normalizeScope("-- src/a.ts src/b.ts").scope, "-- src/a.ts src/b.ts");
+		assert.equal(normalizeScope("main -- src/a.ts").scope, "main -- src/a.ts");
+		// The pathspec query builds its own separator, so it must not double it.
+		assert.deepEqual(subjectQueries("main -- src/a.ts")[2], ["log", "--format=%s", "-n", "20", "--", "main", "src/a.ts"]);
 	});
 
 	test("a quoted path with a space stays one token", () => {
@@ -351,7 +370,7 @@ describe("pi review: the brief is cut once", () => {
 		const finalized = finalizeBrief(
 			{ scope: "main", task: "none", decisions: "none" },
 			{ task: false, decisions: false },
-			{ notesDir: "/notes", indexText: INDEX, readStatus: () => status },
+			{ notesDir: "/notes", indexText: INDEX, readFile: () => status },
 		);
 		assert.equal(finalized.brief.task, "Brief - check the gate and also the docs");
 		assert.equal(finalized.brief.decisions, "/notes/studies/2026-11-19-brief/study.md");
@@ -364,7 +383,7 @@ describe("pi review: the brief is cut once", () => {
 		const finalized = finalizeBrief(
 			{ scope: "main", task: "the author's task", decisions: "none" },
 			{ task: true, decisions: false },
-			{ notesDir: "/notes", indexText: INDEX, readStatus: () => status },
+			{ notesDir: "/notes", indexText: INDEX, readFile: () => status },
 		);
 		assert.equal(finalized.brief.task, "the author's task");
 	});
@@ -376,8 +395,9 @@ describe("pi review: the brief is cut once", () => {
 			{
 				notesDir: "/notes",
 				indexText: INDEX,
-				readStatus: () => {
-					throw new Error("an excluded study must never be read");
+				readFile: (path) => {
+					assert.doesNotMatch(path, /status\.md$/, "an excluded study's status must never be read");
+					return null;
 				},
 			},
 		);
@@ -385,11 +405,43 @@ describe("pi review: the brief is cut once", () => {
 		assert.equal(finalized.needsSubjects, true, "no study is read, so git names the task");
 	});
 
+	test("an author's `task=none` is kept, and git is not asked", () => {
+		const finalized = finalizeBrief(
+			{ scope: "main", task: "none", decisions: "none" },
+			{ task: true, decisions: false },
+			{ notesDir: "/notes", indexText: INDEX, readFile: () => null },
+		);
+		assert.equal(finalized.brief.task, "none");
+		assert.equal(finalized.needsSubjects, false);
+	});
+
+	test("a given decisions path that cannot be read is named back", () => {
+		const finalized = finalizeBrief(
+			{ scope: "main", task: "given", decisions: "agent-notes/gone.md" },
+			{ task: true, decisions: true },
+			{ notesDir: "/notes", indexText: INDEX, readFile: () => null },
+		);
+		assert.equal(finalized.brief.decisions, "agent-notes/gone.md");
+		assert.match(finalized.notes.join(" "), /decisions file could not be read: agent-notes\/gone\.md/);
+	});
+
+	test("a claim word needs its punctuation to cut a task", () => {
+		assert.equal(buildBrief({ task: "fix the note parser" }).brief.task, "fix the note parser");
+		assert.equal(buildBrief({ task: "also the release notes" }).brief.task, "also the release notes");
+		assert.equal(buildBrief({ task: "cutover Check: the tree" }).brief.task, "cutover");
+		assert.equal(buildBrief({ task: "cutover Also, the docs" }).brief.task, "cutover");
+	});
+
+	test("an empty scope stays empty inside the module and defaults only in the prompt", () => {
+		assert.equal(buildBrief({}).brief.scope, "");
+		assert.match(promptForBrief(buildBrief({}).brief), /^Scope: the uncommitted change in this repository$/m);
+	});
+
 	test("no study names a task, so the caller is told to ask git", () => {
 		const finalized = finalizeBrief(
 			{ scope: "main", task: "none", decisions: "none" },
 			{ task: false, decisions: false },
-			{ notesDir: "/notes", indexText: "", readStatus: () => null },
+			{ notesDir: "/notes", indexText: "", readFile: () => null },
 		);
 		assert.equal(finalized.needsSubjects, true);
 		assert.equal(finalized.brief.decisions, "none");

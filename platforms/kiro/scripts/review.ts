@@ -21,6 +21,7 @@ import {
 	buildBrief,
 	deriveTask,
 	finalizeBrief,
+	isWorkingTreeScope,
 	NO_VALUE,
 	parseReviewArgs,
 	promptForBrief,
@@ -76,7 +77,7 @@ export async function buildReviewBrief(
 	const finalized = finalizeBrief(brief, given, {
 		notesDir: options.notesDir,
 		indexText,
-		readStatus: readText,
+		readFile: readText,
 	});
 	const notes = [
 		...(dropped.trim() === "" ? [] : [`ignored author text: ${dropped.replace(/\s+/g, " ").trim()}`]),
@@ -91,10 +92,12 @@ export async function buildReviewBrief(
 	const { key } = changeKey(options.cwd);
 	// The commit gate compares the working-tree key. A review of a named ref,
 	// range, or path list did not see the whole uncommitted change, so it must
-	// not unlock a commit of it.
-	const workingTree = finalized.brief.scope === UNCOMMITTED;
+	// not unlock a commit of it. An omitted scope is the working tree, so the
+	// brief carries the default and the reviewer reads what was reviewed.
+	const scope = isWorkingTreeScope(finalized.brief.scope) ? UNCOMMITTED : finalized.brief.scope;
+	const workingTree = isWorkingTreeScope(scope);
 	if (!workingTree) notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
-	return { brief: { ...finalized.brief, task }, key: workingTree ? key : "", notes };
+	return { brief: { ...finalized.brief, scope, task }, key: workingTree ? key : "", notes };
 }
 
 /** The reviewer task: the shared prompt plus the change-key line. */

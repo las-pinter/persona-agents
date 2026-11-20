@@ -321,6 +321,16 @@ export const NO_VALUE = "none";
 /** The scope a review with no argument covers. */
 export const UNCOMMITTED = "the uncommitted change in this repository";
 
+/**
+ * True when a review of this scope saw the whole uncommitted change.
+ *
+ * An empty scope is the default, so it covers the working tree exactly like the
+ * named default. Only such a review can unlock a commit of the working tree.
+ */
+export function isWorkingTreeScope(scope: string): boolean {
+	return scope.trim() === "" || scope.trim() === UNCOMMITTED;
+}
+
 /** A scope with the text that is not a ref, range, or path, and that text. */
 export interface ScopeText {
 	scope: string;
@@ -350,8 +360,8 @@ function splitTokens(text: string, stripQuotes = true): string[] {
 	return tokens;
 }
 
-/** Words that start an author's account rather than a value. */
-const CLAIM_WORDS = new Set(["check", "checks", "verify", "verifies", "ensure", "ensures", "note", "also"]);
+/** Words that start an author's account, when they carry its punctuation. */
+const CLAIM_WORD = /^(check|checks|verify|verifies|ensure|ensures|note|also)\b[,:]/i;
 
 /** True for a label token: a word or two ending in a colon (`Check:`). */
 function isLabel(token: string): boolean {
@@ -368,10 +378,18 @@ function cutAtLabel(text: string): { kept: string; dropped: string } {
 	const separator = tokens.indexOf("--");
 	const head = separator === -1 ? tokens : tokens.slice(0, separator);
 	const paths = separator === -1 ? [] : tokens.slice(separator + 1);
-	// A token starting with `-` is a git option, not a scope.
-	const cut = head.findIndex((token) => token.startsWith("-") || isLabel(token));
+	// A token starting with `-` is a git option, not a scope; a label is the
+	// author's account. Either ends the scope, before or after the separator.
+	const isBoundary = (token: string): boolean => token.startsWith("-") || isLabel(token);
+	const cut = head.findIndex(isBoundary);
 	const stop = cut === -1 ? head.length : cut;
-	return { kept: [...head.slice(0, stop), ...paths].join(" "), dropped: head.slice(stop).join(" ") };
+	const pathCut = paths.findIndex(isBoundary);
+	const keptPaths = pathCut === -1 ? paths : paths.slice(0, pathCut);
+	const droppedPaths = pathCut === -1 ? [] : paths.slice(pathCut);
+	// The separator is kept, so git reads a path as a path even when it is also a
+	// ref name.
+	const kept = [...head.slice(0, stop), ...(separator === -1 ? [] : ["--"]), ...keptPaths].join(" ");
+	return { kept, dropped: [...head.slice(stop), ...droppedPaths].join(" ") };
 }
 
 /**
@@ -381,7 +399,7 @@ function cutAtLabel(text: string): { kept: string; dropped: string } {
  */
 function cutAtClaim(text: string): { kept: string; dropped: string } {
 	const tokens = text.trim() === "" ? [] : text.trim().split(/\s+/);
-	const cut = tokens.findIndex((token) => CLAIM_WORDS.has(token.toLowerCase().replace(/[,:;]+$/, "")));
+	const cut = tokens.findIndex((token) => CLAIM_WORD.test(token));
 	const stop = cut === -1 ? tokens.length : cut;
 	return { kept: tokens.slice(0, stop).join(" "), dropped: tokens.slice(stop).join(" ") };
 }
@@ -416,7 +434,7 @@ export function buildBrief(input: BriefInput): ResolvedBrief {
 	const dropped = [scope.dropped, task.rest, decisions.rest].filter((part) => part !== "").join("\n");
 	return {
 		brief: {
-			scope: scope.scope === "" ? UNCOMMITTED : scope.scope,
+			scope: scope.scope,
 			task: task.line === "" ? NO_VALUE : task.line,
 			decisions: decisions.line === "" ? NO_VALUE : decisions.line,
 		},
@@ -438,10 +456,11 @@ export function buildBrief(input: BriefInput): ResolvedBrief {
  * author's view.
  */
 export function promptForBrief(brief: Brief, platform: "Pi" | "Kiro" = "Pi"): string {
+	const scope = brief.scope.trim() === "" ? UNCOMMITTED : brief.scope;
 	return [
 		"Review one change in this repository.",
 		"",
-		`Scope: ${brief.scope}`,
+		`Scope: ${scope}`,
 		`Task: ${brief.task}`,
 		`Decisions: ${brief.decisions}`,
 		"",
@@ -564,7 +583,10 @@ export function subjectQueries(scope: string): string[][] {
 	const text = scope.trim();
 	if (text === "") return [];
 	const base = ["log", "--format=%s", "-n", "20"];
-	return [[...base, `${text}...HEAD`], [...base, text], [...base, "--", ...splitTokens(text)]];
+	// The scope may keep its own `--`, so the separator is dropped before the
+	// pathspec list is built again.
+	const paths = splitTokens(text).filter((token) => token !== "--");
+	return [[...base, `${text}...HEAD`], [...base, text], [...base, "--", ...paths]];
 }
 
 /**
@@ -604,17 +626,18 @@ export interface BriefSources {
 	notesDir: string;
 	/** `studies/index.md`: its text, "" when absent, null when unreadable. */
 	indexText: string | null;
-	/** Read a `status.md`: its text, or null. */
-	readStatus: (path: string) => string | null;
+	/** Read a file: its text, or null when it cannot be read. */
+	readFile: (path: string) => string | null;
 }
 
 /**
  * Fill the fields the author left out, and say what could not be named.
  *
  * A field the author named is kept as given, `none` included: `decisions=none`
- * is an opt-out, not an omission. This runs after the author's text was cut
- * once, so a derived task is never cut again (`Title - check the gate`).
- * `needsSubjects` is true when no study named a task, so the caller can ask git.
+ * is an opt-out, not an omission, and the same holds for `task=none`. This runs
+ * after the author's text was cut once, so a derived task is never cut again
+ * (`Title - check the gate`). `needsSubjects` is true only when the author
+ * named no task and no study named one, so the caller can ask git.
  */
 export function finalizeBrief(
 	brief: Brief,
@@ -627,13 +650,17 @@ export function finalizeBrief(
 		const resolved = resolveDecisions(sources.notesDir, "", sources.indexText);
 		decisions = resolved.decisions;
 		if (resolved.note !== "") notes.push(resolved.note);
+	} else if (decisions !== NO_VALUE && sources.readFile(decisions) === null) {
+		// A path the author gave is never silently replaced; the reviewer is told.
+		notes.push(`the decisions file could not be read: ${decisions}`);
 	}
 	let task = brief.task;
 	if (!given.task) {
-		const status = decisions === NO_VALUE ? null : sources.readStatus(join(dirname(decisions), "status.md"));
+		const status = decisions === NO_VALUE ? null : sources.readFile(join(dirname(decisions), "status.md"));
 		task = deriveTask(studyTitle(status ?? ""), status ?? "", []);
 	}
-	return { brief: { scope: brief.scope, task, decisions }, notes, needsSubjects: task === NO_VALUE };
+	const needsSubjects = !given.task && task === NO_VALUE;
+	return { brief: { scope: brief.scope, task, decisions }, notes, needsSubjects };
 }
 
 /** The field labels a `/review` argument accepts, at a word boundary only. */

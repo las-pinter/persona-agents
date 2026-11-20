@@ -31,9 +31,9 @@ and you change it as soon as the facts change.
    status, the decisions, and the pinned documents. It links the study when
    there is one. When the plan changes, update the file first, then continue.
    Context can be compacted at any time; the files cannot.
-4. **Implement** with the **code-implementation** skill and the quality-gate
-   skill for the language (**python-quality-gates**, **react-quality-gates**,
-   **rust-quality-gates**, **rust-implementation**). Follow the
+4. **Implement** with the **code-implementation** skill and the language's
+   own gate: a global or project skill when the environment has one, otherwise
+   typecheck, lint, tests, and build in that order. Follow the
    **file-length-policy** skill.
 5. **Test** with **test-strategy-selection**, **test-case-structure**, and
    **regression-identification**. Report a production defect you find with
@@ -81,8 +81,6 @@ the journal holds what happened.
 - **project-notes** — project rules, summary, notes, and studies.
 - **session-notes** — the working file of one task.
 - **code-implementation** — the implementation workflow.
-- **python-quality-gates**, **react-quality-gates**, **rust-quality-gates**,
-  **rust-implementation** — language quality gates.
 - **test-strategy-selection**, **test-case-structure**,
   **regression-identification**, **production-issue-flagging** — testing.
 - **review** — independent review in a separate context.

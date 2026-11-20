@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
 import { dayOf, entryPath, findEntry, recentJournal } from "../../shared/notes/journal.ts";
 import { hasMaterial, sources, type Payload } from "../../shared/notes/journal-net.ts";
@@ -35,6 +36,16 @@ import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
+import {
+	BUILTIN_TOOLS,
+	journalLine,
+	listLine,
+	permissionsLine,
+	retroLine,
+	reviewLine,
+	summarizeReview,
+	toolCallLine,
+} from "../scripts/summary.ts";
 import { agentsDir, contentDir, homeDir } from "../scripts/paths.ts";
 import {
 	addRule,
@@ -62,6 +73,7 @@ import {
 	finalizeBrief,
 	isCommitCommand,
 	isTrivial,
+	isWorkingTreeScope,
 	makeChange,
 	oneLine,
 	parseReviewArgs,
@@ -71,7 +83,6 @@ import {
 	reviewKey,
 	REVIEWER_TIMEOUT_MS,
 	subjectsFromQueries,
-	UNCOMMITTED,
 	untrackedFiles,
 	type Brief,
 	type BriefInput,
@@ -85,6 +96,36 @@ const READ_LIST = "persona-agents:read-list";
 const RELOAD_LIST = "persona-agents:reload-list";
 /** The section names this extension owns in the system prompt. */
 const SECTIONS = ["profession", "persona", "platform"] as const;
+/** The plain text of a tool result or a message body. */
+function bodyText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((part): part is { type: string; text?: string } => typeof part === "object" && part !== null && "type" in part)
+		.filter((part) => part.type === "text")
+		.map((part) => part.text ?? "")
+		.join("\n");
+}
+
+/** One line that never wraps, whatever the terminal width. */
+class CollapsedRow implements Component {
+	private readonly text: string;
+
+	constructor(text: string) {
+		this.text = text;
+	}
+
+	render(width: number): string[] {
+		return [truncateToWidth(this.text, width)];
+	}
+
+	invalidate(): void {}
+}
+
+/** A collapsed row: the mark, then the one line the summarizer built. */
+function collapsedRow(theme: { fg(color: string, text: string): string }, line: string): Component {
+	return new CollapsedRow(`${theme.fg("accent", "▸ ")}${line}`);
+}
 
 interface Session {
 	/** The id of this Pi session, from its manager: an inherited env var is not it. */
@@ -455,10 +496,11 @@ async function prepareBrief(
 	const finalized = finalizeBrief(prepared.brief, prepared.given, {
 		notesDir: session.env.notesDir,
 		indexText,
-		readStatus: readText,
+		readFile: readText,
 	});
 	let brief = finalized.brief;
-	if (finalized.needsSubjects) {
+	// No scope means the uncommitted change, which has no commits of its own.
+	if (finalized.needsSubjects && brief.scope !== "") {
 		const subjects = await subjectsFromQueries(brief.scope, async (args) => pi.exec("git", args, { cwd: session.env.cwd }));
 		brief = { ...brief, task: deriveTask("", "", subjects) };
 	}
@@ -506,7 +548,10 @@ interface ReviewRequest {
 	dropped?: string;
 }
 
-/** Run a review, remember its verdict for the exact change, and return the text. */
+/**
+ * Run a review, remember its verdict for the exact change, and return the
+ * reviewer's text with the key and the notes that belong beside it.
+ */
 async function executeReview(
 	pi: ExtensionAPI,
 	session: Session,
@@ -517,7 +562,7 @@ async function executeReview(
 	const prepared = await prepareBrief(pi, session, request.input);
 	// Only a review of the whole working tree unlocks a commit of it. A named
 	// ref, range, or path list did not see the uncommitted change.
-	const key = prepared.brief.scope === UNCOMMITTED ? reviewKey(change) : "";
+	const key = isWorkingTreeScope(prepared.brief.scope) ? reviewKey(change) : "";
 	const notes = [...prepared.notes];
 	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
 	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
@@ -764,6 +809,11 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			required: ["action"],
 			additionalProperties: false,
 		},
+		renderResult(result, { expanded }, theme) {
+			const text = bodyText(result.content);
+			if (expanded) return new Text(text, 0, 0);
+			return collapsedRow(theme, journalLine(text));
+		},
 		async execute(_toolCallId, params) {
 			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
 			const notesDir = session.env.notesDir;
@@ -836,8 +886,15 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			},
 			additionalProperties: false,
 		},
+		renderResult(result, { expanded }, theme) {
+			const text = bodyText(result.content);
+			if (expanded) return new Text(text, 0, 0);
+			// A failed review is never summarized into a clean-looking row.
+			if (result.isError) return collapsedRow(theme, `review  failed: ${oneLine(text, 120)}`);
+			return collapsedRow(theme, reviewLine(summarizeReview(text)));
+		},
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
-			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }] };
+			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
 			const input: BriefInput = {};
 			if (typeof params.scope === "string") input.scope = params.scope;
 			if (typeof params.task === "string") input.task = params.task;
@@ -864,17 +921,56 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			}
 			const parsed = parseReviewArgs(args);
 			executeReview(pi, session, { input: parsed.input, dropped: parsed.dropped })
-				.then(({ text, verdict, notes }) => {
+				.then(({ text, verdict, notes, key }) => {
 					const extra = notes.map((note) => `\n${note}`).join("");
 					pi.sendMessage({
 						customType: "persona-agents:review",
-						content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}${extra}`,
+						content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}${extra}\n\nreview key: ${key}`,
 						display: true,
 					});
 				})
 				.catch((error: unknown) => ctx.ui.notify(`the review could not run: ${(error as Error).message}`, "error"));
 		},
 	});
+
+	pi.registerToolRenderer((toolName, next) => {
+		if (!BUILTIN_TOOLS.has(toolName)) return next();
+		const base = next();
+		return {
+			...base,
+			renderCall: (args, theme, context) => {
+				// Expanded, the owner wants the real call: Pi's own renderer, or the line.
+				if (context?.expanded) return base?.renderCall?.(args, theme, context) ?? new Text(toolCallLine(toolName, args), 0, 0);
+				return collapsedRow(theme, toolCallLine(toolName, args));
+			},
+		};
+	});
+
+	pi.registerMessageRenderer("persona-agents:review", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, reviewLine(summarizeReview(text)));
+	});
+
+	pi.registerMessageRenderer("persona-agents:permissions", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, permissionsLine(text));
+	});
+
+	pi.registerMessageRenderer("persona-agents:retro", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, retroLine(text));
+	});
+
+	for (const [type, name] of [[READ_LIST, "read list"], [RELOAD_LIST, "reload list"]] as const) {
+		pi.registerMessageRenderer(type, (message, options, theme) => {
+			const text = bodyText(message.content);
+			if (options.expanded) return new Text(text, 0, 0);
+			return collapsedRow(theme, listLine(name, text));
+		});
+	}
 
 	pi.registerCommand("persona", {
 		description: "Show or change the persona theme for this session",
