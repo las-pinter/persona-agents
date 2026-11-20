@@ -370,7 +370,11 @@ function classify(command: string, args: string[]): Hit[] {
 	const sub = args[i];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
 	if (!sub) return [UNGATED];
-	if (!GIT_HISTORY.has(sub)) return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(args.slice(i + 1))) ? [UNGATED] : ["write"];
+	if (!GIT_HISTORY.has(sub)) {
+		// A read that writes its output to a file (`git diff --output=x`) is a write.
+		if (args.slice(i + 1).some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
+		return GIT_READ.has(sub) || (sub === "branch" && isBranchListing(args.slice(i + 1))) ? [UNGATED] : ["write"];
+	}
 	const rest = args.slice(i + 1);
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.

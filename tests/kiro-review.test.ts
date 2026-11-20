@@ -96,6 +96,8 @@ describe("kiro review: the brief", () => {
 			assert.equal(brief.brief.scope, "HEAD~1");
 			assert.equal(brief.brief.task, "cutover");
 			assert.equal(brief.brief.decisions, "none");
+			assert.equal(brief.key, "", "a ref scope does not carry the working-tree key");
+			assert.ok(brief.notes.some((note) => /does not unlock a commit/.test(note)));
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}
@@ -137,9 +139,25 @@ describe("kiro review: the brief", () => {
 			);
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /^Scope: main$/m);
-			assert.match(run.stdout, /^Change key: [0-9a-f]{16}$/m);
+			assert.doesNotMatch(run.stdout, /^Change key:/m, "a named scope names no key");
 			assert.match(run.stdout, /Note for Kiro/);
 			assert.match(run.stderr, /ignored author text/);
+			assert.match(run.stderr, /does not unlock a commit/);
+		});
+	});
+
+	test("the CLI with no scope names the uncommitted change and its key", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const notes = notesWithStudy(root);
+			const run = spawnSync(
+				process.execPath,
+				["--experimental-strip-types", "--no-warnings", reviewScript, `--cwd=${cwd}`, `--notes=${notes}`],
+				{ encoding: "utf8" },
+			);
+			assert.equal(run.status, 0, run.stderr);
+			assert.match(run.stdout, /^Scope: the uncommitted change in this repository$/m);
+			assert.match(run.stdout, /^Change key: [0-9a-f]{16}$/m);
 		});
 	});
 });

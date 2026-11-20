@@ -100,23 +100,36 @@ export function makeChange(diffText: string, statusText: string, signature = "")
  * The verdict a reviewer's text states, or null. Accepts the agent's
  * `[Approve | Request Changes | Reject] — reason` line, a `Verdict: X` line,
  * and bold or bracketed forms.
+ *
+ * A `## Verdict` section wins. Failing that, a line labelled `Verdict:` is the
+ * verdict, so an earlier "not an Approve" cannot win. Without either, the last
+ * verdict word in the text is the result: a reviewer's final sentence states
+ * the verdict, and an early mention is usually its negation.
  */
 export function parseVerdict(text: string): Verdict | null {
+	const plain = text.replace(/[*_`[\]]/g, "");
 	const pattern = /(Request Changes|Approve|Reject)/i;
-	// The `## Verdict` section wins over a stray mention earlier in the text.
-	const section = /^##\s+Verdict\s*$/im.exec(text);
-	const tail = section ? text.slice(section.index) : "";
-	for (const source of [tail, text]) {
-		if (!source) continue;
-		const found = pattern.exec(source.replace(/[*_`[\]]/g, ""));
-		if (found) {
-			const raw = found[1].toLowerCase();
-			if (raw === "approve") return "Approve";
-			if (raw === "reject") return "Reject";
-			return "Request Changes";
-		}
+	const section = /^##\s+Verdict\s*$/im.exec(plain);
+	if (section) {
+		const found = pattern.exec(plain.slice(section.index));
+		return found ? verdictOf(found[1]) : null;
 	}
-	return null;
+	const labelled = /^\s*(?:#{1,6}\s*)?Verdict\s*:\s*(.+)$/im.exec(plain);
+	if (labelled) {
+		const found = pattern.exec(labelled[1]);
+		if (found) return verdictOf(found[1]);
+	}
+	let last = "";
+	for (const match of plain.matchAll(/(Request Changes|Approve|Reject)/gi)) last = match[1];
+	return last === "" ? null : verdictOf(last);
+}
+
+/** The canonical verdict for a matched word. */
+function verdictOf(word: string): Verdict {
+	const raw = word.toLowerCase();
+	if (raw === "approve") return "Approve";
+	if (raw === "reject") return "Reject";
+	return "Request Changes";
 }
 
 export interface GateInput {
@@ -170,7 +183,7 @@ export interface Brief {
 export const NO_VALUE = "none";
 
 /** The scope a review with no argument covers. */
-const UNCOMMITTED = "the uncommitted change in this repository";
+export const UNCOMMITTED = "the uncommitted change in this repository";
 
 /** A scope with the text that is not a ref, range, or path, and that text. */
 export interface ScopeText {

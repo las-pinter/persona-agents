@@ -66,6 +66,7 @@ import {
 	reviewKey,
 	REVIEWER_TIMEOUT_MS,
 	subjectsFromQueries,
+	UNCOMMITTED,
 	type Brief,
 	type BriefInput,
 	type Change,
@@ -478,13 +479,16 @@ async function executeReview(
 	signal?: AbortSignal,
 ): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[] }> {
 	const change = await readChange(pi, session.env.cwd);
-	const key = reviewKey(change);
 	const prepared = await prepareBrief(pi, session, request.input);
+	// Only a review of the whole working tree unlocks a commit of it. A named
+	// ref, range, or path list did not see the uncommitted change.
+	const key = prepared.brief.scope === UNCOMMITTED ? reviewKey(change) : "";
 	const notes = [...prepared.notes];
 	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
 	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
+	if (key === "") notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
 	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
-	if (verdict) {
+	if (verdict && key !== "") {
 		session.reviews.set(key, verdict);
 		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
 	}

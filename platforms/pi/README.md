@@ -112,7 +112,9 @@ code without the author's reasoning.
 - The verdict is read from the reviewer's `## Verdict` line and **stored against
   the key of the exact change** (a session entry, restored on reload), so a
   review covers what it reviewed and nothing else. An untracked file edited
-  after its review changes the key.
+  after its review changes the key. A review with a named ref, range, or path
+  scope names no key: it did not see the whole working tree, so it does not
+  unlock a commit.
 
 **The commit gate.** When the companion runs a `git commit` that policy allows,
 the extension reads the change and asks unless the change is trivial (at most

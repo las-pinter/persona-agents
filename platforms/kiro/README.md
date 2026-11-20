@@ -143,7 +143,10 @@ also take `--home=` (the notes home, for tests) and `--cwd=` in tests.
 Kiro skills cannot fork into a sub-agent the way a Claude skill can. The Kiro
 branch of the shared `review` skill therefore runs `review.ts` to build the
 three-field brief (`Scope`, `Task`, `Decisions`) and the change key, then
-passes the brief to the `pa-reviewer` sub-agent.
+passes the brief to the `pa-reviewer` sub-agent. With no scope the brief is the
+uncommitted change, and only that scoped review carries a key: a named ref,
+range, or path list does not see the whole working tree, so it cannot unlock a
+commit.
 
 The verdict is recorded from the session store, not from a PostToolUse hook: a
 sub-agent run is written as `sub_agent_start` / `sub_agent_complete` with

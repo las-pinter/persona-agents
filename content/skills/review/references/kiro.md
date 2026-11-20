@@ -11,15 +11,19 @@ You are the companion. The review runs in a separate context with the
    node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
    ```
 
-   Replace `<scope>` with the scope the owner named; when none was named, use
-   `HEAD`. The argument is a scope only: a ref, a commit range, or paths. The
+   Replace `<scope>` with the scope the owner named; when none was named, drop
+   the argument: an empty scope is the uncommitted change. Do not pass `HEAD`;
+   `git diff HEAD...HEAD` is empty, while the commit gate watches the working
+   tree. The argument is a scope only: a ref, a commit range, or paths. The
    script cuts anything that is not a scope, fills the missing `Task` and
    `Decisions` from the project notes, names the change key, and prints the
    reviewer task. It writes its warnings (dropped text, a derived field) to
    stderr; tell the owner those in one line.
 
    Do not build the brief yourself. Without the script the brief has no change
-   key, so the Stop hook cannot record the verdict and the commit will ask.
+   key, so the Stop hook cannot record the verdict and the commit will ask. A
+   review of a named ref, range, or paths names no key either: it did not see
+   the whole uncommitted change, so it does not unlock a commit of it.
 
 2. Start the `pa-reviewer` sub-agent with the printed task verbatim, including
    the final `Change key:` line. Do not add a checklist, your own risk list, or

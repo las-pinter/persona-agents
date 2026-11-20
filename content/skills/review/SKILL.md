@@ -16,10 +16,11 @@ yourself and do not write the brief yourself. Run
 node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
 ```
 
-with the scope the owner named (`HEAD` when none was named), then start the
-`pa-reviewer` sub-agent with the printed text verbatim, including the final
-`Change key:` line. Read `references/kiro.md` for the rest. The text below is
-the reviewer's own prompt; it is not the companion's instructions.
+with the scope the owner named; when none was named, omit the argument (an
+empty scope is the uncommitted change). Then start the `pa-reviewer` sub-agent
+with the printed text verbatim, including the final `Change key:` line. Read
+`references/kiro.md` for the rest. The text below is the reviewer's own prompt;
+it is not the companion's instructions.
 
 # Review
 

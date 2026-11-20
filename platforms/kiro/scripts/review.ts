@@ -25,6 +25,7 @@ import {
 	parseReviewArgs,
 	promptForBrief,
 	subjectsFromQueries,
+	UNCOMMITTED,
 	type Brief,
 	type BriefInput,
 } from "../../shared/review/review.ts";
@@ -88,17 +89,21 @@ export async function buildReviewBrief(
 		task = deriveTask("", "", subjects);
 	}
 	const { key } = changeKey(options.cwd);
-	return { brief: { ...finalized.brief, task }, key, notes };
+	// The commit gate compares the working-tree key. A review of a named ref,
+	// range, or path list did not see the whole uncommitted change, so it must
+	// not unlock a commit of it.
+	const workingTree = finalized.brief.scope === UNCOMMITTED;
+	if (!workingTree) notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
+	return { brief: { ...finalized.brief, task }, key: workingTree ? key : "", notes };
 }
 
 /** The reviewer task: the shared prompt plus the change-key line. */
 export function reviewerTask(brief: ReviewBrief): string {
-	return [
-		promptForBrief(brief.brief, "Kiro"),
-		"",
-		`Change key: ${brief.key}`,
-		"This line is metadata for the commit gate, not a checklist.",
-	].join("\n");
+	const lines = [promptForBrief(brief.brief, "Kiro")];
+	if (brief.key !== "") {
+		lines.push("", `Change key: ${brief.key}`, "This line is metadata for the commit gate, not a checklist.");
+	}
+	return lines.join("\n");
 }
 
 function option(name: string, argv: string[]): string | undefined {

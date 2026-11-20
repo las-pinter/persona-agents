@@ -140,7 +140,17 @@ describe("kiro doctrine: the reviewer", () => {
 	test("every history, publish, or write segment is denied", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));
-			for (const command of ["git commit -m x", "git add .", "git push", "gh pr create", "rm -rf build", "sed -i s/a/b/ x", "echo x > out.txt"]) {
+			for (const command of [
+				"git commit -m x",
+				"git add .",
+				"git push",
+				"gh pr create",
+				"rm -rf build",
+				"sed -i s/a/b/ x",
+				"echo x > out.txt",
+				"git diff --output=/tmp/x",
+				"git log --output /tmp/x",
+			]) {
 				assert.equal(commandDecision("reviewer", command, context).verdict, "deny", command);
 			}
 		});
