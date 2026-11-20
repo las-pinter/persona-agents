@@ -67,6 +67,37 @@ function toolUses(entries) {
 	return uses;
 }
 
+/** The text of an entry's message content, string or blocks. */
+function entryText(entry) {
+	const content = entry.message?.content;
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((block) => block?.type === "text" && typeof block.text === "string")
+		.map((block) => block.text)
+		.join("\n");
+}
+
+/**
+ * The skills a session invoked, in order: a `Skill` tool call, or a typed
+ * `/persona-agents:<skill>` command, which Claude Code records as user text
+ * with a `<command-name>` marker instead of a tool call.
+ */
+function skillNames(entries) {
+	const names = [];
+	for (const entry of entries) {
+		if (entry.type === "assistant" && !entry.isSidechain && Array.isArray(entry.message?.content)) {
+			for (const block of entry.message.content) {
+				if (block?.type === "tool_use" && block.name === "Skill" && typeof block.input?.skill === "string") names.push(block.input.skill);
+			}
+		}
+		for (const match of entryText(entry).matchAll(/<command-name>\/persona-agents:([a-z0-9-]+)<\/command-name>/g)) {
+			names.push(`persona-agents:${match[1]}`);
+		}
+	}
+	return names;
+}
+
 /** Keep the last `max` distinct values, ordered by their last use. */
 function lastDistinct(values, max) {
 	const seen = new Map();
@@ -92,10 +123,7 @@ function projectStartupDocs(notesDir) {
  */
 export function buildManifest(entries, notesDir, sessionId = "") {
 	const uses = toolUses(entries);
-	const skills = lastDistinct(
-		uses.filter((use) => use.name === "Skill" && typeof use.input?.skill === "string").map((use) => use.input.skill),
-		MAX_SKILLS,
-	);
+	const skills = lastDistinct(skillNames(entries), MAX_SKILLS);
 	const sessionsDir = join(notesDir, "sessions") + sep;
 	const written = uses
 		.filter((use) => ["Write", "Edit", "MultiEdit"].includes(use.name))
@@ -113,7 +141,7 @@ export function buildManifest(entries, notesDir, sessionId = "") {
 		[...readNotes, ...projectStartupDocs(notesDir), ...(study ? [study] : []), ...pinnedDocs(notesText)],
 		MAX_DOCS,
 	).filter((path) => path !== sessionNotes);
-	return { sessionNotes, skills, docs };
+	return { sessionNotes, skills, docs, scan: { entries: entries.length, toolUses: uses.length } };
 }
 
 /** The PreCompact stdout: instructions that the summary must follow. */
@@ -193,6 +221,11 @@ function run(mode, input) {
 	if (mode === "pre") {
 		const manifest = buildManifest(readTranscript(input.transcript_path), notesDir, sessionId);
 		writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+		if (manifest.scan.entries > 0 && manifest.scan.toolUses === 0) {
+			process.stderr.write(
+				`persona-agents: the transcript holds ${manifest.scan.entries} entries but no tool calls; the reload list may be incomplete\n`,
+			);
+		}
 		process.stdout.write(summaryInstructions(manifest));
 		return;
 	}
@@ -209,7 +242,7 @@ function run(mode, input) {
 		}
 		appendFileSync(
 			join(dir, "metrics.ndjson"),
-			`${JSON.stringify({ at: new Date().toISOString(), session: input.session_id, trigger: input.trigger, preTokens: meta.preTokens ?? null, postTokens: meta.postTokens ?? null, skills: manifest.skills.length, docs: manifest.docs.length })}\n`,
+			`${JSON.stringify({ at: new Date().toISOString(), session: input.session_id, trigger: input.trigger, preTokens: meta.preTokens ?? null, postTokens: meta.postTokens ?? null, entries: manifest.scan?.entries ?? null, toolUses: manifest.scan?.toolUses ?? null, skills: manifest.skills.length, docs: manifest.docs.length })}\n`,
 		);
 		appendLog(manifest.sessionNotes, `${stamp()} — compaction (${input.trigger}${tokens}); reload: ${manifest.skills.length} skills, ${manifest.docs.length} docs`);
 		return;
