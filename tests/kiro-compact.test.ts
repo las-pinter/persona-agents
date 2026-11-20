@@ -88,6 +88,22 @@ describe("kiro compaction: the manifest", () => {
 		});
 	});
 
+	test("a resumed session that only read its notes gets them from the Sessions line", () => {
+		withTemp((root) => {
+			const f = fixture(root);
+			const notesFile = path.join(f.notes, "sessions", "2026-11-20-task.md");
+			fs.writeFileSync(notesFile, `# Task\n\n- **Status:** open\n- **Sessions:** ${sessionId}\n`);
+			// A second open file makes the only-open fallback useless, so only the
+			// Sessions line can choose the target.
+			fs.writeFileSync(path.join(f.notes, "sessions", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
+			const dir = path.join(f.kiro, "sessions", "hash", sessionId);
+			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${JSON.stringify({ type: "tool_call", toolName: "read_file", args: { path: f.doc } })}\n`);
+			const { manifest } = prepareCompaction(f.kiro, f.cwd, f.home, sessionId, new Date("2026-11-20T10:00:00Z"));
+			assert.equal(manifest.sessionNotes, notesFile);
+			assert.equal(manifest.session, sessionId);
+		});
+	});
+
 	test("a missing session store yields an empty manifest, not a failure", () => {
 		withTemp((root) => {
 			const f = fixture(root);
@@ -135,6 +151,23 @@ describe("kiro compaction: the summary and the reload", () => {
 			fs.mkdirSync(path.join(state, "compact"), { recursive: true });
 			const { reload } = finishCompaction(f.kiro, f.cwd, f.home, sessionId, { summary: "s" }, new Date("2026-11-20T10:01:00Z"));
 			assert.match(reload, new RegExp(f.sessionNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+		});
+	});
+
+	test("a PostCompact rebuild uses the session id when no manifest was saved", () => {
+		withTemp((root) => {
+			const f = fixture(root);
+			const notesFile = path.join(f.notes, "sessions", "2026-11-20-task.md");
+			fs.writeFileSync(notesFile, `# Task\n\n- **Status:** open\n- **Sessions:** ${sessionId}\n`);
+			// Only the Sessions line can choose the target; the fallback sees two open files.
+			fs.writeFileSync(path.join(f.notes, "sessions", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
+			const dir = path.join(f.kiro, "sessions", "hash", sessionId);
+			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${JSON.stringify({ type: "tool_call", toolName: "read_file", args: { path: f.doc } })}\n`);
+			const state = path.join(f.kiro, "persona-agents", "state");
+			fs.mkdirSync(path.join(state, "compact"), { recursive: true });
+			const { reload } = finishCompaction(f.kiro, f.cwd, f.home, sessionId, { summary: "s" }, new Date("2026-11-20T10:01:00Z"));
+			assert.ok(reload.includes(notesFile));
+			assert.ok(reload.includes(`Session id: ${sessionId}`));
 		});
 	});
 });

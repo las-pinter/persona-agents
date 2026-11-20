@@ -66,7 +66,7 @@ function manifestFor(kiroHome: string, sessionId: string, notesDir: string, stat
 		}
 	}
 	const session = readSession(kiroHome, sessionId);
-	return buildManifest(session?.entries ?? [], notesDir);
+	return buildManifest(session?.entries ?? [], notesDir, sessionId);
 }
 
 /** Save the manifest and return the summarizer guidance. */
@@ -79,7 +79,7 @@ export function prepareCompaction(
 ): { manifest: Manifest; instructions: string } {
 	const notesDir = projectDir(cwd, home);
 	const session = readSession(kiroHome, sessionId);
-	const manifest = buildManifest(session?.entries ?? [], notesDir);
+	const manifest = buildManifest(session?.entries ?? [], notesDir, sessionId);
 	const stateDir = stateDirOf(kiroHome);
 	mkdirSync(compactDir(stateDir), { recursive: true });
 	const state: CompactionState = { session: sessionId, at: now.toISOString(), manifest };
