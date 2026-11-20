@@ -15,7 +15,8 @@
 # Kiro CLI: copies a self-contained payload into <kiro home>/persona-agents/,
 # installs the skills into <kiro home>/skills/, and writes pa-companion,
 # pa-reviewer, and pa-writer into <kiro home>/agents/. The kiro home is
-# $KIRO_HOME, else ~/.kiro. Needs kiro-cli 3.4.0 or newer and Node.
+# $KIRO_HOME, else ~/.kiro. Needs kiro-cli 3.4.0 or newer and Node 22.6 or
+# newer.
 #
 # With no adapter flag, both are installed. When kiro-cli is absent, the Kiro
 # step is skipped with a message unless --kiro was named.
@@ -57,7 +58,8 @@ Usage:
 With no adapter flag, both are installed. When kiro-cli is absent, the Kiro
 step is skipped with a message unless --kiro was named.
 
-Claude Code needs jq. Kiro CLI needs Node and kiro-cli 3.4.0 or newer.
+Claude Code needs jq. Kiro CLI needs Node 22.6 or newer and kiro-cli 3.4.0 or
+newer.
 EOF
 }
 
@@ -190,8 +192,20 @@ install_kiro() {
             return 0
         fi
     fi
+    local node_version node_major node_minor
     if ! command -v node >/dev/null 2>&1; then
         echo "Error: Node is required for the Kiro adapter." >&2
+        exit 1
+    fi
+    node_version="$(node --version 2>/dev/null)" || node_version=""
+    if [[ "$node_version" =~ ^v([0-9]+)\.([0-9]+) ]]; then
+        node_major="${BASH_REMATCH[1]}"
+        node_minor="${BASH_REMATCH[2]}"
+    else
+        node_major="" node_minor=""
+    fi
+    if [[ -z "$node_major" ]] || ((node_major < 22)) || ((node_major == 22 && node_minor < 6)); then
+        echo "Error: Node 22.6 or newer is required for the Kiro adapter; found ${node_version:-an unreadable version}." >&2
         exit 1
     fi
     local args=(--kiro-home="$kiro_home" --kiro-cli="$KIRO_CLI_ARG")

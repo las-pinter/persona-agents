@@ -80,6 +80,19 @@ function fakeCli(temp: Temp, output = "kiro-cli 3.5.0"): string {
 	return file;
 }
 
+/** A fake node that reports one version and hands every other call to the real node. */
+function fakeNode(temp: Temp, version: string): string {
+	const bin = path.join(temp.root, "node-bin");
+	fs.mkdirSync(bin, { recursive: true });
+	const file = path.join(bin, "node");
+	fs.writeFileSync(
+		file,
+		`#!/usr/bin/env bash\nif [[ "$1" == "--version" ]]; then echo ${JSON.stringify(version)}; exit 0; fi\nexec ${JSON.stringify(process.execPath)} "$@"\n`,
+	);
+	fs.chmodSync(file, 0o755);
+	return file;
+}
+
 function runInstaller(args: string[], env: Record<string, string> = {}): { status: number; stdout: string; stderr: string } {
 	const run = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", installerScript, ...args], {
 		encoding: "utf8",
@@ -450,6 +463,33 @@ describe("install.sh: the adapter flags", () => {
 			const run = runShell(["--kiro", `--kiro-cli=${cli}`], { HOME: temp.home });
 			assert.equal(run.status, 1);
 			assert.match(run.stderr, /below the required 3\.4\.0/);
+		});
+	});
+
+	test("--kiro with an old Node fails before any write", () => {
+		withTemp((temp) => {
+			const cli = fakeCli(temp);
+			const node = fakeNode(temp, "v20.9.0");
+			const run = runShell(["--kiro", `--kiro-home=${temp.kiro}`, `--kiro-cli=${cli}`], {
+				HOME: temp.home,
+				PATH: `${path.dirname(node)}:${process.env.PATH}`,
+			});
+			assert.equal(run.status, 1);
+			assert.match(run.stderr, /Node 22\.6 or newer/);
+			assert.ok(!fs.existsSync(path.join(temp.kiro, "persona-agents")));
+		});
+	});
+
+	test("--kiro accepts Node 22.6.0 as the minimum", () => {
+		withTemp((temp) => {
+			const cli = fakeCli(temp);
+			const node = fakeNode(temp, "v22.6.0");
+			const run = runShell(["--kiro", `--kiro-home=${temp.kiro}`, `--kiro-cli=${cli}`], {
+				HOME: temp.home,
+				PATH: `${path.dirname(node)}:${process.env.PATH}`,
+			});
+			assert.equal(run.status, 0, run.stderr);
+			assert.ok(fs.existsSync(path.join(temp.kiro, "persona-agents", "config.json")));
 		});
 	});
 
