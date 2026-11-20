@@ -38,7 +38,9 @@ const sessionId = "sess_11111111-2222-3333-4444-555555555555";
 function writeSession(root: string, payloads: Record<string, unknown>[], meta?: Record<string, unknown>): string {
 	const dir = path.join(root, "sessions", "abc123", sessionId);
 	fs.mkdirSync(dir, { recursive: true });
-	fs.writeFileSync(path.join(dir, "messages.jsonl"), `${payloads.map((payload) => JSON.stringify(payload)).join("\n")}\n`);
+	// The real V3 store wraps each payload; the reader must unwrap it.
+	const lines = payloads.map((payload) => JSON.stringify({ timestamp: "2026-11-20T00:00:00.000Z", payload }));
+	fs.writeFileSync(path.join(dir, "messages.jsonl"), `${lines.join("\n")}\n`);
 	if (meta) fs.writeFileSync(path.join(dir, "session.json"), JSON.stringify(meta));
 	return dir;
 }

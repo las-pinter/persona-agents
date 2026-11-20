@@ -39,7 +39,10 @@ export interface SessionMeta {
 export interface SubAgentRun {
 	subSessionId: string;
 	agent: string;
+	/** The brief the companion sent; a model may pass only part of the printed text. */
 	prompt: string;
+	/** The change key from the prompt, or from the brief in the transcript before the run. */
+	key: string;
 	response: string;
 	status: string;
 }
@@ -137,6 +140,15 @@ function neutralTool(name: string): string {
 /** The reviewer name whose completion becomes a review entry. */
 export const DEFAULT_REVIEWER = "pa-reviewer";
 
+/** A change key line: the review brief's metadata for the commit gate. */
+export const CHANGE_KEY = /Change key:\s*([0-9a-f]{16})\b/;
+
+/** The change key in a text, or "". */
+export function changeKeyIn(text: string): string {
+	const match = CHANGE_KEY.exec(text);
+	return match ? match[1] : "";
+}
+
 /**
  * Map the payloads of one session to the shared entry shape and the facts the
  * adapter needs.
@@ -157,13 +169,20 @@ export function mapPayloads(
 	const denials: ToolDenial[] = [];
 	const subAgents: SubAgentRun[] = [];
 	const hooks: string[] = [];
-	const pending = new Map<string, { agent: string; prompt: string }>();
+	const pending = new Map<string, { agent: string; prompt: string; key: string }>();
 	let credits: CreditSplit | null = null;
 	let contextUsage: number | null = null;
+	/**
+	 * The last change key seen in a tool result of this turn. A model may pass
+	 * only the head of the printed brief to the reviewer, so the key would be
+	 * lost; the transcript keeps the whole brief. A new user message resets it.
+	 */
+	let lastKey = "";
 
 	for (const payload of payloads) {
 		const type = typeof payload.type === "string" ? payload.type : "";
 		if (type === "user") {
+			lastKey = "";
 			const content = payload.content;
 			if (typeof content === "string" && content.trim() !== "") {
 				entries.push({ type: "message", message: { role: "user", content } });
@@ -210,13 +229,17 @@ export function mapPayloads(
 					message: typeof payload.content === "string" ? payload.content : "",
 				});
 			}
+			if (typeof payload.content === "string") {
+				const found = changeKeyIn(payload.content);
+				if (found) lastKey = found;
+			}
 			continue;
 		}
 		if (type === "sub_agent_start") {
 			const subSessionId = typeof payload.subSessionId === "string" ? payload.subSessionId : "";
 			const agent = typeof payload.subAgentName === "string" ? payload.subAgentName : "";
 			const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
-			if (subSessionId) pending.set(subSessionId, { agent, prompt });
+			if (subSessionId) pending.set(subSessionId, { agent, prompt, key: changeKeyIn(prompt) || lastKey });
 			continue;
 		}
 		if (type === "sub_agent_complete") {
@@ -225,7 +248,7 @@ export function mapPayloads(
 			const agent = typeof payload.subAgentName === "string" ? payload.subAgentName : (start?.agent ?? "");
 			const response = typeof payload.response === "string" ? payload.response : "";
 			const status = typeof payload.status === "string" ? payload.status : "unknown";
-			subAgents.push({ subSessionId, agent, prompt: start?.prompt ?? "", response, status });
+			subAgents.push({ subSessionId, agent, prompt: start?.prompt ?? "", key: start?.key ?? "", response, status });
 			if (agent === reviewer) {
 				const verdict = parseVerdict(response);
 				if (verdict) {
@@ -267,7 +290,12 @@ export function readSession(kiroHome: string, sessionId: string): SessionFacts |
 	const dir = findSessionDir(kiroHome, sessionId);
 	if (!dir) return null;
 	const meta = readSessionMeta(dir);
-	const payloads = readJsonLines(join(dir, "messages.jsonl"));
+	// The store wraps each payload as `{ id, timestamp, payload: { type, ... } }`;
+	// a flat line is tolerated for fixtures and older stores.
+	const payloads = readJsonLines(join(dir, "messages.jsonl")).map((line) => {
+		const inner = line.payload;
+		return inner && typeof inner === "object" ? (inner as Record<string, unknown>) : line;
+	});
 	const facts = mapPayloads(payloads, { skillsDir: join(kiroHome, "skills") });
 	return { dir, meta, ...facts };
 }

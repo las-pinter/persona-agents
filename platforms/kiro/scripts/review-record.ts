@@ -43,6 +43,9 @@ export function keyOfPrompt(prompt: string): string {
 /**
  * Record every pa-reviewer run in a session that has not been recorded yet.
  *
+ * The run carries the key from its prompt, or, when the model passed only part
+ * of the printed brief, from the brief text in the transcript before the run.
+ *
  * A run that already has a record for the same key and sub-session is skipped,
  * so the Stop hook can run after every turn. A re-review of the same change
  * has a different sub-session and replaces the earlier verdict.
@@ -61,7 +64,7 @@ export function recordSessionReviews(
 	const recorded: RecordedReview[] = [];
 	for (const run of session.subAgents) {
 		if (run.agent !== reviewer || run.status !== "success") continue;
-		const key = keyOfPrompt(run.prompt);
+		const key = run.key || keyOfPrompt(run.prompt);
 		if (!key) continue;
 		const verdict = parseVerdict(run.response);
 		if (!verdict) continue;

@@ -145,13 +145,16 @@ describe("kiro review: the brief", () => {
 });
 
 describe("kiro review: the verdict recorder", () => {
-	function store(root: string, runs: { agent: string; key?: string; response: string; status?: string }[]): string {
+	function store(root: string, runs: { agent: string; key?: string; briefKey?: string; response: string; status?: string }[]): string {
 		const kiro = path.join(root, "kiro");
 		const dir = path.join(kiro, "sessions", "hash", sessionId);
 		fs.mkdirSync(dir, { recursive: true });
 		const payloads: Record<string, unknown>[] = [];
 		runs.forEach((run, index) => {
 			const sub = `sub-${index}`;
+			if (!run.key && run.briefKey) {
+				payloads.push({ type: "tool_result", status: "completed", content: `Output:\nReview one change.\n\nChange key: ${run.briefKey}\nmetadata` });
+			}
 			payloads.push({ type: "sub_agent_start", subSessionId: sub, subAgentName: run.agent, prompt: run.key ? `Review one change.\n\nChange key: ${run.key}\nmetadata` : "Review one change." });
 			payloads.push({ type: "sub_agent_complete", subSessionId: sub, subAgentName: run.agent, response: run.response, status: run.status ?? "success" });
 		});
@@ -185,6 +188,18 @@ describe("kiro review: the verdict recorder", () => {
 			assert.equal(reviewFor(stateDir, "1111111111111111")?.verdict, "Request Changes");
 			assert.equal(reviewFor(stateDir, "2222222222222222"), null);
 			assert.equal(reviewFor(stateDir, "3333333333333333"), null);
+		});
+	});
+
+	test("a truncated prompt still records the key from the brief in the transcript", () => {
+		withTemp((root) => {
+			const kiro = store(root, [
+				{ agent: "pa-reviewer", briefKey: "4444444444444444", response: "## Verdict\nApprove - the brief was in the transcript." },
+			]);
+			const stateDir = path.join(root, "state");
+			const recorded = recordSessionReviews(kiro, sessionId, stateDir);
+			assert.equal(recorded.length, 1);
+			assert.equal(reviewFor(stateDir, "4444444444444444")?.verdict, "Approve");
 		});
 	});
 
