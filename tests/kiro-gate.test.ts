@@ -99,6 +99,60 @@ describe("kiro doctrine: the companion", () => {
 		});
 	});
 
+	test("a cd into the project notes folder is a session directory", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const notes = path.join(root, "notes");
+			fs.mkdirSync(notes);
+			const context = { ...ctx(cwd, path.join(root, "state")), notesDir: () => notes };
+			assert.equal(commandDecision("companion", `cd ${notes} && git add -A`, context).verdict, "allow");
+			assert.equal(commandDecision("companion", "cd /elsewhere && git add -A", context).verdict, "ask");
+		});
+	});
+
+	test("the observed commit chain allows a trivial change", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "one\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "two\n");
+			const chain = [
+				`cd ${cwd} && cargo fmt && git add -A && git commit -q -F - <<'EOF' | grep -v Passed | tail -5`,
+				"msg",
+				"EOF",
+				"git log --oneline -1",
+			].join("\n");
+			assert.equal(commandDecision("companion", chain, ctx(cwd, path.join(root, "state"))).verdict, "allow");
+		});
+	});
+
+	test("the commit review still runs inside a chain", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const decision = commandDecision(
+				"companion",
+				`cd ${cwd} && cargo fmt && git add -A && git commit -q -m x`,
+				ctx(cwd, path.join(root, "state")),
+			);
+			assert.equal(decision.verdict, "ask");
+			assert.match(decision.reason, /no independent review/);
+		});
+	});
+
+	test("a cd outside the session asks", () => {
+		withTemp((root) => {
+			const cwd = repoWithChange(root);
+			const decision = commandDecision("companion", "cd /elsewhere && git commit -m x", ctx(cwd, path.join(root, "state")));
+			assert.equal(decision.verdict, "ask");
+			assert.match(decision.reason, /mixes/);
+		});
+	});
+
 	test("a commit of a trivial change is allowed", () => {
 		withTemp((root) => {
 			const cwd = path.join(root, "repo");
@@ -138,6 +192,57 @@ describe("kiro doctrine: the companion", () => {
 			const decision = commandDecision("companion", "git commit -m x", ctx(cwd, stateDir));
 			assert.equal(decision.verdict, "ask");
 			assert.match(decision.reason, /Request Changes/);
+		});
+	});
+
+	test("a cd into a nested repository asks", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "one\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "two\n");
+			const nested = path.join(cwd, "nested");
+			fs.mkdirSync(nested);
+			git(nested, ["init"]);
+			git(nested, ["config", "user.email", "test@example.com"]);
+			git(nested, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(nested, "b.txt"), "one\n");
+			git(nested, ["add", "."]);
+			git(nested, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(nested, "b.txt"), "two\n");
+			const decision = commandDecision("companion", `cd ${nested} && git commit -m x`, ctx(cwd, path.join(root, "state")));
+			assert.equal(decision.verdict, "ask");
+			assert.equal(decision.reason, OTHER_REPO_ASK);
+			// A trailing cd back into the session does not hide the commit's repository.
+			const trailing = commandDecision(
+				"companion",
+				`cd ${nested} && git commit -m x; cd ${cwd}`,
+				ctx(cwd, path.join(root, "state")),
+			);
+			assert.equal(trailing.verdict, "ask");
+			assert.equal(trailing.reason, OTHER_REPO_ASK);
+		});
+	});
+
+	test("a cd inside the same repository still allows", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "one\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "a.txt"), "two\n");
+			fs.mkdirSync(path.join(cwd, "sub"));
+			const decision = commandDecision("companion", `cd ${cwd}/sub && git commit -m x`, ctx(cwd, path.join(root, "state")));
+			assert.equal(decision.verdict, "allow");
 		});
 	});
 
@@ -191,6 +296,19 @@ describe("kiro doctrine: the reviewer", () => {
 			for (const command of ["git status", "git diff", "npm test", "node --test tests/x.test.ts", "ls"]) {
 				assert.equal(commandDecision("reviewer", command, context).verdict, "allow", command);
 			}
+		});
+	});
+
+	test("the observed commit chain is denied", () => {
+		withTemp((root) => {
+			const context = ctx(root, path.join(root, "state"));
+			const chain = [
+				`cd ${root} && cargo fmt && git add -A && git commit -q -F - <<'EOF' | grep -v Passed | tail -5`,
+				"msg",
+				"EOF",
+				"git log --oneline -1",
+			].join("\n");
+			assert.equal(commandDecision("reviewer", chain, context).verdict, "deny");
 		});
 	});
 });
