@@ -144,7 +144,7 @@ Rules:
 
 - No "Last worked on" field.
 - No persona voice. Plain facts only.
-- `summary.md`: maximum 30 lines (hard ceiling).
+- `summary.md`: maximum 50 lines (hard ceiling).
 - Feature, bug, and tech notes: maximum 300 lines each (hard ceiling). Split the
   topic when a note cannot fit.
 - Release and audit notes: maximum 300 lines each (hard ceiling). Split the
