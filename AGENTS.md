@@ -118,7 +118,3 @@ restates doctrine prose. A local imitation of Claude Code's own rule engine
 proves nothing about Claude Code. A hook test never starts a real `claude`
 process and never reads the owner's real notes folder; use the `--home` and
 `--claude` argument seams.
-
-The reviewer's skill-loading rule has a behavioral check in
-`evals/reviewer-skills`: it starts a real `claude` child, so it is not part of
-`npm test`. Run it after a reviewer-rule change as `evals/README.md` describes.

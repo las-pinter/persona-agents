@@ -1,7 +1,7 @@
 # Reviewer evals
 
 A `claude plugin eval` suite for the reviewer's behavior. It is not part of
-`npm test`; run it when the reviewer rules change.
+`npm test`; run it by hand when you want the behavioral check.
 
 ## The case
 
