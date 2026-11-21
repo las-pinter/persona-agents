@@ -95,6 +95,11 @@ code without the author's reasoning.
   author hears what went nowhere. A scope that is plain prose survives that cut;
   the reviewer then says the scope does not resolve and reviews what it can.
   The reviewer is told the brief is the author's view, not its checklist.
+- **The reviewer picks its own skills**: it names the languages and frameworks
+  in scope from the changed files and their manifests, loads every available
+  skill that matches (the checklist, plus a quality-gate, implementation, or
+  installed language skill such as `rust-skills`), and lists them under
+  `## Skills loaded`. The brief never names a skill.
 - **`Task` and `Decisions` are filled when the author leaves them out**: the
   decisions file is the single study at stage `in-progress` in
   `studies/index.md` (two in progress names `none` and both titles, never a

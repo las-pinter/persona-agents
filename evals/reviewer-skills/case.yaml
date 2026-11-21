@@ -1,0 +1,14 @@
+schema_version: "1.1"
+name: reviewer-skills
+description: The reviewer loads a Rust skill for a Rust change and names it.
+tags: [review, rust]
+runs: 1
+plugins:
+  # The plugin under test is not loaded into the eval child by itself; this
+  # entry loads it so the child can run the review skill.
+  - ../..
+  # A self-contained Rust skill, because the sandbox has a fresh HOME and
+  # cannot see the owner's installed skills.
+  - rust-skill-plugin
+context:
+  scaffold_script: scaffold.sh

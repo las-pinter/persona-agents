@@ -38,6 +38,14 @@ do.
 ## Skills
 
 - **code-review-checklist** — the review method and the severity map.
+- Select by the language or framework in scope: name them from the changed
+  files and their manifests (`Cargo.toml`, `package.json`, `pyproject.toml`,
+  and the like), then load every available skill whose description names that
+  language or framework — a quality-gate or implementation skill for it, or an
+  installed skill such as `rust-skills` for Rust. Do not load a general
+  workflow or policy skill for this. The skills you were given are the list;
+  the brief never names a skill. Name every loaded skill under `## Skills
+  loaded`, so a missing one shows.
 
 ## Output Format
 Keep the review terse: one finding per issue, no restated diff, no praise. Use
@@ -50,6 +58,9 @@ this structure:
 ## Risk list
 [One line each: what could go wrong, including effects outside the diff, or
 "none identified"]
+
+## Skills loaded
+[One line per skill you loaded, or "none matched the scope"]
 
 ## Issues
 [Numbered. Each: Severity (BLOCKER | CRITICAL | IMPORTANT | SUGGESTION | NIT),
