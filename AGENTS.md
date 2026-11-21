@@ -56,12 +56,22 @@ The doctrine lives in three places:
   `platforms/shared/shell/` and is shared with the Pi gate
   (`platforms/pi/scripts/policy.ts`) and the Kiro gate, so the adapters cannot
   drift apart. The companion runs any git command with no prompt when every
-  part of the command is git work. A push, a `gh pr` / `run` / `release`, a
-  `git -c` override, an unknown git global option, an upload-pack or transport
-  helper URL, a merge strategy, a git verb that runs another program, writes
-  config, or reaches a remote, and any wrapped or substituted command ask.
-  Every other plugin agent is denied all of these and every shell write the
-  hook can see.
+  other part of the command is inert: a `cd` into the session working
+  directory or an additional working directory (the recommended settings list
+  the notes folder as one); a plain read-only git command (`status`,
+  `diff`, `log`, `show`, and the other local read verbs; `grep`, `cat-file`,
+  `reflog`, `help`, `remote show`, a diff helper, or a runtime-shaped word
+  stays out); a project formatter
+  (`cargo fmt`, `rustfmt`, `ruff format`, `black`, `prettier --write`,
+  `gofmt -w`); a `grep`, `head`, `tail`, `wc`, `sort`, or `uniq` filter that
+  reads a pipe with no file argument; or a quoted heredoc or single-quoted
+  here-string that only feeds `git commit -F -`. A push, a `gh pr` / `run` /
+  `release`, a `git -c` override, an unknown git global option, an upload-pack
+  or transport helper URL, a merge strategy, a git verb that runs another
+  program, writes config, or reaches a remote, and any wrapped or substituted
+  command ask. A file redirect, a `tee`, or a `cd` outside those directories
+  removes the allowance, so Claude Code's own flow decides. Every other plugin
+  agent is denied all of these and every shell write the hook can see.
 - The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and
   `pa-reviewer`. A `PermissionRequest` hook allows a git command and
   a reviewed or trivial commit; anything else returns no decision, so Kiro's
@@ -75,8 +85,15 @@ details.
 Accepted risks: `rebase --exec` and `rebase -i` are allowed. `git -C` to
 another repository is allowed on Claude Code and Pi, and the hooks and config
 of that repository run; the Kiro gate asks for a commit that names another
-repository, because it reads the change in the session's directory. `gh
-workflow run` and `gh api` carry no gate entry by owner choice, so Claude
+repository, because it reads the change in the session's directory. The
+additional working directories come from the settings files
+(`permissions.additionalDirectories`), because a hook input carries only
+`cwd`; a repository-controlled `.claude/settings.json` can therefore add a
+directory, as it already can for Claude Code's own file access. A formatter
+runs the configuration and plugins its arguments name. The Pi companion keeps
+its broader local-shell allowance, so the cd rule decides the Claude and Kiro
+verdicts.
+`gh workflow run` and `gh api` carry no gate entry by owner choice, so Claude
 Code's own permission flow decides them. The Kiro companion may run a `node`
 script, so a determined companion can write the review store; the gate ignores
 a record with no sub-session, but it guards against mistakes, not against the

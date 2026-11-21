@@ -72,11 +72,23 @@ today or yesterday. The `wrap-up` skill calls it with the session id from the
 `doctrine.ts` adds what settings rules cannot express. `AGENTS.md` owns the
 rule; `tests/claude-doctrine.test.ts` holds the matrix.
 
-- The companion: any git command is allowed when every part of the command is
-  git work. A push, a `gh pr` / `run` / `release`, a git config override, an
-  upload-pack or transport helper URL, a merge strategy, a git verb that runs
-  another program, writes config, or reaches a remote, and any wrapped or
-  runtime-shaped command ask.
+- The companion: any git command is allowed when every other part of the
+  command is inert. The inert parts are a `cd` into the session working
+  directory or an additional working directory (read from
+  `permissions.additionalDirectories` in the managed, user, and project
+  settings, because the hook input carries only `cwd`), a plain read-only git
+  command (`status`, `diff`, `log`, `show`, and the other local read verbs;
+  `grep`, `cat-file`, `reflog`, `help`, `remote show`, a diff helper, or a
+  runtime-shaped word stays out), a project formatter (`cargo fmt`, `rustfmt`,
+  `ruff format`, `black`, `prettier --write`, `gofmt -w`), a `grep`, `head`,
+  `tail`, `wc`, `sort`, or `uniq` filter that reads a pipe with no file
+  argument, and a quoted heredoc or single-quoted here-string that only feeds
+  `git commit -F -`. A push, a
+  `gh pr` / `run` / `release`, a git config override, an upload-pack or
+  transport helper URL, a merge strategy, a git verb that runs another program,
+  writes config, or reaches a remote, and any wrapped or runtime-shaped
+  command ask. A file redirect, a substitution, a `tee`, or a `cd` elsewhere
+  removes the allowance, so Claude Code's own flow decides.
 - Every other plugin agent (the reviewer) is denied all of those, and every
   shell write the hook can see: file-changing commands, git and gh writes, and
   output redirects to a file.

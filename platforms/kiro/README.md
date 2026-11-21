@@ -117,7 +117,7 @@ session.
 | --- | --- | --- |
 | companion | `SessionStart` | `context.ts session`: the platform note and the theme persona (the profession is the agent prompt). |
 | companion | `SessionStart` | `context.ts startup`: the session id and the read list. |
-| companion | `PermissionRequest` | `gate.ts permission`: allow a git command or a reviewed/trivial commit; return no decision otherwise, so Kiro shows its own prompt. |
+| companion | `PermissionRequest` | `gate.ts permission`: allow a git command or a reviewed/trivial commit; return no decision otherwise, so Kiro shows its own prompt. A chain of git work and inert parts (a session cd, a read, a formatter, a pipe filter, a quoted commit heredoc) is allowed; a cd outside the session asks, and the commit review still runs inside a chain. |
 | companion | `Stop` | `review-record.ts`: scan the V3 store for a `sub_agent_complete` from `pa-reviewer` and store its verdict against the change key. |
 | companion | `PreCompact` | `compact.ts pre`: store the manifest and print guidance for the summarizer. |
 | companion | `PostCompact` | `compact.ts post`: store the summary and print the ordered reload list. |

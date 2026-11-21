@@ -64,7 +64,7 @@ user enabled (MCP, other extensions) stay enabled.
 | --- | --- |
 | `session_start` | Resolve the profile, the theme, and the notes folder; set the tools; load the policy; show the footer. A bad theme or an unreadable policy refuses the agent and says why. |
 | `before_agent_start` | Set the `profession`, `persona`, and `platform` prompt sections (Pi diffs them, so the cached prefix survives), and send the read list, naming the session id, as one message on the first run and after a compaction. |
-| `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. An allowed `git commit` of an unreviewed, non-trivial change asks first. |
+| `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. An allowed `git commit` of an unreviewed, non-trivial change asks first. A commit chain whose other parts are inert (a session cd, a read, a formatter, a pipe filter, a quoted commit heredoc) passes for the companion; Pi's local-shell allowance is unchanged, so the cd rule adds no ask here. |
 | `session_before_compact` | Build the reload manifest from the branch and save it, then let Pi summarize with the manifest's focus. |
 | `session_compact` | Record the compaction, and send the reload list at once: steered mid-run, stored when idle. |
 | `session_shutdown` | On `quit`, start the detached journal writer when the session has no entry. |
