@@ -110,7 +110,7 @@ function commitOutsideRepo(command: string, cwd: string): boolean {
 			}
 			i += 3;
 		}
-		if (words[i] !== "git" || words[i + 1] !== "commit") continue;
+		if (words[i] !== "git" || gitSubcommand(words.slice(i + 1)).sub !== "commit") continue;
 		const there = gitTopLevel(dir);
 		if (here === null || there === null || here !== there) return true;
 	}

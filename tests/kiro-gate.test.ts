@@ -226,6 +226,13 @@ describe("kiro doctrine: the companion", () => {
 			);
 			assert.equal(trailing.verdict, "ask");
 			assert.equal(trailing.reason, OTHER_REPO_ASK);
+			// A git global option before the subcommand does not hide the commit.
+			const pager = commandDecision("companion", `cd ${nested} && git --no-pager commit -m x`, ctx(cwd, path.join(root, "state")));
+			assert.equal(pager.verdict, "ask");
+			assert.equal(pager.reason, OTHER_REPO_ASK);
+			const shortPager = commandDecision("companion", `cd ${nested} && git -p commit -m x`, ctx(cwd, path.join(root, "state")));
+			assert.equal(shortPager.verdict, "ask");
+			assert.equal(shortPager.reason, OTHER_REPO_ASK);
 		});
 	});
 
