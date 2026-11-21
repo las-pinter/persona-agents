@@ -109,6 +109,25 @@ describe("pi policy: the built-in doctrine", () => {
 		assert.equal(bash(companion, "cp -r src ../../outside"), "deny");
 	});
 
+	test("the observed commit chain allows; a publish still asks", () => {
+		const chain = [
+			"cargo fmt && git add -A && git commit -q -F - <<'EOF' | grep -v Passed | tail -5",
+			"msg",
+			"EOF",
+			"git log --oneline -1",
+		].join("\n");
+		assert.equal(bash(companion, chain), "allow");
+		assert.equal(bash(reviewer, chain), "deny");
+		assert.equal(bash(companion, "cargo fmt && git add -A && git push"), "ask");
+		// Pi keeps its broader local-shell allowance: a cd is not a new ask.
+		assert.equal(bash(companion, "cd sub && git commit -m x"), "allow");
+	});
+
+	test("the reviewer still denies a writer filter", () => {
+		assert.equal(bash(reviewer, "git log | sort -rn | head -5"), "deny");
+		assert.equal(bash(reviewer, "sort -o out"), "deny");
+	});
+
 	test("the reviewer is read-only through the shell", () => {
 		assert.equal(bash(reviewer, "git commit -m 'x'"), "deny");
 		assert.equal(bash(reviewer, "git push"), "deny");

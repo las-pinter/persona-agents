@@ -36,8 +36,9 @@ import {
 	redirectTargets,
 	shellWords,
 	unwrapSegment,
-	type Hit,
+	SUPPORT,
 	UNGATED,
+	type Hit,
 } from "../../shared/shell/gates.ts";
 import type { Profile } from "./profile.ts";
 
@@ -414,7 +415,7 @@ export function doctrineDecision(profile: Profile, tool: string, input: Record<s
 		const command = typeof input.command === "string" ? input.command : "";
 		const hits = gateCommand(command);
 		if (!profile.writable) {
-			const gated = hits.filter((hit) => hit !== UNGATED);
+			const gated = hits.filter((hit) => hit !== UNGATED && hit !== SUPPORT);
 			if (gated.length > 0) {
 				return {
 					verdict: "deny",
@@ -498,7 +499,7 @@ export function suggestGrant(
 		const candidates = commandCandidates(command).filter((value) => shellWords(value)[0] !== "cd");
 		const segment =
 			candidates.find((value) => gateCommand(value).includes("publish")) ??
-			candidates.find((value) => gateCommand(value).some((hit) => hit !== UNGATED)) ??
+			candidates.find((value) => gateCommand(value).some((hit) => hit !== UNGATED && hit !== SUPPORT)) ??
 			candidates[0] ??
 			command;
 		const words = shellWords(segment);
