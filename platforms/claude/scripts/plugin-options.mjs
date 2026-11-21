@@ -126,7 +126,7 @@ export function userConfigDir(env = process.env, cwd = process.cwd(), home = rea
 }
 
 /** The managed settings path: the hook argument --managed-settings=<path>, else the system path. */
-function managedPath() {
+export function managedPath() {
 	const arg = process.argv.find((value) => value.startsWith(MANAGED_ARG));
 	return arg ? arg.slice(MANAGED_ARG.length) : MANAGED_SETTINGS[process.platform];
 }

@@ -5,4 +5,5 @@ export function managedOption(managedFile: string, name: string): string;
 export function realHome(): string;
 export function inProject(dir: string, env?: NodeJS.ProcessEnv, cwd?: string, home?: string): boolean;
 export function userConfigDir(env?: NodeJS.ProcessEnv, cwd?: string, home?: string): string;
+export function managedPath(): string | undefined;
 export function pluginOption(name: string): string;

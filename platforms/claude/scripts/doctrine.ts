@@ -6,7 +6,11 @@
 // for the persona-agents agents (agent type `persona-agents:<name>`):
 //
 //   any local git command that is not a read and not a push
-//                     companion: allow; every other agent: deny
+//                     companion: allow when every other part is inert (a `cd`
+//                     into the session directory or an additional one, a
+//                     read-only git command, a project formatter, a pipe
+//                     filter, a quoted heredoc that feeds `git commit -F -`);
+//                     every other agent: deny
 //   git push, gh pr, gh release, gh run, any git global option outside
 //   GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS (-c, --config-env, --exec-path,
 //   --attr-source, ...), git pull --upload-pack, a `::` transport URL, a merge
@@ -21,8 +25,8 @@
 // The reviewer is read-only: it has no Edit or Write tool (its agent file),
 // and this hook denies it every shell write it can see.
 //
-// Allow is given only when every segment of the command is git work. A
-// command that mixes an allowed segment with an ungated one
+// Allow is given only when every segment of the command is git work or an
+// inert part. A command that mixes an allowed segment with an ungated one
 // (`git add . && rm -rf x`) gets no decision, so Claude Code's own flow runs.
 // A wrapped form (env/sudo/xargs/eval prefixes, `bash -c`, a subshell, a
 // `$(...)` or backtick substitution, an env assignment, a path to git, the
@@ -36,9 +40,9 @@
 //   git -C / --git-dir / --work-tree to another path runs that repository's
 //   hooks and core.* config.
 //
-// The classification of a command into history / publish / write / ungated
-// lives in platforms/shared/shell/gates.ts, which the Pi gate also uses. This
-// file owns only the verdicts for the Claude agents.
+// The classification of a command into history / publish / write / support /
+// ungated lives in platforms/shared/shell/gates.ts, which the Pi and Kiro
+// gates also use. This file owns only the verdicts for the Claude agents.
 //
 // Any other agent, or a session without one, gets no decision, so Claude
 // Code's own permission flow runs unchanged.
@@ -49,7 +53,8 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { gateCommand, type Hit, UNGATED } from "../../shared/shell/gates.ts";
+import { gateCommand, insideDir, SUPPORT, UNGATED, type GateHit, type Hit } from "../../shared/shell/gates.ts";
+import { sessionDirs } from "./session-dirs.ts";
 
 export { commandSegments, gateCommand, shellWords } from "../../shared/shell/gates.ts";
 export type { Hit } from "../../shared/shell/gates.ts";
@@ -67,6 +72,8 @@ export interface HookInput {
 	agent_type?: unknown;
 	tool_name?: unknown;
 	tool_input?: Record<string, unknown>;
+	/** The session's current directory, as the hook input reports it. */
+	cwd?: unknown;
 }
 
 /**
@@ -105,17 +112,20 @@ const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
 };
 
 /** The doctrine decision for one tool call, or null to leave it alone. */
-export function decide(input: HookInput): Decision | null {
+export function decide(input: HookInput, additionalDirs: string[] = []): Decision | null {
 	const agentType = typeof input.agent_type === "string" ? input.agent_type : "";
 	if (!agentType.startsWith(PREFIX)) return null;
 	const profession = agentType.slice(PREFIX.length);
 	if (input.tool_name !== "Bash") return null;
 	const command = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
-	let hits = gateCommand(command);
+	const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : "";
+	const isSessionDir =
+		cwd === "" ? undefined : (path: string) => insideDir(path, cwd) || additionalDirs.some((dir) => insideDir(path, dir));
+	let hits = gateCommand(command, 0, { cwd: cwd === "" ? undefined : cwd, isSessionDir });
 	// The companion may write; a write segment is an ungated segment for it.
 	if (profession === "companion") hits = hits.map((hit) => (hit === "write" ? UNGATED : hit));
 	const decisions = hits
-		.filter((hit): hit is Gate => hit !== UNGATED)
+		.filter((hit): hit is GateHit => hit !== UNGATED && hit !== SUPPORT)
 		.map((gate) => {
 			const verdict = profession === "companion" ? (COMPANION_RULES[gate] ?? "deny") : "deny";
 			return { verdict, reason: GATE_REASON[gate][verdict] };
@@ -138,7 +148,11 @@ function strongest(hits: Decision[], profession: string): Decision | null {
 // Run as a hook: PreToolUse JSON on stdin, a permission decision on stdout.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
 	const input = JSON.parse(readFileSync(0, "utf8")) as HookInput;
-	const decision = decide(input);
+	const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : "";
+	const command = typeof input.tool_input?.command === "string" ? input.tool_input.command : "";
+	// The settings read is lazy: only a command with a `cd` part needs it.
+	const additionalDirs = /\bcd\s/.test(command) ? sessionDirs(cwd || process.cwd()) : [];
+	const decision = decide(input, additionalDirs);
 	if (process.env.PERSONA_AGENTS_DEBUG && process.env.CLAUDE_PLUGIN_DATA) {
 		mkdirSync(process.env.CLAUDE_PLUGIN_DATA, { recursive: true });
 		appendFileSync(join(process.env.CLAUDE_PLUGIN_DATA, "doctrine.log"), `${JSON.stringify({ input, decision })}\n`);
