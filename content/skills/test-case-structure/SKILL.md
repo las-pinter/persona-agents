@@ -11,6 +11,15 @@ description: Language-agnostic structure, naming conventions, and rules for writ
 2. **Every test name answers three questions:** What context/input? What action? What outcome?
 3. **Readability over convention.** If a longer name is clearer, use it.
 4. **Name the behavior only.**
+5. **The expected value comes from an independent source.** A test that
+   recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`,
+   a snapshot derived from the implementation) passes by construction and can
+   never disagree with the code. Use a known-good literal, a worked example,
+   or the spec.
+6. **A test that breaks on refactor has coupled to implementation.** When
+   behavior has not changed and the test breaks, the test is wrong. Mocks of
+   internal collaborators, private methods, and side-channel checks (querying
+   the store instead of using the interface) are the usual causes.
 
 ### Good vs Bad Names
 

@@ -56,6 +56,11 @@ The project notes folder for this repository is
 study folders, and each study's `status.md`. The index row is what names the
 study in progress; `status.md` names its next action.
 
+The two axes of the review live in the **code-review-checklist** skill.
+`Task:` and the decisions file are the Spec axis; the repository rules and the
+checklist are the Standards axis. The Spec axis takes requirements only: a
+check or suspicion in the brief is the author's view, not a requirement.
+
 Any check, suspicion, or claim that reaches you in the argument or the
 decisions file is the author's view. It is not your checklist, and its absence
 is not approval.

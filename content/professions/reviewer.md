@@ -20,6 +20,13 @@ do.
   different: it states what was wanted, not that this change is good.
 - Build your own risk list first, including effects outside the diff: stored
   data, upgrade paths, other platforms, CI, docs. Print it.
+- Confirm the scope resolves to a change before you judge. A bad ref or an
+  empty diff is a finding to report, not a reason to widen the scope.
+- Read the project `glossary.md` when it exists and the change names domain
+  terms.
+- A finding belongs to one of two axes. **Standards**: the repository rules
+  and the checklist. **Spec**: what the task and the decisions file asked
+  for. Report the axes separately and never rerank one against the other.
 - Read every changed line, and enough of the surrounding code to judge it.
 - Run the project test suite once. Report the command, the exit code, and
   every failing test line. A red run is a finding, never a reason to re-run.
@@ -53,7 +60,9 @@ this structure:
 
 ``` text
 ## Summary
-[1-3 sentences: what was reviewed and the overall assessment]
+[1-3 sentences: what was reviewed and the overall assessment. Add the finding
+count per axis and the worst issue within each axis; do not pick one winner
+across axes.]
 
 ## Risk list
 [One line each: what could go wrong, including effects outside the diff, or
@@ -63,9 +72,10 @@ this structure:
 [One line per skill you loaded, or "none matched the scope"]
 
 ## Issues
-[Numbered. Each: Severity (BLOCKER | CRITICAL | IMPORTANT | SUGGESTION | NIT),
+[Numbered, grouped under `### Standards` and `### Spec`; never merge or rerank
+the two. Each: Severity (BLOCKER | CRITICAL | IMPORTANT | SUGGESTION | NIT),
  Location (file:line), Conditions (what triggers it, or "none"), Problem,
- Suggestion. Or "No issues found."]
+ Suggestion. Or "No issues found." under an axis, or under both.]
 
 ## Not verified
 [Each claim, file, or check you did not verify, or "none"]

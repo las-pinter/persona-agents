@@ -120,6 +120,17 @@ sweep internal. Print only a dimension with evidence.
 | 14 | Plan upkeep | Did the session notes or the study change before the work changed, or after? |
 | 15 | Compaction and recovery | Did a compaction lose something the reload did not bring back? |
 
+### Routing a Lesson
+
+- A mechanical mistake (a fixed syntactic pattern, a banned API, an import
+  shape, a file location) gets a check, never a prose rule: a linter rule, a
+  pre-commit hook, or a CI job.
+- A judgement call gets a rule, and only when no check can express it.
+- A steering file that has grown past about 1,000 lines gets navigation
+  pointers, not more prose.
+- A repository with no guardrail (no pre-commit hook and no CI job running its
+  lint, typecheck, and test command) is itself a finding.
+
 ### Cost Data
 
 Use the token totals from the Cost source in Session Facts. When the

@@ -160,6 +160,23 @@ The level for a gap a change leaves behind:
 
 ---
 
+## Seams and the Red-Green Loop
+
+A **seam** is the public boundary where a test observes behavior without
+reaching inside. Tests live at seams, never against internals.
+
+- Agree the seams with the owner before writing a test. Name each proposed
+  seam, and say in one line what it catches and what it misses. No test is
+  written at an unagreed seam.
+- Work in vertical slices: one test, then the least code that passes it, then
+  the next test. Do not write a batch of tests first against imagined
+  behavior.
+- Red before green: see the test fail before the code that makes it pass.
+- Refactoring is not part of the loop; it belongs to its own refactor task,
+  after the loop.
+
+---
+
 ## Core Rules
 
 1. Mock external deps in unit tests; use real ones in integration tests.
