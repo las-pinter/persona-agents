@@ -115,10 +115,15 @@ function filterArgsOk(args: string[], spec: FilterSpec): boolean {
 		if (arg === "--") return false;
 		if (arg.startsWith("--")) {
 			const name = arg.slice(2).split("=")[0];
-			if (spec.longFiles.has(name)) return false;
-			if (spec.longValues.has(name)) {
+			if (name === "") return false;
+			// GNU getopt accepts an unambiguous long-option prefix, so a blocked
+			// option matches by prefix too: `--out` is `--output` and
+			// `--compress-prog` is `--compress-program`.
+			if ([...spec.longFiles].some((option) => option.startsWith(name))) return false;
+			const values = [...spec.longValues].filter((option) => option.startsWith(name));
+			if (values.length > 0) {
 				if (!arg.includes("=")) i += 1;
-				if (name === spec.patternLong) patternConsumed = true;
+				if (spec.patternLong !== undefined && values.includes(spec.patternLong)) patternConsumed = true;
 			}
 			continue;
 		}

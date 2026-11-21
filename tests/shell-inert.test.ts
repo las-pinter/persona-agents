@@ -71,6 +71,11 @@ describe("shell inert: a read-only filter", () => {
 		["uniq", []],
 		["uniq", ["-c"]],
 		["uniq", ["-f", "2"]],
+		// GNU accepts an unambiguous long-option prefix; a safe value option
+		// keeps the filter inert.
+		["sort", ["--ke", "1,1"]],
+		["sort", ["--ke=1,1"]],
+		["grep", ["--regex", "foo"]],
 	];
 	for (const [command, args] of YES) {
 		test(`${command} ${args.join(" ")}`, () => {
@@ -97,6 +102,16 @@ describe("shell inert: a read-only filter", () => {
 		["sort", ["--output=out"]],
 		["sort", ["--compress-program=gzip"]],
 		["sort", ["--files0-from=list"]],
+		// A blocked long option matches by prefix too, as GNU getopt does.
+		["sort", ["--out=out"]],
+		["sort", ["--outp=out"]],
+		["sort", ["--compress-prog=gzip"]],
+		["sort", ["--compress-prog", "gzip"]],
+		["sort", ["--files0=list"]],
+		["sort", ["--random-sourc=seed"]],
+		["wc", ["--files0=names"]],
+		["grep", ["--exclude-f=pats", "foo"]],
+		["grep", ["--recursiv", "foo"]],
 		["uniq", ["in"]],
 		["uniq", ["in", "out"]],
 		["cat", []],
