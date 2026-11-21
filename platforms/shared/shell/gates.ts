@@ -3,18 +3,24 @@
  *
  * One command is split into segments by the shell parser, each segment is
  * unwrapped (`cd x &&`, env/sudo/xargs/eval prefixes, `bash -c '...'`), and
- * classified into one of three gates:
+ * classified into one of four gates:
  *
  *   history: a git command that is not a read and not publish (add, commit,
  *            reset, rebase, tag writes, ...)
  *   publish: git push, gh pr/release/run, a git option that runs a program of
  *            the caller's choice, or any wrapped or runtime-shaped command
  *   write:   a file-changing command or an output redirect to a file
+ *   support: an inert part beside a history command: a `cd` into a session
+ *            directory, a read-only git command, a project formatter, or a
+ *            read-only filter that follows a pipe
  *
  * A segment no gate covers is `ungated`. A platform decides the verdict for
- * each hit: the Claude hook (`platforms/claude/scripts/doctrine.ts`) and the Pi
- * gate (`platforms/pi/scripts/policy.ts`) share this file, so one parser owns
- * every safety decision on both platforms.
+ * each hit: the Claude hook (`platforms/claude/scripts/doctrine.ts`), the Pi
+ * gate (`platforms/pi/scripts/policy.ts`), and the Kiro gate share this file,
+ * so one parser owns every safety decision on every adapter. A wrapper, a
+ * command substitution, or an output redirect removes support: support becomes
+ * ungated and history becomes publish. A runtime-shaped git read is not
+ * support, because a `$VAR` or a glob can hide `--output` or `--edit`.
  *
  * A command the parser cannot read (a heredoc, an unbalanced quote) that holds
  * a gated form counts as a hit: fail closed. Unreadable text with only git read
@@ -23,12 +29,34 @@
  * header only (safeHeredocHeader).
  */
 
-import { basename } from "node:path";
+import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, isAbsolute, relative, resolve } from "node:path";
+import { normalizeHeredocs, safeHeredocHeader } from "./heredoc.ts";
+import { isFormatter, isInertFilter } from "./inert.ts";
 import { parseShellCommand } from "./shell-parse.ts";
+import { shellWords } from "./shell-words.ts";
 
-export type Hit = "history" | "publish" | "write" | typeof UNGATED;
+export { normalizeHeredocs } from "./heredoc.ts";
+export { shellWords } from "./shell-words.ts";
+
+export type Hit = "history" | "publish" | "write" | typeof SUPPORT | typeof UNGATED;
+/** A segment that is inert beside a history command: a session cd, a read, a formatter, a pipe filter. */
+export const SUPPORT = "support";
 /** A segment that runs a command no gate covers. */
 export const UNGATED = "ungated";
+/** A gated segment: the kinds an adapter turns into a verdict. */
+export type GateHit = Exclude<Hit, typeof SUPPORT | typeof UNGATED>;
+
+/** What a `cd` part needs to decide whether its target is a session directory. */
+export interface GateOptions {
+	/** The directory the command starts in; each `cd` resolves against it. */
+	cwd?: string;
+	/** True when an absolute path is a session working directory. */
+	isSessionDir?: (path: string) => boolean;
+	/** The home folder for `~` expansion; the process home by default. */
+	home?: string;
+}
 
 const GIT_PUBLISH = new Set(["push"]);
 /** Git verbs that take a repository or a remote, where a transport URL matters. */
@@ -134,6 +162,18 @@ const GIT_READ = new Set([
 	"shortlog", "cat-file", "merge-base", "rev-list", "show-ref", "reflog", "version", "help", "range-diff",
 	"whatchanged", "name-rev", "for-each-ref", "check-ignore", "check-attr", "var",
 ]);
+/**
+ * Read verbs that are inert beside a history command. The rest stay ungated:
+ * `grep -O` runs a pager, `cat-file --filters` runs a filter, `reflog`
+ * rewrites history, and `help` launches a viewer.
+ */
+const GIT_INERT_READ = new Set([
+	"status", "diff", "log", "show", "blame", "rev-parse", "ls-files", "ls-tree", "describe",
+	"shortlog", "merge-base", "rev-list", "show-ref", "range-diff", "whatchanged", "name-rev",
+	"for-each-ref", "check-ignore", "check-attr", "var", "version",
+]);
+/** Diff options that run a configured helper program. */
+const GIT_DIFF_PROGRAM = ["--ext-diff", "--textconv"];
 /** gh actions that only read (`gh issue list`, `gh repo view`). */
 const GH_READ_ACTIONS = new Set(["list", "view", "status", "diff", "checks", "search"]);
 const GH_READ_COMMANDS = new Set(["status", "search", "help", "version", "browse"]);
@@ -154,59 +194,46 @@ const GATED_PROGRAMS = ["git", "gh", ...WRITE_COMMANDS, ...IN_PLACE_COMMANDS];
 const GATED_WORD = new RegExp(
 	"(?<=^|[\\s;&|(`$'\"/\\\\])(" + GATED_PROGRAMS.join("|") + ")(?=\\s|$|['\"])",
 );
-/** A plain file path in a heredoc header: no quotes, expansions, or operators. */
-const PLAIN_PATH = String.raw`[A-Za-z0-9._/~-]+`;
-const HEREDOC_REDIRECT = String.raw`>>?[ \t]*${PLAIN_PATH}`;
-const HEREDOC_TOKEN = String.raw`<<[ \t]*(?:'(\w+)'|"(\w+)")`;
-/**
- * The only heredoc header whose body may skip the fail-closed scan: a data
- * reader (cat, tee with one file, python3/python/node with `-`), one optional
- * output redirect to a plain path, and one heredoc with a quoted delimiter.
- */
-const SAFE_HEREDOC_HEADER = new RegExp(
-	String.raw`^(?:cat|tee(?:[ \t]+${PLAIN_PATH})?|(?:python3|python|node)(?:[ \t]+-)?)` +
-		String.raw`(?:(?:[ \t]+${HEREDOC_REDIRECT})?[ \t]+${HEREDOC_TOKEN}|[ \t]+${HEREDOC_TOKEN}(?:[ \t]+${HEREDOC_REDIRECT})?)[ \t]*$`,
-);
 
 const MAX_UNWRAP_DEPTH = 4;
 
-/** Split one segment into shell words, removing quotes. */
-export function shellWords(segment: string): string[] {
-	const words: string[] = [];
-	let word = "";
-	let inWord = false;
-	let quote: "'" | '"' | null = null;
-	for (let i = 0; i < segment.length; i++) {
-		const ch = segment[i];
-		if (quote === "'") {
-			if (ch === "'") quote = null;
-			else word += ch;
-		} else if (quote === '"') {
-			if (ch === '"') quote = null;
-			else if (ch === "\\" && i + 1 < segment.length) word += segment[++i];
-			else word += ch;
-		} else if (ch === "'" || ch === '"') {
-			quote = ch;
-			inWord = true;
-		} else if (ch === "\\" && i + 1 < segment.length) {
-			word += segment[++i];
-			inWord = true;
-		} else if (/\s/.test(ch)) {
-			if (inWord) words.push(word);
-			word = "";
-			inWord = false;
-		} else {
-			word += ch;
-			inWord = true;
-		}
+/** The real path when it exists, else the resolved path. */
+function realOrResolved(path: string): string {
+	try {
+		return realpathSync.native(path);
+	} catch {
+		return resolve(path);
 	}
-	if (inWord) words.push(word);
-	return words;
 }
 
-/** A wrapped history command loses its allow: history becomes publish (ask). */
+/** True when `path` is `base` or inside it, resolving a symlink that exists. */
+export function insideDir(path: string, base: string): boolean {
+	const rel = relative(realOrResolved(base), realOrResolved(path));
+	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+/**
+ * A `cd` target as a resolved absolute path when it is a session directory,
+ * else null. `~` expands to the home folder; an expansion, a glob, a quote
+ * form we cannot read, or `cd -` is null.
+ */
+function cdPath(target: string, dir: string | undefined, options: GateOptions): string | null {
+	if (target === "-" || /[$`*?[\]{}]/.test(target)) return null;
+	const home = options.home ?? homedir();
+	let path: string;
+	if (target === "" || target === "~") path = home;
+	else if (target.startsWith("~/")) path = resolve(home, target.slice(2));
+	else if (target.startsWith("~")) return null;
+	else path = target;
+	const base = dir ?? options.cwd;
+	const resolved = isAbsolute(path) ? resolve(path) : base === undefined ? null : resolve(base, path);
+	if (resolved === null || options.isSessionDir === undefined) return null;
+	return options.isSessionDir(resolved) ? resolved : null;
+}
+
+/** A wrapped command loses its support: history becomes publish, support becomes ungated. */
 function raise(hits: Hit[]): Hit[] {
-	return hits.map((hit) => (hit === "history" ? "publish" : hit));
+	return hits.map((hit) => (hit === "history" ? "publish" : hit === SUPPORT ? UNGATED : hit));
 }
 
 /**
@@ -278,6 +305,11 @@ function writesFile(segment: string): boolean {
  * the path belongs to the policy, not only to the shell.
  */
 export function redirectTargets(command: string): string[] {
+	return redirectTargetsIn(normalizeHeredocs(command));
+}
+
+/** The redirect scan over text whose quoted commit heredocs are already removed. */
+function redirectTargetsIn(command: string): string[] {
 	const targets: string[] = [];
 	let quote: "'" | '"' | null = null;
 	for (let i = 0; i < command.length; i++) {
@@ -357,21 +389,47 @@ function hasSubstitution(command: string): boolean {
 	return false;
 }
 
+/** One segment's hits and the directory it leaves the shell in. */
+interface SegmentResult {
+	hits: Hit[];
+	dir: string | undefined;
+}
+
 /** The hits of one parsed segment, unwrapping prefixes and `sh -c` payloads. */
-function segmentGates(segment: string, depth: number): Hit[] {
+function segmentGates(
+	segment: string,
+	depth: number,
+	options: GateOptions,
+	afterPipe: boolean,
+	startDir: string | undefined,
+): SegmentResult {
 	// A subshell or group keeps its brackets in the segment: `(git push)`.
 	const trimmed = segment.trim();
 	const inner = trimmed.replace(/^[({]\s*/, "").replace(/\s*[)}]$/, "");
 	let wrapped = inner !== trimmed;
 	let words = shellWords(inner);
-	// A leading `cd <dir> &&` stays folded into the segment by the parser; the
-	// cd counts as an ungated segment of its own.
-	let cd = false;
-	while (words[0] === "cd" && words[2] === "&&") {
-		words = words.slice(3);
-		cd = true;
+	// A leading `cd <dir> &&` stays folded into the segment by the parser. Each
+	// cd resolves against the running directory, which carries across segments;
+	// it is support only when its target is a session directory.
+	let dir = startDir ?? options.cwd;
+	// A pipe feeds the first command after the separator; a `cd` does not pass
+	// the pipe on to the command after its `&&`.
+	let pipeMember = afterPipe;
+	const extra: Hit[] = [];
+	while (words[0] === "cd") {
+		const joined = words[2] === "&&";
+		// `cd a b` is not a form the gate reads; it stays ungated below.
+		if (!joined && words.length > 2) break;
+		const resolved = cdPath(words[1] ?? "", dir, options);
+		words = words.slice(joined ? 3 : Math.min(words.length, 2));
+		if (resolved === null) extra.push(UNGATED);
+		else {
+			extra.push(SUPPORT);
+			dir = resolved;
+		}
+		if (joined) pipeMember = false;
+		if (!joined) break;
 	}
-	const extra: Hit[] = cd ? [UNGATED] : [];
 	for (;;) {
 		let assigned = false;
 		while (words.length > 0 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) {
@@ -380,7 +438,7 @@ function segmentGates(segment: string, depth: number): Hit[] {
 		}
 		// An env assignment (GIT_DIR=x, GIT_CONFIG_*) changes what git does.
 		if (assigned) wrapped = true;
-		if (words.length === 0) return assigned || cd ? [UNGATED] : [];
+		if (words.length === 0) return { hits: assigned ? [UNGATED] : extra, dir };
 		const command = basename(words[0]);
 		// A path to the program (`/tmp/x/git`) may run something else than git.
 		if (command !== words[0]) wrapped = true;
@@ -398,16 +456,20 @@ function segmentGates(segment: string, depth: number): Hit[] {
 		if (SHELLS.has(command)) {
 			const flag = words.findIndex((word) => /^-[a-z]*c[a-z]*$/.test(word));
 			if (flag < 0 || flag + 1 >= words.length) {
-				return [UNGATED];
+				return { hits: [UNGATED], dir };
 			}
 			// Never allow through a shell: the payload's history hits ask.
-			const hits = depth >= MAX_UNWRAP_DEPTH ? (["publish", "write"] as Hit[]) : raise(gateCommand(words[flag + 1], depth + 1));
-			return [...hits, ...extra];
+			const hits =
+				depth >= MAX_UNWRAP_DEPTH
+					? (["publish", "write"] as Hit[])
+					: raise(gateCommand(words[flag + 1], depth + 1, { ...options, cwd: dir }));
+			return { hits: [...hits, ...extra], dir };
 		}
-		let hits = classify(command, words.slice(1));
-		if (wrapped || (hits.includes("history") && runtimeShaped(inner))) hits = raise(hits);
+		const runtime = runtimeShaped(inner);
+		let hits = classify(command, words.slice(1), pipeMember, runtime);
+		if (wrapped || (hits.includes("history") && runtime)) hits = raise(hits);
 		if (writesFile(inner)) hits = [...hits, "write"];
-		return [...hits, ...extra];
+		return { hits: [...hits, ...extra], dir };
 	}
 }
 
@@ -418,7 +480,7 @@ function longOption(arg: string, long: string, min: number): boolean {
 }
 
 /** The hits of one plain command (no prefixes). */
-function classify(command: string, args: string[]): Hit[] {
+function classify(command: string, args: string[], afterPipe: boolean, runtime: boolean): Hit[] {
 	if (WRITE_COMMANDS.has(command)) return ["write"];
 	if (IN_PLACE_COMMANDS.has(command) && args.some((arg) => /^-[a-zA-Z]*i/.test(arg) || arg.startsWith("--in-place"))) return ["write"];
 	if (command === "find" && args.some((arg) => ["-delete", "-exec", "-execdir", "-ok", "-okdir"].includes(arg))) return ["write"];
@@ -434,7 +496,13 @@ function classify(command: string, args: string[]): Hit[] {
 		if (sub === undefined || GH_READ_COMMANDS.has(sub) || GH_READ_ACTIONS.has(args[g + 1] ?? "")) return [UNGATED];
 		return ["write"];
 	}
-	if (command !== "git") return [UNGATED];
+	if (command !== "git") {
+		// A known formatter is inert beside a history command; so is a read-only
+		// filter whose only input is the pipe it follows.
+		if (isFormatter(command, args)) return [SUPPORT];
+		if (afterPipe && isInertFilter(command, args)) return [SUPPORT];
+		return [UNGATED];
+	}
 	const { sub, rest, unknown } = gitSubcommand(args);
 	if (unknown) return ["publish"];
 	if (sub && GIT_PUBLISH.has(sub)) return ["publish"];
@@ -445,8 +513,17 @@ function classify(command: string, args: string[]): Hit[] {
 	if (GIT_REMOTE_VERBS.has(sub) && withoutMessage(rest).some((arg) => arg.includes("::") || longOption(arg, "--upload-pack", 5))) return ["publish"];
 	// A read that writes its output to a file (`git diff --output=x`) is a write.
 	if (rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) return ["write"];
-	// Reads stay ungated, so a read-only agent keeps them.
-	if (GIT_READ.has(sub) || (sub === "branch" && isBranchListing(rest)) || (sub === "tag" && isTagListing(rest))) return [UNGATED];
+	// A read stays ungated, so a read-only agent keeps it. Only the plain read
+	// verbs are support beside a history command: one that runs a helper, can
+	// rewrite history, or can reach a remote keeps today's no-allow behavior. A
+	// `$VAR` or a glob hides an option the words do not show (`git log $OPS`
+	// may be `--output=file`), so a runtime-shaped read is not support either.
+	if (GIT_READ.has(sub)) {
+		if (!GIT_INERT_READ.has(sub)) return [UNGATED];
+		if (rest.some((arg) => GIT_DIFF_PROGRAM.some((name) => longOption(arg, name, 5)))) return [UNGATED];
+		return runtime ? [UNGATED] : [SUPPORT];
+	}
+	if ((sub === "branch" && isBranchListing(rest)) || (sub === "tag" && isTagListing(rest))) return runtime ? [UNGATED] : [SUPPORT];
 	// Read forms of a verb that can also write config or a remote.
 	const firstWord = rest.find((arg) => !arg.startsWith("-"));
 	if (sub === "config") {
@@ -456,9 +533,12 @@ function classify(command: string, args: string[]): Hit[] {
 		const readAction = rest.some((arg) => arg === "-l" || nameOf(arg).startsWith("--get") || nameOf(arg).startsWith("--list"));
 		const words = rest.filter((arg) => !arg.startsWith("-"));
 		// `git config user.name` reads one key; `git config key=value` writes.
-		if (!writeAction && (readAction || (words.length === 1 && !words[0].includes("=")))) return [UNGATED];
+		if (!writeAction && (readAction || (words.length === 1 && !words[0].includes("=")))) return runtime ? [UNGATED] : [SUPPORT];
 	}
-	if (sub === "remote" && (firstWord === undefined || firstWord === "show" || firstWord === "get-url")) return [UNGATED];
+	// `git remote show` reaches the remote, so it keeps the no-allow behavior;
+	// listing the remotes and reading a URL are local reads.
+	if (sub === "remote" && firstWord === "show") return [UNGATED];
+	if (sub === "remote" && (firstWord === undefined || firstWord === "get-url")) return runtime ? [UNGATED] : [SUPPORT];
 	// Ask exceptions. Fail safe on short options: any `-x...` word that holds
 	// the letter counts, because a bundle (`-fm1`) or a value can hide it.
 	const short = (letters: string): boolean => rest.some((arg) => /^-[^-]/.test(arg) && [...letters].some((l) => arg.includes(l)));
@@ -508,57 +588,46 @@ function gatedFormFollows(program: "git" | "gh", after: string): boolean {
 	return false;
 }
 
-/**
- * The header without its heredoc token when the whole command is one safe
- * data heredoc, else null. The check is a strict allow-list because any shape
- * it does not know (a shell reading the body, a pipe, a later line that runs
- * the written file) must fall back to the fail-closed scan.
- * Shape: header line (SAFE_HEREDOC_HEADER), body, a closing line equal to the
- * delimiter, then only blank lines.
- * Known limit: python or node code in a body (a subprocess or child_process
- * call to git) is not inspected; `python -c '...'` has the same limit.
- */
-function safeHeredocHeader(command: string): string | null {
-	const lines = command.split("\n");
-	const match = SAFE_HEREDOC_HEADER.exec(lines[0]);
-	if (!match) return null;
-	const delimiter = match.slice(1).find((group) => group !== undefined);
-	if (!delimiter) return null;
-	const close = lines.indexOf(delimiter, 1);
-	if (close < 0) return null;
-	if (!lines.slice(close + 1).every((line) => /^[ \t]*$/.test(line))) return null;
-	return lines[0].replace(new RegExp(HEREDOC_TOKEN), " ");
-}
-
 /** Every hit a whole shell command makes, in no particular order. */
-export function gateCommand(command: string, depth = 0): Hit[] {
-	const parsed = parseShellCommand(command);
+export function gateCommand(command: string, depth = 0, options: GateOptions = {}): Hit[] {
+	const text = normalizeHeredocs(command);
+	const parsed = parseShellCommand(text);
 	if (parsed.unsupported) {
-		const header = safeHeredocHeader(command);
-		if (header !== null) return gateCommand(header, depth);
+		const header = safeHeredocHeader(text);
+		if (header !== null) return gateCommand(header, depth, options);
 		// Fail closed: an unreadable command that names a gated program is a
 		// hit, and never an allow.
 		const gates = new Set<Hit>();
-		for (const match of command.matchAll(new RegExp(GATED_WORD.source, "g"))) {
+		for (const match of text.matchAll(new RegExp(GATED_WORD.source, "g"))) {
 			const program = match[1];
 			if (program === "git" || program === "gh") {
 				// A read such as `git status` stays ungated; only a gated form fires.
-				if (gatedFormFollows(program, command.slice(match.index + program.length))) gates.add("publish");
+				if (gatedFormFollows(program, text.slice(match.index + program.length))) gates.add("publish");
 			} else gates.add("write");
 		}
 		// The first line of an unreadable command (a heredoc header) may redirect into a file.
-		if (writesFile(command.split("\n")[0])) gates.add("write");
+		if (writesFile(text.split("\n")[0])) gates.add("write");
 		return [...gates];
 	}
-	const hits = [...new Set(parsed.segments.flatMap((segment) => segmentGates(segment, depth)))];
-	// A history command inside a substitution never runs without a prompt.
-	return hasSubstitution(command) ? raise(hits) : hits;
+	const all: Hit[] = [];
+	let dir = options.cwd;
+	for (let index = 0; index < parsed.segments.length; index++) {
+		const separator = parsed.separators[index];
+		const result = segmentGates(parsed.segments[index], depth, options, separator === "|" || separator === "|&", dir);
+		dir = result.dir;
+		all.push(...result.hits);
+	}
+	const hits = [...new Set(all)];
+	// A history command inside a substitution never runs without a prompt, and
+	// no inert part survives one.
+	return hasSubstitution(text) ? raise(hits) : hits;
 }
 
 /** The segments of a command, as the parser split them (a leading `cd` still folded in). */
 export function commandSegments(command: string): string[] {
-	const parsed = parseShellCommand(command);
-	return parsed.unsupported ? [command] : parsed.segments;
+	const text = normalizeHeredocs(command);
+	const parsed = parseShellCommand(text);
+	return parsed.unsupported ? [text] : parsed.segments;
 }
 
 /**

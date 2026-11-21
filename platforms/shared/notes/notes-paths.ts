@@ -21,6 +21,7 @@ export const COMMON_PROJECT = "common";
 export function gitCommonDir(cwd: string): string {
 	const run = spawnSync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
 		encoding: "utf8",
+		timeout: 2000,
 	});
 	return run.status === 0 ? run.stdout.trim() : "";
 }

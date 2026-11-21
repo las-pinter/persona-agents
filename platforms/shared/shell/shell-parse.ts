@@ -13,6 +13,12 @@ import { extractSubstitutions } from "./shell-grammar.ts";
 
 export interface ShellParse {
 	segments: string[];
+	/**
+	 * The operator before each entry in `segments`: `start`, `;`, a newline,
+	 * `|`, `|&`, `&&`, `&`, `||`, or `sub` (a segment taken from inside a
+	 * command substitution).
+	 */
+	separators: string[];
 	/** Segments before the leading-`cd` fold. Deny/ask probes test both lists. */
 	rawSegments: string[];
 	/** Original start offset of each entry in `segments`, or -1 when unknown. */
@@ -34,33 +40,43 @@ function isSpace(c: string): boolean {
 function foldLeadingCdGuards(
 	segments: string[],
 	starts: number[],
-): { segments: string[]; starts: number[] } {
+	separators: string[],
+): { segments: string[]; starts: number[]; separators: string[] } {
 	const out: string[] = [];
 	const outStarts: number[] = [];
+	const outSeparators: string[] = [];
 	let pending: string | null = null;
 	let pendingStart = -1;
+	let pendingSeparator = "start";
 	for (let k = 0; k < segments.length; k++) {
 		const seg = segments[k];
 		if (/^cd\s+\S+$/.test(seg)) {
 			pending = pending ? `${pending} && ${seg}` : seg;
-			if (pendingStart < 0) pendingStart = starts[k];
+			if (pendingStart < 0) {
+				pendingStart = starts[k];
+				pendingSeparator = separators[k] ?? "start";
+			}
 			continue;
 		}
 		if (pending) {
 			out.push(`${pending} && ${seg}`);
 			outStarts.push(pendingStart);
+			outSeparators.push(pendingSeparator);
 			pending = null;
 			pendingStart = -1;
+			pendingSeparator = "start";
 		} else {
 			out.push(seg);
 			outStarts.push(starts[k]);
+			outSeparators.push(separators[k] ?? "start");
 		}
 	}
 	if (pending) {
 		out.push(pending);
 		outStarts.push(pendingStart);
+		outSeparators.push(pendingSeparator);
 	}
-	return { segments: out, starts: outStarts };
+	return { segments: out, starts: outStarts, separators: outSeparators };
 }
 
 /**
@@ -71,11 +87,13 @@ function foldLeadingCdGuards(
  */
 export function parseShellCommand(command: string, depth = 0): ShellParse {
 	if (depth > MAX_DEPTH) {
-		return { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: "recursion-limit" };
+		return { segments: [command], separators: ["start"], rawSegments: [command], segmentStarts: [0], unsupported: "recursion-limit" };
 	}
 
 	const segments: string[] = [];
 	const starts: number[] = [];
+	const separators: string[] = [];
+	let pendingSeparator = "start";
 	let buf = "";
 	let segStart = -1;
 	let quote: "none" | "single" | "double" = "none";
@@ -96,6 +114,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 		if (s !== "") {
 			segments.push(s);
 			starts.push(segStart);
+			separators.push(pendingSeparator);
 		}
 		buf = "";
 		segStart = -1;
@@ -191,6 +210,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 				continue;
 			}
 			pushBuf();
+			pendingSeparator = ";";
 			expectOperand = false;
 			i++;
 			continue;
@@ -198,6 +218,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 
 		if (c === "\n") {
 			pushBuf();
+			pendingSeparator = "\n";
 			expectOperand = false;
 			i++;
 			continue;
@@ -205,7 +226,9 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 
 		if (c === "|") {
 			if (buf.trim() === "" || expectOperand) malformed = true;
+			const op = command[i + 1] === "|" ? "||" : command[i + 1] === "&" ? "|&" : "|";
 			pushBuf();
+			pendingSeparator = op;
 			expectOperand = true;
 			if (command[i + 1] === "|" || command[i + 1] === "&") i += 2;
 			else i++;
@@ -216,6 +239,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 			if (command[i + 1] === "&") {
 				if (buf.trim() === "" || expectOperand) malformed = true;
 				pushBuf();
+				pendingSeparator = "&&";
 				expectOperand = true;
 				i += 2;
 				continue;
@@ -230,6 +254,7 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 			}
 			if (buf.trim() === "") malformed = true;
 			pushBuf();
+			pendingSeparator = "&";
 			expectOperand = false;
 			i++;
 			continue;
@@ -246,11 +271,12 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 
 	if (quote !== "none" && unsupported === null) unsupported = "unbalanced-quote";
 	if (malformed) {
-		return { segments: [command], rawSegments: [command], segmentStarts: [0], unsupported: "dangling-operator" };
+		return { segments: [command], separators: ["start"], rawSegments: [command], segmentStarts: [0], unsupported: "dangling-operator" };
 	}
 
 	let result = segments;
 	let resultStarts = starts;
+	let resultSeparators = separators;
 
 	// Recurse into executed sub-commands (`$(...)`, backticks, process subs).
 	const subs: { text: string; baseOffset: number }[] = [];
@@ -262,20 +288,24 @@ export function parseShellCommand(command: string, depth = 0): ShellParse {
 	if (subs.length > 0) {
 		const extra: string[] = [];
 		const extraStarts: number[] = [];
+		const extraSeparators: string[] = [];
 		for (const sub of subs) {
 			const parsed = parseShellCommand(sub.text, depth + 1);
 			for (let j = 0; j < parsed.segments.length; j++) {
 				extra.push(parsed.segments[j]);
 				extraStarts.push(sub.baseOffset + parsed.segmentStarts[j]);
+				// A segment inside a substitution is not a member of the outer pipe.
+				extraSeparators.push("sub");
 			}
 			if (parsed.unsupported) unsupported = parsed.unsupported;
 		}
 		result = [...result, ...extra];
 		resultStarts = [...resultStarts, ...extraStarts];
+		resultSeparators = [...resultSeparators, ...extraSeparators];
 	}
 
-	const folded = foldLeadingCdGuards(result, resultStarts);
-	return { segments: folded.segments, rawSegments: result, segmentStarts: folded.starts, unsupported };
+	const folded = foldLeadingCdGuards(result, resultStarts, resultSeparators);
+	return { segments: folded.segments, separators: folded.separators, rawSegments: result, segmentStarts: folded.starts, unsupported };
 }
 
 // The expansion probe in `command-segments.ts` walks quoted spans.
