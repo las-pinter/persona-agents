@@ -224,6 +224,19 @@ hit wins:
 
 A shell redirect is a write: `> out.log` inside the project is allowed, `>
 ~/.bashrc` is denied, and a redirect into a gate file is denied by the floor.
+One quoted data heredoc (`cat`, `tee`, or a `python`/`node` stdin script) that
+is the whole command is judged by its header, as the shared gate judges it: the
+header decides which files the shell opens, and a path in the body names none.
+A header the grammar does not read falls back to the whole text, which is then
+scanned as commands, so a redirect, a write command, or a path word in the body
+can deny whenever any part of the text counts as a write.
+Two limits: the floor still reads the raw body for its own patterns (a secret
+word, a gate-file redirect, a remote script piped to a shell), and a `python` or
+`node` body runs as code, which no rule inspects.
+
+A write word is resolved as a literal path: a `$VAR`, a backtick, or a `~user`
+form is not expanded, so the place rule cannot see where it lands. `AGENTS.md`
+records that as an accepted risk.
 
 A rule is `{ tool, match, verdict, reason? }`, where `match` is a regular
 expression source tested against:

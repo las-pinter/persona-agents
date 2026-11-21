@@ -32,6 +32,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
 	commandCandidates,
 	commandSegments,
+	dataHeredocHeader,
 	gateCommand,
 	redirectTargets,
 	shellWords,
@@ -436,10 +437,18 @@ export function doctrineDecision(profile: Profile, tool: string, input: Record<s
 		}
 		// A redirect is a write, so the same place rule applies: inside the
 		// project or the notes, nowhere else. A write command's path arguments
-		// are checked the same way.
+		// are checked the same way. The shell gate reads one quoted data heredoc
+		// by its header only, so the place rule reads the header too: the header
+		// decides which files the shell opens, and a path in a body names none.
+		// Two limits: python and node run the body as code, which no rule reads
+		// (as with `python -c`), and a header the shared allow-list rejects falls
+		// back to the whole text. A word the shell resolves at run time (`$VAR`,
+		// `~user`) is resolved here as a literal path, so the place rule cannot see
+		// where it lands; the doctrine records that as an accepted risk.
+		const inspected = dataHeredocHeader(command) ?? command;
 		const outside =
-			outsideWriteTarget(command, env) ??
-			redirectTargets(command)
+			outsideWriteTarget(inspected, env) ??
+			redirectTargets(inspected)
 				.map((target) => absolutePath(target, env))
 				.find((path) => !isInside(path, env.cwd) && !isInside(path, env.notesDir));
 		if (outside) {

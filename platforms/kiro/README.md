@@ -103,8 +103,10 @@ The payload keeps the repository layout so the relative imports between
   model is pinned: the owner's session model is used.
 - **`pa-reviewer`** — read-only, separate context. Tools `read`, `web`,
   `shell`; no file-write tool. Its `permissions.rules` deny every `fs_write`,
-  and a PreToolUse hook blocks shell writes and every command that writes
-  history or publishes (commit, tag, push). Reading git history is allowed.
+  and a PreToolUse hook blocks shell writes the gate can see and every command
+  that writes history or publishes (commit, tag, push). Reading git history is
+  allowed. A `python` or `node` heredoc body runs as code the gate does not
+  read, as `python -c` already did.
 - **`pa-writer`** — the journal writer. Tools `[]`; no permissions. It writes
   the entry text from the material the SessionEnd net gives it.
 

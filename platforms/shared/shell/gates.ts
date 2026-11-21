@@ -588,6 +588,15 @@ function gatedFormFollows(program: "git" | "gh", after: string): boolean {
 	return false;
 }
 
+/**
+ * The header of one whole-command quoted data heredoc, or null. A platform that
+ * reads a data heredoc by its header (the Pi write-place rule) composes through
+ * this entry point, so the gate and the rule cannot drift apart.
+ */
+export function dataHeredocHeader(command: string): string | null {
+	return safeHeredocHeader(normalizeHeredocs(command));
+}
+
 /** Every hit a whole shell command makes, in no particular order. */
 export function gateCommand(command: string, depth = 0, options: GateOptions = {}): Hit[] {
 	const text = normalizeHeredocs(command);

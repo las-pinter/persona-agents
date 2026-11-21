@@ -76,8 +76,8 @@ The doctrine lives in three places:
   `pa-reviewer`. A `PermissionRequest` hook allows a git command and
   a reviewed or trivial commit; anything else returns no decision, so Kiro's
   native prompt asks. A PreToolUse hook denies the reviewer every shell write
-  and every command that writes history or publishes; reading git history is
-  allowed.
+  the gate can see and every command that writes history or publishes; reading
+  git history is allowed.
 
 `platforms/claude/README.md` and `platforms/kiro/README.md` hold the hook
 details.
@@ -92,7 +92,13 @@ additional working directories come from the settings files
 directory, as it already can for Claude Code's own file access. A formatter
 runs the configuration and plugins its arguments name. The Pi companion keeps
 its broader local-shell allowance, so the cd rule decides the Claude and Kiro
-verdicts.
+verdicts. A `python` or `node` heredoc body runs as code that no rule reads as
+commands, though the Pi floor still reads its own patterns in it (a secret
+word, a gate-file redirect, a remote script piped to a shell): the Pi companion runs it with no prompt, the Pi reviewer denies it, the
+Kiro companion is asked, the Kiro reviewer is allowed it, and Claude Code's own
+flow decides. The Pi write-place rule resolves a write word as a literal path,
+so a `$VAR`, a backtick, or a `~user` word there is not expanded and the rule
+cannot place it.
 `gh workflow run` and `gh api` carry no gate entry by owner choice, so Claude
 Code's own permission flow decides them. The Kiro companion may run a `node`
 script, so a determined companion can write the review store; the gate ignores

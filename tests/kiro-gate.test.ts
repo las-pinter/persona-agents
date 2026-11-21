@@ -306,6 +306,17 @@ describe("kiro doctrine: the reviewer", () => {
 		});
 	});
 
+	test("a python or node heredoc body is not read as commands", () => {
+		// The gate reads one quoted data heredoc by its header, so the body is not a
+		// segment it can see: the reviewer is allowed it, the companion is asked.
+		withTemp((root) => {
+			const context = ctx(root, path.join(root, "state"));
+			const body = "python3 - <<'PY'\nopen('/tmp/x', 'w')\nPY";
+			assert.equal(commandDecision("reviewer", body, context).verdict, "allow");
+			assert.equal(commandDecision("companion", body, context).verdict, "ask");
+		});
+	});
+
 	test("the observed commit chain is denied", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));

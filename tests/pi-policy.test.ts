@@ -324,6 +324,92 @@ describe("pi policy: shell writes obey the place rule", () => {
 		}
 	});
 
+	test("a quoted data heredoc is judged by its header, not its body", () => {
+		const box = sandbox();
+		try {
+			const policy: PolicyState = { rules: [], errors: [], grants: [] };
+			const outside = path.join(box.root, "elsewhere");
+			// A quoted body is data: a path in it is not a file this shell opens.
+			// Before this rule the fail-closed word scan read a body path as a file
+			// argument and denied it; the header decides which files the shell opens.
+			assert.equal(bash(companion, `cat > notes.txt <<'EOF'\nsee ${outside} for details\nEOF`, policy, box.env), "allow");
+			assert.equal(bash(companion, `cat > notes.txt <<'EOF'\necho x > ${outside}\nEOF`, policy, box.env), "allow");
+			assert.equal(bash(companion, `tee notes.txt <<'EOF'\nsee ${outside}\nEOF`, policy, box.env), "allow");
+			assert.equal(bash(companion, `cat <<'EOF' > notes.txt\nsee ${outside}\nEOF`, policy, box.env), "allow");
+			// The floor still reads the body words: a secret there is denied.
+			const secret = decidePolicy(companion, "bash", { command: "cat > notes.txt <<'EOF'\nsee ~/.aws/credentials\nEOF" }, policy, box.env);
+			assert.equal(secret.verdict, "deny");
+			assert.equal(secret.source, "floor");
+			// So is a redirect inside the body into a gate file.
+			const gateFile = decidePolicy(
+				companion,
+				"bash",
+				{ command: `cat > notes.txt <<'EOF'\n> ${box.refs[0].path}\nEOF` },
+				policy,
+				box.env,
+			);
+			assert.equal(gateFile.verdict, "deny");
+			assert.equal(gateFile.source, "floor");
+			// The header still names every file the shell opens, in either order.
+			for (const command of [
+				`cat > ${outside} <<'EOF'\nplain\nEOF`,
+				`tee ${outside} <<'EOF'\nplain\nEOF`,
+				`cat <<'EOF' > ${outside}\nplain\nEOF`,
+			]) {
+				const denied = decidePolicy(companion, "bash", { command }, policy, box.env);
+				assert.equal(denied.verdict, "deny");
+				assert.match(denied.reason, /shell writes stay inside/);
+				assert.equal(denied.matched, outside);
+			}
+		} finally {
+			box.cleanup();
+		}
+	});
+
+	test("a data heredoc the shared allow-list rejects keeps the fail-closed scan", () => {
+		// The header grammar belongs to the shared gate, not to this rule: when
+		// `safeHeredocHeader` refuses a shape, the body is scanned again and a path
+		// in it denies. These shapes are the accepted cost of one grammar.
+		const box = sandbox();
+		try {
+			const policy: PolicyState = { rules: [], errors: [], grants: [] };
+			const outside = path.join(box.root, "elsewhere");
+			assert.equal(bash(companion, `cat > notes.txt 2>&1 <<'EOF'\nsee ${outside}\nEOF`, policy, box.env), "deny");
+			assert.equal(bash(companion, `cat > notes.txt <<<'see ${outside}'`, policy, box.env), "deny");
+			assert.equal(bash(companion, `cat > notes.txt <<'EOF'\nsee ${outside}\nEOF\necho done`, policy, box.env), "deny");
+			// A commit heredoc beside a data heredoc is not one whole data heredoc,
+			// so the gate and the place rule fall back together.
+			assert.equal(
+				bash(companion, `git add -A && git commit -F - <<'MSG'\nsubject\nMSG\ncat > notes.txt <<'EOF'\nsee ${outside}\nEOF`, policy, box.env),
+				"deny",
+			);
+		} finally {
+			box.cleanup();
+		}
+	});
+
+	test("a script body is not read by the place rule", () => {
+		// A python or node heredoc body runs as code and stays uninspected, the
+		// same known limit `python -c` has. The first two cases hold with and
+		// without the header rule; the third flips from deny to allow with it.
+		const box = sandbox();
+		try {
+			const policy: PolicyState = { rules: [], errors: [], grants: [] };
+			const outside = path.join(box.root, "elsewhere");
+			assert.equal(bash(companion, `python3 - <<'PY'\nopen('${outside}')\nPY`, policy, box.env), "allow");
+			assert.equal(bash(companion, `node - <<'JS'\nrequire('child_process').execSync('git push')\nJS`, policy, box.env), "allow");
+			// A redirect-shaped line in the body is code too, not a file the shell
+			// opens. The third case was denied before the header rule, because the
+			// raw text was scanned for redirects; trusting the header is the accepted
+			// risk recorded in AGENTS.md.
+			assert.equal(bash(companion, `python3 - <<'PY'\nx > ${outside}\nPY`, policy, box.env), "allow");
+			// A read-only reviewer may run no script at all, so it is denied.
+			assert.equal(bash(reviewer, `python3 - <<'PY'\nopen('${outside}')\nPY`, policy, box.env), "deny");
+		} finally {
+			box.cleanup();
+		}
+	});
+
 	test("a redirect into the gate's own files is denied by the floor", () => {
 		const box = sandbox();
 		try {

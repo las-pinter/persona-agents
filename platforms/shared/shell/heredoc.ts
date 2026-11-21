@@ -7,8 +7,10 @@
  *                      that only feeds a `git commit ... -F -` header, so the
  *                      parser sees the commit and the body stays data.
  *   safeHeredocHeader  the header of one whole-command data heredoc (cat, tee,
- *                      python3/py, node reading stdin), for the fail-closed
- *                      path.
+ *                      python3/python, node reading stdin), for the fail-closed
+ *                      path, and for a platform that reads a data heredoc by
+ *                      its header (the Pi write-place rule, through
+ *                      `dataHeredocHeader` in gates.ts).
  *
  * Everything else stays: an unquoted or expanding form, a header that is not a
  * plain `git commit -F -`, a comment, or a token the scanner cannot read. The
