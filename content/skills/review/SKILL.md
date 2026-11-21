@@ -79,8 +79,8 @@ Build your own picture before you judge:
 4. Your own risk list, including effects outside the diff: stored data,
    upgrade paths, other platforms, CI, docs.
 
-Then review the change with the `persona-agents:code-review-checklist` skill,
-and return the review in the output format of your agent instructions. A
-re-review is a fresh full review of the new range with the same brief: nothing
-from an earlier review is passed to you, and nothing you reported earlier
-counts as verified now.
+Then review the change with the `persona-agents:code-review-checklist` skill
+and the skills your agent instructions select, and return the review in the
+output format of your agent instructions. A re-review is a fresh full review
+of the new range with the same brief: nothing from an earlier review is passed
+to you, and nothing you reported earlier counts as verified now.

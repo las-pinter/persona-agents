@@ -82,7 +82,9 @@ kiro-cli --agent pa-companion
 - **Agents**: the `pa-reviewer` prompt is the shared
   `content/professions/reviewer.md`, read from the payload at install time,
   plus a Kiro note (skills have no namespace; the checklist skill is
-  `code-review-checklist`).
+  `code-review-checklist`). The reviewer selects the skills that name the
+  languages in scope and lists them under `## Skills loaded`, as the shared
+  prompt says.
 - **Shared modules** (`platforms/shared/`): the logic every adapter uses —
   shell classification, notes, compaction manifest, review, retro facts, and
   the prompt sections. See [platforms/pi/README.md](../pi/README.md#layout)

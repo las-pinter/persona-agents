@@ -1,0 +1,6 @@
+{
+  "name": "pa-eval-rust",
+  "description": "Rust skill fixture for the reviewer eval",
+  "version": "0.0.1",
+  "skills": ["./skills/rust-quality-gate/"]
+}
