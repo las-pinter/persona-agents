@@ -1,6 +1,6 @@
 {
   "name": "persona-agents",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "Claude Code plugin: a persona companion agent with skills, project notes, and journals",
   "private": true,
   "type": "module",
