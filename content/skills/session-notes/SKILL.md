@@ -12,8 +12,6 @@ Your context is a cache of it: compaction can drop the context at any time, but
 the file stays. Write the plan here, keep it current, and you can always pick
 the work up again.
 
-Follow the **persona-free-documents** skill: the file holds no persona voice.
-
 ## When to Create One
 
 - Create one when a task needs more than a few steps, or when it will outlive
@@ -39,6 +37,7 @@ plain kebab-case slug.
 - **Started:** YYYY-MM-DD
 - **Status:** open | done
 - **Study:** <path to study.md, or none>
+- **Sessions:** <session id>, <session id>
 
 ## Goal
 
@@ -64,6 +63,10 @@ plain kebab-case slug.
 
 ## Rules
 
+- **Name the session.** Write the session id from the session start text on
+  the `Sessions` line when you create the file. When a new session picks the
+  task up, append its id to that line first, before any other edit. The id is
+  how the file is found after a compaction.
 - **Update the plan first.** When the facts change the plan, edit `## Plan`
   before you continue the work. Mark the current step.
 - **Record decisions** the owner makes, with the date.

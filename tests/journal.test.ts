@@ -148,7 +148,7 @@ describe("journal: session-end hook", () => {
 	const hookInput = (env: Env, extra: Record<string, unknown> = {}) =>
 		JSON.stringify({ hook_event_name: "SessionEnd", reason: "prompt_input_exit", session_id: "s-9", cwd: env.cwd, agent_type: "persona-agents:companion", ...extra });
 	const runHook = (env: Env, input: string, claude: string) =>
-		spawnSync(process.execPath, [endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
+		spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
 			input,
 			env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data },
 			encoding: "utf8",
@@ -169,6 +169,20 @@ describe("journal: session-end hook", () => {
 			assert.match(fs.readFileSync(path.join(env.tmp, "claude-args"), "utf8"), /--tools\s+--no-session-persistence/);
 		}));
 
+	test("the detached writer loads the shared parser with type stripping off by default", () =>
+		withEnv(async (env) => {
+			const transcript = path.join(env.tmp, "t.jsonl");
+			write(transcript, JSON.stringify({ type: "user", message: { content: "please fix the parser" } }));
+			const claude = fakeClaude(env, "# 2026-01-02 09:00 — parser fix\n\n## Done\n\n- fixed");
+			const run = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
+				input: hookInput(env, { transcript_path: transcript }),
+				env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data, NODE_OPTIONS: "--no-experimental-strip-types" },
+				encoding: "utf8",
+			});
+			assert.equal(run.status, 0, run.stderr);
+			assert.ok(await waitFor(() => findEntry(env.notes, "s-9", [dayOf(new Date())]) !== ""), "the writer child did not run");
+		}));
+
 	test("a session that already has an entry gets no second one", () =>
 		withEnv(async (env) => {
 			const existing = entryPath(env.notes, "s-9");
@@ -185,7 +199,7 @@ describe("journal: session-end hook", () => {
 		withEnv(async (env) => {
 			const claude = fakeClaude(env, "# x");
 			runHook(env, hookInput(env, { agent_type: "Explore" }), claude);
-			spawnSync(process.execPath, [endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
+			spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
 				input: hookInput(env),
 				env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data, PERSONA_AGENTS_JOURNAL_WRITER: "1" },
 			});

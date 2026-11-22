@@ -64,12 +64,9 @@ Run the relevant existing tests and confirm: all previously passing tests still 
 
 ### Step 5: Write New Tests
 
-| Gap Type | Best Level | Why |
-|----------|-----------|-----|
-| New logic path | Unit | Fast, precise, isolated |
-| Changed behavior | Unit + Integration | Verifies behavior AND integration |
-| Bug fix | Unit (reproduces the bug) | Prevents regression |
-| API change | Contract | Catches consumer/provider mismatch |
+Choose the level for each new test with the **test-strategy-selection** skill.
+One rule stays here: a bug fix gets a test that reproduces the bug, at the
+lowest level that shows it.
 
 ---
 

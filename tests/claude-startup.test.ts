@@ -13,7 +13,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { recentEntries } from "../platforms/claude/scripts/journal.mjs";
-import { openSessionNotes, startupContext, unfinishedStudies } from "../platforms/claude/scripts/startup.mjs";
+import { startupContext } from "../platforms/claude/scripts/startup.mjs";
+import { openSessionNotes, unfinishedStudies } from "../platforms/shared/notes/notes.ts";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "startup.mjs");
 
@@ -107,7 +108,10 @@ describe("startup hook: read list", () => {
 
 describe("startup hook: process", () => {
 	const run = (input: Record<string, unknown>, home = os.tmpdir()) =>
-		spawnSync(process.execPath, [script, `--home=${home}`], { input: JSON.stringify(input), encoding: "utf8" });
+		spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", script, `--home=${home}`], {
+			input: JSON.stringify(input),
+			encoding: "utf8",
+		});
 
 	test("the companion gets SessionStart additional context under the cap", () => {
 		withNotes(({ home, cwd, dir }) => {

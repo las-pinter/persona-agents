@@ -9,75 +9,21 @@
 //
 // Any other agent, or a session without one, gets no output.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { recentEntries } from "./journal.mjs";
+import { startupContext as sharedStartupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "./notes-paths.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
-const JOURNAL_DAYS = 3;
-const UNFINISHED = new Set(["draft", "ready", "in-progress"]);
 
-/** The sorted names in a folder that pass `keep`, or [] when the folder is missing. */
-function list(dir, keep) {
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir)
-		.filter((name) => keep(name, join(dir, name)))
-		.sort();
-}
-
-const isFile = (path) => statSync(path).isFile();
-
-/** Session notes files whose Status line says open. */
-export function openSessionNotes(dir) {
-	return list(join(dir, "sessions"), (name, path) => name.endsWith(".md") && isFile(path))
-		.map((name) => join(dir, "sessions", name))
-		.filter((path) => /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
-}
-
-/** Rows of studies/index.md whose stage is not done or abandoned: "title (stage): path". */
-export function unfinishedStudies(dir) {
-	const index = join(dir, "studies", "index.md");
-	if (!existsSync(index)) return [];
-	const rows = [];
-	for (const line of readFileSync(index, "utf8").split("\n")) {
-		const cells = line.split("|").map((cell) => cell.trim());
-		// | title | stage | updated | `path` |  splits to ["", title, stage, updated, path, ""]
-		if (cells.length < 6 || !UNFINISHED.has(cells[2])) continue;
-		rows.push(`${cells[1]} (${cells[2]}): ${join(dir, cells[4].replace(/`/g, ""))}`);
-	}
-	return rows;
-}
-
-/** The startup context text for a working directory. */
+/**
+ * The startup context text for a working directory.
+ *
+ * The text lives in the shared notes module; the Claude adapter passes no
+ * session id, because the context hook prints it on every session source.
+ */
 export function startupContext(cwd, home) {
-	const dir = projectDir(cwd, home);
-	const project = projectName(cwd);
-	const rules = list(join(dir, "rules"), (name, path) => name.endsWith(".md") && isFile(path)).map((name) =>
-		join(dir, "rules", name),
-	);
-	const summary = join(dir, "summary.md");
-	const bullets = (items) => (items.length ? items.map((item) => `- ${item}`) : ["- none"]);
-	const lines = [
-		"# Session start: read list",
-		"",
-		`Project: ${project}`,
-		`Project notes folder: ${dir}${existsSync(dir) ? "" : " (does not exist yet)"}`,
-		"",
-		"Before your first answer, read these in full (rules in this order, then the summary):",
-		...bullets([...rules, ...(existsSync(summary) ? [summary] : [])]),
-		"",
-		`Then read the journal of the last ${JOURNAL_DAYS} days with entries:`,
-		...bullets(recentEntries(dir, JOURNAL_DAYS)),
-		"",
-		"Open session notes (read each; offer to resume or close it):",
-		...bullets(openSessionNotes(dir)),
-		"",
-		"Unfinished studies (read a study only when the task names it):",
-		...bullets(unfinishedStudies(dir)),
-	];
-	return lines.join("\n");
+	return sharedStartupContext(projectDir(cwd, home), projectName(cwd));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

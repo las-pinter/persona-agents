@@ -4,12 +4,23 @@ description: Print-only blameless retrospective of the current companion session
 disable-model-invocation: true
 ---
 
+## Platform branch
+
+If your system context says `Running in Kiro CLI`, first read
+`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md`. It names the script that
+prints this session's facts and says which parts of this file apply. Write
+nothing durable either way.
+
 # Retro
 
 ## Purpose
 
 Review the current session and print the result in chat. Write nothing
 durable.
+
+On Pi, `/retro` gathers the session facts (tool calls, changed files,
+compactions, reviews, and every permission decision) and sends them here. On
+Claude Code, `/persona-agents:retro` starts the same work.
 
 The spine is the After Action Review (AAR). It has four parts:
 
@@ -108,6 +119,17 @@ sweep internal. Print only a dimension with evidence.
 | 13 | Update-surface routing | For each lesson, which surface should change? |
 | 14 | Plan upkeep | Did the session notes or the study change before the work changed, or after? |
 | 15 | Compaction and recovery | Did a compaction lose something the reload did not bring back? |
+
+### Routing a Lesson
+
+- A mechanical mistake (a fixed syntactic pattern, a banned API, an import
+  shape, a file location) gets a check, never a prose rule: a linter rule, a
+  pre-commit hook, or a CI job.
+- A judgement call gets a rule, and only when no check can express it.
+- A steering file that has grown past about 1,000 lines gets navigation
+  pointers, not more prose.
+- A repository with no guardrail (no pre-commit hook and no CI job running its
+  lint, typecheck, and test command) is itself a finding.
 
 ### Cost Data
 

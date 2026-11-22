@@ -113,7 +113,8 @@ function runContext(
 		if (settings.noConfigDir) delete env.CLAUDE_CONFIG_DIR;
 		if (theme !== undefined) env.CLAUDE_PLUGIN_OPTION_THEME = theme;
 		// The test seam: a hook argument, which a settings env block cannot set.
-		const args = [...(settings.nodeArgs ?? []), contextScript, part, `--managed-settings=${managedFile}`];
+		// The hook imports shared TypeScript, so it runs exactly as hooks.json does.
+		const args = ["--experimental-strip-types", "--no-warnings", ...(settings.nodeArgs ?? []), contextScript, part, `--managed-settings=${managedFile}`];
 		result = spawnSync(process.execPath, args, {
 			input: JSON.stringify(input),
 			env,
@@ -136,12 +137,12 @@ function runContext(
 
 /** A companion SessionStart input; compaction restarts the session with source "compact". */
 function companionInput(source = "startup"): Record<string, unknown> {
-	return { hook_event_name: "SessionStart", source, agent_type: "persona-agents:companion" };
+	return { hook_event_name: "SessionStart", source, agent_type: "persona-agents:companion", session_id: "sess-1" };
 }
 
 describe("claude plugin: context hook", () => {
-	test("there is exactly one profession, the companion", () => {
-		assert.deepEqual(professions, ["companion"]);
+	test("the content holds the companion and the reviewer professions", () => {
+		assert.deepEqual(professions, ["companion", "reviewer"]);
 	});
 
 	test("the profession part is the file, verbatim, under the cap", () => {
@@ -161,10 +162,24 @@ describe("claude plugin: context hook", () => {
 		}
 	});
 
-	test("both parts come back after a compaction", () => {
-		for (const part of ["profession", "persona"]) {
+	test("every part comes back after a compaction", () => {
+		for (const part of ["profession", "persona", "session"]) {
 			assert.ok(runContext(part, companionInput("compact")).context, part);
 		}
+	});
+
+	test("the session part names the id on every session source", () => {
+		for (const source of ["startup", "resume", "clear", "compact", "fork"]) {
+			const run = runContext("session", companionInput(source));
+			assert.equal(run.context, "Session id: sess-1", source);
+			assert.ok((run.context ?? "").length < HOOK_STRING_CAP);
+		}
+	});
+
+	test("the session part is silent without a session id", () => {
+		const run = runContext("session", { hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:companion" });
+		assert.equal(run.status, 0);
+		assert.equal(run.context, null);
 	});
 
 	test("no option set means the goblin theme", () => {
@@ -177,7 +192,7 @@ describe("claude plugin: context hook", () => {
 			{ hook_event_name: "SessionStart", source: "startup", agent_type: "Explore" },
 			{ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:reviewer" },
 		]) {
-			for (const part of ["profession", "persona"]) {
+			for (const part of ["profession", "persona", "session"]) {
 				const run = runContext(part, input);
 				assert.equal(run.status, 0);
 				assert.equal(run.context, null, `${part}: ${JSON.stringify(input)}`);
@@ -356,10 +371,10 @@ describe("claude plugin: context hook", () => {
 			assert.equal(themeOf(run), themeA);
 		});
 
-		test("an unknown theme from the settings file still warns", () => {
+		test("an unknown theme from the settings file still warns and keeps the persona-free rule", () => {
 			const run = runContext("persona", companionInput(), themeA, { user: themeSettings("nosuch") });
 			assert.equal(run.status, 0);
-			assert.equal(run.context, null);
+			assert.match(run.context ?? "", /persona-free-documents/);
 			assert.match(run.stderr, /no nosuch persona for the companion/);
 		});
 	});
@@ -367,7 +382,7 @@ describe("claude plugin: context hook", () => {
 	test("an unknown theme warns and still sends the profession", () => {
 		const persona = runContext("persona", companionInput(), "nosuch");
 		assert.equal(persona.status, 0);
-		assert.equal(persona.context, null);
+		assert.match(persona.context ?? "", /persona-free-documents/);
 		assert.match(persona.stderr, /no nosuch persona for the companion/);
 		assert.ok(runContext("profession", companionInput(), "nosuch").context);
 	});

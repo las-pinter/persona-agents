@@ -10,7 +10,16 @@ description: Language-agnostic structure, naming conventions, and rules for writ
 1. **Describe behavior, not implementation.** Test names say WHAT the code does, not HOW.
 2. **Every test name answers three questions:** What context/input? What action? What outcome?
 3. **Readability over convention.** If a longer name is clearer, use it.
-4. **Name the behavior only.** Follow **persona-free-documents**.
+4. **Name the behavior only.**
+5. **The expected value comes from an independent source.** A test that
+   recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`,
+   a snapshot derived from the implementation) passes by construction and can
+   never disagree with the code. Use a known-good literal, a worked example,
+   or the spec.
+6. **A test that breaks on refactor has coupled to implementation.** When
+   behavior has not changed and the test breaks, the test is wrong. Mocks of
+   internal collaborators, private methods, and side-channel checks (querying
+   the store instead of using the interface) are the usual causes.
 
 ### Good vs Bad Names
 
@@ -59,23 +68,10 @@ describe('Payment Processing')
 
 ## Test Structure
 
-### Arrange-Act-Assert (AAA)
-
-```
-// Arrange — set up test data and preconditions
-// Act     — execute the behavior under test
-// Assert  — verify the outcome
-```
-
-Rules:
-- **One Act per test** — multiple actions make failure diagnosis ambiguous
-- **Arrange sets up only what's needed** for THIS test
-- **Assert verifies the outcome**, not intermediate state
-- Separate phases with blank lines or comments for readability
-
 ### Given-When-Then (GWT)
 
-Semantically identical to AAA, framed for behavior:
+The same three phases as arrange-act-assert, whose rules live in
+**code-implementation**, framed for behavior:
 
 | AAA | GWT |
 |-----|-----|
@@ -187,8 +183,6 @@ Over-mocking couples tests to implementation — the #1 anti-pattern in test dou
 
 ## Testing Rules
 
-- Never test only the happy path. Cover failure modes, boundaries, and
-  invalid input.
 - When no test suite exists, start with the highest-risk paths (core logic,
   error handling, boundary input) and state the coverage assumptions.
 - Back every result claim with evidence: the exact command, the exit code, and

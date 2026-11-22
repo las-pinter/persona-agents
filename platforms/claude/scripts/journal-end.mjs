@@ -107,7 +107,16 @@ function hook(input, claudeArg) {
 		payloadFile,
 		JSON.stringify({ session: input.session_id, transcript: input.transcript_path, notesDir, reason: input.reason, at: now.toISOString() }),
 	);
-	const args = [fileURLToPath(import.meta.url), "write", payloadFile, ...(claudeArg ? [claudeArg] : [])];
+	// The writer imports compact.mjs, which imports the shared TypeScript
+	// notes parser; the flag must travel to the child, which inherits no exec args.
+	const args = [
+		"--experimental-strip-types",
+		"--no-warnings",
+		fileURLToPath(import.meta.url),
+		"write",
+		payloadFile,
+		...(claudeArg ? [claudeArg] : []),
+	];
 	const child = spawn(process.execPath, args, {
 		detached: true,
 		stdio: "ignore",

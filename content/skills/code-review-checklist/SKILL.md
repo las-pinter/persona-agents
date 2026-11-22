@@ -16,6 +16,20 @@ description: Structured checklist for reviewing code changes — severity taxono
 
 ---
 
+## Two Axes
+
+Every finding carries one axis:
+
+- **Standards** — the repository's documented rules and this checklist.
+- **Spec** — what the task and the decisions file asked for.
+
+Report the axes separately and never rerank one against the other: code can
+follow every standard and do the wrong thing, or do exactly what was asked and
+break the conventions. The severity map and the verdict still apply across
+both.
+
+---
+
 ## Severity Taxonomy
 
 Label every issue so the author can triage at a glance:
@@ -88,6 +102,33 @@ session-notes line that records it.
 
 The command forms live in the project's `tech/` notes (see the
 **project-notes** skill).
+
+---
+
+## Smell Baseline
+
+A fixed set of design smells that applies even when a repository documents
+nothing. Two rules bind it:
+
+- A documented repository standard always wins. Where it endorses something a
+  smell would flag, suppress the smell.
+- Each smell is a labelled judgement call ("possible Feature Envy"), never a
+  hard violation. Skip anything tooling already enforces.
+
+| Smell | What it looks like | The fix |
+|---|---|---|
+| Mysterious name | A function, variable, or type whose name does not say what it does or holds. | Rename it; if no honest name comes, the design is unclear. |
+| Duplicated code | The same logic shape appears in more than one hunk or file. | Extract the shared shape once and call it from both. |
+| Feature envy | A method reaches into another object's data more than its own. | Move the method onto the data it envies. |
+| Data clumps | The same few fields or parameters keep travelling together. | Bundle them into one type and pass that. |
+| Primitive obsession | A primitive or string stands in for a domain concept. | Give the concept its own small type. |
+| Repeated switches | The same switch or if-cascade on one type recurs. | One map both sites share, or polymorphism. |
+| Shotgun surgery | One logical change forces scattered edits across many files. | Gather what changes together into one module. |
+| Divergent change | One file is edited for several unrelated reasons. | Split it so each module changes for one reason. |
+| Speculative generality | Abstraction, parameters, or hooks for needs the task does not have. | Delete it; inline until a real need shows. |
+| Message chains | Long `a.b().c().d()` navigation the caller should not depend on. | Hide the walk behind one method on the first object. |
+| Middle man | A class or function that mostly just delegates onward. | Cut it; call the real target. |
+| Refused bequest | A subclass ignores or overrides most of what it inherits. | Drop the inheritance; use composition. |
 
 ---
 

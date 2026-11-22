@@ -11,10 +11,6 @@ Plain, persona-free records about repositories agents work on. The notes hold
 architecture, conventions, lessons learned, rules, and studies. No flair.
 Every line must earn its place. The companion reads and writes them.
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## Storage
 
 ```
@@ -22,6 +18,7 @@ Load and follow the **persona-free-documents** skill for every study, note, jour
 ├── project-notes/
 │   └── <project>/
 │       ├── summary.md
+│       ├── glossary.md
 │       ├── features/<slug>.md
 │       ├── bugs/<slug>.md
 │       ├── tech/<slug>.md
@@ -59,6 +56,7 @@ A release note file uses `<version>.md`. Study folders use `YYYY-MM-DD-<slug>`.
 | Path | When to write |
 |------|---------------|
 | `summary.md` | On significant discovery or owner correction. |
+| `glossary.md` | On a term the owner corrects, or when the code contradicts the name. |
 | `features/`, `bugs/`, `tech/` | On significant discovery or owner correction. |
 | `releases/` | On each release, one note per version. |
 | `audit/` | On each audit, one note per audit. |
@@ -70,7 +68,8 @@ A release note file uses `<version>.md`. Study folders use `YYYY-MM-DD-<slug>`.
 | `<study>/<side-doc>.md` | When detail must move out of the study. |
 
 **READ rule.** The read order lives in **Read order** under `## Rules Folder`. A
-task read happens only when the task names the note.
+task read happens only when the task names the note. The one exception is
+`glossary.md`: read it before naming a domain term, even when no task names it.
 
 The two startup reads are the project `rules/` folder and `summary.md`. No
 other note is a startup read. Archived studies live in
@@ -108,7 +107,8 @@ retire one rule or merge two rules in the same edit. Then write the new rule.
 2. Read the project `rules/` folder in full, in file-name order.
 3. Read `summary.md` in full.
 4. Read `studies/index.md` and one `status.md` only when the task names a study.
-5. Read every other note only when a task names it.
+5. Read every other note only when a task names it, except `glossary.md` (see
+   the READ rule).
 
 **Mid-session duty.** Write, update, or retire a rule in the session that finds
 it. Record the reason in the session notes.
@@ -144,7 +144,7 @@ Rules:
 
 - No "Last worked on" field.
 - No persona voice. Plain facts only.
-- `summary.md`: maximum 30 lines (hard ceiling).
+- `summary.md`: maximum 50 lines (hard ceiling).
 - Feature, bug, and tech notes: maximum 300 lines each (hard ceiling). Split the
   topic when a note cannot fit.
 - Release and audit notes: maximum 300 lines each (hard ceiling). Split the
@@ -154,6 +154,34 @@ Rules:
 - Each side document: maximum 300 lines (hard ceiling). Split the topic before
   it exceeds the cap.
 - Omit a section when it has nothing notable.
+
+## Glossary
+
+`glossary.md` holds the project's vocabulary for agents: the terms the code and
+the owner use, and the words an agent got wrong. It sits at the project root,
+beside `summary.md`.
+
+```markdown
+# Glossary — <project>
+
+| Term | Meaning | Code home | Not this |
+|---|---|---|---|
+| <term> | <one line> | <file or skill, or none> | <wrong synonyms the agent used> |
+```
+
+Rules:
+
+- Write an entry when the owner corrects a term, or when the code contradicts
+  the name. Those are the two times the agent demonstrably got it wrong.
+- One line per meaning. A term that needs a paragraph belongs in `tech/`, not
+  here.
+- No implementation details, no decisions (a study owns those), no persona
+  voice.
+- `Not this` names the wrong synonyms the agent has actually used; that column
+  is what changes its habits.
+- Maximum 100 lines (hard ceiling). A glossary never splits across files.
+- Read it before naming things in the code or in a note, and when reviewing a
+  change that uses domain terms. It is not a startup read.
 
 ## Study Lifecycle
 

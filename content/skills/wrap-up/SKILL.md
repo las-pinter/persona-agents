@@ -3,24 +3,30 @@ name: wrap-up
 description: Write or rewrite this session's journal entry, and close or update the session notes. Run it before the owner ends the session, when the owner asks to wrap up, or after a large piece of work. Safe to run more than once.
 ---
 
+## Platform branch
+
+If your system context says `Running in Kiro CLI`, read
+`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the journal path and
+the write step. Then continue with steps 3 to 5 and the entry format below.
+
 # Wrap-Up
 
 Write this session's journal entry. The journal records what happened; the
 project notes hold knowledge; the session notes hold the task.
 
-Follow the **persona-free-documents** skill: the entry holds no persona voice.
-
 ## Steps
 
-1. Get the entry path for this session:
+1. Get the entry path for this session. On Pi, call the `journal` tool with
+   `action: "path"`. On Claude Code, run:
 
-   ```
+   ```sh
    node "${CLAUDE_SKILL_DIR}/../../../platforms/claude/scripts/journal.mjs" path --session=${CLAUDE_SESSION_ID}
    ```
 
    The path is this session's existing entry (today or yesterday) or a new
    one. Each session has its own file, so parallel sessions never collide.
-2. Write the whole entry to that path with the Write tool, in the format
+2. Write the whole entry to that path — the `journal` tool with
+   `action: "write"` on Pi, the Write tool on Claude Code — in the format
    below. When the file exists, read it first and write the merged entry: a
    second wrap-up replaces the first.
 3. Update each session notes file this session worked on: mark the plan

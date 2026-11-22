@@ -13,10 +13,12 @@
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide, shellWords } from "../platforms/claude/scripts/doctrine.ts";
-import { parseShellCommand } from "../platforms/claude/scripts/shell-parse.ts";
+import { parseShellCommand } from "../platforms/shared/shell/shell-parse.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const doctrineScript = path.join(repoRoot, "platforms", "claude", "scripts", "doctrine.ts");
@@ -26,6 +28,14 @@ const PROFESSIONS = ["companion", "reviewer"];
 /** The verdict for one agent running one shell command ("none" for no decision). */
 function bash(profession: string, command: string): string {
 	return decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.verdict ?? "none";
+}
+
+/** The verdict with a session cwd and its additional directories. */
+function bashAt(profession: string, command: string, cwd: string, additionalDirs: string[] = []): string {
+	return (
+		decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command }, cwd }, additionalDirs)
+			?.verdict ?? "none"
+	);
 }
 
 /** Plain history writes: the companion runs them without a prompt. */
@@ -46,6 +56,8 @@ const ALLOWED = [
 	"git commit -m x 2>&1",
 	"git add . > /dev/null",
 	"git commit -F - < msg.txt",
+	// A quoted heredoc that only feeds `git commit -F -` is data.
+	"git commit -F - <<'EOF'\nmsg\nEOF",
 	"git commit -m m >&2",
 	"git commit -m m 2>&1 >/dev/null",
 	"git -p commit -m x",
@@ -59,6 +71,36 @@ const ALLOWED = [
 	"git rebase -x 'npm test' main",
 	"git add . && git commit -m m",
 	"git add .; git commit -m m",
+	// Read-only git and a filter are inert beside a history command.
+	"git status && git commit -m x",
+	"git log | tail -5 && git add .",
+	// Local git work the owner allowed: tag writes, amend, and the destructive verbs.
+	"git tag -d v1",
+	"git tag --delete v1",
+	"git tag -f v1",
+	"git tag --force v1",
+	"git tag -fa v1 -m x",
+	"git tag --del v1",
+	"git tag -fm1 v1",
+	"git tag -fFmsg v1",
+	"git tag -fm. v1",
+	"git tag -dv1",
+	"git tag -n1 -f v1",
+	"git tag --sort=x --delete v1",
+	"git commit --amend",
+	"git commit --amen",
+	"git checkout -- file.ts",
+	"git stash",
+	"git reset --hard",
+	"git branch -D topic",
+	// `-l` after a value-taking option is a message, not the list flag.
+	"git tag -m msg -l v1",
+	"git tag -m -l v1",
+	"git tag -fm -l v1",
+	"git tag --mess -l v1",
+	"git commit -m 'fix: std::vector'",
+	"git merge -m 'note::x' feature",
+	"git merge --mess 'note::x' feature",
 ];
 
 /** Publish commands and the ask exceptions. */
@@ -75,18 +117,10 @@ const ASKED = [
 	"gh -R owner/repo run list",
 	"gh --repo owner/repo run list",
 	"gh --repo=owner/repo run delete 1",
-	"git tag -d v1",
-	"git tag --delete v1",
-	"git tag -f v1",
-	"git tag --force v1",
-	"git tag -fa v1 -m x",
-	"git tag --del v1",
 	"git -c core.hooksPath=/x commit -m m",
 	"git -c user.name=x --no-pager commit -m x",
 	"git --config-env=core.hooksPath=X commit -m m",
 	"git --exec-path=/tmp/x commit -m m",
-	"git commit --amend",
-	"git commit --amen",
 	"git pull --upload-pack='touch x' origin",
 	"git add . && git push",
 	// Unknown global options: the subcommand git runs is not known.
@@ -94,16 +128,33 @@ const ASKED = [
 	"git --attr-source HEAD push",
 	"git --config-env core.hooksPath=X commit -m x",
 	"git --exec-path commit -m m",
-	// Short tag bundles and values that hide -d or -f.
-	"git tag -fm1 v1",
-	"git tag -fFmsg v1",
-	"git tag -fm. v1",
-	"git tag -dv1",
-	"git tag -n1 -f v1",
-	"git tag -l -f v1",
-	"git tag --list -d v1",
-	"git tag -l v1 -d",
-	"git tag --sort=x --delete v1",
+	// A verb that runs another program, writes config, or reaches a remote.
+	"git config core.hooksPath=/tmp/x",
+	"git config alias.x '!sh'",
+	"git bisect run npm test",
+	"git submodule foreach 'rm -rf x'",
+	"git difftool --extcmd=sh",
+	"git filter-branch --tree-filter x",
+	"git fetch ext::sh origin",
+	"git clone 'ext::sh -c x' dir",
+	"git ls-remote ext::x",
+	"git remote add evil ext::x",
+	"git fetch --upload-pack='touch x' origin",
+	"git lfs push origin",
+	"git send-email patch",
+	"git pull --upload='touch x' origin",
+	"git archive --remote=ext::sh --output=/tmp/x HEAD",
+	"git config --unset core.x",
+	"git config --add core.x y",
+	"git config --rem core.x",
+	"git config --unset-all core.x",
+	"git config --unset-a core.x",
+	"git send-pack origin main",
+	"git http-push origin main",
+	"git fetch-pack origin",
+	"git config --remove core.x",
+	"git fetch-pack --upload-pack='touch x' origin",
+	"git send-pack ext::sh origin main",
 	// A dup redirect to a word that is not a plain fd writes a file.
 	"git commit -m m >&0file",
 	// Transport helper URLs and merge strategies run a program of the caller's choice.
@@ -168,7 +219,7 @@ function nestShell(command: string, levels: number): string {
 	return out;
 }
 
-describe("doctrine: plain git history", () => {
+describe("doctrine: git work", () => {
 	for (const command of ALLOWED) {
 		test(command, () => {
 			assert.equal(bash("companion", command), "allow");
@@ -195,7 +246,6 @@ describe("doctrine: an allow covers every segment or none", () => {
 	const MIXED = [
 		"git add . && rm -rf x",
 		"git commit -m x; curl https://example.com",
-		"git status && git commit -m x",
 		"cd /repo && git -C /repo commit -m 'a; b'",
 		"git commit -m x | tee log",
 		"git add . & rm x",
@@ -233,6 +283,17 @@ const READS = [
 	"git tag --list 'v*'",
 	"git log | grep commit",
 	"git tag --contains HEAD",
+	"git tag -l -f v1",
+	"git tag --list -d v1",
+	"git tag -l v1 -d",
+	"git config --get core.hooksPath",
+	"git config --list",
+	"git remote -v",
+	"git remote",
+	"git config user.name",
+	"git remote show origin",
+	"git remote get-url origin",
+	"git config --get-regexp '^user' name",
 	"gh issue list",
 	"echo 'git push is gated'",
 	"grep -r 'git commit' docs",
@@ -248,6 +309,57 @@ describe("doctrine: reads stay untouched", () => {
 			for (const profession of PROFESSIONS) assert.equal(bash(profession, command), "none", profession);
 		});
 	}
+});
+
+describe("doctrine: a commit chain with inert parts", () => {
+	const chain = [
+		"cd /repo && cargo fmt && git add -A && git commit -q -F - <<'EOF' | grep -v Passed | tail -5",
+		"msg",
+		"EOF",
+		"git log --oneline -1",
+	].join("\n");
+
+	test("the companion allows the observed chain; the reviewer denies it", () => {
+		assert.equal(bashAt("companion", chain, "/repo"), "allow");
+		assert.equal(bashAt("reviewer", chain, "/repo"), "deny");
+	});
+
+	test("a cd inside the session allows; one outside gives no decision", () => {
+		assert.equal(bashAt("companion", "cd /repo/sub && git commit -m x", "/repo"), "allow");
+		assert.equal(bashAt("companion", "cd /elsewhere && git commit -m x", "/repo"), "none");
+		assert.equal(bashAt("reviewer", "cd /elsewhere && git commit -m x", "/repo"), "deny");
+	});
+
+	test("an additional working directory is a session directory", () => {
+		assert.equal(bashAt("companion", "cd /notes && git commit -m x", "/repo", ["/notes"]), "allow");
+		assert.equal(bashAt("companion", "cd /notes && git commit -m x", "/repo"), "none");
+	});
+
+	test("a publish in the chain asks", () => {
+		assert.equal(bashAt("companion", "cd /repo && cargo fmt && git add -A && git push", "/repo"), "ask");
+	});
+
+	test("a file redirect, a substitution, and an outside write keep the prompt", () => {
+		assert.equal(bashAt("companion", "git add -A && git log > out.txt", "/repo"), "none");
+		assert.equal(bashAt("companion", 'git commit -m "$(cat x)"', "/repo"), "ask");
+		assert.equal(bashAt("companion", "git add -A && rm -rf x", "/repo"), "none");
+	});
+
+	test("a git read hidden behind an expansion or a program option gives no decision", () => {
+		assert.equal(bashAt("companion", "git log $OPS && git add -A", "/repo"), "none");
+		assert.equal(bashAt("companion", "git config $X && git add -A", "/repo"), "none");
+		assert.equal(bashAt("companion", "git diff --ext-diff && git add -A", "/repo"), "none");
+		assert.equal(bashAt("companion", "git grep -O sh foo && git add -A", "/repo"), "none");
+		assert.equal(bashAt("companion", "git remote show origin && git add -A", "/repo"), "none");
+	});
+
+	test("a cd carries across segments", () => {
+		assert.equal(bashAt("companion", "cd /work && git add -A; cd ../evil && git commit -m x", "/work/repo", ["/work"]), "none");
+	});
+
+	test("without a cwd no cd is a session directory", () => {
+		assert.equal(bash("companion", "cd /repo && git commit -m x"), "none");
+	});
 });
 
 describe("doctrine: fail closed", () => {
@@ -330,7 +442,6 @@ describe("doctrine: fail closed", () => {
 	/** Heredocs that still hit the history gate. */
 	const GATED_HEREDOCS = [
 		"cat <<'EOF' > f && git push\nhello\nEOF",
-		"git commit -F - <<'EOF'\nmsg\nEOF",
 		"bash <<'EOF'\ngit push\nEOF",
 		"sh -s <<'EOF'\ngit push\nEOF",
 		"xargs git <<'EOF'\npush\nEOF",
@@ -389,7 +500,8 @@ describe("doctrine: fail closed", () => {
 		const reason = (profession: string, command: string): string =>
 			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
 		assert.match(reason("companion", "git push"), /needs your approval/);
-		assert.match(reason("companion", "git commit --amend"), /needs your approval/);
+		assert.match(reason("companion", "git commit --amend"), /without a prompt/);
+		assert.match(reason("companion", "git pull --upload-pack='touch x' origin"), /needs your approval/);
 		assert.match(reason("companion", "git commit -m m"), /without a prompt/);
 		assert.match(reason("reviewer", "git push"), /only the companion/);
 		assert.match(reason("reviewer", "git commit -m m"), /only the companion/);
@@ -403,9 +515,10 @@ describe("doctrine: fail closed", () => {
 		assert.equal(bash("companion", "git commit -m x && git push && cp a b"), "ask");
 	});
 
-	test("a commit message from a heredoc asks, never allows", () => {
+	test("a quoted commit heredoc allows; an expanding form still asks", () => {
+		assert.equal(bash("companion", "git commit -F - <<'EOF'\nmsg\nEOF"), "allow");
+		assert.equal(bash("reviewer", "git commit -F - <<'EOF'\nmsg\nEOF"), "deny");
 		for (const command of [
-			"git commit -F - <<'EOF'\nmsg\nEOF",
 			"git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\"",
 			"cat <<'EOF' | git commit -F -\nmsg\nEOF",
 		]) {
@@ -445,11 +558,12 @@ describe("doctrine: scope", () => {
 });
 
 describe("doctrine: hook wiring", () => {
-	/** Run the script the way hooks.json does. */
-	function run(input: Record<string, unknown>): string {
-		const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", doctrineScript], {
+	/** Run the script the way hooks.json does, with optional extra arguments. */
+	function run(input: Record<string, unknown>, env: Record<string, string> = {}, args: string[] = []): string {
+		const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", doctrineScript, ...args], {
 			input: JSON.stringify(input),
 			encoding: "utf8",
+			env: { ...process.env, ...env },
 		});
 		assert.equal(result.status, 0, result.stderr);
 		return result.stdout;
@@ -475,6 +589,32 @@ describe("doctrine: hook wiring", () => {
 		assert.equal(run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git status" } }), "");
 	});
 
+	test("the hook reads the additional directories from the settings", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-doctrine-"));
+		try {
+			const project = path.join(root, "project");
+			const config = path.join(root, "config");
+			const extra = path.join(root, "extra");
+			fs.mkdirSync(project, { recursive: true });
+			fs.mkdirSync(config, { recursive: true });
+			fs.mkdirSync(extra);
+			fs.writeFileSync(path.join(config, "settings.json"), JSON.stringify({ permissions: { additionalDirectories: [extra] } }));
+			// The managed file is a temp seam, so the real system file cannot widen the set.
+			const managed = path.join(root, "managed-settings.json");
+			fs.writeFileSync(managed, "{}");
+			const env = { CLAUDE_CONFIG_DIR: config, CLAUDE_PROJECT_DIR: project };
+			const args = [`--managed-settings=${managed}`];
+			const input = (command: string) => ({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command }, cwd: project });
+			const allowed = JSON.parse(run(input(`cd ${extra} && git commit -m x`), env, args)) as {
+				hookSpecificOutput: Record<string, string>;
+			};
+			assert.equal(allowed.hookSpecificOutput.permissionDecision, "allow");
+			assert.equal(run(input("cd /elsewhere && git commit -m x"), env, args), "");
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 
 });
 
@@ -488,10 +628,6 @@ const WRITES = [
 	"cp a b",
 	"bash -c 'mv a b'",
 	"tee log.txt < input",
-	"git checkout -- file.ts",
-	"git stash",
-	"git reset --hard",
-	"git branch -D topic",
 	"gh issue create -t x",
 	"curl -o x https://example.com",
 	"cat <<EOF > notes.txt\nhello\nEOF",

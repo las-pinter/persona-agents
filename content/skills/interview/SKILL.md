@@ -10,10 +10,6 @@ description: Grill the user in frontier rounds until every decision is settled.
 Grill the user before any study is written. The interview turns a vague
 request into a settled set of decisions. It is the only stage before the study.
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## The Design Tree
 
 Model the request as a tree of decisions.
@@ -27,9 +23,12 @@ Model the request as a tree of decisions.
 
 1. Compute the frontier of the design tree.
 2. Ask the whole frontier in one round with the question tool. Number each
-   question.
+   question across the round. Where the platform's question tool caps a round
+   (Claude Code allows four questions per call), a wider frontier takes several
+   calls in the same round.
 3. Put the recommendation first among the options, marked as recommended.
-   Word the question so accepting the recommendation is one choice.
+   Word the question so accepting the recommendation is one choice: "yes"
+   means the recommendation.
 4. Never put two dependent questions in the same round.
 5. Settle the answers into the study on disk before the next round.
    Recompute the frontier.
@@ -47,7 +46,11 @@ Model the request as a tree of decisions.
 ## Findings
 
 - Run one look-up sweep of the code and the project notes before the first round.
-- Run a look-up during the interview when a question demands one.
+- Run a look-up during the interview when a question demands one. When the
+  sweep is wide, start a subagent with its own context instead of reading it
+  into this one.
+- A running look-up does not hold the frontier. Only the questions that depend
+  on it wait; ask the rest of the round now.
 - Do not ask the user for anything a look-up can settle.
 
 ## Recording

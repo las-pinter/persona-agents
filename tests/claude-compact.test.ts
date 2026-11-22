@@ -16,11 +16,10 @@ import {
 	appendLog,
 	buildManifest,
 	lastBoundary,
-	pinnedDocs,
 	reloadContext,
-	studyPath,
 	summaryInstructions,
 } from "../platforms/claude/scripts/compact.mjs";
+import { notesListsSession, pinnedDocs, studyPath } from "../platforms/shared/notes/notes.ts";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "compact.mjs");
 const COMPANION = "persona-agents:companion";
@@ -56,13 +55,14 @@ function use(name: string, input: Record<string, unknown>, sidechain = false): R
 	return { type: "assistant", isSidechain: sidechain, message: { content: [{ type: "tool_use", name, input }] } };
 }
 
-function sessionNotesText(study: string, pinned: string[]): string {
+function sessionNotesText(study: string, pinned: string[], sessions: string[] = []): string {
 	return [
 		"# Task",
 		"",
 		"- **Started:** 2026-01-01",
 		"- **Status:** open",
 		`- **Study:** ${study}`,
+		...(sessions.length ? [`- **Sessions:** ${sessions.join(", ")}`] : []),
 		"",
 		"## Plan",
 		"",
@@ -126,6 +126,58 @@ describe("compact: manifest scan", () => {
 		});
 	});
 
+	test("a typed slash command counts as a skill", () => {
+		withEnv(({ notes }) => {
+			const typed = {
+				type: "user",
+				message: { content: "<command-message>persona-agents:retro</command-message>\n<command-name>/persona-agents:retro</command-name>" },
+			};
+			const manifest = buildManifest([typed, use("Skill", { skill: "persona-agents:study" })], notes);
+			assert.deepEqual(manifest.skills, ["persona-agents:retro", "persona-agents:study"]);
+		});
+	});
+
+	test("a resumed session that only read its notes gets them from the Sessions line", () => {
+		withEnv(({ notes }) => {
+			const other = path.join(notes, "sessions", "2026-01-01-other.md");
+			const mine = path.join(notes, "sessions", "2026-01-02-mine.md");
+			write(other, sessionNotesText("none", [], ["another-session"]));
+			write(mine, sessionNotesText("none", [], ["sess-9"]));
+			const manifest = buildManifest([use("Read", { file_path: other })], notes, "sess-9");
+			assert.equal(manifest.sessionNotes, mine);
+		});
+	});
+
+	test("several files naming the session choose the newest", () => {
+		withEnv(({ notes }) => {
+			const older = path.join(notes, "sessions", "2026-01-01-old.md");
+			const newer = path.join(notes, "sessions", "2026-01-02-new.md");
+			write(older, sessionNotesText("none", [], ["sess-9"]));
+			write(newer, sessionNotesText("none", [], ["sess-9"]));
+			fs.utimesSync(older, new Date("2026-01-01T00:00:00Z"), new Date("2026-01-01T00:00:00Z"));
+			fs.utimesSync(newer, new Date("2026-01-02T00:00:00Z"), new Date("2026-01-02T00:00:00Z"));
+			assert.equal(buildManifest([], notes, "sess-9").sessionNotes, newer);
+		});
+	});
+
+	test("with no id match and no write, the only open notes file is used", () => {
+		withEnv(({ notes }) => {
+			const only = path.join(notes, "sessions", "2026-01-01-only.md");
+			write(only, sessionNotesText("none", []));
+			assert.equal(buildManifest([], notes, "sess-unknown").sessionNotes, only);
+			write(path.join(notes, "sessions", "2026-01-02-second.md"), sessionNotesText("none", []));
+			assert.equal(buildManifest([], notes, "sess-unknown").sessionNotes, "");
+		});
+	});
+
+	test("the Sessions line matches a whole id, not a substring", () => {
+		const text = "- **Sessions:** abc-1, abc-10\n";
+		assert.equal(notesListsSession(text, "abc-1"), true);
+		assert.equal(notesListsSession(text, "abc"), false);
+		assert.equal(notesListsSession("- **Status:** open\n", "abc-1"), false);
+		assert.equal(notesListsSession("- **sessions:** abc-1\n", "abc-1"), true);
+	});
+
 	test("pins and the study line accept only absolute paths", () => {
 		const text = sessionNotesText("relative/study.md", ["/abs/a.md", "relative.md", "`/abs/b.md`"]);
 		assert.deepEqual(pinnedDocs(text), ["/abs/a.md", "/abs/b.md"]);
@@ -134,7 +186,8 @@ describe("compact: manifest scan", () => {
 });
 
 describe("compact: texts", () => {
-	const manifest = { sessionNotes: "/n/sessions/2026-01-01-x.md", skills: ["persona-agents:study"], docs: ["/n/summary.md"] };
+	const scan = { entries: 0, toolUses: 0 };
+	const manifest = { sessionNotes: "/n/sessions/2026-01-01-x.md", skills: ["persona-agents:study"], docs: ["/n/summary.md"], scan };
 
 	test("the summary instructions carry the session notes path", () => {
 		assert.ok(summaryInstructions(manifest).includes(manifest.sessionNotes));
@@ -143,7 +196,7 @@ describe("compact: texts", () => {
 	test("the reload context lists the notes, the skills, and the docs, under the hook cap", () => {
 		const text = reloadContext(manifest);
 		for (const item of [manifest.sessionNotes, ...manifest.skills, ...manifest.docs]) assert.ok(text.includes(item), item);
-		const big = { sessionNotes: "/n/s.md", skills: Array(12).fill("persona-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`) };
+		const big = { sessionNotes: "/n/s.md", skills: Array(12).fill("persona-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`), scan };
 		assert.ok(reloadContext(big).length < 10_000);
 	});
 
@@ -174,7 +227,7 @@ describe("compact: texts", () => {
 
 describe("compact: hook processes", () => {
 	function run(env: Env, mode: string, input: Record<string, unknown>) {
-		return spawnSync(process.execPath, [script, mode, `--home=${env.home}`], {
+		return spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", script, mode, `--home=${env.home}`], {
 			input: JSON.stringify({ session_id: "s-1", cwd: env.cwd, agent_type: COMPANION, ...input }),
 			env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data },
 			encoding: "utf8",
@@ -209,10 +262,43 @@ describe("compact: hook processes", () => {
 		});
 	});
 
+	test("an unrecognized transcript shape still finds the notes and warns", () => {
+		withEnv((env) => {
+			const notesFile = path.join(env.notes, "sessions", "2026-01-01-task.md");
+			write(notesFile, sessionNotesText("none", [], ["s-1"]));
+			const transcript = path.join(env.tmp, "t.jsonl");
+			write(
+				transcript,
+				[
+					JSON.stringify({ type: "user", message: { content: "hello" } }),
+					JSON.stringify({ type: "assistant", message: { content: [{ type: "thinking", thinking: "..." }] } }),
+				].join("\n"),
+			);
+			const pre = run(env, "pre", { hook_event_name: "PreCompact", trigger: "auto", transcript_path: transcript });
+			assert.equal(pre.status, 0, pre.stderr);
+			assert.ok(pre.stdout.includes(notesFile));
+			assert.match(pre.stderr, /no tool calls/);
+			run(env, "post", { hook_event_name: "PostCompact", trigger: "auto", transcript_path: transcript, compact_summary: "S" });
+			const metric = JSON.parse(fs.readFileSync(path.join(env.data, "compact", "metrics.ndjson"), "utf8").trim());
+			assert.equal(metric.entries, 2);
+			assert.equal(metric.toolUses, 0);
+		});
+	});
+
+	test("a transcript with a tool call writes no warning", () => {
+		withEnv((env) => {
+			const transcript = path.join(env.tmp, "t.jsonl");
+			write(transcript, JSON.stringify(use("Read", { file_path: "/x.md" })));
+			const pre = run(env, "pre", { hook_event_name: "PreCompact", trigger: "auto", transcript_path: transcript });
+			assert.equal(pre.status, 0);
+			assert.equal(pre.stderr, "");
+		});
+	});
+
 	test("another agent gets no output and no state", () => {
 		withEnv((env) => {
 			for (const mode of ["pre", "post", "reload"]) {
-				const result = spawnSync(process.execPath, [script, mode, `--home=${env.home}`], {
+				const result = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", script, mode, `--home=${env.home}`], {
 					input: JSON.stringify({ session_id: "s-2", cwd: env.cwd, agent_type: "Explore", hook_event_name: "PreCompact" }),
 					env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data },
 					encoding: "utf8",

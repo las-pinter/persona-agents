@@ -5,10 +5,6 @@ description: Decision rules for choosing between Context7, DeepWiki, and Exa bas
 
 # Source Selection
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ---
 
 ## Tool Names

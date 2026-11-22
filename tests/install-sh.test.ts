@@ -38,8 +38,9 @@ function withConfig(fn: (dir: string, home: string) => void): void {
 	}
 }
 
+/** The Claude merge alone; the Kiro adapter has its own test file. */
 function install(dir: string, home: string, ...args: string[]): Run {
-	const result = spawnSync("bash", [script, ...args], {
+	const result = spawnSync("bash", [script, "--claude", ...args], {
 		env: { ...process.env, CLAUDE_CONFIG_DIR: dir, HOME: home },
 		encoding: "utf8",
 	});

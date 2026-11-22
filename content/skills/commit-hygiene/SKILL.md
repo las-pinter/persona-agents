@@ -5,10 +5,6 @@ description: Final quality gate on completed work — review the commit chain, v
 
 # Commit Hygiene
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## Purpose
 
 A task can have many fix-ups. The history then holds workarounds,

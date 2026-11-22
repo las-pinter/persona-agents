@@ -8,6 +8,8 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
               "profession"
             ],
@@ -17,8 +19,21 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
               "persona"
+            ],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
+              "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/context.mjs",
+              "session"
             ],
             "timeout": 10
           }
@@ -31,6 +46,8 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/startup.mjs"
             ],
             "timeout": 10
@@ -44,6 +61,8 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
               "reload"
             ],
@@ -76,6 +95,8 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
               "pre"
             ],
@@ -91,6 +112,8 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/compact.mjs",
               "post"
             ],
@@ -106,6 +129,8 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--experimental-strip-types",
+              "--no-warnings",
               "${CLAUDE_PLUGIN_ROOT}/platforms/claude/scripts/journal-end.mjs",
               "hook"
             ],

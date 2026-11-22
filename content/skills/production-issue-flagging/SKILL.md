@@ -5,10 +5,6 @@ description: Format for reporting production-code issues found while testing.
 
 # Production Issue Flagging
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## When to Flag
 
 Flag production-code issues found while testing when the problem is NOT the test's fault:

@@ -8,13 +8,17 @@ and you change it as soon as the facts change.
 
 - These rules decide what you do. The persona decides only how you sound in
   chat.
-- Code, comments, commit messages, notes, studies, and journals stay
-  persona-free. Follow the **persona-free-documents** skill.
-- Do the work yourself: read the code, write it, run it, test it. Do not hand
-  a task to a subagent to save context.
-- Use a subagent for two cases only: an independent review of your own change
-  (the **review** skill), and a wide read-only search whose file dumps you do
-  not need (the `Explore` agent).
+- Do the implementation, the tests, and the small look-ups yourself: you keep
+  the plan, and you verify what you built.
+- Send wide or costly research to a subagent: a code sweep whose file dumps you
+  do not need, web research, and several lookups at once. Start it in the
+  background and work from its summary. A fork copies this conversation and
+  saves no context; a narrow brief that asks one question does.
+- Use a subagent for an independent review of your own change (the **review**
+  skill). Outside a repository the skill cannot find a change, so start the
+  reviewer agent yourself with three fields and nothing else: `Scope:` the
+  absolute path, `Task:` one line or `none`, `Decisions:` the study path or
+  `none`. No explanation, no defence, no checklist.
 - When a question changes the outcome, ask the owner with the question tool.
   Otherwise decide, state the assumption, and continue.
 - Keep chat short. Report what changed, what you verified, and what is next.
@@ -31,9 +35,9 @@ and you change it as soon as the facts change.
    status, the decisions, and the pinned documents. It links the study when
    there is one. When the plan changes, update the file first, then continue.
    Context can be compacted at any time; the files cannot.
-4. **Implement** with the **code-implementation** skill and the quality-gate
-   skill for the language (**python-quality-gates**, **react-quality-gates**,
-   **rust-quality-gates**, **rust-implementation**). Follow the
+4. **Implement** with the **code-implementation** skill and the language's
+   own gate: a global or project skill when the environment has one, otherwise
+   typecheck, lint, tests, and build in that order. Follow the
    **file-length-policy** skill.
 5. **Test** with **test-strategy-selection**, **test-case-structure**, and
    **regression-identification**. Report a production defect you find with
@@ -52,8 +56,10 @@ and you change it as soon as the facts change.
 
 ## Research
 
-Read the code and docs you need yourself. For a question outside the
-repository, choose the source with **source-selection**.
+Read the code and docs you need yourself when the answer is one file or one
+page. Send a wide sweep, a web search, or several lookups at once to a
+subagent, and work from its summary. For a question outside the repository,
+choose the source with **source-selection**.
 
 ## Session Start
 
@@ -81,8 +87,6 @@ the journal holds what happened.
 - **project-notes** — project rules, summary, notes, and studies.
 - **session-notes** — the working file of one task.
 - **code-implementation** — the implementation workflow.
-- **python-quality-gates**, **react-quality-gates**, **rust-quality-gates**,
-  **rust-implementation** — language quality gates.
 - **test-strategy-selection**, **test-case-structure**,
   **regression-identification**, **production-issue-flagging** — testing.
 - **review** — independent review in a separate context.

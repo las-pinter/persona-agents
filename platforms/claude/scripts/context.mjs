@@ -8,12 +8,14 @@
 //   context.mjs profession   content/professions/companion.md, verbatim
 //   context.mjs persona      a short Claude Code note + the persona that
 //                            content/agents.json picks for the selected theme
+//   context.mjs session      the session id, so the companion can name its
+//                            session in the session notes file
 //
-// SessionStart fires on startup, resume, clear, and compact, so both parts
-// come back after a compaction. The two parts run as two hooks because Claude
-// Code caps each hook string at 10,000 characters; tests/claude-plugin.test.ts
-// keeps every part under it. Any other agent, or a session without one, gets
-// no output.
+// SessionStart fires on startup, resume, clear, and compact, so every part
+// comes back after a compaction. The parts run as separate hooks because
+// Claude Code caps each hook string at 10,000 characters;
+// tests/claude-plugin.test.ts keeps every part under it. Any other agent, or
+// a session without one, gets no output.
 //
 // Set PERSONA_AGENTS_DEBUG=1 to append each hook input to
 // $CLAUDE_PLUGIN_DATA/hook-input.log. plugin-options.mjs reads the theme option
@@ -21,6 +23,7 @@
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PERSONA_FREE_RULE } from "../../shared/context/context.ts";
 import { pluginOption } from "./plugin-options.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
@@ -44,28 +47,36 @@ function professionContext() {
 	return readFileSync(join(content, "professions", `${PROFESSION}.md`), "utf8").trim();
 }
 
-/** The Claude Code note plus the theme's persona, or null when none is mapped. */
+/** The Claude Code note plus the theme's persona; a missing mapping still carries the persona-free rule. */
 function personaContext() {
 	const theme = pluginOption("theme") || DEFAULT_THEME;
 	const registry = JSON.parse(readFileSync(join(content, "agents.json"), "utf8"));
 	const entry = registry[theme]?.[PROFESSION];
 	if (!entry) {
-		// A missing mapping must not block the session: warn the owner and run plain.
+		// A missing mapping must not block the session: warn the owner, and still
+		// carry the persona-free rule, which travels with the persona.
 		process.stderr.write(`persona-agents: no ${theme} persona for the ${PROFESSION}; running without one\n`);
-		return null;
+		return `# Running in Claude Code (no persona)\n\n${PERSONA_FREE_RULE}`;
 	}
 	const persona = readFileSync(join(content, "personas", theme, entry.personaFile), "utf8").trim();
 	const lines = [
 		`# Running in Claude Code (persona theme: ${theme})`,
 		"",
-		"You are the persona-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. Code, commits, and every durable file stay persona-free.",
+		`You are the persona-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. ${PERSONA_FREE_RULE}`,
 		"",
 		"- Load a skill by name with the Skill tool: the skill `<name>` is `persona-agents:<name>`.",
 	];
 	return `${lines.join("\n")}\n\n${persona}`;
 }
 
-const text = part === "profession" ? professionContext() : part === "persona" ? personaContext() : null;
+/** The session id, or null when the hook input holds none. */
+function sessionContext(input) {
+	const id = typeof input.session_id === "string" ? input.session_id : "";
+	return id ? `Session id: ${id}` : null;
+}
+
+const text =
+	part === "profession" ? professionContext() : part === "persona" ? personaContext() : part === "session" ? sessionContext(input) : null;
 if (!text) process.exit(0);
 
 process.stdout.write(

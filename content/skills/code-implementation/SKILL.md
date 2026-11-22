@@ -55,7 +55,6 @@ Before touching a single line:
 - Comment WHY, not WHAT. The code already says what it does.
 - Keep comments brief. Prefer code that explains itself; a long comment shows the code needs a
   rewrite.
-- Follow **persona-free-documents** for repository artifacts.
 
 **By task type:**
 
@@ -73,10 +72,9 @@ Run the quality gate for the project's language. Fix each new issue or warning
 before delivering. Report an issue or warning that predates the change to the
 owner; when an old warning blocks a gate, the owner decides.
 
-The three language gate skills (`python-quality-gates`, `rust-quality-gates`,
-`react-quality-gates`) own the gate order and the language tools. Follow the gate
-for the project language. When the project language has no gate skill, use this
-order: type check, lint, tests, build.
+The environment owns the language gate: when a global or project skill covers
+it, load that skill and follow it. When nothing covers it, use this order: type
+check, lint, tests, build.
 
 **Prove each test can fail.** Do this for each acceptance test the study names,
 and for each new test. A compile check, a lint, or a type check is a gate, not a

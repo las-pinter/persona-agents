@@ -16,10 +16,6 @@ document.
 Load this skill after the **interview** skill settles the decisions. Load the
 two skills as one unit. The study is the record of the interview.
 
-## Persona-Free Documents
-
-Load and follow the **persona-free-documents** skill for every study, note, journal, report, release note, and code comment.
-
 ## One Document
 
 - One study folder per feature: `studies/YYYY-MM-DD-<slug>/`.
