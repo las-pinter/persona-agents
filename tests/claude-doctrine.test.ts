@@ -2,7 +2,7 @@
  * The Claude Code doctrine hook (platforms/claude/scripts/doctrine.ts).
  *
  * Per persona-agents agent: a plain git add/commit/pull/merge/rebase/tag is
- * allowed for the companion; git push, gh pr/release/run, the ask exceptions,
+ * allowed for the companion; git push, gh pr/release/run writes, the ask exceptions,
  * and wrapped forms ask for the companion; every other agent (the reviewer)
  * is denied all of these and every shell write it can see. Agents outside the
  * plugin get no decision.
@@ -107,15 +107,14 @@ const ALLOWED = [
 const ASKED = [
 	"git push origin main",
 	"gh pr create --fill",
+	"gh pr merge 4 --squash",
+	"gh pr close 4",
 	"gh release create v1.0.0",
-	// AGENTS.md gates every gh pr, gh release, and gh run command, reads included.
-	"gh pr list",
-	"gh release list",
-	"gh run list",
+	// AGENTS.md gates every gh pr, gh release, and gh run write; a read action
+	// (view, list, status, diff, checks, search) is ungated.
 	"gh run delete 3",
+	"gh run cancel 3",
 	// A gh global option before the subcommand does not hide the gate.
-	"gh -R owner/repo run list",
-	"gh --repo owner/repo run list",
 	"gh --repo=owner/repo run delete 1",
 	"git -c core.hooksPath=/x commit -m m",
 	"git -c user.name=x --no-pager commit -m x",
@@ -295,6 +294,20 @@ const READS = [
 	"git remote get-url origin",
 	"git config --get-regexp '^user' name",
 	"gh issue list",
+	// A gh publish sub-command's read action is a read: no prompt on any agent.
+	"gh pr list",
+	"gh pr view 23",
+	"gh pr view 23 --json state,mergeable",
+	"gh pr diff 23",
+	"gh pr checks 23",
+	"gh pr status",
+	"gh run list",
+	"gh run view 7",
+	"gh release list",
+	"gh release view v1.0.0",
+	"gh -R owner/repo run list",
+	"gh --repo owner/repo run list",
+	"gh --repo=owner/repo pr view 23",
 	"echo 'git push is gated'",
 	"grep -r 'git commit' docs",
 	"command -v git",
@@ -643,8 +656,7 @@ describe("doctrine: shell writes", () => {
 
 	test("reads with a harmless redirect stay untouched", () => {
 		for (const command of ["npm test 2>&1", "git diff > /dev/null", "git branch", "git branch -a", "git branch --show-current", "gh pr view 1"]) {
-			const expected = command.startsWith("gh pr") ? "deny" : "none";
-			assert.equal(bash("reviewer", command), expected, command);
+			assert.equal(bash("reviewer", command), "none", command);
 		}
 	});
 });

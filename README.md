@@ -62,7 +62,9 @@ does three things:
 
 - sets auto-compaction to start at 40% of the context window;
 - gives Claude Code access to `~/agent-notes`, where the notes and journals live;
-- asks before `git push`, `gh pr`, `gh run`, and `gh release`.
+- asks before `git push` and the write actions of `gh pr`, `gh run`, and
+  `gh release`; their read actions (`view`, `list`, `status`, `diff`,
+  `checks`, `search`) pass.
 
 Start the companion:
 

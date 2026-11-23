@@ -49,8 +49,9 @@ prefix `ai:`. The reviewer never commits.
 The doctrine lives in three places:
 
 - The settings snippet `platforms/claude/settings/recommended.json`, which
-  `install.sh` merges into the user settings: `git push`, `gh pr`, `gh run`,
-  and `gh release` ask.
+  `install.sh` merges into the user settings: `git push` and the write actions
+  of `gh pr`, `gh run`, and `gh release` ask. Their read actions (`view`,
+  `list`, `status`, `diff`, `checks`, `search`) pass.
 - The PreToolUse hook `platforms/claude/scripts/doctrine.ts`, for the
   persona-agents agents. The command classification it uses lives in
   `platforms/shared/shell/` and is shared with the Pi gate
@@ -66,7 +67,7 @@ The doctrine lives in three places:
   `gofmt -w`); a `grep`, `head`, `tail`, `wc`, `sort`, or `uniq` filter that
   reads a pipe with no file argument; or a quoted heredoc or single-quoted
   here-string that only feeds `git commit -F -`. A push, a `gh pr` / `run` /
-  `release`, a `git -c` override, an unknown git global option, an upload-pack
+  `release` write, a `git -c` override, an unknown git global option, an upload-pack
   or transport helper URL, a merge strategy, a git verb that runs another
   program, writes config, or reaches a remote, and any wrapped or substituted
   command ask. A file redirect, a `tee`, or a `cd` outside those directories

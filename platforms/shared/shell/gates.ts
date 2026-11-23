@@ -7,8 +7,10 @@
  *
  *   history: a git command that is not a read and not publish (add, commit,
  *            reset, rebase, tag writes, ...)
- *   publish: git push, gh pr/release/run, a git option that runs a program of
- *            the caller's choice, or any wrapped or runtime-shaped command
+ *   publish: git push, a gh pr/release/run write (create, merge, delete,
+ *            cancel, ...), a git option that runs a program of the caller's
+ *            choice, or any wrapped or runtime-shaped command. A gh read
+ *            action (view, list, status, diff, checks, search) is ungated.
  *   write:   a file-changing command or an output redirect to a file
  *   support: an inert part beside a history command: a `cd` into a session
  *            directory, a read-only git command, a project formatter, or a
@@ -174,7 +176,7 @@ const GIT_INERT_READ = new Set([
 ]);
 /** Diff options that run a configured helper program. */
 const GIT_DIFF_PROGRAM = ["--ext-diff", "--textconv"];
-/** gh actions that only read (`gh issue list`, `gh repo view`). */
+/** gh actions that only read (`gh issue list`, `gh pr view`, `gh run list`). */
 const GH_READ_ACTIONS = new Set(["list", "view", "status", "diff", "checks", "search"]);
 const GH_READ_COMMANDS = new Set(["status", "search", "help", "version", "browse"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
@@ -492,7 +494,9 @@ function classify(command: string, args: string[], afterPipe: boolean, runtime: 
 		let g = 0;
 		while (g < args.length && args[g].startsWith("-")) g += args[g] === "-R" || args[g] === "--repo" ? 2 : 1;
 		const sub = args[g];
-		if (sub !== undefined && GH_PUBLISH.has(sub)) return ["publish"];
+		// A publish sub-command's read action (`gh pr view`, `gh run list`) only
+		// reads; every other action (`gh pr merge`, `gh run delete`) is publish.
+		if (sub !== undefined && GH_PUBLISH.has(sub) && !GH_READ_ACTIONS.has(args[g + 1] ?? "")) return ["publish"];
 		if (sub === undefined || GH_READ_COMMANDS.has(sub) || GH_READ_ACTIONS.has(args[g + 1] ?? "")) return [UNGATED];
 		return ["write"];
 	}

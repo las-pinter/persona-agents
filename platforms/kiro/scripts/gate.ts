@@ -38,10 +38,10 @@ export type Verdict = "allow" | "ask" | "deny";
 
 /** Why the doctrine stops a reviewer's shell write or history command. */
 export const HISTORY_DENY =
-	"only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
+	"only the companion writes git history or runs a gh pr / release / run write; suggest a commit instead";
 /** Why a publish command asks the owner. */
 export const PUBLISH_ASK =
-	"git push, gh pr, gh release, gh run, a git config override, or a wrapped git command needs your approval";
+	"git push, a gh pr / release / run write, a git config override, or a wrapped git command needs your approval";
 /** Why an unreviewed commit asks the owner. */
 export const REVIEW_ASK = "this change has no independent review, so the commit needs your approval";
 /** Why a commit against another repository asks the owner. */

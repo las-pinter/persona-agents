@@ -11,7 +11,7 @@
 //                     read-only git command, a project formatter, a pipe
 //                     filter, a quoted heredoc that feeds `git commit -F -`);
 //                     every other agent: deny
-//   git push, gh pr, gh release, gh run, any git global option outside
+//   git push, a gh pr / release / run write, any git global option outside
 //   GIT_PLAIN_OPTIONS / GIT_PATH_OPTIONS (-c, --config-env, --exec-path,
 //   --attr-source, ...), git pull --upload-pack, a `::` transport URL, a merge
 //   strategy (-s, --strategy), a git verb that runs another program, writes
@@ -78,9 +78,9 @@ export interface HookInput {
 
 /**
  * history: a git command that is not a read and not publish.
- * publish: git push, and gh pr, gh release, or gh run, also when a gh global option
- * comes first, plus every history command that is an ask exception or comes
- * wrapped (see the header).
+ * publish: git push, and a gh pr, gh release, or gh run write, also when a gh
+ * global option comes first, plus every history command that is an ask
+ * exception or comes wrapped (see the header).
  * write: a command that changes files or remote state (see the header).
  */
 type Gate = "history" | "publish" | "write";
@@ -92,9 +92,9 @@ const COMPANION_RULES: Record<Gate, Verdict | null> = {
 	write: null,
 };
 
-const HISTORY_DENY = "only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
+const HISTORY_DENY = "only the companion writes git history or runs a gh pr / release / run write; suggest a commit instead";
 const PUBLISH_ASK =
-	"git push, gh pr, gh release, gh run, a git config override, an upload-pack or transport helper URL, a merge strategy, or a wrapped git command needs your approval";
+	"git push, a gh pr / release / run write, a git config override, an upload-pack or transport helper URL, a merge strategy, or a wrapped git command needs your approval";
 
 /** Why a gate fired: an ask explains the approval, a deny names who may run it. */
 const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
