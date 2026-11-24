@@ -15,8 +15,7 @@
 
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
-import { prepareBrief, type GitRun } from "../../shared/review/brief.ts";
-import { NO_VALUE, parseReviewArgs, promptForBrief, type Brief, type BriefInput } from "../../shared/review/review.ts";
+import { NO_VALUE, parseReviewArgs, prepareBrief, promptForBrief, type Brief, type BriefInput, type GitRun } from "../../shared/review/brief.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey, git } from "./change.ts";
 import { option } from "../../shared/argv.ts";

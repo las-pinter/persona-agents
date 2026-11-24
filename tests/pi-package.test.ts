@@ -125,11 +125,12 @@ describe("pi package: one parser, two platforms", () => {
 			"platforms/shared/notes/session-log-net.ts",
 			"platforms/shared/compaction/manifest.ts",
 			"platforms/shared/review/review.ts",
+			"platforms/shared/review/brief.ts",
 			"platforms/shared/retro/retro.ts",
 			"platforms/shared/context/context.ts",
 		];
 		for (const file of shared) assert.ok(fs.existsSync(path.join(repoRoot, file)), `${file} is missing`);
-		for (const name of ["notes-paths.ts", "notes.ts", "session-log.ts", "session-log-net.ts", "manifest.ts", "review.ts", "retro.ts"]) {
+		for (const name of ["notes-paths.ts", "notes.ts", "session-log.ts", "session-log-net.ts", "manifest.ts", "review.ts", "brief.ts", "retro.ts"]) {
 			assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "pi", "scripts", name)), false, `pi/scripts/${name} is a duplicate`);
 		}
 		// The Pi context file stays as a thin adapter over the shared builder: it
@@ -145,7 +146,7 @@ describe("pi package: one parser, two platforms", () => {
 	});
 
 	test("the shell parser lives in platforms/shared and only there", () => {
-		for (const file of ["shell-parse.ts", "shell-grammar.ts", "gates.ts"]) {
+		for (const file of ["shell-parse.ts", "shell-grammar.ts", "gates.ts", "scan.ts"]) {
 			assert.ok(fs.existsSync(path.join(repoRoot, "platforms", "shared", "shell", file)), `shared/${file} is missing`);
 			assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "claude", "scripts", file)), false, `claude/scripts/${file} is a duplicate`);
 		}

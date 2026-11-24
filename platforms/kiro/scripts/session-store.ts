@@ -22,7 +22,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { EntryLike } from "../../shared/compaction/manifest.ts";
-import { parseVerdict, UNCOMMITTED } from "../../shared/review/review.ts";
+import { UNCOMMITTED } from "../../shared/review/brief.ts";
+import { parseVerdict } from "../../shared/review/review.ts";
 
 /** The session metadata this adapter reads. */
 export interface SessionMeta {

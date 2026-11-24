@@ -14,26 +14,9 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-	addRule,
-	ruleTarget,
-	appendDecision,
-	decidePolicy,
-	decisionRecord,
-	describeRules,
-	initPolicyFile,
-	isGatePath,
-	isInside,
-	isSecretPath,
-	loadPolicy,
-	parsePolicy,
-	piAgentDir,
-	suggestGrant,
-	type PolicyEnv,
-	type PolicyFileRef,
-	type PolicyState,
-} from "../platforms/pi/scripts/policy.ts";
+import { decidePolicy, decisionRecord, isGatePath, isInside, isSecretPath, suggestGrant, type PolicyEnv, type PolicyFileRef, type PolicyState } from "../platforms/pi/scripts/policy.ts";
 import { PROFILES } from "../platforms/pi/scripts/profile.ts";
+import { initPolicyFile, piAgentDir, parsePolicy, loadPolicy, describeRules, appendDecision, ruleTarget, addRule } from "../platforms/pi/scripts/policy-file.ts";
 
 const companion = PROFILES.companion;
 const reviewer = PROFILES.reviewer;

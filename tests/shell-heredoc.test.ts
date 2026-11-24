@@ -7,7 +7,8 @@
 
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { commandSegments, gateCommand, normalizeHeredocs, redirectTargets, SUPPORT, UNGATED, type GateOptions, type Hit } from "../platforms/shared/shell/gates.ts";
+import { commandSegments, gateCommand, normalizeHeredocs, SUPPORT, UNGATED, type GateOptions, type Hit } from "../platforms/shared/shell/gates.ts";
+import { redirectTargets } from "../platforms/shared/shell/scan.ts";
 
 function hits(command: string, options?: GateOptions): Hit[] {
 	return [...new Set(gateCommand(command, 0, options))].sort();

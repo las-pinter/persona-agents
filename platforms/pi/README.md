@@ -13,18 +13,22 @@ of `content/` names no harness.
 
 ## Layout
 
-- **Extension** (`platforms/pi/extensions/index.ts`): the wiring only. It
-  registers `--agent` and `--persona`, connects the events and commands to the
-  pure modules below, and collapses every surface it prints. All logic lives in
-  the shared modules and the Pi-only scripts.
-- **Scripts** (`platforms/pi/scripts/`): the Pi-only modules, pure TypeScript
-  with no Pi imports, so `node:test` can exercise every decision without
-  starting a Pi process.
+- **Extension** (`platforms/pi/extensions/index.ts`): the wiring. It
+  registers `--agent` and `--persona`, the event handlers, the commands, and
+  the tools, and connects them to the modules below.
+- **Scripts** (`platforms/pi/scripts/`): the Pi-only modules. The decision
+  modules hold no Pi runtime state, so `node:test` exercises every decision
+  without starting a Pi process.
   - `profile.ts` — the agent ids, their tools, and what they may do.
   - `context.ts` — the Pi platform note over the shared prompt builder.
-  - `policy.ts` — the permission gate: floors, rules, grants, doctrine.
+  - `policy.ts` — the permission gate: floors, rules, grants, doctrine;
+    `policy-file.ts` — reading and writing the policy files and the decision log.
   - `commands.ts` — the `/permissions` argument grammar.
   - `paths.ts` — the package paths; `session-log-writer.ts` — the detached writer.
+  - Pieces of the extension that take the Pi API or the session state:
+    `session.ts` (the session state), `permissions-ui.ts` (the ask dialog and
+    `/permissions`), `review-run.ts` (the reviewer child and the commit ask),
+    and `render.ts` (the collapsed rows; it imports `pi-tui` at runtime).
 - **Shared modules** (`platforms/shared/`): the logic every adapter uses.
   - `shell/` — the shell lexer, the nested construct grammar, and the gate
     classification. The Claude doctrine hook and the Pi gate both import it, so
@@ -88,7 +92,7 @@ code without the author's reasoning.
   test suite once; there is no Edit or Write tool at all.
 - **`platforms/shared/review/review.ts`** is pure: it reads a diff and a status
   into a `Change`, names it with a 16-character hash (`reviewKey`), parses the
-  verdict, and decides the gate.
+  verdict, and decides the gate. **`brief.ts`** builds the brief below.
 - The review starts from a **three-field brief**, never a checklist: `Scope`
   (a ref, a range, or paths), `Task` (one line: goal and study task id), and
   `Decisions` (the file that holds the owner decisions, or `none`).
