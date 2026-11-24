@@ -160,6 +160,11 @@ function logsAllows(): boolean {
 	return process.env.PERSONA_AGENTS_DEBUG === "1";
 }
 
+/** The status-line text: the profile, and the theme when it has a persona. */
+function statusText(profile: Profile, theme: string): string {
+	return `🎭 ${profile.name}${profile.persona ? ` · ${theme}` : ""}`;
+}
+
 /** Start the agent for this session, or return null and explain why. */
 function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 	const raw = pi.getFlag("agent");
@@ -228,7 +233,7 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 	if (policy.errors.length > 0) {
 		for (const error of policy.errors) ctx.ui.notify(`${error.message} — the gate fails closed until this is fixed`, "error");
 	}
-	ctx.ui.setStatus("persona-agents", `🎭 ${profile.name}${profile.persona ? ` · ${theme}` : ""}`);
+	ctx.ui.setStatus("persona-agents", statusText(profile, theme));
 	ctx.ui.notify(`persona-agents: ${profile.name} (${profile.persona ? theme : "no persona"}), notes: ${notesDir}`, "info");
 	return session;
 }
@@ -399,7 +404,7 @@ function personaCommand(pi: ExtensionAPI, session: Session, args: string, ctx: E
 		return;
 	}
 	pi.appendEntry("persona-agents:theme", { theme: session.theme });
-	ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
+	ctx.ui.setStatus("persona-agents", statusText(session.profile, session.theme));
 	ctx.ui.notify(`persona-agents: theme ${session.theme} applies from your next message`, "info");
 }
 
@@ -410,7 +415,7 @@ function piInvocation(): { command: string; args: string[] } {
 	return { command: "pi", args: [] };
 }
 
-/** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
+/** The change a commit would record: the diff, the changed paths, and a signature of their content. */
 async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 	const run = (args: string[]) => pi.exec("git", [...GIT_OPTIONS, ...args], { cwd });
 	const status = await run(STATUS_ARGS);
@@ -598,7 +603,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				session.reviews.set(data.key, data.verdict as ReviewVerdict);
 			}
 		}
-		ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
+		ctx.ui.setStatus("persona-agents", statusText(session.profile, session.theme));
 	});
 
 	pi.on("before_agent_start", (event, ctx) => {

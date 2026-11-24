@@ -266,7 +266,7 @@ export function mapPayloads(
 					entries.push({
 						type: "custom",
 						customType: "persona-agents:review",
-						data: { verdict, at: payload.timestamp ?? null },
+						data: { verdict },
 					});
 				}
 			}

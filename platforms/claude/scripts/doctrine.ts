@@ -53,11 +53,9 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { gateCommand, insideDir, SUPPORT, UNGATED, type GateHit, type Hit } from "../../shared/shell/gates.ts";
+import { gateCommand, insideDir, SUPPORT, UNGATED, type GateHit } from "../../shared/shell/gates.ts";
 import { sessionDirs } from "./session-dirs.ts";
 
-export { commandSegments, gateCommand, shellWords } from "../../shared/shell/gates.ts";
-export type { Hit } from "../../shared/shell/gates.ts";
 
 const PREFIX = "persona-agents:";
 
@@ -85,31 +83,27 @@ export interface HookInput {
  */
 type Gate = "history" | "publish" | "write";
 
-/** The companion's verdict per gate; null leaves the call to Claude Code. Every other agent is denied. */
-const COMPANION_RULES: Record<Gate, Verdict | null> = {
+/**
+ * The companion's verdict per gate. Its write segments never reach a gate
+ * (they count as ungated), so write has no rule. Every other agent is denied.
+ */
+const COMPANION_RULES: Record<Exclude<Gate, "write">, Verdict> = {
 	history: "allow",
 	publish: "ask",
-	write: null,
 };
 
 const HISTORY_DENY = "only the companion writes git history or runs a gh pr / release / run write; suggest a commit instead";
 const PUBLISH_ASK =
 	"git push, a gh pr / release / run write, a git config override, an upload-pack or transport helper URL, a merge strategy, or a wrapped git command needs your approval";
 
-/** Why a gate fired: an ask explains the approval, a deny names who may run it. */
-const GATE_REASON: Record<Gate, Record<Verdict, string>> = {
-	history: {
-		allow: "a git command runs without a prompt for the companion",
-		ask: PUBLISH_ASK,
-		deny: HISTORY_DENY,
-	},
-	publish: { allow: PUBLISH_ASK, ask: PUBLISH_ASK, deny: HISTORY_DENY },
-	write: {
-		allow: "this agent is read-only",
-		ask: "this agent is read-only",
-		deny: "this agent is read-only: it may not change files or remote state from the shell",
-	},
-};
+const HISTORY_ALLOW = "a git command runs without a prompt for the companion";
+const WRITE_DENY = "this agent is read-only: it may not change files or remote state from the shell";
+
+/** Why a gate fired: an allow or an ask explains itself, a deny names who may run it. */
+function gateReason(gate: Gate, verdict: Verdict): string {
+	if (verdict === "deny") return gate === "write" ? WRITE_DENY : HISTORY_DENY;
+	return verdict === "allow" ? HISTORY_ALLOW : PUBLISH_ASK;
+}
 
 /** The doctrine decision for one tool call, or null to leave it alone. */
 export function decide(input: HookInput, additionalDirs: string[] = []): Decision | null {
@@ -127,8 +121,8 @@ export function decide(input: HookInput, additionalDirs: string[] = []): Decisio
 	const decisions = hits
 		.filter((hit): hit is GateHit => hit !== UNGATED && hit !== SUPPORT)
 		.map((gate) => {
-			const verdict = profession === "companion" ? (COMPANION_RULES[gate] ?? "deny") : "deny";
-			return { verdict, reason: GATE_REASON[gate][verdict] };
+			const verdict: Verdict = profession === "companion" && gate !== "write" ? COMPANION_RULES[gate] : "deny";
+			return { verdict, reason: gateReason(gate, verdict) };
 		});
 	const decision = strongest(decisions, profession);
 	// A hook allow skips Claude Code's prompt for the whole command, so allow
@@ -169,6 +163,3 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
 		);
 	}
 }
-
-/** Re-exported for the tests: the type of one classified segment. */
-export type SegmentHit = Hit;

@@ -27,7 +27,7 @@ function output(result: GitResult): { code: number; stdout: string } {
 	return { code: result.status, stdout: result.stdout };
 }
 
-/** The change a commit would record: the diff, the untracked paths, and their signature. */
+/** The change a commit would record: the diff, the changed paths, and a signature of their content. */
 export function readChange(cwd: string): Change {
 	const status = output(git(cwd, STATUS_ARGS));
 	let diff = output(git(cwd, DIFF_ARGS));

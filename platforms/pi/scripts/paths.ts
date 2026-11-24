@@ -28,8 +28,3 @@ export function contentDir(): string {
 export function homeDir(): string {
 	return homedir();
 }
-
-/** The agent-notes root, next to the home folder. */
-export function notesRoot(home: string = homeDir()): string {
-	return join(home, "agent-notes");
-}

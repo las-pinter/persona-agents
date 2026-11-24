@@ -49,9 +49,6 @@ export const configFile = (home: string): string => join(payloadDir(home), "conf
 /** The adapter's state folder: review records, compaction manifests, metrics. */
 export const stateDir = (home: string): string => join(payloadDir(home), "state");
 
-/** The agent profile folder. */
-export const agentsDir = (home: string): string => join(home, "agents");
-
 /** The global skills folder. */
 export const skillsDir = (home: string): string => join(home, "skills");
 
