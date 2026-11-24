@@ -53,7 +53,7 @@ The installer (`install.ts`) writes:
 A skill folder is replaced only when it carries the marker
 `.persona-agents.json`. The installer stops before any write when a folder
 lacks the marker; `--force` renames it to `<name>.bak-<timestamp>` and replaces
-it.
+it. A marked folder for a skill that is no longer shipped is removed.
 A version below 3.4.0 is refused before any write.
 
 Update with `git pull` and `./install.sh --kiro`. A file whose text the
