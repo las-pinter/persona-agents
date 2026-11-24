@@ -11,6 +11,10 @@ If your system context says `Running in Kiro CLI`, first read
 prints this session's facts and says which parts of this file apply. Write
 nothing durable either way.
 
+If your system context says `Running in Pi`, the `/retro` message carries the
+session facts. Use them as the evidence; the **Session Facts** table below is
+Claude Code's and does not apply.
+
 # Retro
 
 ## Purpose

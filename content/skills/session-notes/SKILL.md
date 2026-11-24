@@ -20,7 +20,7 @@ the work up again.
   study's task table plus the steps of the current task.
 - A small, one-step change needs none.
 
-One file per task, not per Claude Code session. A task that spans several
+One file per task, not per agent session. A task that spans several
 sessions keeps one file. Several tasks in one session get one file each.
 
 ## Location

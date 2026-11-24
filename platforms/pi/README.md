@@ -7,7 +7,9 @@ The Pi adapter ships the same agent as the Claude plugin, from the same
 `content/` tree: one companion that plans, implements, tests, reviews, and
 commits with the owner, in the voice of a persona theme. The Claude adapter
 (`platforms/claude/`) puts the shared content behind hooks; this one puts it
-behind one Pi extension. Nothing in `content/` knows which harness runs it.
+behind one Pi extension. A few skills carry a `## Platform branch` section
+that keys on the `Running in <harness>` line of the system context; the rest
+of `content/` names no harness.
 
 ## Layout
 

@@ -90,8 +90,8 @@ kiro-cli --agent pa-companion
   the prompt sections. See [platforms/pi/README.md](../pi/README.md#layout)
   for the module list.
 - **Skill branches** (`content/skills/{review,retro,wrap-up}/references/kiro.md`):
-  the harness-specific procedure for the three skills that name a harness. The
-  installer substitutes the payload paths.
+  the Kiro procedure for the three skills whose `## Platform branch` section
+  sends Kiro elsewhere. The installer substitutes the payload paths.
 
 The payload keeps the repository layout so the relative imports between
 `platforms/kiro/` and `platforms/shared/` resolve unchanged.

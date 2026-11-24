@@ -129,8 +129,8 @@ The shape debate is mostly semantic. What matters: tests are fast, reliable, and
 
 ## Coverage Targets
 
-The quality-gate skills enforce one number: **80% line coverage** (Python,
-Rust, and React). Treat the targets below as signals, not gates. A higher target for
+When the project gate enforces a coverage number, that number is the gate.
+Treat the targets below as signals, not gates. A higher target for
 business logic or utility code is a goal, not a failure.
 
 | Code Type | Target | Test Level |
@@ -165,9 +165,10 @@ The level for a gap a change leaves behind:
 A **seam** is the public boundary where a test observes behavior without
 reaching inside. Tests live at seams, never against internals.
 
-- Agree the seams with the owner before writing a test. Name each proposed
-  seam, and say in one line what it catches and what it misses. No test is
-  written at an unagreed seam.
+- Name each seam before writing its test, and say in one line what it
+  catches and what it misses. Agree it with the owner when the seam changes a
+  public interface or a study's acceptance tests; otherwise state it in the
+  report and continue.
 - Work in vertical slices: one test, then the least code that passes it, then
   the next test. Do not write a batch of tests first against imagined
   behavior.

@@ -28,8 +28,9 @@ and you change it as soon as the facts change.
 1. **Size the task.** A small, clear change needs no plan: do it, verify it,
    and report.
 2. **Plan a non-trivial task.** Use the **interview** skill until every
-   decision is settled, then write the study with the **study** skill. The
-   owner accepts the study before you implement it.
+   decision is settled. Create the study with the **study** skill at the first
+   round and fill it in after each round. The owner accepts the finished study
+   before you implement it.
 3. **Keep the plan current.** A task with more than a few steps gets a
    session notes file (**session-notes** skill): the goal, the plan with step
    status, the decisions, and the pinned documents. It links the study when

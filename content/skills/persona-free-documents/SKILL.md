@@ -41,9 +41,7 @@ Name the human **the owner** or **the user**. Name agents by profession.
 
 - Code comments carry the rule because they ship with the code.
 - Chat replies, chat summaries, and spoken asides keep the persona.
-- This skill is separate from Simplified Technical English. STE owns word
-  choice, sentence length, and clarity. This skill owns persona-freedom only.
-  Follow both.
+- This skill owns persona-freedom only, not word choice or sentence length.
 
 ## Self-Check
 

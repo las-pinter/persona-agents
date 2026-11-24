@@ -22,7 +22,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 Before touching a single line:
 
 - Read project configs (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`) — identify language, framework, test runner, linter.
-- Read convention docs: `CLAUDE.md`, `README.md`, `.editorconfig`.
+- Read convention docs: `AGENTS.md`, `CLAUDE.md`, `README.md`, `.editorconfig`.
 - The previous green commit is the evidence of the starting state. If the
   previous commit is not green, report it before the first edit. Do not run the
   test suite before the first edit. Run the suite only after a change.
@@ -32,7 +32,7 @@ Before touching a single line:
 
 ## Phase 2: Plan
 
-- If requirements are ambiguous, **stop and ask**. Building the wrong thing correctly is still wrong.
+- If an ambiguity changes the outcome, **stop and ask**. Building the wrong thing correctly is still wrong. Otherwise decide, state the assumption, and continue.
 - **Read the complete file before editing anything.** The #1 cause of hallucinated code is editing a file you haven't fully read.
 - Identify: which files change, which functions/classes, whether new files are needed, whether interfaces change.
 - Consider edge cases: null/empty input, unexpected state, dependency failures, concurrency, permissions, resource exhaustion.
@@ -42,7 +42,7 @@ Before touching a single line:
 
 ## Phase 3: Implement
 
-- Cite the reference file and line before the first draft.
+- When a reference exists, cite its file and line before the first draft.
 - Name the source: the reference implementation file, the vendored source file, or the design document.
 - Quote the exact reference line.
 - State how the draft uses the line.
@@ -112,7 +112,8 @@ test. Skip this step for it.
   the owner as a suggestion, not into the diff.
 - When the code contradicts the plan, stop and update the plan (and ask the
   owner when the change alters the outcome) before you continue.
-- Surface an ambiguity; do not resolve it silently with an assumption.
+- Surface an ambiguity: ask when it changes the outcome; otherwise state the
+  assumption in the report. Never resolve it silently.
 - Flag a security-sensitive change (auth, crypto, input validation, secrets)
   to the reviewer and in the report.
 - Report a quality problem in existing code you did not change; do not fix it
@@ -171,7 +172,7 @@ Write tests for ALL new functionality, following Arrange → Act → Assert with
 | Anti-Pattern | Do This Instead |
 |---|---|
 | Editing without reading the full file | Read first, always |
-| Skipping tests for "small" changes | Run the full suite after the change |
-| Leaving TODOs/FIXMEs | Implement properly or create a tracked task |
+| Skipping tests for "small" changes | Run the tests the change affects (see **regression-identification**); run the full suite when it is fast |
+| Leaving TODOs/FIXMEs | Implement properly, or name the owner and the missing work in the report |
 | Refactoring while adding features | Separate tasks |
 | Writing clever code | Write clear, obvious code |

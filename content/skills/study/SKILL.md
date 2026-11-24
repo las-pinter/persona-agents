@@ -13,8 +13,10 @@ document.
 
 ## When to Load
 
-Load this skill after the **interview** skill settles the decisions. Load the
-two skills as one unit. The study is the record of the interview.
+Load this skill with the **interview** skill, at its first round. Load the
+two skills as one unit. The study is the record of the interview: create it
+at the first round and fill it in after each round, so a compaction loses no
+settled decision.
 
 ## One Document
 
