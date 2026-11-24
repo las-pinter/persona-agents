@@ -145,7 +145,7 @@ describe("kiro install: a fresh install", () => {
 			}
 			const end = (agent.hooks as Array<Record<string, unknown>>).find((hook) => hook.trigger === "SessionEnd");
 			const command = String((end?.action as Record<string, unknown>).command);
-			assert.match(command, /journal-end\.ts/);
+			assert.match(command, /session-log-end\.ts/);
 			assert.match(command, /--kiro-home=/);
 			assert.match(command, /--kiro-cli=/);
 			const rules = (agent.permissions as { rules: Array<Record<string, unknown>> }).rules;
@@ -193,7 +193,7 @@ describe("kiro install: a fresh install", () => {
 				assert.ok(!text.includes("{{PERSONA_AGENTS_KIRO_"), `${file} keeps no token`);
 			}
 			const wrap = fs.readFileSync(path.join(skills, "wrap-up", "references", "kiro.md"), "utf8");
-			assert.ok(wrap.includes(path.join(temp.kiro, "persona-agents", "platforms", "kiro", "scripts", "journal.ts")));
+			assert.ok(wrap.includes(path.join(temp.kiro, "persona-agents", "platforms", "kiro", "scripts", "session-log.ts")));
 		});
 	});
 });
@@ -243,6 +243,26 @@ describe("kiro install: the second run and the theme", () => {
 			fs.writeFileSync(path.join(state, "keep.txt"), "keep\n");
 			assert.ok(fresh(temp).ok);
 			assert.equal(fs.readFileSync(path.join(state, "keep.txt"), "utf8"), "keep\n");
+		});
+	});
+});
+
+describe("kiro install: retired skills", () => {
+	test("a skill folder we installed but no longer ship is removed; a foreign one stays", () => {
+		withTemp((temp) => {
+			assert.ok(fresh(temp).ok);
+			const retired = path.join(temp.kiro, "skills", "session-notes");
+			fs.mkdirSync(retired, { recursive: true });
+			fs.writeFileSync(path.join(retired, "SKILL.md"), "old\n");
+			fs.writeFileSync(path.join(retired, SKILL_MARKER), "{}\n");
+			const foreign = path.join(temp.kiro, "skills", "someone-else");
+			fs.mkdirSync(foreign, { recursive: true });
+			fs.writeFileSync(path.join(foreign, "SKILL.md"), "theirs\n");
+			const result = fresh(temp);
+			assert.ok(result.ok, result.error);
+			assert.equal(fs.existsSync(retired), false);
+			assert.equal(fs.readFileSync(path.join(foreign, "SKILL.md"), "utf8"), "theirs\n");
+			assert.ok(result.actions.some((action) => action.includes("session-notes")), result.actions.join("\n"));
 		});
 	});
 });

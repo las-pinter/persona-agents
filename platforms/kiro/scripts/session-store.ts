@@ -10,7 +10,7 @@
  *                   sub_agent_start, sub_agent_complete, ...
  *   sub-executions/ the child transcripts of sub-agent runs
  *
- * The shared notes, compaction, retro, and journal modules read a neutral
+ * The shared notes, compaction, retro, and session-log modules read a neutral
  * entry shape (`EntryLike`), so this module maps a Kiro session onto it. The
  * mapping is pure and takes the home and session id as arguments; the hooks
  * pass the real ones.

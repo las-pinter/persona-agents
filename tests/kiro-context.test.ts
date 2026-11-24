@@ -1,6 +1,6 @@
 /**
- * The Kiro context, paths, and journal CLI (platforms/kiro/scripts/context.ts,
- * paths.ts, journal.ts).
+ * The Kiro context, paths, and session-log CLI (platforms/kiro/scripts/context.ts,
+ * paths.ts, session-log.ts).
  *
  * The tests build a hermetic home and notes tree, and run the CLI entry points
  * as child processes where the argument seam matters. They never read the
@@ -17,7 +17,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { contextFor, platformNote, sessionContext, startupText } from "../platforms/kiro/scripts/context.ts";
-import { journalPath } from "../platforms/kiro/scripts/journal.ts";
+import { sessionLogPath } from "../platforms/kiro/scripts/session-log.ts";
 import { kiroHome, readTheme } from "../platforms/kiro/scripts/paths.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -93,19 +93,19 @@ describe("kiro context: the persona and the platform note", () => {
 });
 
 describe("kiro context: the startup read list", () => {
-	test("the read list names the rules, the summary, the journal, the open notes, and the unfinished studies", () => {
+	test("the read list names the rules, the summary, the session logs, the open task notes, and the unfinished studies", () => {
 		withTemp((root) => {
 			const notes = path.join(root, "agent-notes", "project-notes", "common");
 			fs.mkdirSync(path.join(notes, "rules"), { recursive: true });
 			fs.writeFileSync(path.join(notes, "rules", "one.md"), "# One\n");
 			fs.writeFileSync(path.join(notes, "summary.md"), "# Summary\n");
 			for (const day of ["2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]) {
-				fs.mkdirSync(path.join(notes, "journal", day), { recursive: true });
-				fs.writeFileSync(path.join(notes, "journal", day, "1200-sess_1.md"), `# ${day}\n`);
+				fs.mkdirSync(path.join(notes, "session-logs", day), { recursive: true });
+				fs.writeFileSync(path.join(notes, "session-logs", day, "1200-sess_1.md"), `# ${day}\n`);
 			}
-			fs.mkdirSync(path.join(notes, "sessions"), { recursive: true });
-			fs.writeFileSync(path.join(notes, "sessions", "open.md"), "- **Status:** open\n");
-			fs.writeFileSync(path.join(notes, "sessions", "done.md"), "- **Status:** done\n");
+			fs.mkdirSync(path.join(notes, "tasks"), { recursive: true });
+			fs.writeFileSync(path.join(notes, "tasks", "open.md"), "- **Status:** open\n");
+			fs.writeFileSync(path.join(notes, "tasks", "done.md"), "- **Status:** done\n");
 			fs.mkdirSync(path.join(notes, "studies", "2026-11-20-one"), { recursive: true });
 			fs.writeFileSync(
 				path.join(notes, "studies", "index.md"),
@@ -115,19 +115,19 @@ describe("kiro context: the startup read list", () => {
 			assert.match(text, /Session id: `sess_1`/);
 			assert.match(text, /rules\/one\.md/);
 			assert.match(text, /summary\.md/);
-			assert.match(text, /journal\/2026-11-18/);
-			assert.match(text, /journal\/2026-11-19/);
-			assert.match(text, /journal\/2026-11-20/);
-			assert.doesNotMatch(text, /journal\/2026-11-17/);
-			assert.match(text, /sessions\/open\.md/);
-			assert.doesNotMatch(text, /sessions\/done\.md/);
+			assert.match(text, /session-logs\/2026-11-18/);
+			assert.match(text, /session-logs\/2026-11-19/);
+			assert.match(text, /session-logs\/2026-11-20/);
+			assert.doesNotMatch(text, /session-logs\/2026-11-17/);
+			assert.match(text, /tasks\/open\.md/);
+			assert.doesNotMatch(text, /tasks\/done\.md/);
 			assert.match(text, /One \(draft\)/);
 			assert.doesNotMatch(text, /Two \(done\)/);
 		});
 	});
 });
 
-describe("kiro journal: the entry path", () => {
+describe("kiro session log: the entry path", () => {
 	test("the path is under the project notes and reuses today or yesterday", () => {
 		withTemp((root) => {
 			const home = path.join(root, "home");
@@ -135,12 +135,12 @@ describe("kiro journal: the entry path", () => {
 			fs.mkdirSync(home, { recursive: true });
 			fs.mkdirSync(cwd, { recursive: true });
 			const now = new Date(2026, 10, 20, 15, 30);
-			const first = journalPath(cwd, home, "sess/1", now);
-			assert.match(first.replace(/\\/g, "/"), /agent-notes\/project-notes\/common\/journal\/2026-11-20\/1530-sess_1\.md$/);
+			const first = sessionLogPath(cwd, home, "sess/1", now);
+			assert.match(first.replace(/\\/g, "/"), /agent-notes\/project-notes\/common\/session-logs\/2026-11-20\/1530-sess_1\.md$/);
 			fs.mkdirSync(path.dirname(first), { recursive: true });
 			fs.writeFileSync(first, "# entry\n");
-			assert.equal(journalPath(cwd, home, "sess/1", new Date(2026, 10, 20, 18, 0)), first);
-			assert.equal(journalPath(cwd, home, "sess/1", new Date(2026, 10, 21, 9, 0)), first);
+			assert.equal(sessionLogPath(cwd, home, "sess/1", new Date(2026, 10, 20, 18, 0)), first);
+			assert.equal(sessionLogPath(cwd, home, "sess/1", new Date(2026, 10, 21, 9, 0)), first);
 		});
 	});
 
@@ -152,7 +152,7 @@ describe("kiro journal: the entry path", () => {
 			fs.mkdirSync(cwd, { recursive: true });
 			const run = spawnSync(
 				process.execPath,
-				["--experimental-strip-types", "--no-warnings", script("journal.ts"), "path", "--session=sess_1", `--cwd=${cwd}`, `--home=${home}`],
+				["--experimental-strip-types", "--no-warnings", script("session-log.ts"), "path", "--session=sess_1", `--cwd=${cwd}`, `--home=${home}`],
 				{ encoding: "utf8" },
 			);
 			assert.equal(run.status, 0, run.stderr);

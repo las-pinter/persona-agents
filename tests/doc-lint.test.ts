@@ -13,7 +13,9 @@
  *   5. the plugin.json theme options equal the agents.json themes;
  *   6. each persona file has an H1 ending in "Persona" and the three
  *      required sections, in order;
- *   7. no README.md holds the package version.
+ *   7. no README.md holds the package version;
+ *   8. content and docs use the task-notes skill and the `tasks/` and
+ *      `session-logs/` folders, never the old names.
  *
  * It does not check doctrine prose.
  */
@@ -172,6 +174,41 @@ describe("condition 7: no README holds the package version", () => {
 		const files = readmes();
 		assert.ok(files.length > 0, "no README found");
 		const bad = files.filter((file) => pattern.test(readText(file))).map((file) => path.relative(repoRoot, file));
+		assert.deepEqual(bad, []);
+	});
+});
+
+/** Every Markdown file under a folder. */
+function markdownFiles(dir: string): string[] {
+	return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) return entry.name === "node_modules" ? [] : markdownFiles(full);
+		return entry.name.endsWith(".md") ? [full] : [];
+	});
+}
+
+describe("condition 8: task notes and session logs carry their new names", () => {
+	test("the task-notes skill replaces session-notes", () => {
+		assert.ok(skillFolders().includes("task-notes"));
+		assert.ok(!skillFolders().includes("session-notes"));
+	});
+
+	test("no shipped content or doc names the old folders or skill", () => {
+		// The migration note in README.md names the old folders on purpose.
+		const ALLOWED = /legacy-names/;
+		// Kiro's own session store (`<kiro home>/sessions/*/sess_<id>/`) keeps its name.
+		const OLD = /\bsessions\/(?!\*\/sess_)|(?<![\w-])journal\/|session-notes|\bjournal\.mjs\b|journal-end/;
+		const files = [contentDir, path.join(repoRoot, "docs"), path.join(repoRoot, "platforms"), path.join(repoRoot, "evals")]
+			.flatMap(markdownFiles)
+			.concat(["README.md", "AGENTS.md"].map((name) => path.join(repoRoot, name)));
+		const bad: string[] = [];
+		for (const file of files) {
+			readText(file)
+				.split("\n")
+				.forEach((line, index) => {
+					if (OLD.test(line) && !ALLOWED.test(line)) bad.push(`${path.relative(repoRoot, file)}:${index + 1}: ${line.trim()}`);
+				});
+		}
 		assert.deepEqual(bad, []);
 	});
 });

@@ -29,8 +29,8 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
-import { dayOf, entryPath, findEntry, recentJournal } from "../../shared/notes/journal.ts";
-import { hasMaterial, sources, type Payload } from "../../shared/notes/journal-net.ts";
+import { dayOf, entryPath, findEntry, recentSessionLogs } from "../../shared/notes/session-log.ts";
+import { hasMaterial, sources, type Payload } from "../../shared/notes/session-log-net.ts";
 import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../../shared/compaction/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
 import { changeFromGit, DIFF_ARGS, GIT_OPTIONS, isCleanTree, SHOW_ARGS, STATUS_ARGS } from "../../shared/review/change.ts";
@@ -38,7 +38,7 @@ import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import {
 	BUILTIN_TOOLS,
-	journalLine,
+	sessionLogLine,
 	listLine,
 	permissionsLine,
 	retroLine,
@@ -728,26 +728,26 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		try {
 			const dir = join(piAgentDir(), "persona-agents");
 			mkdirSync(dir, { recursive: true });
-			const file = join(dir, `journal-${session.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+			const file = join(dir, `session-log-${session.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
 			writeFileSync(file, JSON.stringify(payload));
 			// Detached: a shutdown must not wait for a model, and this process is
 			// about to exit. The writer removes its own payload.
 			const child = spawn(
 				process.execPath,
-				["--experimental-strip-types", "--no-warnings", fileURLToPath(new URL("../scripts/journal-writer.ts", import.meta.url)), file],
-				{ detached: true, stdio: "ignore", env: { ...process.env, PERSONA_AGENTS_JOURNAL_WRITER: "1" } },
+				["--experimental-strip-types", "--no-warnings", fileURLToPath(new URL("../scripts/session-log-writer.ts", import.meta.url)), file],
+				{ detached: true, stdio: "ignore", env: { ...process.env, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" } },
 			);
 			child.unref();
 		} catch {
-			// A journal entry is a convenience; a failed spawn is not worth an error.
+			// A session log is a convenience; a failed spawn is not worth an error.
 		}
 	});
 
 	pi.registerTool({
-		name: "journal",
-		label: "Journal",
+		name: "session-log",
+		label: "Session log",
 		description:
-			"This session's journal entry: `path` for where it goes, `write` to save the whole entry there, `recent` to read the last days. Use `path` first when you wrap up.",
+			"This session's log: `path` for where it goes, `write` to save the whole entry there, `recent` to read the last days. Use `path` first when you wrap up.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -761,7 +761,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		renderResult(result, { expanded }, theme) {
 			const text = bodyText(result.content);
 			if (expanded) return new Text(text, 0, 0);
-			return collapsedRow(theme, journalLine(text));
+			return collapsedRow(theme, sessionLogLine(text));
 		},
 		async execute(_toolCallId, params) {
 			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
@@ -773,25 +773,25 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			}
 			if (action === "write") {
 				const text = typeof params.text === "string" ? params.text : "";
-				if (text.trim() === "") return { content: [{ type: "text", text: "journal write needs the entry text" }], isError: true };
+				if (text.trim() === "") return { content: [{ type: "text", text: "session-log write needs the entry text" }], isError: true };
 				const path = entryPath(notesDir, session.id);
 				mkdirSync(dirname(path), { recursive: true });
 				writeFileSync(path, text.endsWith("\n") ? text : `${text}\n`);
-				return { content: [{ type: "text", text: `journal entry written: ${path}` }], details: { path } };
+				return { content: [{ type: "text", text: `session log written: ${path}` }], details: { path } };
 			}
 			if (action === "recent") {
 				const days = typeof params.days === "number" && params.days > 0 ? Math.min(params.days, 30) : 3;
-				const entries = recentJournal(notesDir, days);
+				const entries = recentSessionLogs(notesDir, days);
 				return {
 					content: [
 						{
 							type: "text",
-							text: entries.length ? entries.map((entry) => `<!-- ${entry.path} -->\n${entry.text}`).join("\n\n") : "no journal entries",
+							text: entries.length ? entries.map((entry) => `<!-- ${entry.path} -->\n${entry.text}`).join("\n\n") : "no session logs",
 						},
 					],
 				};
 			}
-			return { content: [{ type: "text", text: "journal action must be path, write, or recent" }], isError: true };
+			return { content: [{ type: "text", text: "session-log action must be path, write, or recent" }], isError: true };
 		},
 	});
 
@@ -812,7 +812,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			const facts = summarizeSession({
 				entries: ctx.sessionManager.getEntries() as EntryLike[],
 				decisions,
-				journal: existsSync(entry) ? [entry] : [],
+				sessionLogs: existsSync(entry) ? [entry] : [],
 			});
 			pi.sendMessage(
 				{ customType: "persona-agents:retro", content: retroMessage(join(contentDir(), "skills", "retro", "SKILL.md"), facts), display: true },

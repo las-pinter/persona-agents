@@ -4,7 +4,7 @@
  *
  *   context.ts session   the platform note and the theme persona
  *   context.ts startup   the read list: project rules and summary, the last
- *                        three journal days, open session notes, unfinished
+ *                        three session-log days, open task notes, unfinished
  *                        studies
  *
  * The profession itself is the agent profile's `prompt` (the shared

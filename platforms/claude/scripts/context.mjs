@@ -9,7 +9,7 @@
 //   context.mjs persona      a short Claude Code note + the persona that
 //                            content/agents.json picks for the selected theme
 //   context.mjs session      the session id, so the companion can name its
-//                            session in the session notes file
+//                            session in the task notes file
 //
 // SessionStart fires on startup, resume, clear, and compact, so every part
 // comes back after a compaction. The parts run as separate hooks because

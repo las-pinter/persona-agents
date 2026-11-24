@@ -7,7 +7,7 @@ The session id is in your system context, on the line `Session id: <id>`.
 1. Get this session's entry path. Run this with the shell tool:
 
    ```sh
-   node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/journal.ts path --session=<id>
+   node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/session-log.ts path --session=<id>
    ```
 
    The path is this session's existing entry (today or yesterday) or a new
@@ -21,7 +21,7 @@ The session id is in your system context, on the line `Session id: <id>`.
 
 ## Then
 
-Continue with steps 3 to 5 of the shared skill: update each session notes
+Continue with steps 3 to 5 of the shared skill: update each task notes
 file this session worked on, update the project notes when a lasting rule or
 fact was found, and tell the owner the entry path in one line.
 

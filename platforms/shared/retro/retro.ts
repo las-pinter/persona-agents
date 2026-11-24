@@ -25,8 +25,8 @@ export interface FactsInput {
 	entries: EntryLike[];
 	/** The decisions log lines for this session only. */
 	decisions: DecisionLine[];
-	/** The journal entry paths this session wrote, when known. */
-	journal?: string[];
+	/** The session log paths this session wrote, when known. */
+	sessionLogs?: string[];
 }
 
 /** Parse the JSONL decisions log; a bad line is skipped, not fatal. */
@@ -112,8 +112,8 @@ export function summarizeSession(input: FactsInput): string {
 	if (notable.length > 0) {
 		lines.push("- asks and denials:", ...cap(notable, 10).map((line) => `  - ${line}`));
 	}
-	if (input.journal && input.journal.length > 0) {
-		lines.push("- journal:", ...cap(input.journal, 5).map((path) => `  - ${path}`));
+	if (input.sessionLogs && input.sessionLogs.length > 0) {
+		lines.push("- session logs:", ...cap(input.sessionLogs, 5).map((path) => `  - ${path}`));
 	}
 	return lines.join("\n");
 }
@@ -121,7 +121,7 @@ export function summarizeSession(input: FactsInput): string {
 /** The instruction the retro run gets on top of the facts. */
 export const RETRO_INSTRUCTION = [
 	"Run a blameless retro on this session, print only: what was supposed to happen, what happened, what was right and wrong, and the actions worth taking.",
-	"Use the facts below as evidence. Write nothing durable: no journal entry, no notes, no commit.",
+	"Use the facts below as evidence. Write nothing durable: no session log, no notes, no commit.",
 ].join("\n");
 
 /**

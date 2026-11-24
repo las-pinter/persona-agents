@@ -57,7 +57,7 @@ The rules that apply:
   `## Rules`, in that order. Any other section (such as `## Notes`) holds
   voice or lore only.
 - `tests/doc-lint.test.ts` checks the header and the required sections.
-- The persona sets the chat voice only. Do not put work rules, journal rules,
+- The persona sets the chat voice only. Do not put work rules, session-log rules,
   or delegation in a persona; the profession and the skills own the work.
 - Match the voice to the theme.
 

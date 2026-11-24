@@ -8,7 +8,7 @@
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
-	journalLine,
+	sessionLogLine,
 	toolCallLine,
 	listLine,
 	permissionsLine,
@@ -189,8 +189,8 @@ describe("pi summary: the other surfaces", () => {
 		assert.equal(toolCallLine("mcp__thing", { id: 1 }), "mcp__thing");
 	});
 
-	test("a journal row names the file it wrote", () => {
-		assert.equal(journalLine("journal entry written: /notes/journal/2026-11-19/2310-x.md"), "journal  written: /notes/journal/2026-11-19/2310-x.md");
-		assert.equal(journalLine("no journal entries"), "journal  no journal entries");
+	test("a session-log row names the file it wrote", () => {
+		assert.equal(sessionLogLine("session log written: /notes/session-logs/2026-11-19/2310-x.md"), "session-log  written: /notes/session-logs/2026-11-19/2310-x.md");
+		assert.equal(sessionLogLine("no session logs"), "session-log  no session logs");
 	});
 });

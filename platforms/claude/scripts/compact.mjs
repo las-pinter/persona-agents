@@ -3,15 +3,15 @@
 //
 //   compact.mjs pre     PreCompact: scan the transcript, save a reload manifest,
 //                       and print instructions for the summary (stdout).
-//   compact.mjs post    PostCompact: keep the summary for the journal, and log
-//                       one metrics line (session notes and plugin data).
+//   compact.mjs post    PostCompact: keep the summary for the session log, and
+//                       log one metrics line (task notes and plugin data).
 //   compact.mjs reload  SessionStart (compact): send the reload list as
 //                       additional context.
 //
-// The manifest holds the skills the session invoked, the active session notes
-// file (the last one the session wrote under <project notes>/sessions/), and
+// The manifest holds the skills the session invoked, the active task notes
+// file (the last one the session wrote under <project notes>/tasks/), and
 // the reference documents to read again: the project rules and summary, the
-// study the session notes link, the pinned documents, and other project notes
+// study the task notes link, the pinned documents, and other project notes
 // the session read. Working source files are not reloaded.
 //
 // State lives in $CLAUDE_PLUGIN_DATA/compact/ (a temp folder when unset):
@@ -25,7 +25,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../../shared/notes/notes.ts";
+import { isInside, sessionLogDirs, taskDirs } from "../../shared/notes/folders.ts";
+import { activeTaskNotes, pinnedDocs, projectRules, studyPath } from "../../shared/notes/notes.ts";
 import { projectDir } from "./notes-paths.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
@@ -117,31 +118,30 @@ function projectStartupDocs(notesDir) {
 /**
  * The reload manifest for a transcript and a project notes folder.
  * Docs: project rules and summary, the linked study, the pinned docs, then
- * other project notes the session read (not journal entries or other sessions).
+ * other project notes the session read (not session logs or other tasks).
  * The active notes file comes from the session id first, so a resumed session
  * that only read its notes still finds them.
  */
 export function buildManifest(entries, notesDir, sessionId = "") {
 	const uses = toolUses(entries);
 	const skills = lastDistinct(skillNames(entries), MAX_SKILLS);
-	const sessionsDir = join(notesDir, "sessions") + sep;
+	const tasks = taskDirs(notesDir);
 	const written = uses
 		.filter((use) => ["Write", "Edit", "MultiEdit"].includes(use.name))
 		.map((use) => use.input?.file_path)
-		.filter((path) => typeof path === "string" && path.startsWith(sessionsDir) && path.endsWith(".md"));
-	const sessionNotes = activeSessionNotes(notesDir, sessionId, written);
-	const notesText = sessionNotes && existsSync(sessionNotes) ? readFileSync(sessionNotes, "utf8") : "";
-	const skip = [join(notesDir, "journal") + sep, sessionsDir];
+		.filter((path) => typeof path === "string" && isInside(tasks, path) && path.endsWith(".md"));
+	const taskNotes = activeTaskNotes(notesDir, sessionId, written);
+	const notesText = taskNotes && existsSync(taskNotes) ? readFileSync(taskNotes, "utf8") : "";
 	const readNotes = uses
 		.filter((use) => use.name === "Read" && typeof use.input?.file_path === "string")
 		.map((use) => use.input.file_path)
-		.filter((path) => path.startsWith(notesDir + sep) && !skip.some((prefix) => path.startsWith(prefix)));
+		.filter((path) => path.startsWith(notesDir + sep) && !isInside(sessionLogDirs(notesDir), path) && !isInside(tasks, path));
 	const study = studyPath(notesText);
 	const docs = lastDistinct(
 		[...readNotes, ...projectStartupDocs(notesDir), ...(study ? [study] : []), ...pinnedDocs(notesText)],
 		MAX_DOCS,
-	).filter((path) => path !== sessionNotes);
-	return { sessionNotes, skills, docs, scan: { entries: entries.length, toolUses: uses.length } };
+	).filter((path) => path !== taskNotes);
+	return { taskNotes, skills, docs, scan: { entries: entries.length, toolUses: uses.length } };
 }
 
 /** The PreCompact stdout: instructions that the summary must follow. */
@@ -151,8 +151,8 @@ export function summaryInstructions(manifest) {
 		"- Keep the current task, the current plan step, the open decisions, and the owner's latest request word for word where short.",
 		"- Do not paraphrase skill text or project rules; they are reloaded after compaction.",
 	];
-	if (manifest.sessionNotes) {
-		lines.push(`- Keep this exact path in the summary: the session notes file ${manifest.sessionNotes}`);
+	if (manifest.taskNotes) {
+		lines.push(`- Keep this exact path in the summary: the task notes file ${manifest.taskNotes}`);
 	}
 	return lines.join("\n");
 }
@@ -165,10 +165,10 @@ export function reloadContext(manifest) {
 		"Do every step below before any other work, even when the summary seems to cover it: the summary is lossy, the files are not.",
 		"",
 	];
-	if (manifest.sessionNotes) {
-		lines.push(`1. Read the session notes file first; it holds the plan: ${manifest.sessionNotes}`);
+	if (manifest.taskNotes) {
+		lines.push(`1. Read the task notes file first; it holds the plan: ${manifest.taskNotes}`);
 	} else {
-		lines.push("1. No session notes file was found for this session.");
+		lines.push("1. No task notes file was found for this session.");
 	}
 	lines.push("2. Re-invoke these skills with the Skill tool (an unchanged skill costs only a short note):");
 	lines.push(...(manifest.skills.length ? manifest.skills.map((skill) => `   - ${skill}`) : ["   - none"]));
@@ -184,7 +184,7 @@ export function lastBoundary(entries) {
 	return boundary?.compactMetadata ?? {};
 }
 
-/** Append one line to the `## Log` section of a session notes file. */
+/** Append one line to the `## Log` section of a task notes file. */
 export function appendLog(path, line) {
 	if (!path || !existsSync(path)) return false;
 	const text = readFileSync(path, "utf8");
@@ -244,7 +244,7 @@ function run(mode, input) {
 			join(dir, "metrics.ndjson"),
 			`${JSON.stringify({ at: new Date().toISOString(), session: input.session_id, trigger: input.trigger, preTokens: meta.preTokens ?? null, postTokens: meta.postTokens ?? null, entries: manifest.scan?.entries ?? null, toolUses: manifest.scan?.toolUses ?? null, skills: manifest.skills.length, docs: manifest.docs.length })}\n`,
 		);
-		appendLog(manifest.sessionNotes, `${stamp()} — compaction (${input.trigger}${tokens}); reload: ${manifest.skills.length} skills, ${manifest.docs.length} docs`);
+		appendLog(manifest.taskNotes, `${stamp()} — compaction (${input.trigger}${tokens}); reload: ${manifest.skills.length} skills, ${manifest.docs.length} docs`);
 		return;
 	}
 

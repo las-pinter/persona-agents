@@ -9,14 +9,14 @@
  * session store and the adapter's state files, then prints the shared retro
  * instruction and the facts.
  *
- * A Kiro journal entry, when one exists, is named but not read: the retro's
+ * A Kiro session log, when one exists, is named but not read: the retro's
  * review scope is the live context plus the notes the model reads itself.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
-import { dayOf, findEntry } from "../../shared/notes/journal.ts";
+import { dayOf, findEntry } from "../../shared/notes/session-log.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import {
 	parseDecisions,
@@ -63,8 +63,8 @@ function decisionsFor(stateDir: string, session: string) {
 	}
 }
 
-/** The journal entry path of a session, when it has one. */
-function journalOf(notesDir: string, session: string, now: Date): string[] {
+/** The session log path of a session, when it has one. */
+function sessionLogOf(notesDir: string, session: string, now: Date): string[] {
 	const yesterday = new Date(now);
 	yesterday.setDate(now.getDate() - 1);
 	const file = findEntry(notesDir, session, [dayOf(now), dayOf(yesterday)]);
@@ -87,7 +87,7 @@ export function retroFacts(
 	const facts = summarizeSession({
 		entries,
 		decisions: decisionsFor(stateDir, sessionId),
-		journal: journalOf(notesDir, sessionId, now),
+		sessionLogs: sessionLogOf(notesDir, sessionId, now),
 	});
 	const extras: string[] = [];
 	if (session.contextUsage !== null) extras.push(`- context usage: ${session.contextUsage}%`);

@@ -203,7 +203,7 @@ export const TEST_COMMANDS = [
  */
 export const REVIEWER_COMMANDS = ["npm test", "npm test *", "npm run lint", "npm run typecheck", "node --test*", "node --experimental-strip-types --test *", "npx tsc *", "npx shellcheck *"];
 /**
- * The companion runs the adapter scripts (`review.ts`, `retro.ts`, `journal.ts`)
+ * The companion runs the adapter scripts (`review.ts`, `retro.ts`, `session-log.ts`)
  * through node, and a project script is the same trust as the write access it
  * already has. The reviewer keeps the narrower test commands.
  */
@@ -277,9 +277,9 @@ export function companionHooks(payload: string, kiroHome: string, kiroCli: strin
 			timeout: 30,
 		},
 		{
-			name: "persona-agents-journal-end",
+			name: "persona-agents-session-log-end",
 			trigger: "SessionEnd",
-			action: { type: "command", command: nodeCommand(payload, "journal-end.ts", ["hook", kiro, `--kiro-cli=${kiroCli}`]) },
+			action: { type: "command", command: nodeCommand(payload, "session-log-end.ts", ["hook", kiro, `--kiro-cli=${kiroCli}`]) },
 			timeout: 10,
 		},
 	];
@@ -331,13 +331,21 @@ export function reviewerAgent(plan: Plan): Record<string, unknown> {
 	};
 }
 
-/** The tool-less journal writer agent. */
+/** Skill folders that carry our marker but are no longer shipped. */
+function retiredSkills(plan: Plan): string[] {
+	const root = join(plan.kiroHome, "skills");
+	if (!existsSync(root)) return [];
+	const shipped = new Set(plan.skills.map((skill) => basename(skill.dest)));
+	return readdirSync(root).filter((name) => !shipped.has(name) && existsSync(join(root, name, SKILL_MARKER)));
+}
+
+/** The tool-less session-log writer agent. */
 export function writerAgent(): Record<string, unknown> {
 	return {
 		name: "pa-writer",
-		description: "Writes one journal entry from the material the session-end safety net provides. No tools.",
+		description: "Writes one session log from the material the session-end safety net provides. No tools.",
 		prompt:
-			"You write one journal entry from the material you are given. Output only the entry, in markdown, at most 30 lines, plain and factual, no persona voice, never a persona's voice. Do not use tools.",
+			"You write one session log from the material you are given. Output only the entry, in markdown, at most 30 lines, plain and factual, no persona voice, never a persona's voice. Do not use tools.",
 		tools: [],
 		permissions: { rules: [] },
 	};
@@ -406,6 +414,7 @@ export function install(options: InstallOptions & { kiroCli?: string }): { ok: b
 	actions.push(`skills: ${plan.skills.length}`);
 	if (options.dryRun) {
 		for (const skill of plan.skills) actions.push(`  skill ${skill.name}: ${skill.status === "foreign" ? "back up and replace (--force)" : "install"}`);
+		for (const name of retiredSkills(plan)) actions.push(`  skill ${name}: remove (retired)`);
 		actions.push(`agents: ${AGENT_NAMES.join(", ")}`);
 		return { ok: true, error: "", plan, actions };
 	}
@@ -419,8 +428,13 @@ export function install(options: InstallOptions & { kiroCli?: string }): { ok: b
 	cpSync(join(options.root, "platforms", "kiro"), join(payload, "platforms", "kiro"), { recursive: true });
 	writeIfChanged(join(payload, "config.json"), `${JSON.stringify({ theme: plan.theme }, null, 2)}\n`, stamp);
 
-	// 2. Skills.
+	// 2. Skills. A folder that carries our marker but is no longer shipped is
+	// a retired skill: remove it, so no agent loads stale instructions.
 	mkdirSync(join(plan.kiroHome, "skills"), { recursive: true });
+	for (const name of retiredSkills(plan)) {
+		rmSync(join(plan.kiroHome, "skills", name), { recursive: true, force: true });
+		actions.push(`removed retired skill ${name}`);
+	}
 	for (const skill of plan.skills) {
 		if (skill.status === "foreign") renameSync(skill.dest, `${skill.dest}.bak-${stamp}`);
 		else if (existsSync(skill.dest)) rmSync(skill.dest, { recursive: true, force: true });

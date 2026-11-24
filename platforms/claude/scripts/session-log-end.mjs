@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// journal-end — the journal safety net for a companion session that ends
-// without a wrap-up.
+// session-log-end — the session-log safety net for a companion session that
+// ends without a wrap-up.
 //
-//   journal-end.mjs hook             SessionEnd hook: when this session has no
-//                                    journal entry, save a payload and start
+//   session-log-end.mjs hook             SessionEnd hook: when this session has
+//                                        no session log, save a payload and start
 //                                    the writer as a detached process. Returns
 //                                    at once (the SessionEnd budget is short).
-//   journal-end.mjs write <payload>  The detached writer: build the source
+//   session-log-end.mjs write <payload>  The detached writer: build the source
 //                                    text, run a small headless model, and
 //                                    write the entry if it is still missing.
 //
-// The source text is the session notes the session wrote, the compaction
+// The source text is the task notes the session wrote, the compaction
 // summaries that compact.mjs kept, and the tail of the transcript after the
 // last compaction. The writer session runs no agent and no tools, so the
 // plugin hooks do nothing in it.
@@ -21,7 +21,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readTranscript, stateDir } from "./compact.mjs";
-import { entryPath, findEntry, dayOf } from "./journal.mjs";
+import { isInside, taskDirs } from "../../shared/notes/folders.ts";
+import { entryPath, findEntry, dayOf } from "./session-log.mjs";
 import { projectDir } from "./notes-paths.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
@@ -34,15 +35,15 @@ const CAP_TAIL = 20_000;
 /** The last `max` characters of a text, marked when cut. */
 const tail = (text, max) => (text.length <= max ? text : `[...cut...]\n${text.slice(-max)}`);
 
-/** Session notes files the session wrote, in first-write order. */
-export function writtenSessionNotes(entries, notesDir) {
-	const prefix = join(notesDir, "sessions") + sep;
+/** Task notes files the session wrote, in first-write order. */
+export function writtenTaskNotes(entries, notesDir) {
+	const dirs = taskDirs(notesDir);
 	const paths = [];
 	for (const entry of entries) {
 		if (entry.isSidechain || entry.type !== "assistant" || !Array.isArray(entry.message?.content)) continue;
 		for (const block of entry.message.content) {
 			const path = block?.type === "tool_use" && ["Write", "Edit", "MultiEdit"].includes(block.name) ? block.input?.file_path : null;
-			if (typeof path === "string" && path.startsWith(prefix) && !paths.includes(path)) paths.push(path);
+			if (typeof path === "string" && isInside(dirs, path) && !paths.includes(path)) paths.push(path);
 		}
 	}
 	return paths;
@@ -72,13 +73,13 @@ export function conversationTail(entries) {
 /** The prompt for the writer model. */
 export function writerPrompt(payload, sources) {
 	return [
-		"Write a short journal entry for a finished Claude Code work session, from the material below.",
+		"Write a short session log for a finished Claude Code work session, from the material below.",
 		"Output only the entry, in this markdown format, at most 30 lines, plain and factual, no persona voice:",
 		"",
 		`# ${payload.day} ${payload.time} — <short title of the session>`,
 		"",
 		`- **Session:** ${payload.session}`,
-		`- **Session notes:** ${sources.notes.length ? sources.notes.map((n) => n.path).join(", ") : "none"}`,
+		`- **Task notes:** ${sources.notes.length ? sources.notes.map((n) => n.path).join(", ") : "none"}`,
 		"- **Written by:** the session-end safety net (no wrap-up)",
 		"",
 		"## Done",
@@ -87,7 +88,7 @@ export function writerPrompt(payload, sources) {
 		"",
 		"Use '- none' for an empty section. Name commits, files, and studies when the material names them.",
 		"",
-		...sources.notes.map((n) => `=== SESSION NOTES ${n.path} ===\n${n.text}`),
+		...sources.notes.map((n) => `=== TASK NOTES ${n.path} ===\n${n.text}`),
 		sources.summaries ? `=== COMPACTION SUMMARIES ===\n${sources.summaries}` : "",
 		sources.tail ? `=== CONVERSATION AFTER THE LAST COMPACTION ===\n${sources.tail}` : "",
 	].join("\n");
@@ -102,7 +103,7 @@ function hook(input, claudeArg) {
 	if (findEntry(notesDir, input.session_id, [dayOf(now), dayOf(yesterday)])) return;
 	const dir = stateDir();
 	mkdirSync(dir, { recursive: true });
-	const payloadFile = join(dir, `journal-${String(input.session_id).replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+	const payloadFile = join(dir, `session-log-${String(input.session_id).replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
 	writeFileSync(
 		payloadFile,
 		JSON.stringify({ session: input.session_id, transcript: input.transcript_path, notesDir, reason: input.reason, at: now.toISOString() }),
@@ -120,7 +121,7 @@ function hook(input, claudeArg) {
 	const child = spawn(process.execPath, args, {
 		detached: true,
 		stdio: "ignore",
-		env: { ...process.env, PERSONA_AGENTS_JOURNAL_WRITER: "1" },
+		env: { ...process.env, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" },
 	});
 	child.unref();
 }
@@ -133,7 +134,7 @@ function write(payloadFile, command = "claude") {
 		const path = entryPath(payload.notesDir, payload.session, at);
 		if (existsSync(path)) return;
 		const entries = readTranscript(payload.transcript);
-		const notes = writtenSessionNotes(entries, payload.notesDir)
+		const notes = writtenTaskNotes(entries, payload.notesDir)
 			.filter((path) => existsSync(path))
 			.map((path) => ({ path, text: tail(readFileSync(path, "utf8"), CAP_NOTES) }));
 		const summariesFile = join(dirname(payloadFile), `${String(payload.session).replace(/[^A-Za-z0-9_-]/g, "_")}.summaries.md`);
@@ -169,7 +170,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	if (mode === "hook") {
 		const input = JSON.parse(readFileSync(0, "utf8"));
 		const claudeArg = process.argv.find((value) => value.startsWith("--claude="));
-		if (input.agent_type === AGENT_TYPE && input.session_id && !process.env.PERSONA_AGENTS_JOURNAL_WRITER) hook(input, claudeArg);
+		if (input.agent_type === AGENT_TYPE && input.session_id && !process.env.PERSONA_AGENTS_SESSION_LOG_WRITER) hook(input, claudeArg);
 	} else if (mode === "write" && process.argv[3]) {
 		// The test seam: `--claude=<path>` replaces the claude binary. The hook never passes it,
 		// and an argument, unlike an env var, cannot come from a project settings env block.

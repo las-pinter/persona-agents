@@ -31,11 +31,11 @@ Flags:
 - `--dry-run` prints the plan and writes nothing.
 - `--force` backs up and replaces a skill folder the installer does not own.
 - `--kiro-home=<dir>` overrides `$KIRO_HOME`; `--kiro-cli=<path>` overrides the
-  `kiro-cli` command for the version check and for the session-end journal
+  `kiro-cli` command for the version check and for the session-end session-log
   writer, which the installer wires into the hook.
 
 The environment variable `PERSONA_AGENTS_WRITER_MODEL` picks the model of that
-journal writer.
+session-log writer.
 
 The installer (`install.ts`) writes:
 
@@ -76,12 +76,12 @@ kiro-cli --agent pa-companion
     session id, read list.
   - `session-store.ts` — the V3 `messages.jsonl` reader and the neutral entry
     mapping.
-  - `journal.ts` — this session's journal path.
+  - `session-log.ts` — this session's session-log path.
   - `change.ts`, `review.ts`, `review-record.ts`, `state.ts` — the review brief,
     the change key, the verdict record, and the commit gate store.
   - `gate.ts` — the doctrine decision in two hook shapes.
   - `compact.ts` — the pre-compaction manifest and the post-compaction reload.
-  - `journal-end.ts` — the SessionEnd safety net and its detached writer.
+  - `session-log-end.ts` — the SessionEnd safety net and its detached writer.
   - `retro.ts` — the session facts.
 - **Agents**: the `pa-reviewer` prompt is the shared
   `content/professions/reviewer.md`, read from the payload at install time,
@@ -113,7 +113,7 @@ The payload keeps the repository layout so the relative imports between
   that writes history or publishes (commit, tag, push). Reading git history is
   allowed. A `python` or `node` heredoc body runs as code the gate does not
   read, as `python -c` already did.
-- **`pa-writer`** — the journal writer. Tools `[]`; no permissions. It writes
+- **`pa-writer`** — the session-log writer. Tools `[]`; no permissions. It writes
   the entry text from the material the SessionEnd net gives it.
 
 ## Hooks
@@ -129,7 +129,7 @@ session.
 | companion | `Stop` | `review-record.ts`: scan the V3 store for a `sub_agent_complete` from `pa-reviewer` and store its verdict against the change key. |
 | companion | `PreCompact` | `compact.ts pre`: store the manifest and print guidance for the summarizer. |
 | companion | `PostCompact` | `compact.ts post`: store the summary and print the ordered reload list. |
-| companion | `SessionEnd` | `journal-end.ts hook`: detach the journal writer when the session has no entry. |
+| companion | `SessionEnd` | `session-log-end.ts hook`: detach the session-log writer when the session has no entry. |
 | reviewer | `PreToolUse` | `gate.ts pretool`: deny a shell write, history command, or publish command. Reads pass. |
 
 Kiro passes the event as JSON on stdin with `session_id`, `hook_event_name`,
@@ -184,23 +184,23 @@ The native permission rules never give the companion a blanket shell allow.
 
 ## Compaction
 
-`PreCompact` stores a manifest — the session notes, the skills the session
+`PreCompact` stores a manifest — the task notes, the skills the session
 used, and the documents to reload — and prints guidance for Kiro's summarizer.
 `PostCompact` appends the summary to
 `<state>/compact/<session>.summaries.md` and prints the ordered reload list,
 which Kiro adds to the conversation. The list ends with a `load_resource` line
 for a used skill and says not to re-read working source files.
 
-## Journal
+## Session logs
 
 The good path is the `wrap-up` skill:
-`node --experimental-strip-types --no-warnings <payload>/platforms/kiro/scripts/journal.ts
+`node --experimental-strip-types --no-warnings <payload>/platforms/kiro/scripts/session-log.ts
 path --session=<id>` names this session's entry, and `fs_write` writes it.
 Each session has its own file.
 
 The safety net runs on `SessionEnd` for an interactive exit. When the session
 has no entry and has material, it writes a payload and detaches
-`journal-end.ts write`; that process runs
+`session-log-end.ts write`; that process runs
 `kiro-cli chat --agent pa-writer --no-interactive --model claude-haiku-4.5
 <prompt>` and writes the entry only when it still does not exist. A
 `--no-interactive` or scripted session gets no SessionEnd, so it gets no entry:
@@ -213,7 +213,7 @@ run the wrap-up there. A failed writer is silent by design.
 --session=<id>`, which reads the V3 store and the adapter state: tool calls,
 files changed, denied calls, compactions, stored review verdicts, permission
 decisions, credit split, context usage, sub-agent runs, hook invocations, the
-journal entry, and the model. It writes no files and prints the instruction
+session log, and the model. It writes no files and prints the instruction
 plus a `## Session facts` table.
 
 ## Permissions
@@ -226,7 +226,7 @@ and `subagent`; an unmatched call is `ask`.
   write the project and `~/agent-notes`; it may load any installed skill and
   spawn `pa-reviewer`; it may run the read-only git commands, the test
   commands, and a node script (the adapter scripts include the review brief,
-  the retro facts, and the journal path) without a prompt.
+  the retro facts, and the session-log path) without a prompt.
 - Both agents deny secret paths: `**/.env`, `**/.env.*`, `**/.ssh/**`,
   `**/.aws/**`, `**/*.pem`, `**/id_rsa*`, `**/.netrc`.
 - The companion may not write the payload, the `pa-*` agent files, the skill
@@ -248,13 +248,13 @@ tune the rules; a new session picks the change up.
 - **The secret deny list covers templates.** `**/.env.*` also denies
   `.env.example` and `.env.sample`. Have the owner copy the template into the
   project or loosen the rule when the companion needs to read one.
-- **SessionEnd is interactive only.** A headless run gets no automatic journal
-  entry; use the wrap-up skill.
+- **SessionEnd is interactive only.** A headless run gets no automatic session
+  log; use the wrap-up skill.
 - **No PostToolUse for a sub-agent run.** Verdicts are recorded by scanning the
   session store on `Stop`.
 - **The V3 session store is undocumented.** The reader locates
   `sessions/*/sess_<id>/messages.jsonl`, ignores unknown payloads, and fails
-  soft. The retro and journal lose their source if the layout changes.
+  soft. The retro and session log lose their source if the layout changes.
 - **Kiro skills cannot fork.** The review skill starts `pa-reviewer` as a
   sub-agent instead of a fork.
 - **`chat.defaultAgent` is not changed.** A default that names no agent is

@@ -3,7 +3,7 @@
  *
  * Three skills carry harness-specific mechanics: `review` (a Claude fork that
  * Kiro runs as a sub-agent), `retro` (a Claude transcript that Kiro reads from
- * its session store), and `wrap-up` (a Claude journal command that Kiro runs
+ * its session store), and `wrap-up` (a Claude session-log command that Kiro runs
  * from its own script). Each starts with a branch that checks the system
  * context for `Running in Kiro CLI` and points at `references/kiro.md`.
  *
@@ -29,7 +29,7 @@ const ROOT_TOKEN = "{{PERSONA_AGENTS_KIRO_ROOT}}";
 const harnessBound: Record<string, RegExp> = {
 	review: /review\.ts/,
 	retro: /retro\.ts/,
-	"wrap-up": /journal\.ts/,
+	"wrap-up": /session-log\.ts/,
 };
 
 /** The skill folder names that hold a SKILL.md. */

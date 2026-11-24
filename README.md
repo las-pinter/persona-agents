@@ -66,7 +66,7 @@ The settings snippet ([platforms/claude/settings/recommended.json](platforms/cla
 does three things:
 
 - sets auto-compaction to start at 40% of the context window;
-- gives Claude Code access to `~/agent-notes`, where the notes and journals live;
+- gives Claude Code access to `~/agent-notes`, where the notes and session logs live;
 - asks before `git push` and the write actions of `gh pr`, `gh run`, and
   `gh release`; their read actions (`view`, `list` / `ls`, `status`, `diff`,
   `checks`, `search`) pass.
@@ -145,19 +145,19 @@ the gate allows a plain git command, and a publish or a git command mixed with
 other work asks. An unreviewed
 non-trivial commit, a push, or a pull request shows Kiro's own permission
 prompt; a change of at most two files and forty changed lines counts as
-trivial. The automatic journal entry needs an interactive exit; a headless run
+trivial. The automatic session log needs an interactive exit; a headless run
 gets none, so run the wrap-up skill there. The
 [Kiro adapter docs](platforms/kiro/README.md) hold the hook and gate details.
 
 ## How the companion works
 
 - **Session start.** A hook gives the companion its read list: the project
-  rules and summary, the last three days of the project journal, any open
-  session notes, and unfinished studies.
+  rules and summary, the last three days of the project session logs, any open
+  task notes, and unfinished studies.
 - **Planning.** A non-trivial task goes through an interview (questions until
   every decision is settled) and a study (goal, decisions, tasks, risks,
   acceptance criteria). You accept the study before any code is written.
-- **Session notes.** A task with more than a few steps gets a working file:
+- **Task notes.** A task with more than a few steps gets a working file:
   the plan with step status, the decisions, and the pinned documents. The plan
   changes there first, then in the code.
 - **Review.** Before a non-trivial commit, the companion runs a read-only
@@ -169,12 +169,12 @@ gets none, so run the wrap-up skill there. The
 - **Commits.** The companion commits finished tasks without a prompt. A push, a
   pull request, or a release always asks you.
 - **Compaction.** Before a compaction, the adapter records the skills the
-  session used, the session notes, and the pinned documents. After it, the
+  session used, the task notes, and the pinned documents. After it, the
   companion reloads them before it continues — so the plan, the skills, and the
   key documents survive.
 - **Wrap-up.** On Pi `/skill:wrap-up`, on Claude Code
   `/persona-agents:wrap-up`, on Kiro CLI `/wrap-up`; each writes this session's
-  journal entry.
+  session log.
   Each session writes its own file, so parallel sessions never collide. If you
   exit without a wrap-up, a background writer creates a shorter entry for you
   (on Pi only when you quit, not on `/new` or `/resume`; on Kiro CLI only after
@@ -186,6 +186,26 @@ gets none, so run the wrap-up skill there. The
 Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
 the repository's folder name (shared by all its worktrees), or `common`
 outside a repository.
+
+## Notes folders after an update
+
+Task notes live in `tasks/` and session logs in `session-logs/` inside each
+project notes folder. Earlier releases used two other folder names; the
+current release still reads them, and the next release stops. First update
+every adapter you use (Claude Code, Pi, Kiro CLI), so none of them writes to
+the old folders again. Then move them once per project notes folder (nothing
+moves them for you):
+
+```bash
+cd ~/agent-notes/project-notes/<project>
+mkdir -p tasks session-logs
+mv -n sessions/* tasks/ && rmdir sessions             # legacy-names
+mv -n journal/* session-logs/ && rmdir journal        # legacy-names
+```
+
+`mv -n` never overwrites. When an old folder is not empty afterwards, its
+remaining entries have a same-named file or day folder in the new folder;
+merge those by hand.
 
 ## Uninstall
 
@@ -200,7 +220,7 @@ outside a repository.
   hold a `.persona-agents.json` marker. The installer's `.bak-<timestamp>`
   copies can go too.
 
-Your notes and journals in `~/agent-notes/` are yours; no uninstall touches
+Your notes and session logs in `~/agent-notes/` are yours; no uninstall touches
 them.
 
 ## The Companions
@@ -221,7 +241,7 @@ output varies between runs.
 | `catcrew` | **Chairman Meow** | Sits on keyboard. Types with paws. Demands treats. Takes credit for everything — and now deserves it |
 | `fantasy` | **The Quest Giver** | Left the town square to go on the QUESTS himself. Speaks in CAPITAL LETTERS |
 
-The persona sets the voice in chat only. Code, commits, notes, and journals
+The persona sets the voice in chat only. Code, commits, notes, and session logs
 stay persona-free.
 
 ## Contributing

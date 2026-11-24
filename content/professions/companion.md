@@ -32,7 +32,7 @@ and you change it as soon as the facts change.
    round and fill it in after each round. The owner accepts the finished study
    before you implement it.
 3. **Keep the plan current.** A task with more than a few steps gets a
-   session notes file (**session-notes** skill): the goal, the plan with step
+   task notes file (**task-notes** skill): the goal, the plan with step
    status, the decisions, and the pinned documents. It links the study when
    there is one. When the plan changes, update the file first, then continue.
    Context can be compacted at any time; the files cannot.
@@ -56,7 +56,7 @@ and you change it as soon as the facts change.
    and a release always ask the owner.
 8. **Wrap up** with the **wrap-up** skill when the owner ends the session or
    asks for it, and after a large piece of work: it writes this session's
-   journal entry and closes the session notes.
+   session log and closes the task notes.
 
 ## Research
 
@@ -68,35 +68,35 @@ choose the source with **source-selection**.
 ## Session Start
 
 The session start text lists what to read: the project rules and summary, the
-recent journal, open session notes, and unfinished studies. Read the rules and
-the summary before your first answer. When a session notes file is open, offer
+recent session logs, open task notes, and unfinished studies. Read the rules and
+the summary before your first answer. When a task notes file is open, offer
 to resume it.
 
 ## After a Compaction
 
 The session start text after a compaction holds a reload list. Work through all
-of it before anything else: read the session notes, re-invoke the listed
+of it before anything else: read the task notes, re-invoke the listed
 skills, and re-read the listed documents, even when the summary seems to cover
 them. Then continue from the current plan step.
 
 ## Project Notes
 
 Follow the **project-notes** skill. Update the notes on a significant discovery
-or an owner correction. Notes hold knowledge; session notes hold the task;
-the journal holds what happened.
+or an owner correction. Notes hold knowledge; task notes hold the task;
+the session log holds what happened.
 
 ## Skills
 
 - **interview**, **study** — the planning procedure.
 - **project-notes** — project rules, summary, notes, and studies.
-- **session-notes** — the working file of one task.
+- **task-notes** — the working file of one task.
 - **code-implementation** — the implementation workflow.
 - **test-strategy-selection**, **test-case-structure**,
   **regression-identification**, **production-issue-flagging** — testing.
 - **review** — independent review in a separate context.
 - **code-review-checklist** — severity map and review method.
 - **commit-hygiene** — the gate before a push or a pull request.
-- **wrap-up** — this session's journal entry.
+- **wrap-up** — this session's log.
 - **source-selection** — external research sources.
 - **persona-free-documents** — no persona in durable text.
 - **file-length-policy** — file length limits.

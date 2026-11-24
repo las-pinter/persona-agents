@@ -12,9 +12,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { recentEntries } from "../platforms/claude/scripts/journal.mjs";
+import { recentEntries } from "../platforms/claude/scripts/session-log.mjs";
 import { startupContext } from "../platforms/claude/scripts/startup.mjs";
-import { openSessionNotes, unfinishedStudies } from "../platforms/shared/notes/notes.ts";
+import { openTaskNotes, unfinishedStudies } from "../platforms/shared/notes/notes.ts";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "startup.mjs");
 
@@ -58,29 +58,29 @@ describe("startup hook: read list", () => {
 		});
 	});
 
-	test("the journal list holds the entries of the last three day folders only", () => {
+	test("the session-log list holds the entries of the last three day folders only", () => {
 		withNotes(({ dir }) => {
 			for (const day of ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]) {
-				write(path.join(dir, "journal", day, "0900-s1.md"), "x");
+				write(path.join(dir, "session-logs", day, "0900-s1.md"), "x");
 			}
-			write(path.join(dir, "journal", "2026-01-04", "1000-s2.md"), "x");
-			write(path.join(dir, "journal", "notes.txt"), "not a day");
+			write(path.join(dir, "session-logs", "2026-01-04", "1000-s2.md"), "x");
+			write(path.join(dir, "session-logs", "notes.txt"), "not a day");
 			const entries = recentEntries(dir, 3).map((file) => path.relative(dir, file));
 			assert.deepEqual(entries, [
-				path.join("journal", "2026-01-02", "0900-s1.md"),
-				path.join("journal", "2026-01-03", "0900-s1.md"),
-				path.join("journal", "2026-01-04", "0900-s1.md"),
-				path.join("journal", "2026-01-04", "1000-s2.md"),
+				path.join("session-logs", "2026-01-02", "0900-s1.md"),
+				path.join("session-logs", "2026-01-03", "0900-s1.md"),
+				path.join("session-logs", "2026-01-04", "0900-s1.md"),
+				path.join("session-logs", "2026-01-04", "1000-s2.md"),
 			]);
 		});
 	});
 
-	test("only session notes with an open status are listed", () => {
+	test("only task notes with an open status are listed", () => {
 		withNotes(({ dir }) => {
-			write(path.join(dir, "sessions", "2026-01-01-open.md"), "# a\n\n- **Status:** open\n");
-			write(path.join(dir, "sessions", "2026-01-01-done.md"), "# b\n\n- **Status:** done\n");
+			write(path.join(dir, "tasks", "2026-01-01-open.md"), "# a\n\n- **Status:** open\n");
+			write(path.join(dir, "tasks", "2026-01-01-done.md"), "# b\n\n- **Status:** done\n");
 			assert.deepEqual(
-				openSessionNotes(dir).map((file) => path.basename(file)),
+				openTaskNotes(dir).map((file) => path.basename(file)),
 				["2026-01-01-open.md"],
 			);
 		});

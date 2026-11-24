@@ -2,8 +2,8 @@
 // startup — Claude Code SessionStart hook (startup, clear) for the companion.
 //
 // It sends the companion its startup read list as additional context: the
-// project notes folder, the project rules and summary, the last three journal
-// days, the open session notes, and the unfinished studies. It sends paths and
+// project notes folder, the project rules and summary, the last three session-log
+// days, the open task notes, and the unfinished studies. It sends paths and
 // short facts, not file contents, so the text stays far under the 10,000-
 // character hook cap; the companion reads the files itself.
 //

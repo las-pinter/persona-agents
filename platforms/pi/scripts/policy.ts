@@ -94,7 +94,7 @@ export interface PolicyEnv {
 	cwd: string;
 	/** The owner's home folder. */
 	home: string;
-	/** The project notes folder, where notes and journals live. */
+	/** The project notes folder, where notes and session logs live. */
 	notesDir: string;
 	/** The policy files themselves: a floor forbids writing them. */
 	policyFiles?: string[];

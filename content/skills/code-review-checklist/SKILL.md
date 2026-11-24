@@ -100,7 +100,7 @@ runs through the real engine. A test over a mirror or a copy of the engine
 does not close the fix.
 
 The evidence has three items: the command, the verdict it returned, and the
-session-notes line that records it.
+task-notes line that records it.
 
 The command forms live in the project's `tech/` notes (see the
 **project-notes** skill).

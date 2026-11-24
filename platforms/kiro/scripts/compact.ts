@@ -8,7 +8,7 @@
  *                     conversation).
  *
  * The manifest is built from the V3 session store: the skills the session
- * loaded (`load_resource`), the session notes file it wrote last, and the
+ * loaded (`load_resource`), the task notes file it wrote last, and the
  * documents it read (the project rules and summary, the linked study, the
  * pinned paths). Working source files are not reloaded.
  *

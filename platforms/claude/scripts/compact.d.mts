@@ -8,7 +8,7 @@ export interface Scan {
 }
 
 export interface Manifest {
-	sessionNotes: string;
+	taskNotes: string;
 	skills: string[];
 	docs: string[];
 	/** The scan counts recorded before the compaction, for the canary and metrics. */

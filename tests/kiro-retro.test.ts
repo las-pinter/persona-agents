@@ -3,7 +3,7 @@
  *
  * A fixture V3 session store and adapter state stand in for a real session:
  * tool calls, a denial, a reviewer verdict, credits, context usage, compaction
- * metrics, permission decisions, and a journal entry. The retro writes nothing.
+ * metrics, permission decisions, and a session log. The retro writes nothing.
  *
  * Run: node --experimental-strip-types --test tests/kiro-retro.test.ts
  */
@@ -37,7 +37,7 @@ interface Fixture {
 	home: string;
 	cwd: string;
 	notes: string;
-	journal: string;
+	sessionLog: string;
 }
 
 function fixture(root: string): Fixture {
@@ -46,18 +46,18 @@ function fixture(root: string): Fixture {
 	const cwd = path.join(root, "work");
 	const notes = projectDir(cwd, home);
 	fs.mkdirSync(cwd, { recursive: true });
-	fs.mkdirSync(path.join(notes, "sessions"), { recursive: true });
-	const sessionNotes = path.join(notes, "sessions", "2026-11-20-task.md");
-	fs.writeFileSync(sessionNotes, "# Task\n");
+	fs.mkdirSync(path.join(notes, "tasks"), { recursive: true });
+	const taskNotes = path.join(notes, "tasks", "2026-11-20-task.md");
+	fs.writeFileSync(taskNotes, "# Task\n");
 	const day = "2026-11-20";
-	const journal = path.join(notes, "journal", day, `1200-${sessionId}.md`);
-	fs.mkdirSync(path.dirname(journal), { recursive: true });
-	fs.writeFileSync(journal, "# entry\n");
+	const sessionLog = path.join(notes, "session-logs", day, `1200-${sessionId}.md`);
+	fs.mkdirSync(path.dirname(sessionLog), { recursive: true });
+	fs.writeFileSync(sessionLog, "# entry\n");
 	const dir = path.join(kiro, "sessions", "hash", sessionId);
 	fs.mkdirSync(dir, { recursive: true });
 	const payloads = [
 		{ type: "tool_call", toolName: "read_file", args: { path: path.join(notes, "tech", "a.md") } },
-		{ type: "tool_call", toolName: "fs_write", args: { path: sessionNotes, text: "# Task" } },
+		{ type: "tool_call", toolName: "fs_write", args: { path: taskNotes, text: "# Task" } },
 		{ type: "tool_call", toolName: "execute_bash", args: { command: "npm test" } },
 		{ type: "tool_result", status: "denied", title: "Run Command", content: "blocked" },
 		{ type: "sub_agent_start", subSessionId: "sub-1", subAgentName: "pa-reviewer", prompt: "Change key: 0123456789abcdef" },
@@ -79,7 +79,7 @@ function fixture(root: string): Fixture {
 		`${JSON.stringify({ session: sessionId, skills: 2, docs: 3 })}\n${JSON.stringify({ session: otherSession })}\n`,
 	);
 	fs.writeFileSync(path.join(state, "compact", `${sessionId}.summaries.md`), "summary\n");
-	return { kiro, home, cwd, notes, journal };
+	return { kiro, home, cwd, notes, sessionLog };
 }
 
 describe("kiro retro: the facts", () => {
@@ -97,7 +97,7 @@ describe("kiro retro: the facts", () => {
 			assert.match(result.facts, /context usage: 81\.5%/);
 			assert.match(result.facts, /sub-agent runs: 1 \(reviewer 1\)/);
 			assert.match(result.facts, /hook calls: kiro-session-start ×1/);
-			assert.match(result.facts, new RegExp(f.journal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+			assert.match(result.facts, new RegExp(f.sessionLog.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 			assert.match(result.facts, /model: claude-haiku-4\.5/);
 			assert.match(result.instruction, /blameless retro/);
 		});

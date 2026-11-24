@@ -60,7 +60,7 @@ owns the final-tree run and the squash run.
 ### 4. Plan and Docs State
 
 Confirm the plan is marked done with the commit IDs. Confirm the project
-notes and the journal record the work.
+notes and the session logs record the work.
 
 ### 5. Clean Tree
 

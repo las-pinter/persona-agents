@@ -24,13 +24,13 @@ of `content/` names no harness.
   - `context.ts` — the Pi platform note over the shared prompt builder.
   - `policy.ts` — the permission gate: floors, rules, grants, doctrine.
   - `commands.ts` — the `/permissions` argument grammar.
-  - `paths.ts` — the package paths; `journal-writer.ts` — the detached writer.
+  - `paths.ts` — the package paths; `session-log-writer.ts` — the detached writer.
 - **Shared modules** (`platforms/shared/`): the logic every adapter uses.
   - `shell/` — the shell lexer, the nested construct grammar, and the gate
     classification. The Claude doctrine hook and the Pi gate both import it, so
     one parser owns every safety decision.
-  - `notes/` — the notes tree, the startup read list, the journal paths, and
-    the journal safety-net material.
+  - `notes/` — the notes tree, the startup read list, the session-log paths, and
+    the session-log safety-net material.
   - `compaction/` — the reload manifest.
   - `review/` — the change, the brief, the verdict, and the commit gate.
   - `retro/` — the session facts and the retro instruction.
@@ -69,11 +69,11 @@ user enabled (MCP, other extensions) stay enabled.
 | `tool_call` | The gate. Allow, ask with `ctx.ui.select`, or block. A deny from the hook wins; there is no second permission system under it. An allowed `git commit` of an unreviewed, non-trivial change asks first. A commit chain whose other parts are inert (a session cd, a read, a formatter, a pipe filter, a quoted commit heredoc) passes for the companion; Pi's local-shell allowance is unchanged, so the cd rule adds no ask here. |
 | `session_before_compact` | Build the reload manifest from the branch and save it, then let Pi summarize with the manifest's focus. |
 | `session_compact` | Record the compaction, and send the reload list at once: steered mid-run, stored when idle. |
-| `session_shutdown` | On `quit`, start the detached journal writer when the session has no entry. |
+| `session_shutdown` | On `quit`, start the detached session-log writer when the session has no entry. |
 
 The read list is paths and short facts, never contents: the companion reads
 the files itself. `notes.ts` builds it from the project rules, the summary,
-the last three journal days, the open session notes, and the unfinished
+the last three session-log days, the open task notes, and the unfinished
 studies.
 
 ## Review
@@ -135,7 +135,7 @@ silently.
 
 Every persona-agents surface prints one line in the transcript: the review tool
 result, the `/review` notice, the commit-gate message, `/permissions`, `/retro`,
-the `journal` tool result, and the read and reload lists. `scripts/summary.ts`
+the `session-log` tool result, and the read and reload lists. `scripts/summary.ts`
 builds each line from the text the surface already prints, and the renderers in
 the extension return it; `ctrl+o` (`app.tools.expand`) opens the full text. A
 long line is truncated to the width, never wrapped, so one surface is one row.
@@ -152,13 +152,13 @@ again:
 
 1. **`session_before_compact`** builds a manifest from Pi's structured branch
    entries — never by scraping a transcript: the skills the session read or
-   named (`…/skills/<name>/SKILL.md`, `/skill:<name>`), the active session
+   named (`…/skills/<name>/SKILL.md`, `/skill:<name>`), the active task
    notes file, and the documents to reload (project rules and summary, the
    notes it read, the linked study, the pinned paths). The notes file is found
    by the session id on its `Sessions` line, then the last file the session
    wrote, then the only open notes file.
 2. The same call adds a **focus to Pi's own summarizer**: keep the current
-   task, the plan step, and the open decisions, and name the session notes path
+   task, the plan step, and the open decisions, and name the task notes path
    verbatim. Pi's `session_before_compact` cannot append instructions, so the
    extension calls the exported
    `compact(preparation, model, apiKey, headers, instructions, signal)` instead
@@ -167,7 +167,7 @@ again:
    the files.
 3. **`session_compact`** sends the reload list immediately: `deliverAs:
    "steer"` when a turn is running, a stored message when the session is idle.
-   The list is ordered (session notes, skills, documents) and ends with "do not
+   The list is ordered (task notes, skills, documents) and ends with "do not
    re-read working source files".
 
 The manifest follows the branch: it is built from the entries that are actually
@@ -177,21 +177,21 @@ read from the session manager at the moment of use, so an in-tree branch
 cannot leave a stale id in the lookup. The profession, persona, and platform note are prompt
 sections rebuilt every run, so they are never part of what compaction replaces.
 
-## Journal
+## Session logs
 
 A session that ends without a wrap-up still leaves an entry.
 
-- **The good path** is the `wrap-up` skill: `journal` with `action: "path"`
+- **The good path** is the `wrap-up` skill: `session-log` with `action: "path"`
   gives this session's entry path (today's or yesterday's entry if one exists,
   else a new one), then `action: "write"` saves the whole entry. The tool writes
-  the standard format; nothing else in the plugin touches the journal tree.
+  the standard format; nothing else in the plugin touches the session-log tree.
 - **The safety net** runs on `session_shutdown` with reason `quit`, and only for
   the companion. If the session has no entry and has material, it writes a
-  payload to `<pi agent dir>/persona-agents/journal-<session>.json` and detaches
-  `node --experimental-strip-types platforms/pi/scripts/journal-writer.ts`. The
+  payload to `<pi agent dir>/persona-agents/session-log-<session>.json` and detaches
+  `node --experimental-strip-types platforms/pi/scripts/session-log-writer.ts`. The
   writer runs one headless Pi request (`-p -nt --no-session`, no tools), and
   writes the entry only when it still does not exist. The material is capped:
-  8k characters of session notes, 20k of compaction summaries, 20k of the
+  8k characters of task notes, 20k of compaction summaries, 20k of the
   conversation after the last compaction. A failure is silent by design.
 - A `/new`, `/resume`, or `/reload` does not trigger the writer: those end a
   runtime, not a session.
@@ -201,7 +201,7 @@ A session that ends without a wrap-up still leaves an entry.
 `/retro` is print-only. It reads the facts rather than the model's memory: the
 decisions log for this session (`verdict`, `source`, `reason` per tool call),
 the tool calls and changed files from the branch entries, the compactions, the
-stored review verdicts, and the journal entry when one exists.
+stored review verdicts, and the session log when one exists.
 `platforms/shared/retro/retro.ts` does the counting and the caps; the command
 sends the facts plus the instruction to write nothing durable.
 

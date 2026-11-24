@@ -25,8 +25,8 @@ Every line must earn its place. The companion reads and writes them.
 │       ├── releases/<version>.md      (one note per release)
 │       ├── audit/<slug>.md            (one note per audit)
 │       ├── rules/<slug>.md            (one rule per file)
-│       ├── sessions/YYYY-MM-DD-<slug>.md  (session-notes skill)
-│       ├── journal/YYYY-MM-DD/<HHMM>-<session>.md  (wrap-up skill)
+│       ├── tasks/YYYY-MM-DD-<slug>.md  (task-notes skill)
+│       ├── session-logs/YYYY-MM-DD/<HHMM>-<session>.md  (wrap-up skill)
 │       └── studies/
 │           ├── index.md
 │           ├── legacy_studies/
@@ -74,7 +74,7 @@ task read happens only when the task names the note. The one exception is
 `glossary.md`: read it before naming a domain term, even when no task names it.
 
 The project notes read at startup are the `rules/` folder and `summary.md`.
-The session start text also lists the recent journal and the open session
+The session start text also lists the recent session logs and the open task
 notes; read what it lists. No other note is a startup read. Archived studies live in
 `studies/legacy_studies/`. Read one only when the task names it. Never migrate
 one back.
@@ -108,14 +108,14 @@ retire one rule or merge two rules in the same edit. Then write the new rule.
 
 1. Read the project `rules/` folder in full, in file-name order.
 2. Read `summary.md` in full.
-3. Read the journal entries and open session notes the session start text
+3. Read the session logs and open task notes the session start text
    lists.
 4. Read `studies/index.md` and one `status.md` only when the task names a study.
 5. Read every other note only when a task names it, except `glossary.md` (see
    the READ rule).
 
 **Mid-session duty.** Write, update, or retire a rule in the session that finds
-it. Record the reason in the session notes.
+it. Record the reason in the task notes.
 
 **Startup guard.** Run it after the folder read and before the first task.
 Count the rules files. Count their total lines. Re-read each rule against the
@@ -292,14 +292,14 @@ Do not update on every commit. Read the note, make targeted changes, write the
 file with the file-write tool, and do not expand it unnecessarily.
 
 **Bug and feature completion** — a bug note lives in `bugs/` only while the bug
-is open. When the bug is resolved, remove the note; the journals hold the
+is open. When the bug is resolved, remove the note; the session logs hold the
 history. When a feature ships, its note may be removed or consolidated.
 
-## Integration with Journals
+## Integration with Session Logs
 
-- The journal lives in the project folder, under `journal/<day>/`, one
+- The session logs live in the project folder, under `session-logs/<day>/`, one
   persona-free entry per session (the **wrap-up** skill writes it).
-- Journals record activity. Project notes store intelligence.
+- Session logs record activity. Project notes store intelligence.
 
 ## Related Skills
 

@@ -1,18 +1,18 @@
 /**
- * The journal safety net: what a session leaves behind when it ends without a
+ * The session-log safety net: what a session leaves behind when it ends without a
  * wrap-up.
  *
  * The wrap-up skill is the good path. When it does not run, the adapter
- * captures the material a short entry needs — the session notes the session
+ * captures the material a short entry needs — the task notes the session
  * wrote, the compaction summaries, and the conversation after the last
  * compaction — and hands it to a detached writer with no tools. The writer
  * never edits code; it only writes one markdown entry.
  *
- * Caps keep the payload small: a journal entry cannot quote a whole session.
+ * Caps keep the payload small: a session log cannot quote a whole session.
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join, sep } from "node:path";
+import { isInside, taskDirs } from "./folders.ts";
 
 /** The part of a Pi session entry this module reads, plus a compaction summary. */
 export interface EntryLike {
@@ -51,9 +51,9 @@ export function tail(text: string, max: number): string {
 	return text.length <= max ? text : `[...cut...]\n${text.slice(-max)}`;
 }
 
-/** The session notes files the session wrote, in first-write order. */
-export function writtenSessionNotes(entries: EntryLike[], notesDir: string): string[] {
-	const prefix = join(notesDir, "sessions") + sep;
+/** The task notes files the session wrote, in first-write order. */
+export function writtenTaskNotes(entries: EntryLike[], notesDir: string): string[] {
+	const dirs = taskDirs(notesDir);
 	const paths: string[] = [];
 	for (const entry of entries) {
 		if (entry.type !== "message" || entry.message?.role !== "assistant" || !Array.isArray(entry.message.content)) continue;
@@ -62,7 +62,7 @@ export function writtenSessionNotes(entries: EntryLike[], notesDir: string): str
 			if (candidate?.type !== "toolCall") continue;
 			if (!["write", "edit", "patch", "apply_patch"].includes(String(candidate.name))) continue;
 			const path = (candidate.arguments as { path?: unknown } | undefined)?.path;
-			if (typeof path === "string" && path.startsWith(prefix) && !paths.includes(path)) paths.push(path);
+			if (typeof path === "string" && isInside(dirs, path) && !paths.includes(path)) paths.push(path);
 		}
 	}
 	return paths;
@@ -107,7 +107,7 @@ export function conversationTail(entries: EntryLike[]): string {
 
 /** Everything a short entry can be written from. */
 export function sources(entries: EntryLike[], notesDir: string): Sources {
-	const notes = writtenSessionNotes(entries, notesDir)
+	const notes = writtenTaskNotes(entries, notesDir)
 		.filter((path) => existsSync(path))
 		.map((path) => ({ path, text: tail(readFileSync(path, "utf8"), CAP_NOTES) }));
 	const summaries = tail(compactionSummaries(entries).join("\n\n---\n\n"), CAP_SUMMARIES);
@@ -127,13 +127,13 @@ export function writerPrompt(payload: Payload, material: Sources): string {
 	const day = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 	const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
 	return [
-		"Write a short journal entry for a finished coding session, from the material below.",
+		"Write a short session log for a finished coding session, from the material below.",
 		"Output only the entry, in this markdown format, at most 30 lines, plain and factual, no persona voice:",
 		"",
 		`# ${day} ${time} — <short title of the session>`,
 		"",
 		`- **Session:** ${payload.session}`,
-		`- **Session notes:** ${material.notes.length ? material.notes.map((note) => note.path).join(", ") : "none"}`,
+		`- **Task notes:** ${material.notes.length ? material.notes.map((note) => note.path).join(", ") : "none"}`,
 		"- **Written by:** the session-end safety net (no wrap-up)",
 		"",
 		"## Done",
@@ -142,7 +142,7 @@ export function writerPrompt(payload: Payload, material: Sources): string {
 		"",
 		"Use '- none' for an empty section. Name commits, files, and studies when the material names them.",
 		"",
-		...material.notes.map((note) => `=== SESSION NOTES ${note.path} ===\n${note.text}`),
+		...material.notes.map((note) => `=== TASK NOTES ${note.path} ===\n${note.text}`),
 		material.summaries ? `=== COMPACTION SUMMARIES ===\n${material.summaries}` : "",
 		material.tail ? `=== CONVERSATION AFTER THE LAST COMPACTION ===\n${material.tail}` : "",
 	].join("\n");

@@ -55,7 +55,7 @@ function use(name: string, input: Record<string, unknown>, sidechain = false): R
 	return { type: "assistant", isSidechain: sidechain, message: { content: [{ type: "tool_use", name, input }] } };
 }
 
-function sessionNotesText(study: string, pinned: string[], sessions: string[] = []): string {
+function taskNotesText(study: string, pinned: string[], sessions: string[] = []): string {
 	return [
 		"# Task",
 		"",
@@ -90,39 +90,39 @@ describe("compact: manifest scan", () => {
 		});
 	});
 
-	test("the active session notes are the last ones written; their study and pins are docs", () => {
+	test("the active task notes are the last ones written; their study and pins are docs", () => {
 		withEnv(({ notes, tmp }) => {
-			const first = path.join(notes, "sessions", "2026-01-01-one.md");
-			const second = path.join(notes, "sessions", "2026-01-02-two.md");
+			const first = path.join(notes, "tasks", "2026-01-01-one.md");
+			const second = path.join(notes, "tasks", "2026-01-02-two.md");
 			const study = path.join(notes, "studies", "2026-01-01-s", "study.md");
 			const pinned = path.join(tmp, "spec.md");
-			write(first, sessionNotesText("none", []));
-			write(second, sessionNotesText(study, [pinned]));
+			write(first, taskNotesText("none", []));
+			write(second, taskNotesText(study, [pinned]));
 			const manifest = buildManifest([use("Write", { file_path: first }), use("Edit", { file_path: second })], notes);
-			assert.equal(manifest.sessionNotes, second);
+			assert.equal(manifest.taskNotes, second);
 			assert.ok(manifest.docs.includes(study));
 			assert.ok(manifest.docs.includes(pinned));
 			assert.ok(!manifest.docs.includes(second));
 		});
 	});
 
-	test("project rules, the summary, and read project notes are docs; source files and journal entries are not", () => {
+	test("project rules, the summary, and read project notes are docs; source files and session logs are not", () => {
 		withEnv(({ notes, cwd }) => {
 			write(path.join(notes, "rules", "r.md"), "# r");
 			write(path.join(notes, "summary.md"), "# s");
 			const tech = path.join(notes, "tech", "t.md");
-			const journal = path.join(notes, "journal", "2026-01-01", "0900-x.md");
+			const sessionLog = path.join(notes, "session-logs", "2026-01-01", "0900-x.md");
 			const source = path.join(cwd, "src", "main.ts");
 			const manifest = buildManifest(
-				[use("Read", { file_path: tech }), use("Read", { file_path: journal }), use("Read", { file_path: source })],
+				[use("Read", { file_path: tech }), use("Read", { file_path: sessionLog }), use("Read", { file_path: source })],
 				notes,
 			);
 			assert.ok(manifest.docs.includes(path.join(notes, "rules", "r.md")));
 			assert.ok(manifest.docs.includes(path.join(notes, "summary.md")));
 			assert.ok(manifest.docs.includes(tech));
-			assert.ok(!manifest.docs.includes(journal));
+			assert.ok(!manifest.docs.includes(sessionLog));
 			assert.ok(!manifest.docs.includes(source));
-			assert.equal(manifest.sessionNotes, "");
+			assert.equal(manifest.taskNotes, "");
 		});
 	});
 
@@ -139,34 +139,34 @@ describe("compact: manifest scan", () => {
 
 	test("a resumed session that only read its notes gets them from the Sessions line", () => {
 		withEnv(({ notes }) => {
-			const other = path.join(notes, "sessions", "2026-01-01-other.md");
-			const mine = path.join(notes, "sessions", "2026-01-02-mine.md");
-			write(other, sessionNotesText("none", [], ["another-session"]));
-			write(mine, sessionNotesText("none", [], ["sess-9"]));
+			const other = path.join(notes, "tasks", "2026-01-01-other.md");
+			const mine = path.join(notes, "tasks", "2026-01-02-mine.md");
+			write(other, taskNotesText("none", [], ["another-session"]));
+			write(mine, taskNotesText("none", [], ["sess-9"]));
 			const manifest = buildManifest([use("Read", { file_path: other })], notes, "sess-9");
-			assert.equal(manifest.sessionNotes, mine);
+			assert.equal(manifest.taskNotes, mine);
 		});
 	});
 
 	test("several files naming the session choose the newest", () => {
 		withEnv(({ notes }) => {
-			const older = path.join(notes, "sessions", "2026-01-01-old.md");
-			const newer = path.join(notes, "sessions", "2026-01-02-new.md");
-			write(older, sessionNotesText("none", [], ["sess-9"]));
-			write(newer, sessionNotesText("none", [], ["sess-9"]));
+			const older = path.join(notes, "tasks", "2026-01-01-old.md");
+			const newer = path.join(notes, "tasks", "2026-01-02-new.md");
+			write(older, taskNotesText("none", [], ["sess-9"]));
+			write(newer, taskNotesText("none", [], ["sess-9"]));
 			fs.utimesSync(older, new Date("2026-01-01T00:00:00Z"), new Date("2026-01-01T00:00:00Z"));
 			fs.utimesSync(newer, new Date("2026-01-02T00:00:00Z"), new Date("2026-01-02T00:00:00Z"));
-			assert.equal(buildManifest([], notes, "sess-9").sessionNotes, newer);
+			assert.equal(buildManifest([], notes, "sess-9").taskNotes, newer);
 		});
 	});
 
 	test("with no id match and no write, the only open notes file is used", () => {
 		withEnv(({ notes }) => {
-			const only = path.join(notes, "sessions", "2026-01-01-only.md");
-			write(only, sessionNotesText("none", []));
-			assert.equal(buildManifest([], notes, "sess-unknown").sessionNotes, only);
-			write(path.join(notes, "sessions", "2026-01-02-second.md"), sessionNotesText("none", []));
-			assert.equal(buildManifest([], notes, "sess-unknown").sessionNotes, "");
+			const only = path.join(notes, "tasks", "2026-01-01-only.md");
+			write(only, taskNotesText("none", []));
+			assert.equal(buildManifest([], notes, "sess-unknown").taskNotes, only);
+			write(path.join(notes, "tasks", "2026-01-02-second.md"), taskNotesText("none", []));
+			assert.equal(buildManifest([], notes, "sess-unknown").taskNotes, "");
 		});
 	});
 
@@ -179,7 +179,7 @@ describe("compact: manifest scan", () => {
 	});
 
 	test("pins and the study line accept only absolute paths", () => {
-		const text = sessionNotesText("relative/study.md", ["/abs/a.md", "relative.md", "`/abs/b.md`"]);
+		const text = taskNotesText("relative/study.md", ["/abs/a.md", "relative.md", "`/abs/b.md`"]);
 		assert.deepEqual(pinnedDocs(text), ["/abs/a.md", "/abs/b.md"]);
 		assert.equal(studyPath(text), "");
 	});
@@ -187,23 +187,23 @@ describe("compact: manifest scan", () => {
 
 describe("compact: texts", () => {
 	const scan = { entries: 0, toolUses: 0 };
-	const manifest = { sessionNotes: "/n/sessions/2026-01-01-x.md", skills: ["persona-agents:study"], docs: ["/n/summary.md"], scan };
+	const manifest = { taskNotes: "/n/tasks/2026-01-01-x.md", skills: ["persona-agents:study"], docs: ["/n/summary.md"], scan };
 
-	test("the summary instructions carry the session notes path", () => {
-		assert.ok(summaryInstructions(manifest).includes(manifest.sessionNotes));
+	test("the summary instructions carry the task notes path", () => {
+		assert.ok(summaryInstructions(manifest).includes(manifest.taskNotes));
 	});
 
 	test("the reload context lists the notes, the skills, and the docs, under the hook cap", () => {
 		const text = reloadContext(manifest);
-		for (const item of [manifest.sessionNotes, ...manifest.skills, ...manifest.docs]) assert.ok(text.includes(item), item);
-		const big = { sessionNotes: "/n/s.md", skills: Array(12).fill("persona-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`), scan };
+		for (const item of [manifest.taskNotes, ...manifest.skills, ...manifest.docs]) assert.ok(text.includes(item), item);
+		const big = { taskNotes: "/n/s.md", skills: Array(12).fill("persona-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`), scan };
 		assert.ok(reloadContext(big).length < 10_000);
 	});
 
 	test("the log line goes under ## Log, and a missing section is created", () => {
 		withEnv(({ tmp }) => {
 			const withLog = path.join(tmp, "a.md");
-			write(withLog, sessionNotesText("none", []).replace("## Log", "## Log").concat("## After\n\ntext\n"));
+			write(withLog, taskNotesText("none", []).replace("## Log", "## Log").concat("## After\n\ntext\n"));
 			assert.ok(appendLog(withLog, "L1"));
 			const text = fs.readFileSync(withLog, "utf8");
 			assert.ok(text.indexOf("- L1") > text.indexOf("## Log") && text.indexOf("- L1") < text.indexOf("## After"), text);
@@ -236,8 +236,8 @@ describe("compact: hook processes", () => {
 
 	test("pre, post, and reload work together across one compaction", () => {
 		withEnv((env) => {
-			const notesFile = path.join(env.notes, "sessions", "2026-01-01-task.md");
-			write(notesFile, sessionNotesText("none", []));
+			const notesFile = path.join(env.notes, "tasks", "2026-01-01-task.md");
+			write(notesFile, taskNotesText("none", []));
 			const transcript = path.join(env.tmp, "t.jsonl");
 			const lines = [use("Skill", { skill: "persona-agents:study" }), use("Write", { file_path: notesFile })];
 			write(transcript, lines.map((line) => JSON.stringify(line)).join("\n"));
@@ -264,8 +264,8 @@ describe("compact: hook processes", () => {
 
 	test("an unrecognized transcript shape still finds the notes and warns", () => {
 		withEnv((env) => {
-			const notesFile = path.join(env.notes, "sessions", "2026-01-01-task.md");
-			write(notesFile, sessionNotesText("none", [], ["s-1"]));
+			const notesFile = path.join(env.notes, "tasks", "2026-01-01-task.md");
+			write(notesFile, taskNotesText("none", [], ["s-1"]));
 			const transcript = path.join(env.tmp, "t.jsonl");
 			write(
 				transcript,

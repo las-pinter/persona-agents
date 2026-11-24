@@ -1,13 +1,13 @@
 ---
-name: session-notes
-description: The working file for one task - goal, plan with step status, decisions, pinned documents, and a log. Create it when a task needs more than a few steps; update it whenever the plan changes. Compaction recovery and the journal read it.
+name: task-notes
+description: The working file for one task - goal, plan with step status, decisions, pinned documents, and a log. Create it when a task needs more than a few steps; update it whenever the plan changes. Compaction recovery and the session logs read it.
 ---
 
-# Session Notes
+# Task Notes
 
 ## Purpose
 
-The session notes file is the source of truth for the task you are working on.
+The task notes file is the source of truth for the task you are working on.
 Your context is a cache of it: compaction can drop the context at any time, but
 the file stays. Write the plan here, keep it current, and you can always pick
 the work up again.
@@ -25,7 +25,7 @@ sessions keeps one file. Several tasks in one session get one file each.
 
 ## Location
 
-`<project notes folder>/sessions/<YYYY-MM-DD>-<slug>.md`. The session start
+`<project notes folder>/tasks/<YYYY-MM-DD>-<slug>.md`. The session start
 text names the project notes folder. Use the `date` command for the date and a
 plain kebab-case slug.
 

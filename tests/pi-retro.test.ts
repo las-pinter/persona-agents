@@ -83,9 +83,9 @@ describe("pi retro: the facts", () => {
 		assert.match(facts, /… and 5 more/);
 	});
 
-	test("journal entries and the instruction are named", () => {
-		const facts = summarizeSession({ entries: [], decisions: [], journal: ["/notes/journal/2026-01-01/1200-s1.md"] });
-		assert.match(facts, /journal:/);
+	test("session logs and the instruction are named", () => {
+		const facts = summarizeSession({ entries: [], decisions: [], sessionLogs: ["/notes/session-logs/2026-01-01/1200-s1.md"] });
+		assert.match(facts, /session logs:/);
 		assert.match(facts, /1200-s1\.md/);
 		assert.match(RETRO_INSTRUCTION, /print only/);
 		assert.match(RETRO_INSTRUCTION, /Write nothing durable/);

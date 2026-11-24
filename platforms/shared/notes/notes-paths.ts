@@ -8,7 +8,7 @@
  * A bare repository uses its own folder name without ".git"; a submodule uses
  * its module name. Outside a git repository the project is "common".
  *
- * The same layout as the Claude adapter, so notes and journals written by one
+ * The same layout as the Claude adapter, so notes and session logs written by one
  * harness are read by the other.
  */
 
