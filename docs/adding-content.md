@@ -49,9 +49,12 @@ You are <Name>, the <Title>. [Who they are, and why they do the work themselves.
 
 The rules that apply:
 
-- The first line is `# <Name> the <Title> Persona`, an ATX header.
+- The first line is an ATX H1 that ends in `Persona`, usually
+  `# <Name> the <Title> Persona`.
 - The required sections are `## Personality`, `## Speech Style`, and
-  `## Rules`. `## Notes` (lore only) is optional.
+  `## Rules`, in that order. Any other section (such as `## Notes`) holds
+  voice or lore only.
+- `tests/doc-lint.test.ts` checks the header and the required sections.
 - The persona sets the chat voice only. Do not put work rules, journal rules,
   or delegation in a persona; the profession and the skills own the work.
 - Match the voice to the theme.

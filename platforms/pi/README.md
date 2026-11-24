@@ -277,8 +277,7 @@ There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
 `"true"`, so the user policy and the decision log were written under
 `<cwd>/true/persona-agents/` in every repository. Those files are no longer
 read. Re-apply any `/permissions` grants you need with
-`/permissions allow <tool> <regex>`, and delete the stray `true/` folder. Add
-this line to the release notes whenever a release carries the fix.
+`/permissions allow <tool> <regex>`, and delete the stray `true/` folder.
 
 ## Testing
 
