@@ -1,4 +1,4 @@
-/** Command-line helpers shared by the Kiro scripts. */
+/** Command-line helpers shared by the adapter scripts. */
 
 /** The value of a `--name=value` argument, or undefined. */
 export function option(name: string, argv: string[]): string | undefined {

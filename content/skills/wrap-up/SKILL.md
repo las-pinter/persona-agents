@@ -20,7 +20,7 @@ project notes hold knowledge; the task notes hold the task.
    `action: "path"`. On Claude Code, run:
 
    ```sh
-   node "${CLAUDE_SKILL_DIR}/../../../platforms/claude/scripts/session-log.mjs" path --session=${CLAUDE_SESSION_ID}
+   node --experimental-strip-types --no-warnings "${CLAUDE_SKILL_DIR}/../../../platforms/claude/scripts/session-log.mjs" path --session=${CLAUDE_SESSION_ID}
    ```
 
    The path is this session's existing entry (today or yesterday) or a new

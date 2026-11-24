@@ -19,7 +19,7 @@ import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { entryPath, recentSessionLogs } from "../../shared/notes/session-log.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 
 /** This session's entry path for a working directory and home folder. */
 export function sessionLogPath(cwd: string, home: string, sessionId: string, now: Date = new Date()): string {

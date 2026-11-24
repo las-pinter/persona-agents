@@ -9,37 +9,18 @@
 // own folder name without ".git"; a submodule uses its module name. Outside a
 // git repository the project is "common".
 //
-// CLI: node notes-paths.mjs [project|dir] [--cwd=<path>]  (default: dir)
+// The project naming lives in platforms/shared/notes/notes-paths.ts; this
+// file adds the owner's real home folder and the CLI.
+//
+// CLI: node --experimental-strip-types notes-paths.mjs [project|dir] [--cwd=<path>]  (default: dir)
 
-import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { basename, dirname, join, sep } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { projectName } from "../../shared/notes/notes-paths.ts";
 import { realHome } from "./plugin-options.mjs";
 
-export const COMMON_PROJECT = "common";
-
-/** The absolute shared git directory of `cwd`, or "" outside a repository. */
-export function gitCommonDir(cwd) {
-	const run = spawnSync("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
-		encoding: "utf8",
-	});
-	return run.status === 0 ? run.stdout.trim() : "";
-}
-
-/** The project name for a shared git directory path; "common" for "". */
-export function projectFromCommonDir(commonDir) {
-	if (!commonDir) return COMMON_PROJECT;
-	const modules = `${sep}.git${sep}modules${sep}`;
-	if (commonDir.includes(modules)) return basename(commonDir);
-	if (basename(commonDir) === ".git") return basename(dirname(commonDir));
-	return basename(commonDir).replace(/\.git$/, "") || COMMON_PROJECT;
-}
-
-/** The project name for a working directory. */
-export function projectName(cwd) {
-	return projectFromCommonDir(gitCommonDir(cwd));
-}
+export { COMMON_PROJECT, gitCommonDir, projectFromCommonDir, projectName } from "../../shared/notes/notes-paths.ts";
 
 /** The agent-notes root under the owner's home folder. */
 export function notesRoot(home = realHome() || homedir()) {

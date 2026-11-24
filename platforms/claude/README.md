@@ -50,9 +50,11 @@ State that is not a note lives in `$CLAUDE_PLUGIN_DATA/compact/`: the reload
 manifests, the compaction summaries, and `metrics.ndjson` (one line per
 compaction, with the transcript scan counts, for tuning the threshold).
 
-`compact.mjs`, `startup.mjs`, and `session-log-end.mjs` import the shared task
-notes parser at `platforms/shared/notes/notes.ts`, so their hook entries pass
-`--experimental-strip-types`; the minimum supported Node, 22.6, needs it.
+The scripts import the shared modules under `platforms/shared/` (the task
+notes parser, the compaction manifest, the session-log helpers), so every hook
+entry and the wrap-up command pass `--experimental-strip-types`; the minimum
+supported Node, 22.6, needs it. `scripts/transcript.ts` maps a Claude Code
+transcript to the entry shape those modules read.
 
 The hooks that read the notes tree take a `--home=<path>` argument, and the
 session-log writer a `--claude=<path>` argument. These are test seams. They are

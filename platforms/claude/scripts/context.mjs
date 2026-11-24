@@ -23,12 +23,11 @@
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PERSONA_FREE_RULE } from "../../shared/context/context.ts";
+import { DEFAULT_THEME, PERSONA_FREE_RULE } from "../../shared/context/context.ts";
 import { pluginOption } from "./plugin-options.mjs";
 
 const AGENT_TYPE = "persona-agents:companion";
 const PROFESSION = "companion";
-const DEFAULT_THEME = "goblin";
 
 const part = process.argv[2];
 const root = process.env.CLAUDE_PLUGIN_ROOT;

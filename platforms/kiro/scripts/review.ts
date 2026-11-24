@@ -32,7 +32,7 @@ import {
 } from "../../shared/review/review.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey, git } from "./change.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 import { changeKeyLine } from "./session-store.ts";
 
 /** The brief and the change it names. */

@@ -25,7 +25,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadRegistry, resolveTheme, type Registry } from "../shared/context/context.ts";
 import { readTheme, validKiroHome } from "./scripts/paths.ts";
-import { option } from "./scripts/argv.ts";
+import { option } from "../shared/argv.ts";
 
 /** The minimum Kiro CLI version with PermissionRequest and the compaction hooks. */
 export const MIN_VERSION: [number, number, number] = [3, 4, 0];

@@ -25,6 +25,11 @@ export function safeSession(id: string): string {
 	return String(id).replace(/[^A-Za-z0-9_-]/g, "_");
 }
 
+/** A file-name-safe session id for a state file; an empty id becomes `unknown`. */
+export function safeId(id: unknown): string {
+	return safeSession(typeof id === "string" && id !== "" ? id : "unknown");
+}
+
 /** The existing entry of a session in the given day folders, current folder first, or "". */
 export function findEntry(notesDir: string, session: string, days: string[], dirs: string[] = sessionLogDirs(notesDir)): string {
 	const suffix = `-${safeSession(session)}.md`;

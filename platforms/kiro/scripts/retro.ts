@@ -29,7 +29,7 @@ import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts"
 import { decisionsFile } from "./state.ts";
 import { metricsFile, summariesFile } from "./compact.ts";
 import { readSession } from "./session-store.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 
 /** The facts and the instruction a Kiro retro run gets. */
 export interface RetroFacts {

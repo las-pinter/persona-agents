@@ -84,7 +84,7 @@ describe("notes-paths: project folder", () => {
 			fs.mkdirSync(repo);
 			git(repo, "init", "-q");
 			const run = (what: string) =>
-				spawnSync(process.execPath, [script, what, `--cwd=${repo}`], { encoding: "utf8" }).stdout.trim();
+				spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", script, what, `--cwd=${repo}`], { encoding: "utf8" }).stdout.trim();
 			assert.equal(run("project"), "cli-repo");
 			assert.match(run("dir"), /agent-notes[\\/]project-notes[\\/]cli-repo$/);
 		});

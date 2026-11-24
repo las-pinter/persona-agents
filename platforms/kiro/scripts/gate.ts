@@ -32,7 +32,7 @@ import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey } from "./change.ts";
 import { appendDecision, reviewFor } from "./state.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 import { expandHome } from "../../shared/paths.ts";
 
 export type AgentProfile = "companion" | "reviewer";

@@ -117,7 +117,7 @@ export function hasMaterial(sources: Sources): boolean {
 }
 
 /** The prompt the writer model gets. Output only the entry. */
-export function writerPrompt(payload: Payload, material: Sources): string {
+export function writerPrompt(payload: Pick<Payload, "session" | "at">, material: Sources): string {
 	const at = new Date(payload.at);
 	const pad = (n: number): string => String(n).padStart(2, "0");
 	const day = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;

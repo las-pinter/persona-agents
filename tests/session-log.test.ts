@@ -13,12 +13,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { dayOf, entryPath, findEntry, LEGACY_SESSION_LOGS, recentEntries, SESSION_LOGS } from "../platforms/claude/scripts/session-log.mjs";
-import * as folders from "../platforms/shared/notes/folders.ts";
+import { dayOf, entryPath, findEntry, recentEntries } from "../platforms/claude/scripts/session-log.mjs";
 import { conversationTail, writerPrompt, writtenTaskNotes } from "../platforms/claude/scripts/session-log-end.mjs";
 
 const scripts = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts");
 const sessionLogScript = path.join(scripts, "session-log.mjs");
+/** The flags the wrap-up skill and the hooks pass: Node 22.6 needs them for the TypeScript imports. */
+const STRIP = ["--experimental-strip-types", "--no-warnings"];
 const endScript = path.join(scripts, "session-log-end.mjs");
 
 interface Env {
@@ -92,7 +93,7 @@ describe("session log: entry path", () => {
 		withEnv(async (env) => {
 			const one = (session: string) =>
 				new Promise<string>((resolve, reject) => {
-					const child = spawn(process.execPath, [sessionLogScript, "path", `--session=${session}`, `--cwd=${env.cwd}`, `--home=${env.home}`]);
+					const child = spawn(process.execPath, [...STRIP, sessionLogScript, "path", `--session=${session}`, `--cwd=${env.cwd}`, `--home=${env.home}`]);
 					let out = "";
 					child.stdout.on("data", (chunk) => (out += chunk));
 					child.on("close", (code) => (code === 0 ? resolve(out.trim()) : reject(new Error(`exit ${code}`))));
@@ -110,12 +111,12 @@ describe("session log: entry path", () => {
 		withEnv((env) => {
 			write(path.join(env.notes, "session-logs", "2026-01-01", "0900-a.md"), "# first");
 			write(path.join(env.notes, "session-logs", "2026-01-02", "0900-b.md"), "# second");
-			const out = spawnSync(process.execPath, [sessionLogScript, "read", `--cwd=${env.cwd}`, `--home=${env.home}`], { encoding: "utf8" }).stdout;
+			const out = spawnSync(process.execPath, [...STRIP, sessionLogScript, "read", `--cwd=${env.cwd}`, `--home=${env.home}`], { encoding: "utf8" }).stdout;
 			assert.ok(out.indexOf("# first") < out.indexOf("# second"), out);
 		}));
 
 	test("path without a session exits 2", () => {
-		assert.equal(spawnSync(process.execPath, [sessionLogScript, "path"], { encoding: "utf8" }).status, 2);
+		assert.equal(spawnSync(process.execPath, [...STRIP, sessionLogScript, "path"], { encoding: "utf8" }).status, 2);
 	});
 });
 
@@ -126,6 +127,16 @@ describe("session log: safety-net sources", () => {
 		const notes = "/n";
 		const entries = [use("Write", { file_path: "/n/tasks/a.md" }), use("Edit", { file_path: "/n/tasks/a.md" }), use("Write", { file_path: "/src/x.ts" })];
 		assert.deepEqual(writtenTaskNotes(entries, notes), ["/n/tasks/a.md"]);
+	});
+
+	test("each Claude Code file tool marks a task notes file as written; a subagent's write does not", () => {
+		const entries = [
+			use("Write", { file_path: "/n/tasks/w.md" }),
+			use("Edit", { file_path: "/n/tasks/e.md" }),
+			use("MultiEdit", { file_path: "/n/tasks/m.md" }),
+			{ ...use("Write", { file_path: "/n/tasks/side.md" }), isSidechain: true },
+		];
+		assert.deepEqual(writtenTaskNotes(entries, "/n"), ["/n/tasks/w.md", "/n/tasks/e.md", "/n/tasks/m.md"]);
 	});
 
 	test("the conversation tail starts after the last compaction and skips meta lines", () => {
@@ -140,7 +151,7 @@ describe("session log: safety-net sources", () => {
 	});
 
 	test("the writer prompt names the session and carries every source", () => {
-		const prompt = writerPrompt({ session: "s-1", day: "2026-01-02", time: "09:00" }, { notes: [{ path: "/n/a.md", text: "PLAN" }], summaries: "SUM", tail: "TAIL" });
+		const prompt = writerPrompt({ session: "s-1", at: new Date(2026, 0, 2, 9, 0).toISOString() }, { notes: [{ path: "/n/a.md", text: "PLAN" }], summaries: "SUM", tail: "TAIL" });
 		for (const part of ["s-1", "2026-01-02 09:00", "/n/a.md", "PLAN", "SUM", "TAIL", "safety net"]) assert.ok(prompt.includes(part), part);
 	});
 });
@@ -230,9 +241,12 @@ describe("session log: session-end hook", () => {
 		}));
 });
 
-describe("session log: the plain-node copy of the folder names", () => {
-	test("session-log.mjs names the same folders as the shared module", () => {
-		assert.equal(SESSION_LOGS, folders.SESSION_LOGS);
-		assert.equal(LEGACY_SESSION_LOGS, folders.LEGACY_SESSION_LOGS);
+describe("session log: the wrap-up command", () => {
+	test("the wrap-up skill runs session-log.mjs with type stripping", () => {
+		// session-log.mjs imports the shared TypeScript; Node 22.6 cannot load it without the flag.
+		const skill = fs.readFileSync(path.join(scripts, "..", "..", "..", "content", "skills", "wrap-up", "SKILL.md"), "utf8");
+		const line = skill.split("\n").find((text) => text.includes("session-log.mjs"));
+		assert.ok(line);
+		assert.match(line, /node --experimental-strip-types --no-warnings "/);
 	});
 });

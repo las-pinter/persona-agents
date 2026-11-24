@@ -30,7 +30,7 @@ import {
 import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import { contentOf, kiroHome as resolveKiroHome, readTheme, rootFromScript } from "./paths.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 
 /** The Kiro platform note, with the session id the wrap-up and retro use. */
 export function platformNote(sessionId: string, theme?: string): string {

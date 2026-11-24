@@ -31,7 +31,7 @@ import {
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { readSession } from "./session-store.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 import { safeId } from "./paths.ts";
 
 /** One saved compaction. */

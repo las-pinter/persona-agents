@@ -26,7 +26,7 @@ import { parseVerdict } from "../../shared/review/review.ts";
 import { changeKeyIn, readSession, DEFAULT_REVIEWER } from "./session-store.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
 import { readReviews, recordReview } from "./state.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 
 /** One recorded verdict. */
 export interface RecordedReview {

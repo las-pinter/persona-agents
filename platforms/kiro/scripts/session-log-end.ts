@@ -30,7 +30,7 @@ import { hasMaterial, sources, writerPrompt } from "../../shared/notes/session-l
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
 import { readSession } from "./session-store.ts";
-import { option } from "./argv.ts";
+import { option } from "../../shared/argv.ts";
 import { safeId } from "./paths.ts";
 
 /** The headless model the writer uses. */
@@ -100,7 +100,7 @@ export function buildPayload(
 		kiroHome,
 		kiroCli,
 		entry: entryPath(notesDir, session, at),
-		prompt: writerPrompt({ session, notesDir, at: at.toISOString(), sources: material }, material),
+		prompt: writerPrompt({ session, at: at.toISOString() }, material),
 	};
 }
 

@@ -18,80 +18,37 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readTranscript, stateDir } from "./compact.mjs";
-import { isInside, taskDirs } from "../../shared/notes/folders.ts";
-import { entryPath, findEntry, dayOf } from "./session-log.mjs";
+import { stateDir } from "./compact.mjs";
+import {
+	CAP_SUMMARIES,
+	conversationTail as sharedConversationTail,
+	hasMaterial,
+	tail,
+	writerPrompt,
+	writtenTaskNotes as sharedWrittenTaskNotes,
+	CAP_NOTES,
+	CAP_TAIL,
+} from "../../shared/notes/session-log-net.ts";
+import { dayOf, entryPath, findEntry, safeSession } from "../../shared/notes/session-log.ts";
 import { projectDir } from "./notes-paths.mjs";
+import { readTranscript, toEntries } from "./transcript.ts";
+
+export { writerPrompt };
 
 const AGENT_TYPE = "persona-agents:companion";
 const WRITER_MODEL = "haiku";
 const WRITER_TIMEOUT_MS = 180_000;
-const CAP_NOTES = 8_000;
-const CAP_SUMMARIES = 20_000;
-const CAP_TAIL = 20_000;
-
-/** The last `max` characters of a text, marked when cut. */
-const tail = (text, max) => (text.length <= max ? text : `[...cut...]\n${text.slice(-max)}`);
 
 /** Task notes files the session wrote, in first-write order. */
 export function writtenTaskNotes(entries, notesDir) {
-	const dirs = taskDirs(notesDir);
-	const paths = [];
-	for (const entry of entries) {
-		if (entry.isSidechain || entry.type !== "assistant" || !Array.isArray(entry.message?.content)) continue;
-		for (const block of entry.message.content) {
-			const path = block?.type === "tool_use" && ["Write", "Edit", "MultiEdit"].includes(block.name) ? block.input?.file_path : null;
-			if (typeof path === "string" && isInside(dirs, path) && !paths.includes(path)) paths.push(path);
-		}
-	}
-	return paths;
+	return sharedWrittenTaskNotes(toEntries(entries), notesDir);
 }
 
 /** The user and assistant text after the last compaction, as "role: text" lines. */
 export function conversationTail(entries) {
-	let start = 0;
-	entries.forEach((entry, index) => {
-		if (entry.type === "system" && entry.subtype === "compact_boundary") start = index + 1;
-	});
-	const lines = [];
-	for (const entry of entries.slice(start)) {
-		if (entry.isSidechain || entry.isMeta || (entry.type !== "user" && entry.type !== "assistant")) continue;
-		const content = entry.message?.content;
-		const text =
-			typeof content === "string"
-				? content
-				: Array.isArray(content)
-					? content.filter((block) => block?.type === "text").map((block) => block.text).join("\n")
-					: "";
-		if (text.trim() && !text.startsWith("<")) lines.push(`${entry.type}: ${text.trim()}`);
-	}
-	return lines.join("\n\n");
-}
-
-/** The prompt for the writer model. */
-export function writerPrompt(payload, sources) {
-	return [
-		"Write a short session log for a finished Claude Code work session, from the material below.",
-		"Output only the entry, in this markdown format, at most 30 lines, plain and factual, no persona voice:",
-		"",
-		`# ${payload.day} ${payload.time} — <short title of the session>`,
-		"",
-		`- **Session:** ${payload.session}`,
-		`- **Task notes:** ${sources.notes.length ? sources.notes.map((n) => n.path).join(", ") : "none"}`,
-		"- **Written by:** the session-end safety net (no wrap-up)",
-		"",
-		"## Done",
-		"## Decisions",
-		"## Open",
-		"",
-		"Use '- none' for an empty section. Name commits, files, and studies when the material names them.",
-		"",
-		...sources.notes.map((n) => `=== TASK NOTES ${n.path} ===\n${n.text}`),
-		sources.summaries ? `=== COMPACTION SUMMARIES ===\n${sources.summaries}` : "",
-		sources.tail ? `=== CONVERSATION AFTER THE LAST COMPACTION ===\n${sources.tail}` : "",
-	].join("\n");
+	return sharedConversationTail(toEntries(entries));
 }
 
 function hook(input, claudeArg) {
@@ -103,13 +60,13 @@ function hook(input, claudeArg) {
 	if (findEntry(notesDir, input.session_id, [dayOf(now), dayOf(yesterday)])) return;
 	const dir = stateDir();
 	mkdirSync(dir, { recursive: true });
-	const payloadFile = join(dir, `session-log-${String(input.session_id).replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+	const payloadFile = join(dir, `session-log-${safeSession(input.session_id)}.json`);
 	writeFileSync(
 		payloadFile,
 		JSON.stringify({ session: input.session_id, transcript: input.transcript_path, notesDir, reason: input.reason, at: now.toISOString() }),
 	);
-	// The writer imports compact.mjs, which imports the shared TypeScript
-	// notes parser; the flag must travel to the child, which inherits no exec args.
+	// The writer imports the shared TypeScript modules; the flag must travel
+	// to the child, which inherits no exec args.
 	const args = [
 		"--experimental-strip-types",
 		"--no-warnings",
@@ -137,15 +94,11 @@ function write(payloadFile, command = "claude") {
 		const notes = writtenTaskNotes(entries, payload.notesDir)
 			.filter((path) => existsSync(path))
 			.map((path) => ({ path, text: tail(readFileSync(path, "utf8"), CAP_NOTES) }));
-		const summariesFile = join(dirname(payloadFile), `${String(payload.session).replace(/[^A-Za-z0-9_-]/g, "_")}.summaries.md`);
+		const summariesFile = join(dirname(payloadFile), `${safeSession(payload.session)}.summaries.md`);
 		const summaries = existsSync(summariesFile) ? tail(readFileSync(summariesFile, "utf8"), CAP_SUMMARIES) : "";
-		const convo = tail(conversationTail(entries), CAP_TAIL);
-		if (!notes.length && !summaries && !convo) return;
-		const pad = (n) => String(n).padStart(2, "0");
-		const prompt = writerPrompt(
-			{ ...payload, day: dayOf(at), time: `${pad(at.getHours())}:${pad(at.getMinutes())}` },
-			{ notes, summaries, tail: convo },
-		);
+		const material = { notes, summaries, tail: tail(conversationTail(entries), CAP_TAIL) };
+		if (!hasMaterial(material)) return;
+		const prompt = writerPrompt(payload, material);
 		const run = spawnSync(
 			command,
 			["-p", "--model", WRITER_MODEL, "--tools", "", "--no-session-persistence", "--output-format", "text"],
