@@ -23,7 +23,7 @@ import { entryPath, recentEntries } from "../../shared/notes/session-log.ts";
 import { projectDir } from "./notes-paths.mjs";
 
 export { dayOf, entryPath, findEntry, recentEntries, safeSession } from "../../shared/notes/session-log.ts";
-export { LEGACY_SESSION_LOGS, SESSION_LOGS, sessionLogsDir } from "../../shared/notes/folders.ts";
+export { SESSION_LOGS, sessionLogsDir } from "../../shared/notes/folders.ts";
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const argv = process.argv;

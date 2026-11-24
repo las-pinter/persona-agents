@@ -12,7 +12,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { isInside, taskDirs } from "./folders.ts";
+import { isInside, tasksDir } from "./folders.ts";
 import type { EntryLike } from "../compaction/manifest.ts";
 
 export type { EntryLike };
@@ -49,7 +49,7 @@ export function tail(text: string, max: number): string {
 
 /** The task notes files the session wrote, in first-write order. */
 export function writtenTaskNotes(entries: EntryLike[], notesDir: string): string[] {
-	const dirs = taskDirs(notesDir);
+	const dir = tasksDir(notesDir);
 	const paths: string[] = [];
 	for (const entry of entries) {
 		if (entry.type !== "message" || entry.message?.role !== "assistant" || !Array.isArray(entry.message.content)) continue;
@@ -58,7 +58,7 @@ export function writtenTaskNotes(entries: EntryLike[], notesDir: string): string
 			if (candidate?.type !== "toolCall") continue;
 			if (!["write", "edit", "patch", "apply_patch"].includes(String(candidate.name))) continue;
 			const path = (candidate.arguments as { path?: unknown } | undefined)?.path;
-			if (typeof path === "string" && isInside(dirs, path) && !paths.includes(path)) paths.push(path);
+			if (typeof path === "string" && isInside(dir, path) && !paths.includes(path)) paths.push(path);
 		}
 	}
 	return paths;

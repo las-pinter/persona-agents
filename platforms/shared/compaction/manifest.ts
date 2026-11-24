@@ -16,7 +16,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
-import { isInside, sessionLogDirs, taskDirs } from "../notes/folders.ts";
+import { isInside, sessionLogsDir, tasksDir } from "../notes/folders.ts";
 import { activeTaskNotes, pinnedDocs, projectRules, studyPath } from "../notes/notes.ts";
 
 /** The cap on skills reloaded after one compaction. */
@@ -129,7 +129,7 @@ export function buildManifest(entries: EntryLike[], notesDir: string, sessionId 
 export function reloadFiles(notesDir: string, sessionId: string, written: string[], readPaths: string[]): { taskNotes: string; docs: string[] } {
 	// The active notes file: the session-id match first, then the last one the
 	// session wrote, then the only open notes file.
-	const tasks = taskDirs(notesDir);
+	const tasks = tasksDir(notesDir);
 	const writtenNotes = written.filter((path) => isInside(tasks, path) && path.endsWith(".md"));
 	const taskNotes = activeTaskNotes(notesDir, sessionId, writtenNotes);
 	const notesText = taskNotes && existsSync(taskNotes) ? readFileSync(taskNotes, "utf8") : "";
@@ -140,7 +140,7 @@ export function reloadFiles(notesDir: string, sessionId: string, written: string
 	const startup = [...projectRules(notesDir), join(notesDir, "summary.md")].filter((path) => existsSync(path));
 	const readNotes = readPaths.filter(
 		(path) =>
-			path.startsWith(notesDir + sep) && !isInside(sessionLogDirs(notesDir), path) && !isInside(tasks, path),
+			path.startsWith(notesDir + sep) && !isInside(sessionLogsDir(notesDir), path) && !isInside(tasks, path),
 	);
 	const study = studyPath(notesText);
 	const docs = lastDistinct([...readNotes, ...startup, ...(study ? [study] : []), ...pinnedDocs(notesText)], MAX_DOCS).filter(

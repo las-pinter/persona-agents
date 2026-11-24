@@ -1,8 +1,8 @@
 /**
  * The project notes folders: `tasks/` for task notes and `session-logs/` for
- * session logs, with a one-release read fallback to `sessions/` and
- * `journal/`. The session-log cases run against the shared module and the
- * plain-node copy the Claude wrap-up runs.
+ * session logs. The old `sessions/` and `journal/` folders are not read. The
+ * session-log cases run against the shared module and the Claude Code CLI
+ * that re-exports it.
  *
  * Run: node --experimental-strip-types --test tests/notes-folders.test.ts
  */
@@ -36,7 +36,7 @@ const openTask = (session: string) => `# Task\n\n- **Status:** open\n- **Session
 for (const [name, impl] of [["shared", shared], ["claude", claude]] as const) {
 	const { entryPath, findEntry, recentEntries } = impl;
 
-	describe(`notes folders (${name}): writes go to the new folders`, () => {
+	describe(`notes folders (${name}): session logs live in session-logs/ only`, () => {
 		test("a new session log lands under session-logs/", () => {
 			withNotes((notes) => {
 				const now = new Date(2026, 10, 24, 9, 5);
@@ -44,59 +44,42 @@ for (const [name, impl] of [["shared", shared], ["claude", claude]] as const) {
 			});
 		});
 
-		test("an entry in the old journal/ folder is not rewritten; the new one goes to session-logs/", () => {
+		test("an entry left in the old journal/ folder is not found", () => {
 			withNotes((notes) => {
-				const now = new Date(2026, 10, 24, 9, 5);
 				write(path.join(notes, "journal", "2026-11-24", "0800-s1.md"), "# old\n");
-				assert.equal(path.dirname(path.dirname(entryPath(notes, "s1", now))), path.join(notes, "session-logs"));
-			});
-		});
-	});
-
-	describe(`notes folders (${name}): old session logs are still read for one release`, () => {
-		test("findEntry finds a session's entry in journal/", () => {
-			withNotes((notes) => {
-				const old = path.join(notes, "journal", "2026-11-24", "0800-s1.md");
-				write(old, "# old\n");
-				assert.equal(findEntry(notes, "s1", ["2026-11-24"]), old);
+				assert.equal(findEntry(notes, "s1", ["2026-11-24"]), "");
 			});
 		});
 
-		test("recent entries merge both folders by day", () => {
+		test("recent entries come from session-logs/ only", () => {
 			withNotes((notes) => {
-				const old = path.join(notes, "journal", "2026-11-23", "0800-a.md");
 				const fresh = path.join(notes, "session-logs", "2026-11-24", "0900-b.md");
-				write(old, "# a\n");
+				write(path.join(notes, "journal", "2026-11-23", "0800-a.md"), "# a\n");
 				write(fresh, "# b\n");
-				assert.deepEqual(recentEntries(notes, 3), [old, fresh]);
+				assert.deepEqual(recentEntries(notes, 3), [fresh]);
 			});
 		});
 	});
 }
 
-describe("notes folders: old task notes are still read for one release", () => {
-	test("open task notes come from tasks/ and sessions/", () => {
+describe("notes folders: task notes live in tasks/ only", () => {
+	test("open task notes come from tasks/, not the old sessions/", () => {
 		withNotes((notes) => {
 			const fresh = path.join(notes, "tasks", "2026-11-24-new.md");
-			const old = path.join(notes, "sessions", "2026-11-20-old.md");
 			write(fresh, openTask("s1"));
-			write(old, openTask("s0"));
-			assert.deepEqual(openTaskNotes(notes).sort(), [old, fresh].sort());
+			write(path.join(notes, "sessions", "2026-11-20-old.md"), openTask("s0"));
+			assert.deepEqual(openTaskNotes(notes), [fresh]);
 		});
 	});
 
-	test("the active task notes are found by the Sessions line in either folder", () => {
+	test("the active task notes are not found in the old sessions/ folder", () => {
 		withNotes((notes) => {
-			const old = path.join(notes, "sessions", "2026-11-20-old.md");
-			write(old, openTask("s0"));
-			assert.equal(activeTaskNotes(notes, "s0", []), old);
-			const fresh = path.join(notes, "tasks", "2026-11-24-new.md");
-			write(fresh, openTask("s1"));
-			assert.equal(activeTaskNotes(notes, "s1", []), fresh);
+			write(path.join(notes, "sessions", "2026-11-20-old.md"), openTask("s0"));
+			assert.equal(activeTaskNotes(notes, "s0", []), "");
 		});
 	});
 
-	test("a write under tasks/ or sessions/ counts as task notes the session wrote", () => {
+	test("only a write under tasks/ counts as task notes the session wrote", () => {
 		withNotes((notes) => {
 			const call = (file: string) => ({
 				type: "message",
@@ -104,7 +87,7 @@ describe("notes folders: old task notes are still read for one release", () => {
 			});
 			const fresh = path.join(notes, "tasks", "a.md");
 			const old = path.join(notes, "sessions", "b.md");
-			assert.deepEqual(writtenTaskNotes([call(fresh), call(old), call(path.join(notes, "summary.md"))], notes), [fresh, old]);
+			assert.deepEqual(writtenTaskNotes([call(fresh), call(old), call(path.join(notes, "summary.md"))], notes), [fresh]);
 		});
 	});
 });

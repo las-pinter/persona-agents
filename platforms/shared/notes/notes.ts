@@ -19,7 +19,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import { recentEntries } from "./session-log.ts";
-import { isInside, taskDirs } from "./folders.ts";
+import { isInside, tasksDir } from "./folders.ts";
 
 /** The most recent session-log day folders read at session start. */
 export const SESSION_LOG_DAYS = 3;
@@ -69,9 +69,9 @@ export function notesListsSession(text: string, sessionId: string): boolean {
 	return sessionId !== "" && sessionsOf(text).includes(sessionId);
 }
 
-/** Task notes files whose Status line says open, from every task folder. */
+/** Task notes files whose Status line says open. */
 export function openTaskNotes(notesDir: string): string[] {
-	return taskDirs(notesDir).flatMap(notesFiles).filter((path) => /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
+	return notesFiles(tasksDir(notesDir)).filter((path) => /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
 }
 
 /** One row of `studies/index.md`, in file order. */
@@ -123,23 +123,23 @@ function newestByMtime(paths: string[]): string {
 /**
  * The active notes file for a session.
  *
- * 1. A file under `tasks/` (or the legacy `sessions/`) whose `Sessions:` line names the id, newest
+ * 1. A file under `tasks/` whose `Sessions:` line names the id, newest
  *    modification first. A session may run several tasks with one file each,
  *    so the newest match is the current task.
- * 2. The last file the session wrote under those folders.
+ * 2. The last file the session wrote under `tasks/`.
  * 3. The only open notes file.
  * 4. "" when none applies.
  */
 export function activeTaskNotes(notesDir: string, sessionId: string, written: string[]): string {
-	const dirs = taskDirs(notesDir);
+	const dir = tasksDir(notesDir);
 	if (sessionId !== "") {
-		const matches = dirs.flatMap(notesFiles).filter((path) => notesListsSession(readFileSync(path, "utf8"), sessionId));
+		const matches = notesFiles(dir).filter((path) => notesListsSession(readFileSync(path, "utf8"), sessionId));
 		const newest = newestByMtime(matches);
 		if (newest) return newest;
 	}
 	const lastWritten = [...written]
 		.reverse()
-		.find((path) => isInside(dirs, path) && path.endsWith(".md") && existsSync(path));
+		.find((path) => isInside(dir, path) && path.endsWith(".md") && existsSync(path));
 	if (lastWritten) return lastWritten;
 	const open = openTaskNotes(notesDir);
 	return open.length === 1 ? open[0] : "";

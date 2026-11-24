@@ -190,11 +190,10 @@ outside a repository.
 ## Notes folders after an update
 
 Task notes live in `tasks/` and session logs in `session-logs/` inside each
-project notes folder. Earlier releases used two other folder names; the
-current release still reads them, and the next release stops. First update
-every adapter you use (Claude Code, Pi, Kiro CLI), so none of them writes to
-the old folders again. Then move them once per project notes folder (nothing
-moves them for you):
+project notes folder. Earlier releases used two other folder names, and
+nothing reads those any more. First update every adapter you use (Claude
+Code, Pi, Kiro CLI), so none of them writes to the old folders again. Then
+move them once per project notes folder (nothing moves them for you):
 
 ```bash
 cd ~/agent-notes/project-notes/<project>
