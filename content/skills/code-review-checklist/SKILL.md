@@ -89,7 +89,9 @@ The companion reads its own batch diff once more and confirms.
 
 ## Verification Evidence
 
-The review runs the suite once in each review round. A passing suite is its
+The review runs the suite once in each review round, unless the reviewer's
+permissions do not allow it; then the suite goes under `Not verified`. A
+passing suite is its
 own evidence, and CI reruns the same suite. A red run is a failure to report
 or a flake to fix. A red run is never a reason to re-run until green.
 

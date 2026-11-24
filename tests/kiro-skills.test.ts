@@ -68,7 +68,6 @@ describe("kiro skills: the platform branch", () => {
 		assert.match(skill, /^---\nname: review\n/);
 		assert.match(skill, /^context: fork$/m);
 		assert.match(skill, /^agent: persona-agents:reviewer$/m);
-		assert.match(skill, /^background: false$/m);
 	});
 
 	test("the retro skill stays print-only and slash-invoked", () => {

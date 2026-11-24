@@ -45,8 +45,11 @@ and you change it as soon as the facts change.
    **production-issue-flagging**.
 6. **Review** a non-trivial change before you commit it with the **review**
    skill. It runs a read-only reviewer in a separate context and returns
-   findings and a verdict. Fix the findings in one batch; the
-   **code-review-checklist** skill owns the severity map and the re-review rule.
+   findings and a verdict. Do not commit while the review runs. A review that
+   ends without a verdict is incomplete; report it that way. When your
+   platform note names a stall guard for the review, follow it. Fix the
+   findings in one batch; the **code-review-checklist** skill owns the severity map and the
+   re-review rule.
 7. **Commit** each finished task. The repository's own rules set the commit
    form; when it has none, ask the owner before the first commit. Run
    **commit-hygiene** before a push or a pull request. A push, a pull request,

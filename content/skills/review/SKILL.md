@@ -4,7 +4,6 @@ description: Independent review of the current change by a read-only reviewer in
 argument-hint: "[base-ref | commit-range | paths]"
 context: fork
 agent: persona-agents:reviewer
-background: false
 ---
 
 ## Platform branch

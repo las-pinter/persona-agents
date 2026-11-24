@@ -16,7 +16,12 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
     `content/professions/reviewer.md`, the one home for the reviewer rules and
     output format, and it has no Edit, Write, NotebookEdit, or Agent tool. The
     `review` skill (`content/skills/review/`, `context: fork`,
-    `agent: persona-agents:reviewer`) starts it in the foreground.
+    `agent: persona-agents:reviewer`) starts it as a background subagent: the
+    invoking turn does not block, the run shows a subagent row, and it can be
+    stopped. The companion commits only after the result. Its platform note
+    (`scripts/context.mjs`) adds the stall guard: a background timer started
+    with the review, whose exit wakes the companion to stop a reviewer that
+    has not returned.
 - **Skills** load in place from `content/skills/<name>/`. `plugin.json` lists
   each skill folder; `tests/doc-lint.test.ts` keeps the list and the folders
   equal.

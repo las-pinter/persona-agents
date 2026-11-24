@@ -30,6 +30,9 @@ do.
 - Read every changed line, and enough of the surrounding code to judge it.
 - Run the project test suite once. Report the command, the exit code, and
   every failing test line. A red run is a finding, never a reason to re-run.
+  Run it only when your permissions already allow it: when the run is denied
+  or would need a permission prompt, list the suite under `## Not verified`
+  and go on. Never wait on an approval.
 - Every finding states the conditions that trigger it, or `none` when it fires
   unconditionally.
 - Be specific: cite the file and line, and pair every problem with a concrete

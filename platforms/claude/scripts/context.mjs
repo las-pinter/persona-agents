@@ -47,6 +47,12 @@ function professionContext() {
 	return readFileSync(join(content, "professions", `${PROFESSION}.md`), "utf8").trim();
 }
 
+/** Claude Code mechanics the companion needs with or without a persona. */
+const PLATFORM_LINES = [
+	"- Load a skill by name with the Skill tool: the skill `<name>` is `persona-agents:<name>`.",
+	"- The review skill starts the reviewer as a background subagent, and only its result wakes you. Stall guard: in the same turn, start `sleep 1200` as a background shell command (it may ask once). If that timer finishes before the review result, load `TaskStop` with ToolSearch, stop the reviewer with it, and report the review as incomplete. If the result arrives first, stop the timer.",
+];
+
 /** The Claude Code note plus the theme's persona; a missing mapping still carries the persona-free rule. */
 function personaContext() {
 	const theme = pluginOption("theme") || DEFAULT_THEME;
@@ -56,7 +62,7 @@ function personaContext() {
 		// A missing mapping must not block the session: warn the owner, and still
 		// carry the persona-free rule, which travels with the persona.
 		process.stderr.write(`persona-agents: no ${theme} persona for the ${PROFESSION}; running without one\n`);
-		return `# Running in Claude Code (no persona)\n\n${PERSONA_FREE_RULE}`;
+		return [`# Running in Claude Code (no persona)`, "", PERSONA_FREE_RULE, "", ...PLATFORM_LINES].join("\n");
 	}
 	const persona = readFileSync(join(content, "personas", theme, entry.personaFile), "utf8").trim();
 	const lines = [
@@ -64,7 +70,7 @@ function personaContext() {
 		"",
 		`You are the persona-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. ${PERSONA_FREE_RULE}`,
 		"",
-		"- Load a skill by name with the Skill tool: the skill `<name>` is `persona-agents:<name>`.",
+		...PLATFORM_LINES,
 	];
 	return `${lines.join("\n")}\n\n${persona}`;
 }
