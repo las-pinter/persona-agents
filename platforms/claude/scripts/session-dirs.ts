@@ -19,6 +19,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { managedPath, userConfigDir } from "./plugin-options.mjs";
+import { expandHome } from "../../shared/paths.ts";
 
 /** The paths and env a test supplies in place of the real ones. */
 export interface DirSources {
@@ -72,9 +73,7 @@ export function sessionDirs(cwd: string, sources: DirSources = {}): string[] {
 	const found = new Set<string>();
 	for (const file of files) {
 		for (const value of additionalIn(file)) {
-			let path = value;
-			if (path === "~") path = home;
-			else if (path.startsWith("~/")) path = join(home, path.slice(2));
+			let path = expandHome(value, home);
 			if (!isAbsolute(path)) path = join(project, path);
 			found.add(resolve(path));
 		}

@@ -143,6 +143,9 @@ export const DEFAULT_REVIEWER = "pa-reviewer";
 /** A change key line: the review brief's metadata for the commit gate. */
 export const CHANGE_KEY = /Change key:\s*([0-9a-f]{16})\b/;
 
+/** The change key line the review brief carries. */
+export const changeKeyLine = (key: string): string => `Change key: ${key}`;
+
 /** The change key in a text, or "". */
 export function changeKeyIn(text: string): string {
 	const match = CHANGE_KEY.exec(text);

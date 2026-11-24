@@ -30,6 +30,8 @@ import { hasMaterial, sources, writerPrompt } from "../../shared/notes/session-l
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
 import { readSession } from "./session-store.ts";
+import { option } from "./argv.ts";
+import { safeId } from "./paths.ts";
 
 /** The headless model the writer uses. */
 export const WRITER_MODEL = process.env.PERSONA_AGENTS_WRITER_MODEL || "claude-haiku-4.5";
@@ -53,9 +55,6 @@ export interface SessionLogPayload {
 	/** The prompt the writer model gets. */
 	prompt: string;
 }
-
-/** A file-name-safe session id. */
-const safeId = (id: string): string => String(id || "unknown").replace(/[^A-Za-z0-9_-]/g, "_");
 
 /** The writer payload folder. */
 export const sessionLogStateDir = (stateDir: string): string => join(stateDir, "session-log");
@@ -185,11 +184,6 @@ export function writeEntry(file: string, options: { kiroCli?: string } = {}): bo
 	} finally {
 		rmSync(file, { force: true });
 	}
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

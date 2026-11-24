@@ -13,13 +13,9 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { isInside, taskDirs } from "./folders.ts";
+import type { EntryLike } from "../compaction/manifest.ts";
 
-/** The part of a Pi session entry this module reads, plus a compaction summary. */
-export interface EntryLike {
-	type?: string;
-	summary?: string;
-	message?: { role?: string; content?: unknown };
-}
+export type { EntryLike };
 
 export interface NoteSource {
 	path: string;

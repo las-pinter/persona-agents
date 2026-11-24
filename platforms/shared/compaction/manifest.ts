@@ -24,9 +24,10 @@ export const MAX_SKILLS = 12;
 /** The cap on documents reloaded after one compaction. */
 export const MAX_DOCS = 20;
 
-/** The part of a Pi session entry this module reads. */
+/** The part of a Pi session entry the shared modules read, plus a compaction summary. */
 export interface EntryLike {
 	type?: string;
+	summary?: string;
 	message?: { role?: string; content?: unknown };
 	customType?: string;
 	data?: unknown;
@@ -43,13 +44,13 @@ export interface Manifest {
 	docs: string[];
 }
 
-interface ToolCall {
+export interface ToolCall {
 	name: string;
 	arguments: Record<string, unknown>;
 }
 
 /** The tool calls of the main chain, in order. */
-function toolCalls(entries: EntryLike[]): ToolCall[] {
+export function toolCalls(entries: EntryLike[]): ToolCall[] {
 	const calls: ToolCall[] = [];
 	for (const entry of entries) {
 		if (entry.type !== "message" || entry.message?.role !== "assistant") continue;

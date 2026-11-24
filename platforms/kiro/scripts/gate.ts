@@ -32,6 +32,8 @@ import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey } from "./change.ts";
 import { appendDecision, reviewFor } from "./state.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
+import { option } from "./argv.ts";
+import { expandHome } from "../../shared/paths.ts";
 
 export type AgentProfile = "companion" | "reviewer";
 export type Verdict = "allow" | "ask" | "deny";
@@ -102,7 +104,7 @@ function commitOutsideRepo(command: string, cwd: string): boolean {
 			const target = words[i + 1] ?? "";
 			if (target === "") dir = homedir();
 			else if (target !== "-" && !/[$`*?[\]{}]/.test(target)) {
-				dir = target === "~" ? homedir() : target.startsWith("~/") ? resolve(homedir(), target.slice(2)) : resolve(dir, target);
+				dir = resolve(dir, expandHome(target, homedir()));
 			}
 			if (words[i + 2] !== "&&") {
 				i += 2;
@@ -224,11 +226,6 @@ export function logDecision(profile: AgentProfile, tool: string, command: string
 		reason: decision.reason,
 		command,
 	});
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

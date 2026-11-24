@@ -32,6 +32,8 @@ import {
 } from "../../shared/review/review.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey, git } from "./change.ts";
+import { option } from "./argv.ts";
+import { changeKeyLine } from "./session-store.ts";
 
 /** The brief and the change it names. */
 export interface ReviewBrief {
@@ -104,14 +106,9 @@ export async function buildReviewBrief(
 export function reviewerTask(brief: ReviewBrief): string {
 	const lines = [promptForBrief(brief.brief, "Kiro")];
 	if (brief.key !== "") {
-		lines.push("", `Change key: ${brief.key}`, "This line is metadata for the commit gate, not a checklist.");
+		lines.push("", changeKeyLine(brief.key), "This line is metadata for the commit gate, not a checklist.");
 	}
 	return lines.join("\n");
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

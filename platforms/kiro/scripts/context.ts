@@ -30,6 +30,7 @@ import {
 import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import { contentOf, kiroHome as resolveKiroHome, readTheme, rootFromScript } from "./paths.ts";
+import { option } from "./argv.ts";
 
 /** The Kiro platform note, with the session id the wrap-up and retro use. */
 export function platformNote(sessionId: string, theme?: string): string {
@@ -93,12 +94,6 @@ export function contextFor(
 		return { text: startupText(cwd, options.home, sessionId) };
 	}
 	return null;
-}
-
-/** The test seam and the hook arguments: `--home=`, `--kiro-home=`, `--content=`. */
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

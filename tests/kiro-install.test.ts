@@ -347,6 +347,14 @@ describe("kiro install: the version check", () => {
 		assert.deepEqual(MIN_VERSION, [3, 4, 0]);
 	});
 
+	test("install.sh checks the same minimum before it starts Node", () => {
+		// The shell check runs first and cannot import MIN_VERSION, so it keeps a copy.
+		const script = fs.readFileSync(path.join(repoRoot, "install.sh"), "utf8");
+		const [major, minor] = MIN_VERSION;
+		assert.match(script, new RegExp(`\\(\\(major < ${major}\\)\\) \\|\\| \\(\\(major == ${major} && minor < ${minor}\\)\\)`));
+		assert.match(script, new RegExp(`below ${MIN_VERSION.join("\\.")};`));
+	});
+
 	test("the CLI installs with a current kiro-cli and writes only on the real run", () => {
 		withTemp((temp) => {
 			const cli = fakeCli(temp);

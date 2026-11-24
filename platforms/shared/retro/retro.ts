@@ -7,7 +7,9 @@
  * review the session against evidence instead of its own memory.
  */
 
-import type { EntryLike } from "../compaction/manifest.ts";
+import { toolCalls, type EntryLike } from "../compaction/manifest.ts";
+
+export { toolCalls };
 
 /** One line of the decisions log. */
 export interface DecisionLine {
@@ -51,21 +53,6 @@ export function sessionDecisions(lines: DecisionLine[], session: string): Decisi
 
 const cap = (items: string[], max: number): string[] => (items.length <= max ? items : [...items.slice(0, max), `… and ${items.length - max} more`]);
 
-/** The tool calls of the branch, by tool name. */
-export function toolCalls(entries: EntryLike[]): { name: string; arguments: Record<string, unknown> }[] {
-	const calls: { name: string; arguments: Record<string, unknown> }[] = [];
-	for (const entry of entries) {
-		if (entry.type !== "message" || entry.message?.role !== "assistant" || !Array.isArray(entry.message.content)) continue;
-		for (const block of entry.message.content) {
-			const candidate = block as { type?: unknown; name?: unknown; arguments?: unknown } | null;
-			if (candidate?.type !== "toolCall" || typeof candidate.name !== "string") continue;
-			const args = candidate.arguments;
-			calls.push({ name: candidate.name, arguments: args && typeof args === "object" ? (args as Record<string, unknown>) : {} });
-		}
-	}
-	return calls;
-}
-
 /** A compact, honest report of what the session did. */
 export function summarizeSession(input: FactsInput): string {
 	const calls = toolCalls(input.entries);
@@ -85,7 +72,7 @@ export function summarizeSession(input: FactsInput): string {
 		),
 	];
 	const compactions = input.entries.filter((entry) => entry.type === "compaction").length;
-	const reviews = (input.entries as (EntryLike & { customType?: string; data?: unknown })[])
+	const reviews = input.entries
 		.filter((entry) => entry.customType === "persona-agents:review")
 		.map((entry) => (entry.data as { verdict?: unknown } | undefined)?.verdict)
 		.filter((verdict): verdict is string => typeof verdict === "string");

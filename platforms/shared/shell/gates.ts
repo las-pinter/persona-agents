@@ -31,13 +31,15 @@
  * header only (safeHeredocHeader).
  */
 
-import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, relative, resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import { normalizeHeredocs, safeHeredocHeader } from "./heredoc.ts";
 import { isFormatter, isInertFilter } from "./inert.ts";
 import { parseShellCommand } from "./shell-parse.ts";
 import { shellWords } from "./shell-words.ts";
+import { expandHome, insideDir } from "../paths.ts";
+
+export { insideDir };
 
 export { normalizeHeredocs } from "./heredoc.ts";
 export { shellWords } from "./shell-words.ts";
@@ -199,21 +201,6 @@ const GATED_WORD = new RegExp(
 
 const MAX_UNWRAP_DEPTH = 4;
 
-/** The real path when it exists, else the resolved path. */
-function realOrResolved(path: string): string {
-	try {
-		return realpathSync.native(path);
-	} catch {
-		return resolve(path);
-	}
-}
-
-/** True when `path` is `base` or inside it, resolving a symlink that exists. */
-export function insideDir(path: string, base: string): boolean {
-	const rel = relative(realOrResolved(base), realOrResolved(path));
-	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
 /**
  * A `cd` target as a resolved absolute path when it is a session directory,
  * else null. `~` expands to the home folder; an expansion, a glob, a quote
@@ -223,10 +210,9 @@ function cdPath(target: string, dir: string | undefined, options: GateOptions): 
 	if (target === "-" || /[$`*?[\]{}]/.test(target)) return null;
 	const home = options.home ?? homedir();
 	let path: string;
-	if (target === "" || target === "~") path = home;
-	else if (target.startsWith("~/")) path = resolve(home, target.slice(2));
-	else if (target.startsWith("~")) return null;
-	else path = target;
+	if (target === "") path = home;
+	else if (target.startsWith("~") && target !== "~" && !target.startsWith("~/")) return null;
+	else path = expandHome(target, home);
 	const base = dir ?? options.cwd;
 	const resolved = isAbsolute(path) ? resolve(path) : base === undefined ? null : resolve(base, path);
 	if (resolved === null || options.isSessionDir === undefined) return null;

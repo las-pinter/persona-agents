@@ -19,15 +19,11 @@ import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { entryPath, recentSessionLogs } from "../../shared/notes/session-log.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
+import { option } from "./argv.ts";
 
 /** This session's entry path for a working directory and home folder. */
 export function sessionLogPath(cwd: string, home: string, sessionId: string, now: Date = new Date()): string {
 	return entryPath(projectDir(cwd, home), sessionId, now);
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

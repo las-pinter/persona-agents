@@ -26,9 +26,9 @@
  * silently matching nothing.
  */
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, appendFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
 	commandCandidates,
 	commandSegments,
@@ -42,6 +42,7 @@ import {
 	type Hit,
 } from "../../shared/shell/gates.ts";
 import type { Profile } from "./profile.ts";
+import { expandHome, insideDir, realOrResolved } from "../../shared/paths.ts";
 
 export type Verdict = "allow" | "ask" | "deny";
 export type RuleScope = "user" | "project";
@@ -158,26 +159,8 @@ const PIPELINE_FLOORS = [
 const GATE_FILES = /(^|[/\\])(\.git[/\\](hooks|config)([/\\]|$))/;
 const GATE_FILES_REASON = "rewriting the gate's own files or git hooks is denied by the built-in floor";
 
-/** The real path when it exists, else the resolved path. */
-function realOrResolved(path: string): string {
-	try {
-		return realpathSync.native(path);
-	} catch {
-		return resolve(path);
-	}
-}
-
 /** True when dir is base or inside it. */
-export function isInside(dir: string, base: string): boolean {
-	const rel = relative(realOrResolved(base), realOrResolved(dir));
-	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
-/** A path with a leading `~` expanded to the home folder. */
-export function expandHome(path: string, home: string): string {
-	if (path === "~") return home;
-	return path.startsWith("~/") ? join(home, path.slice(2)) : path;
-}
+export const isInside = insideDir;
 
 /** A path as an absolute path, from a redirect target or a tool argument. */
 function absolutePath(value: string, env: PolicyEnv): string {

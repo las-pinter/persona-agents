@@ -25,6 +25,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadRegistry, resolveTheme, type Registry } from "../shared/context/context.ts";
 import { readTheme, validKiroHome } from "./scripts/paths.ts";
+import { option } from "./scripts/argv.ts";
 
 /** The minimum Kiro CLI version with PermissionRequest and the compaction hooks. */
 export const MIN_VERSION: [number, number, number] = [3, 4, 0];
@@ -453,12 +454,6 @@ export function install(options: InstallOptions & { kiroCli?: string }): { ok: b
 		writeIfChanged(join(plan.kiroHome, "agents", `${name}.json`), `${JSON.stringify(config, null, 2)}\n`, stamp);
 	}
 	return { ok: true, error: "", plan, actions };
-}
-
-/** The CLI's option seam. */
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

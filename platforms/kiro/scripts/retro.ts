@@ -29,6 +29,7 @@ import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts"
 import { decisionsFile } from "./state.ts";
 import { metricsFile, summariesFile } from "./compact.ts";
 import { readSession } from "./session-store.ts";
+import { option } from "./argv.ts";
 
 /** The facts and the instruction a Kiro retro run gets. */
 export interface RetroFacts {
@@ -114,11 +115,6 @@ export function retroFacts(
 	if (session.meta?.modelId) extras.push(`- model: ${session.meta.modelId}`);
 	const text = [facts, ...(extras.length ? ["", ...extras] : [])].join("\n");
 	return { instruction: RETRO_INSTRUCTION, facts: text };
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

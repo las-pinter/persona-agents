@@ -190,6 +190,7 @@ install_kiro() {
         else
             major="" minor=""
         fi
+        # Same minimum as MIN_VERSION in platforms/kiro/install.ts; a test keeps them equal.
         if [[ -z "$major" ]] || ((major < 3)) || ((major == 3 && minor < 4)); then
             echo "Kiro CLI ${version:-unknown} is below 3.4.0; skipping the Kiro adapter. Install kiro-cli 3.4.0 or newer to use it."
             return 0
