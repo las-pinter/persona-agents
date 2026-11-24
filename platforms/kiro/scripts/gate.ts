@@ -26,7 +26,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { isCommitCommand, isTrivial } from "../../shared/review/review.ts";
+import { commitGate, isCommitCommand, isTrivial, type Verdict as ReviewVerdict } from "../../shared/review/review.ts";
 import { commandSegments, gateCommand, gitSubcommand, insideDir, shellWords, unwrapSegment, SUPPORT, UNGATED, type GateHit, type Hit } from "../../shared/shell/gates.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey } from "./change.ts";
@@ -44,8 +44,6 @@ export const HISTORY_DENY =
 /** Why a publish command asks the owner. */
 export const PUBLISH_ASK =
 	"git push, a gh pr / release / run write, a git config override, or a wrapped git command needs your approval";
-/** Why an unreviewed commit asks the owner. */
-export const REVIEW_ASK = "this change has no independent review, so the commit needs your approval";
 /** Why a commit against another repository asks the owner. */
 export const OTHER_REPO_ASK = "a commit against another repository needs your approval";
 /** Why a command that is not git work asks the owner. */
@@ -175,14 +173,11 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 	}
 
 	const { change, key } = changeKey(ctx.cwd);
-	if (isTrivial(change)) return { verdict: "allow", reason: "a trivial change needs no review before a commit", key };
 	const review = reviewFor(ctx.stateDir, key);
 	// The Stop hook writes the sub-session. A hand-written entry that omits it
 	// is ignored; one that sets it is indistinguishable from a real record.
 	const usable = review && review.subSession ? review : null;
-	if (usable?.verdict === "Approve") return { verdict: "allow", reason: "an independent review approved this exact change", key };
-	if (usable) return { verdict: "ask", reason: `the review returned ${usable.verdict}, so this commit needs your approval`, key };
-	return { verdict: "ask", reason: REVIEW_ASK, key };
+	return { ...commitGate({ trivial: isTrivial(change), reviewed: usable ? (usable.verdict as ReviewVerdict) : null }), key };
 }
 
 /** The decision for one hook event, with the event's guards applied. */

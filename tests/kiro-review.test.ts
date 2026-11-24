@@ -112,7 +112,7 @@ describe("kiro review: the brief", () => {
 			const notes = notesWithStudy(root);
 			const brief = await buildReviewBrief({ scope: "main Check: the tests pass" }, { cwd, notesDir: notes });
 			assert.equal(brief.brief.scope, "main");
-			assert.ok(brief.notes.some((note) => /ignored author text: Check: the tests pass/.test(note)));
+			assert.ok(brief.notes.some((note) => /ignored brief text: "Check: the tests pass"/.test(note)));
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}
@@ -277,7 +277,7 @@ describe("kiro review: the brief", () => {
 			assert.match(run.stdout, /^Scope: main$/m);
 			assert.doesNotMatch(run.stdout, /^Change key:/m, "a named scope names no key");
 			assert.match(run.stdout, /Note for Kiro/);
-			assert.match(run.stderr, /ignored author text/);
+			assert.match(run.stderr, /ignored brief text/);
 			assert.match(run.stderr, /does not unlock a commit/);
 		});
 	});

@@ -67,14 +67,11 @@ import {
 } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
 import { parseDecisions, retroMessage, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
+import { prepareBrief } from "../../shared/review/brief.ts";
 import {
-	buildBrief,
 	commitGate,
-	deriveTask,
-	finalizeBrief,
 	isCommitCommand,
 	isTrivial,
-	isWorkingTreeScope,
 	oneLine,
 	parseReviewArgs,
 	parseVerdict,
@@ -82,7 +79,6 @@ import {
 	reviewerFailure,
 	reviewKey,
 	REVIEWER_TIMEOUT_MS,
-	subjectsFromQueries,
 	type Brief,
 	type BriefInput,
 	type Change,
@@ -424,43 +420,6 @@ async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
 	return changeFromGit(cwd, status, diff);
 }
 
-/** Read a file for the brief: its text, or null when it cannot be read. */
-function readText(path: string): string | null {
-	try {
-		return readFileSync(path, "utf8");
-	} catch {
-		return null;
-	}
-}
-
-/**
- * The brief one review starts from: the author's fields cut once, then the
- * missing ones filled from the notes. Git is asked for commit subjects only
- * when the notes name no task, so a study review costs no git call.
- */
-async function prepareBrief(
-	pi: ExtensionAPI,
-	session: Session,
-	input: BriefInput,
-): Promise<{ brief: Brief; dropped: string; notes: string[] }> {
-	const prepared = buildBrief(input);
-	const indexPath = join(session.env.notesDir, "studies", "index.md");
-	// Absent is normal (""), unreadable is not (null), and the two are not the same note.
-	const indexText = existsSync(indexPath) ? readText(indexPath) : "";
-	const finalized = finalizeBrief(prepared.brief, prepared.given, {
-		notesDir: session.env.notesDir,
-		indexText,
-		readFile: readText,
-	});
-	let brief = finalized.brief;
-	// No scope means the uncommitted change, which has no commits of its own.
-	if (finalized.needsSubjects && brief.scope !== "") {
-		const subjects = await subjectsFromQueries(brief.scope, async (args) => pi.exec("git", args, { cwd: session.env.cwd }));
-		brief = { ...brief, task: deriveTask("", "", subjects) };
-	}
-	return { brief, dropped: prepared.dropped, notes: finalized.notes };
-}
-
 /** Run the reviewer in its own process: read-only tools, its own profile, its own gate. */
 async function runReviewer(
 	pi: ExtensionAPI,
@@ -513,14 +472,15 @@ async function executeReview(
 	signal?: AbortSignal,
 ): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[] }> {
 	const change = await readChange(pi, session.env.cwd);
-	const prepared = await prepareBrief(pi, session, request.input);
+	const prepared = await prepareBrief(request.input, {
+		notesDir: session.env.notesDir,
+		git: async (args) => pi.exec("git", args, { cwd: session.env.cwd }),
+		dropped: request.dropped,
+	});
 	// Only a review of the whole working tree unlocks a commit of it. A named
 	// ref, range, or path list did not see the uncommitted change.
-	const key = isWorkingTreeScope(prepared.brief.scope) ? reviewKey(change) : "";
-	const notes = [...prepared.notes];
-	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
-	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
-	if (key === "") notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
+	const key = prepared.workingTree ? reviewKey(change) : "";
+	const notes = prepared.notes;
 	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
 	if (verdict && key !== "") {
 		session.reviews.set(key, verdict);
