@@ -66,7 +66,7 @@ import {
 	type Verdict,
 } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
-import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
+import { parseDecisions, retroMessage, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
 import {
 	buildBrief,
 	commitGate,
@@ -815,7 +815,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				journal: existsSync(entry) ? [entry] : [],
 			});
 			pi.sendMessage(
-				{ customType: "persona-agents:retro", content: `${RETRO_INSTRUCTION}\n\n${facts}`, display: true },
+				{ customType: "persona-agents:retro", content: retroMessage(join(contentDir(), "skills", "retro", "SKILL.md"), facts), display: true },
 				{ triggerTurn: true },
 			);
 		},

@@ -75,7 +75,8 @@ plain kebab-case slug.
   when you need them. Project rules, the summary, the study, and this file are
   reloaded anyway and need no pin.
 - **Log** only what a later reader needs: a blocker, a rule change, a
-  compaction line (the hooks write those).
+  compaction line. Some adapters write the compaction line from a hook; when
+  none appears after a compaction, write it yourself.
 - Set `Status: done` when the task closes. An open file shows up at the next
   session start.
 - Keep the file under 200 lines. Move detail into the study or a project note.

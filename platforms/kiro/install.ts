@@ -485,6 +485,6 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 	if (!dryRun) {
 		process.stdout.write(`Kiro installed for ${basename(kiroHome)} (kiro-cli ${check.version}).\n`);
 		process.stdout.write("Start the companion: kiro-cli --agent pa-companion\n");
-		process.stdout.write("Update: git pull, then rerun ./install.sh\n");
+		process.stdout.write("Update: git pull, then ./install.sh --kiro\n");
 	}
 }

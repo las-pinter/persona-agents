@@ -126,7 +126,7 @@ kiro-cli --agent pa-companion
   names an agent that does not exist.
 - A skill folder it does not own stops the install; `--force` backs it up and
   replaces it.
-- Update with `git pull` and a rerun of `./install.sh`.
+- Update with `git pull` and `./install.sh --kiro`.
 
 The native Kiro rules allow the read-only git and test commands. An unreviewed
 non-trivial commit, a push, or a pull request shows Kiro's own permission

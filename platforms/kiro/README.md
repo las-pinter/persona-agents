@@ -52,7 +52,7 @@ lacks the marker; `--force` renames it to `<name>.bak-<timestamp>` and replaces
 it.
 A version below 3.4.0 is refused before any write.
 
-Update with `git pull` and a rerun of `./install.sh`. A file whose text the
+Update with `git pull` and `./install.sh --kiro`. A file whose text the
 installer would change is backed up as `<file>.bak-<timestamp>`; a file that
 already matches is left alone, so an unchanged run writes no backup. Start the
 companion with:

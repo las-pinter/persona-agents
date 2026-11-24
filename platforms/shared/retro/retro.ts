@@ -123,3 +123,11 @@ export const RETRO_INSTRUCTION = [
 	"Run a blameless retro on this session, print only: what was supposed to happen, what happened, what was right and wrong, and the actions worth taking.",
 	"Use the facts below as evidence. Write nothing durable: no journal entry, no notes, no commit.",
 ].join("\n");
+
+/**
+ * The retro message for an adapter that sends the facts itself: the skill
+ * holds the sweep, the finding format, and the routing, so it is named first.
+ */
+export function retroMessage(skillFile: string, facts: string): string {
+	return `Read the retro skill at ${skillFile} and follow it.\n${RETRO_INSTRUCTION}\n\n${facts}`;
+}

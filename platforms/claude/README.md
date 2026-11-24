@@ -84,11 +84,13 @@ rule; `tests/claude-doctrine.test.ts` holds the matrix.
   `tail`, `wc`, `sort`, or `uniq` filter that reads a pipe with no file
   argument, and a quoted heredoc or single-quoted here-string that only feeds
   `git commit -F -`. A push, a
-  `gh pr` / `run` / `release`, a git config override, an upload-pack or
+  `gh pr` / `run` / `release` write, a git config override, an upload-pack or
   transport helper URL, a merge strategy, a git verb that runs another program,
   writes config, or reaches a remote, and any wrapped or runtime-shaped
-  command ask. A file redirect, a substitution, a `tee`, or a `cd` elsewhere
-  removes the allowance, so Claude Code's own flow decides.
+  command ask; a substitution and an output redirect to a file on a history
+  command are runtime-shaped. A `tee`, an output redirect on any other
+  command, or a `cd` elsewhere removes the allowance, so Claude Code's own
+  flow decides.
 - Every other plugin agent (the reviewer) is denied all of those, and every
   shell write the hook can see: file-changing commands, git and gh writes, and
   output redirects to a file.

@@ -70,9 +70,11 @@ The doctrine lives in three places:
   `release` write, a `git -c` override, an unknown git global option, an upload-pack
   or transport helper URL, a merge strategy, a git verb that runs another
   program, writes config, or reaches a remote, and any wrapped or substituted
-  command ask. A file redirect, a `tee`, or a `cd` outside those directories
-  removes the allowance, so Claude Code's own flow decides. Every other plugin
-  agent is denied all of these and every shell write the hook can see.
+  command ask, and so does a history command with an output redirect to a
+  file. A `tee`, an output redirect on any other command, or a `cd` outside
+  those directories removes the allowance, so Claude Code's own flow decides.
+  Every other plugin agent is denied all of these and every shell write the
+  hook can see.
 - The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and
   `pa-reviewer`. A `PermissionRequest` hook allows a git command and
   a reviewed or trivial commit; anything else returns no decision, so Kiro's
@@ -100,6 +102,12 @@ Kiro companion is asked, the Kiro reviewer is allowed it, and Claude Code's own
 flow decides. The Pi write-place rule resolves a write word as a literal path,
 so a `$VAR`, a backtick, or a `~user` word there is not expanded and the rule
 cannot place it.
+The settings ask list matches `gh pr <action>` prefixes, so a global flag
+before the action (`gh pr -R o/r merge 1`) falls outside it; the doctrine hook
+still asks for that command for the persona-agents agents, and a plain session
+relies on Claude Code's own flow. The hook reads the word after the
+sub-command as the action, so a flag there also makes a read ask
+(`gh pr -R o/r view 1`); it fails safe.
 `gh workflow run` and `gh api` carry no gate entry by owner choice, so Claude
 Code's own permission flow decides them. The Kiro companion may run a `node`
 script, so a determined companion can write the review store; the gate ignores

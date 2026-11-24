@@ -19,8 +19,9 @@ Review the current session and print the result in chat. Write nothing
 durable.
 
 On Pi, `/retro` gathers the session facts (tool calls, changed files,
-compactions, reviews, and every permission decision) and sends them here. On
-Claude Code, `/persona-agents:retro` starts the same work.
+compactions, reviews, and every permission decision) and sends them with the
+path of this skill. On Kiro CLI, `/retro` loads this skill. On Claude Code,
+`/persona-agents:retro` starts the same work.
 
 The spine is the After Action Review (AAR). It has four parts:
 
@@ -82,7 +83,7 @@ Collect evidence from these sources:
 |--------|----------|-------|
 | Session context | Live context | Messages, tool calls, denials, user turns |
 | Session transcript | See Session Facts | Tool calls, timestamps, usage, compactions |
-| Session notes | `<project notes>/sessions/` | Plan, decisions, pins, compaction log lines |
+| Session notes | `<project notes>/sessions/` | Plan, decisions, pins, compaction log lines, when an adapter or the agent wrote one |
 | Journal | `<project notes>/journal/<day>/` | Earlier sessions: work, decisions, open items |
 | Project notes | `<project notes>/` | `summary.md`, `rules/`, studies |
 | Git history | Repo working tree | `git log`, `git diff`, `git status` |

@@ -75,11 +75,15 @@ previous commit.
 
 1. Propose the smallest coherent grouping and the final commit count.
 2. Ask the user to approve the grouping.
-3. Confirm the base is not pushed (`git branch -r --contains <base>`). Stop if it is.
+3. Confirm no commit after the base is pushed: `git rev-list --count
+   <base>..HEAD` and `git rev-list --count <base>..HEAD --not --remotes` must
+   print the same number. A difference means a remote holds part of the
+   range: stop. The base itself may be pushed.
 4. Run `git reset --soft <base>`. Re-commit in the target grouping.
    The repository's own contribution rules own the commit form. When the
    repository has no commit rule, ask the user before the first commit.
-   Unstage as needed with `git add <path>` or `git commit <path>`. Do not use a mixed `git reset`.
+   Unstage a path with `git restore --staged <path>`, or commit one group with
+   `git commit <paths>`. Do not use a mixed `git reset`.
 5. Re-run the tests and the typecheck.
 
 ## Rules
