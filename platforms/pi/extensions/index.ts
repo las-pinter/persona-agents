@@ -13,8 +13,8 @@
  *   tool_call          the permission gate: allow, ask with the UI, or block
  *   session_compact    queue the reload list for the next run
  *
- * A session without `--agent persona-agents:<name>` gets no sections, no gate,
- * and no commands: a plain Pi session is unchanged. Every fault is contained:
+ * A session without `--agent persona-agents:<name>` gets no sections and no
+ * gate; the commands and tools are registered but refuse. Every fault is contained:
  * a bad theme or an unreadable policy refuses the agent and says why, rather
  * than running half-configured.
  *

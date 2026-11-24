@@ -36,14 +36,14 @@ of `content/` names no harness.
   - `retro/` — the session facts and the retro instruction.
   - `context/` — the prompt sections built from `content/`; each adapter adds
     its platform note.
-- **Types** (`platforms/pi/types/pi-api.d.ts`): a mirror of the Pi extension
-  API this package uses, so a renamed event fails `npm run typecheck` instead
-  of failing silently in a session. Pi supplies the real module at runtime.
+- **Types** (`platforms/pi/types/pi-api.d.ts`, `pi-tui.d.ts`): mirrors of the
+  Pi extension and TUI APIs this package uses, so a renamed event fails
+  `npm run typecheck` instead of failing silently in a session. Pi supplies the real module at runtime.
 
 ## Entry point
 
 ```bash
-pi install <source>            # npm or git; package.json carries the pi block
+pi install <source>            # git URL or local path; package.json carries the pi block
 pi --agent persona-agents:companion
 ```
 
@@ -52,8 +52,8 @@ and at `content/skills`, which Pi advertises and loads on demand.
 
 `--agent persona-agents:<name>` resolves at session start. An id in the
 namespace that names no profile refuses the session and lists the known
-agents. A session without the flag gets no sections, no gate, and no commands:
-a plain Pi session is unchanged.
+agents. A session without the flag gets no sections and no gate; the commands
+and tools are registered but refuse to run.
 
 The profile decides the tools: the companion adds `read`, `bash`, `edit`,
 `write`, `grep`, `find`, `ls` to the user's selection; the reviewer drops
@@ -271,7 +271,6 @@ There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
 | `PERSONA_AGENTS_THEME` | The persona theme, when `--persona` is absent. |
 | `PERSONA_AGENTS_DEBUG=1` | Log allowed decisions too. |
 | `PI_CODING_AGENT_DIR` | The Pi agent dir: policy file, decisions log. `PI_CODING_AGENT` is pi's own `"true"` marker and is never a path. |
-| `PI_SESSION_ID` | The session id recorded with each decision and journal line. |
 
 **Upgrade note.** Earlier builds read `PI_CODING_AGENT` as a path, which is
 `"true"`, so the user policy and the decision log were written under

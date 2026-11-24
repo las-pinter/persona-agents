@@ -1,11 +1,13 @@
 {
   "name": "persona-agents",
   "version": "5.1.0",
-  "description": "Claude Code plugin: a persona companion agent with skills, project notes, and journals",
+  "description": "A persona companion agent with skills, project notes, and journals, for Claude Code, Pi, and Kiro CLI",
   "private": true,
   "type": "module",
   "keywords": [
-    "claude-code-plugin"
+    "claude-code-plugin",
+    "pi-package",
+    "kiro-cli"
   ],
   "scripts": {
     "lint": "shellcheck install.sh",

@@ -31,7 +31,11 @@ Flags:
 - `--dry-run` prints the plan and writes nothing.
 - `--force` backs up and replaces a skill folder the installer does not own.
 - `--kiro-home=<dir>` overrides `$KIRO_HOME`; `--kiro-cli=<path>` overrides the
-  command the version check runs.
+  `kiro-cli` command for the version check and for the session-end journal
+  writer, which the installer wires into the hook.
+
+The environment variable `PERSONA_AGENTS_WRITER_MODEL` picks the model of that
+journal writer.
 
 The installer (`install.ts`) writes:
 
