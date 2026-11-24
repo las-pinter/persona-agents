@@ -23,8 +23,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -34,6 +33,7 @@ import { dayOf, entryPath, findEntry, recentJournal } from "../../shared/notes/j
 import { hasMaterial, sources, type Payload } from "../../shared/notes/journal-net.ts";
 import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../../shared/compaction/manifest.ts";
 import { parsePermissionsArgs } from "../scripts/commands.ts";
+import { changeFromGit, DIFF_ARGS, GIT_OPTIONS, isCleanTree, SHOW_ARGS, STATUS_ARGS } from "../../shared/review/change.ts";
 import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import {
@@ -50,6 +50,7 @@ import { contentDir, homeDir } from "../scripts/paths.ts";
 import { reviewerBody } from "../scripts/review-body.ts";
 import {
 	addRule,
+	ruleTarget,
 	appendDecision,
 	decidePolicy,
 	decisionRecord,
@@ -70,12 +71,10 @@ import {
 	buildBrief,
 	commitGate,
 	deriveTask,
-	failedChange,
 	finalizeBrief,
 	isCommitCommand,
 	isTrivial,
 	isWorkingTreeScope,
-	makeChange,
 	oneLine,
 	parseReviewArgs,
 	parseVerdict,
@@ -84,7 +83,6 @@ import {
 	reviewKey,
 	REVIEWER_TIMEOUT_MS,
 	subjectsFromQueries,
-	untrackedFiles,
 	type Brief,
 	type BriefInput,
 	type Change,
@@ -369,9 +367,9 @@ function permissionsCommand(pi: ExtensionAPI, session: Session, args: string, ct
 		return;
 	}
 	const rule = parsed.rule;
-	const ref = session.refs.find((candidate) => candidate.scope === (rule.project ? "project" : "user")) ?? session.refs[0];
+	const ref = ruleTarget(session.refs, rule.project);
 	if (!ref) {
-		ctx.ui.notify("persona-agents: no policy file to write", "warning");
+		ctx.ui.notify("persona-agents: no project policy file, because Pi does not trust this project; nothing was written", "warning");
 		return;
 	}
 	try {
@@ -414,53 +412,11 @@ function piInvocation(): { command: string; args: string[] } {
 
 /** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
 async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
-	// Keep non-ASCII paths readable; a space still quotes, and `unquotePath` undoes it.
-	const quote = ["-c", "core.quotePath=false"];
-	// `-uall` lists each file of an untracked directory, not just the folder.
-	const status = await pi.exec("git", [...quote, "status", "--porcelain", "-uall"], { cwd });
-	let diff = await pi.exec("git", [...quote, "diff", "HEAD"], { cwd });
-	if (diff.stdout.trim() === "" && status.stdout.trim() === "") {
-		// A clean tree commits nothing, so review the last commit instead.
-		diff = await pi.exec("git", [...quote, "show", "HEAD", "--format="], { cwd });
-	}
-	const change = makeChange(
-		diff.stdout,
-		status.stdout,
-		"",
-		// An untracked file is not in the diff; its lines still count toward the
-		// trivial-change limit. A file over the cap is measured by size, not read.
-		untrackedFiles(status.stdout).map((path) => {
-			const full = join(cwd, path);
-			try {
-				const size = statSync(full).size;
-				if (size > 1024 * 1024) return "\n".repeat(Math.ceil(size / 1024));
-				return readText(full) ?? "";
-			} catch {
-				return "";
-			}
-		}),
-	);
-	// A failed read is not a small change; the gate must ask.
-	if (status.code !== 0 || diff.code !== 0) return failedChange();
-	// The signature hashes every changed file's worktree content and mode, so
-	// the key is the same before and after `git add` and changes on a chmod.
-	const signature = [...change.files]
-		.sort()
-		.map((path) => {
-			try {
-				// Git tracks only the executable bit, so the key does too. A file
-				// over the cap is measured by size and mtime, not read whole.
-				const stat = statSync(join(cwd, path));
-				const mode = stat.mode & 0o111 ? "exec" : "file";
-				if (stat.size > 1024 * 1024) return `${path}:${mode}:${stat.size}:${stat.mtimeMs}`;
-				const content = createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex");
-				return `${path}:${mode}:${content}`;
-			} catch {
-				return `${path}:missing`;
-			}
-		})
-		.join("\n");
-	return { ...change, signature };
+	const run = (args: string[]) => pi.exec("git", [...GIT_OPTIONS, ...args], { cwd });
+	const status = await run(STATUS_ARGS);
+	let diff = await run(DIFF_ARGS);
+	if (isCleanTree(status, diff)) diff = await run(SHOW_ARGS);
+	return changeFromGit(cwd, status, diff);
 }
 
 /** Read a file for the brief: its text, or null when it cannot be read. */

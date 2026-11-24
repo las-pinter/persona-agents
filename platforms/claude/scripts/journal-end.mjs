@@ -126,8 +126,9 @@ function hook(input, claudeArg) {
 }
 
 function write(payloadFile, command = "claude") {
-	const payload = JSON.parse(readFileSync(payloadFile, "utf8"));
 	try {
+		// Parsed inside the try, so a truncated payload is still removed.
+		const payload = JSON.parse(readFileSync(payloadFile, "utf8"));
 		const at = new Date(payload.at);
 		const path = entryPath(payload.notesDir, payload.session, at);
 		if (existsSync(path)) return;

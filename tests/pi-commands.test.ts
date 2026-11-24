@@ -63,6 +63,12 @@ describe("pi commands: /permissions arguments", () => {
 		assert.equal(parsed.rule.match, "^npm test");
 	});
 
+	test("a regex that does not compile is refused before any file is written", () => {
+		const parsed = parsePermissionsArgs("allow bash ^npm (run");
+		assert.equal(parsed.action, "invalid");
+		if (parsed.action === "invalid") assert.match(parsed.message, /^not a valid regex/);
+	});
+
 	test("a mistyped command is refused with the usage line", () => {
 		for (const args of ["maybe bash x", "allow", "allow bash", "allow bash   "]) {
 			const parsed = parsePermissionsArgs(args);

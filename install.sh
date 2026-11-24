@@ -135,7 +135,10 @@ install_claude() {
     fi
 
     local merged
-    merged="$(jq -n --argjson cur "$current" --slurpfile snip "$SNIPPET" --arg home "$HOME" '
+    # Rules an earlier snippet added and the current one dropped: the merge
+    # only adds, so without this a retired ask keeps prompting after an update.
+    local retired='["Bash(gh pr:*)", "Bash(gh run:*)", "Bash(gh release:*)"]'
+    merged="$(jq -n --argjson cur "$current" --slurpfile snip "$SNIPPET" --arg home "$HOME" --argjson retired "$retired" '
         def union($a; $b): ($a // []) + [($b // [])[] | select(. as $x | ($a // []) | index($x) | not)];
         ($snip[0]) as $s
         | ($s.permissions.additionalDirectories // [] | map(if startswith("~/") then $home + .[1:] else . end)) as $dirs
@@ -144,7 +147,7 @@ install_claude() {
         | .permissions = (.permissions // {})
         | .permissions.additionalDirectories = union(.permissions.additionalDirectories; $dirs)
         | .permissions.allow = union(.permissions.allow; $s.permissions.allow)
-        | .permissions.ask = union(.permissions.ask; $s.permissions.ask)
+        | .permissions.ask = (union(.permissions.ask; $s.permissions.ask) | map(select(. as $x | $retired | index($x) | not)))
     ')"
 
     if [[ "$merged" == "$(jq . <<<"$current")" ]]; then

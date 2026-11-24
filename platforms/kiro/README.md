@@ -172,7 +172,7 @@ reads the same change key the review saw:
   a change with a stored `Approve` — allow;
 - an unreviewed or rejected commit, a mixed command, a push, a `gh pr` /
   `release` / `run` write, a config override — no decision, so Kiro asks
-  natively. A `gh` read action (`view`, `list`, `status`, `diff`, `checks`,
+  natively. A `gh` read action (`view`, `list` / `ls`, `status`, `diff`, `checks`,
   `search`) passes.
 
 Kiro's unmatched default is `ask`; that is the mechanism the gate relies on.

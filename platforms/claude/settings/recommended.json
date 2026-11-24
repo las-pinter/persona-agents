@@ -8,12 +8,14 @@
     "ask": [
       "Bash(git push:*)",
       "Bash(gh pr checkout:*)",
+      "Bash(gh pr co:*)",
       "Bash(gh pr close:*)",
       "Bash(gh pr comment:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr edit:*)",
       "Bash(gh pr lock:*)",
       "Bash(gh pr merge:*)",
+      "Bash(gh pr new:*)",
       "Bash(gh pr ready:*)",
       "Bash(gh pr reopen:*)",
       "Bash(gh pr revert:*)",
@@ -27,6 +29,7 @@
       "Bash(gh run watch:*)",
       "Bash(gh release create:*)",
       "Bash(gh release delete:*)",
+      "Bash(gh release delete-asset:*)",
       "Bash(gh release download:*)",
       "Bash(gh release edit:*)",
       "Bash(gh release upload:*)"

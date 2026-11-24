@@ -220,6 +220,24 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
+	test("a forced-color git config still counts every changed line", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "color-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			git(cwd, ["config", "color.ui", "always"]);
+			fs.writeFileSync(path.join(cwd, "big.ts"), "start\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "big.ts"), Array.from({ length: 100 }, (_, index) => `line ${index}`).join("\n"));
+			const { change } = changeKey(cwd);
+			assert.equal(change.addedLines, 100);
+			assert.equal(isTrivial(change), false);
+		});
+	});
+
 	test("an untracked directory's files all count", () => {		withTemp((root) => {
 			const cwd = path.join(root, "dir-repo");
 			fs.mkdirSync(cwd);

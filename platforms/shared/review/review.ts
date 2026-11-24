@@ -33,8 +33,8 @@ export interface Change {
 	addedLines: number;
 	removedLines: number;
 	/**
-	 * A fingerprint of what a diff cannot show: the untracked files. An untracked
-	 * file edited after its review changes the key, so the review stops counting.
+	 * A fingerprint of every changed file's content and executable bit. An edit
+	 * or a chmod after the review changes the key, so the review stops counting.
 	 */
 	signature: string;
 }

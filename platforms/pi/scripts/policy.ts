@@ -185,6 +185,9 @@ function absolutePath(value: string, env: PolicyEnv): string {
 	return isAbsolute(expanded) ? expanded : resolve(env.cwd, expanded);
 }
 
+const PATH_KEYS = ["path", "file_path", "filePath", "target", "directory", "glob"];
+const PATH_LIST_KEYS = ["paths", "files"];
+
 /** The path arguments of a tool input, absolute where possible. */
 export function pathCandidates(input: Record<string, unknown>, env: PolicyEnv): string[] {
 	const found: string[] = [];
@@ -192,8 +195,8 @@ export function pathCandidates(input: Record<string, unknown>, env: PolicyEnv): 
 		if (typeof value !== "string" || value === "") return;
 		found.push(absolutePath(value, env));
 	};
-	for (const key of ["path", "file_path", "filePath", "target", "directory", "glob"]) push(input[key]);
-	for (const key of ["paths", "files"]) {
+	for (const key of PATH_KEYS) push(input[key]);
+	for (const key of PATH_LIST_KEYS) {
 		const value = input[key];
 		if (Array.isArray(value)) for (const item of value) push(item);
 	}
@@ -564,6 +567,18 @@ export function decidePolicy(
 	return doctrineDecision(profile, tool, input, env);
 }
 
+/**
+ * The part of a tool input the audit trail keeps. A write or edit carries the
+ * file body, which can hold secrets, so only its path arguments are logged.
+ */
+function loggedInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
+	if (tool === "bash") return { command: input.command };
+	if (!WRITE_TOOLS.has(tool)) return input;
+	const kept: Record<string, unknown> = {};
+	for (const key of [...PATH_KEYS, ...PATH_LIST_KEYS]) if (key in input) kept[key] = input[key];
+	return kept;
+}
+
 /** One JSONL line per decision, for the audit trail and the retro. */
 export function decisionRecord(
 	profile: Profile,
@@ -577,7 +592,7 @@ export function decisionRecord(
 		session: extra.session ?? null,
 		agent: profile.id,
 		tool,
-		input: tool === "bash" ? { command: input.command } : input,
+		input: loggedInput(tool, input),
 		verdict: decision.verdict,
 		source: decision.source,
 		reason: decision.reason,
@@ -605,8 +620,20 @@ export function describeRules(state: PolicyState): string[] {
 	});
 }
 
+/**
+ * The policy file a `/permissions` rule goes to. A project rule needs the
+ * project file, which exists only in a trusted project; it never falls back to
+ * the user file, where it would apply everywhere.
+ */
+export function ruleTarget(refs: PolicyFileRef[], project: boolean): PolicyFileRef | undefined {
+	return refs.find((ref) => ref.scope === (project ? "project" : "user"));
+}
+
 /** Add a rule to one policy file, creating it when needed. Returns the new rule count. */
 export function addRule(ref: PolicyFileRef, profileName: string, rule: Rule): number {
+	// A rule that does not compile would make the whole policy fail to load,
+	// and the gate then denies every tool call.
+	new RegExp(rule.match);
 	const existing = existsSync(ref.path) ? parsePolicy(readFileSync(ref.path, "utf8"), ref.path) : {};
 	const profiles = existing.profiles ?? {};
 	const entry = profiles[profileName] ?? {};

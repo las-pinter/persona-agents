@@ -177,7 +177,7 @@ const GIT_INERT_READ = new Set([
 /** Diff options that run a configured helper program. */
 const GIT_DIFF_PROGRAM = ["--ext-diff", "--textconv"];
 /** gh actions that only read (`gh issue list`, `gh pr view`, `gh run list`). */
-const GH_READ_ACTIONS = new Set(["list", "view", "status", "diff", "checks", "search"]);
+const GH_READ_ACTIONS = new Set(["list", "ls", "view", "status", "diff", "checks", "search"]);
 const GH_READ_COMMANDS = new Set(["status", "search", "help", "version", "browse"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 /** Prefix commands that run the rest of the line, with options to skip. */

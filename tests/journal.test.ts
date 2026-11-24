@@ -183,6 +183,15 @@ describe("journal: session-end hook", () => {
 			assert.ok(await waitFor(() => findEntry(env.notes, "s-9", [dayOf(new Date())]) !== ""), "the writer child did not run");
 		}));
 
+	test("a malformed payload is removed, not left in the state folder", () =>
+		withEnv((env) => {
+			const payload = path.join(env.data, "journal", "s-bad.json");
+			write(payload, "{ truncated");
+			const run = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "write", payload, `--claude=${fakeClaude(env, "# x")}`], { encoding: "utf8" });
+			assert.notEqual(run.status, 0, "the parse error still surfaces");
+			assert.equal(fs.existsSync(payload), false);
+		}));
+
 	test("a session that already has an entry gets no second one", () =>
 		withEnv(async (env) => {
 			const existing = entryPath(env.notes, "s-9");

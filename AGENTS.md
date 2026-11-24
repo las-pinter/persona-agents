@@ -51,7 +51,7 @@ The doctrine lives in three places:
 - The settings snippet `platforms/claude/settings/recommended.json`, which
   `install.sh` merges into the user settings: `git push` and the write actions
   of `gh pr`, `gh run`, and `gh release` ask. Their read actions (`view`,
-  `list`, `status`, `diff`, `checks`, `search`) pass.
+  `list` / `ls`, `status`, `diff`, `checks`, `search`) pass.
 - The PreToolUse hook `platforms/claude/scripts/doctrine.ts`, for the
   persona-agents agents. The command classification it uses lives in
   `platforms/shared/shell/` and is shared with the Pi gate
