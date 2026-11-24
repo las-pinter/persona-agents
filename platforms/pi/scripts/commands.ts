@@ -47,6 +47,11 @@ export function parsePermissionsArgs(args: string): ParsedArguments {
 	const [pattern, ...reasonWords] = rest.split(/\s+—\s+|\s+\|\s+/u);
 	const match = pattern.trim();
 	if (match === "") return { action: "invalid", message: USAGE };
+	try {
+		new RegExp(match);
+	} catch (error) {
+		return { action: "invalid", message: `not a valid regex: ${(error as Error).message}` };
+	}
 	return {
 		action: "rule",
 		rule: {

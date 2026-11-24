@@ -1,15 +1,15 @@
 /**
- * Journal paths and reads for the adapters.
+ * Session-log paths and reads for the adapters.
  *
- *   <project notes>/journal/<YYYY-MM-DD>/<HHMM>-<session id>.md
+ *   <project notes>/session-logs/<YYYY-MM-DD>/<HHMM>-<session id>.md
  *
- * One file per session, so parallel sessions never write the same file. A
- * second wrap-up of a session rewrites its own file. The same layout as the
- * Claude adapter, so both harnesses write one journal.
+ * One file per agent session, so parallel sessions never write the same file.
+ * A second wrap-up of a session rewrites its own file.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { sessionLogsDir } from "./folders.ts";
 
 const DAY_FOLDER = /^\d{4}-\d{2}-\d{2}$/;
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -24,14 +24,16 @@ export function safeSession(id: string): string {
 	return String(id).replace(/[^A-Za-z0-9_-]/g, "_");
 }
 
-/** The journal folder of a project notes folder. */
-export const journalDir = (notesDir: string): string => join(notesDir, "journal");
+/** A file-name-safe session id for a state file; an empty id becomes `unknown`. */
+export function safeId(id: unknown): string {
+	return safeSession(typeof id === "string" && id !== "" ? id : "unknown");
+}
 
 /** The existing entry of a session in the given day folders, or "". */
 export function findEntry(notesDir: string, session: string, days: string[]): string {
 	const suffix = `-${safeSession(session)}.md`;
 	for (const day of days) {
-		const dir = join(journalDir(notesDir), day);
+		const dir = join(sessionLogsDir(notesDir), day);
 		if (!existsSync(dir)) continue;
 		const hit = readdirSync(dir).find((name) => name.endsWith(suffix));
 		if (hit) return join(dir, hit);
@@ -45,26 +47,26 @@ export function entryPath(notesDir: string, session: string, now: Date = new Dat
 	yesterday.setDate(now.getDate() - 1);
 	const existing = findEntry(notesDir, session, [dayOf(now), dayOf(yesterday)]);
 	if (existing) return existing;
-	return join(journalDir(notesDir), dayOf(now), `${pad(now.getHours())}${pad(now.getMinutes())}-${safeSession(session)}.md`);
+	return join(sessionLogsDir(notesDir), dayOf(now), `${pad(now.getHours())}${pad(now.getMinutes())}-${safeSession(session)}.md`);
 }
 
-/** The entry files of the last `days` day folders, oldest first. */
+/** The entry files of the last `days` days with entries, oldest first. */
 export function recentEntries(notesDir: string, days = 3): string[] {
-	const root = journalDir(notesDir);
+	const root = sessionLogsDir(notesDir);
 	if (!existsSync(root)) return [];
 	return readdirSync(root)
-		.filter((name) => DAY_FOLDER.test(name) && statSync(join(root, name)).isDirectory())
+		.filter((day) => DAY_FOLDER.test(day) && statSync(join(root, day)).isDirectory())
 		.sort()
 		.slice(-days)
 		.flatMap((day) =>
 			readdirSync(join(root, day))
 				.filter((name) => name.endsWith(".md"))
-				.sort()
+				.sort((a, b) => basename(a).localeCompare(basename(b)))
 				.map((name) => join(root, day, name)),
 		);
 }
 
-/** The journal text of the last `days` days, oldest first, each with its path. */
-export function recentJournal(notesDir: string, days = 3): { path: string; text: string }[] {
+/** The session-log text of the last `days` days, oldest first, each with its path. */
+export function recentSessionLogs(notesDir: string, days = 3): { path: string; text: string }[] {
 	return recentEntries(notesDir, days).map((path) => ({ path, text: readFileSync(path, "utf8").trim() }));
 }

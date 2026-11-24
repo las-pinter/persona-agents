@@ -4,7 +4,7 @@
  *
  *   context.ts session   the platform note and the theme persona
  *   context.ts startup   the read list: project rules and summary, the last
- *                        three journal days, open session notes, unfinished
+ *                        three session-log days, open task notes, unfinished
  *                        studies
  *
  * The profession itself is the agent profile's `prompt` (the shared
@@ -30,6 +30,7 @@ import {
 import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import { contentOf, kiroHome as resolveKiroHome, readTheme, rootFromScript } from "./paths.ts";
+import { option } from "../../shared/argv.ts";
 
 /** The Kiro platform note, with the session id the wrap-up and retro use. */
 export function platformNote(sessionId: string, theme?: string): string {
@@ -93,12 +94,6 @@ export function contextFor(
 		return { text: startupText(cwd, options.home, sessionId) };
 	}
 	return null;
-}
-
-/** The test seam and the hook arguments: `--home=`, `--kiro-home=`, `--content=`. */
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

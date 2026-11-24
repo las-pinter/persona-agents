@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * The detached journal writer.
+ * The detached session-log writer.
  *
  * Started by the extension on `session_shutdown` (quit), as its own process so
  * the exiting session is never held open. It runs one headless Pi request with
  * no tools, and writes the entry only when the session still has none, and only
  * when the model returned something that looks like an entry.
  *
- * Usage: node --experimental-strip-types journal-writer.ts <payload.json> [--pi=<path>]
+ * Usage: node --experimental-strip-types session-log-writer.ts <payload.json> [--pi=<path>]
  *
- * A failure here is silent by design: a journal entry is a convenience, and a
+ * A failure here is silent by design: a session log is a convenience, and a
  * shutdown must never surface an error to the owner.
  */
 
@@ -17,8 +17,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
-import { entryPath } from "../../shared/notes/journal.ts";
-import { hasMaterial, writerPrompt, type Payload } from "../../shared/notes/journal-net.ts";
+import { entryPath } from "../../shared/notes/session-log.ts";
+import { hasMaterial, writerPrompt, type Payload } from "../../shared/notes/session-log-net.ts";
 
 const WRITER_TIMEOUT_MS = 180_000;
 

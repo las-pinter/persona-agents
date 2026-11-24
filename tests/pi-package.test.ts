@@ -121,15 +121,16 @@ describe("pi package: one parser, two platforms", () => {
 		const shared = [
 			"platforms/shared/notes/notes-paths.ts",
 			"platforms/shared/notes/notes.ts",
-			"platforms/shared/notes/journal.ts",
-			"platforms/shared/notes/journal-net.ts",
+			"platforms/shared/notes/session-log.ts",
+			"platforms/shared/notes/session-log-net.ts",
 			"platforms/shared/compaction/manifest.ts",
 			"platforms/shared/review/review.ts",
+			"platforms/shared/review/brief.ts",
 			"platforms/shared/retro/retro.ts",
 			"platforms/shared/context/context.ts",
 		];
 		for (const file of shared) assert.ok(fs.existsSync(path.join(repoRoot, file)), `${file} is missing`);
-		for (const name of ["notes-paths.ts", "notes.ts", "journal.ts", "journal-net.ts", "manifest.ts", "review.ts", "retro.ts"]) {
+		for (const name of ["notes-paths.ts", "notes.ts", "session-log.ts", "session-log-net.ts", "manifest.ts", "review.ts", "brief.ts", "retro.ts"]) {
 			assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "pi", "scripts", name)), false, `pi/scripts/${name} is a duplicate`);
 		}
 		// The Pi context file stays as a thin adapter over the shared builder: it
@@ -139,13 +140,13 @@ describe("pi package: one parser, two platforms", () => {
 
 	test("the pi extension imports the shared notes, review, compaction, and retro modules", () => {
 		const source = read("platforms/pi/extensions/index.ts");
-		for (const part of ["shared/notes/journal.ts", "shared/notes/notes.ts", "shared/compaction/manifest.ts", "shared/review/review.ts", "shared/retro/retro.ts"]) {
+		for (const part of ["shared/notes/session-log.ts", "shared/notes/notes.ts", "shared/compaction/manifest.ts", "shared/review/review.ts", "shared/retro/retro.ts"]) {
 			assert.ok(source.includes(part), `the extension does not import ${part}`);
 		}
 	});
 
 	test("the shell parser lives in platforms/shared and only there", () => {
-		for (const file of ["shell-parse.ts", "shell-grammar.ts", "gates.ts"]) {
+		for (const file of ["shell-parse.ts", "shell-grammar.ts", "gates.ts", "scan.ts"]) {
 			assert.ok(fs.existsSync(path.join(repoRoot, "platforms", "shared", "shell", file)), `shared/${file} is missing`);
 			assert.equal(fs.existsSync(path.join(repoRoot, "platforms", "claude", "scripts", file)), false, `claude/scripts/${file} is a duplicate`);
 		}
@@ -166,7 +167,7 @@ describe("pi package: one parser, two platforms", () => {
 
 	test("the session id comes from the session manager, never the environment", () => {
 		// PI_SESSION_ID is inherited by every child process: a reviewer or a
-		// second pi started from a session would file its journal entry under the
+		// second pi started from a session would file its session log under the
 		// parent's id, at the parent's path.
 		const wiring = read("platforms/pi/extensions/index.ts");
 		assert.equal(wiring.includes("PI_SESSION_ID"), false);

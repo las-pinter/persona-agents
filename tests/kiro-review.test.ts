@@ -112,7 +112,7 @@ describe("kiro review: the brief", () => {
 			const notes = notesWithStudy(root);
 			const brief = await buildReviewBrief({ scope: "main Check: the tests pass" }, { cwd, notesDir: notes });
 			assert.equal(brief.brief.scope, "main");
-			assert.ok(brief.notes.some((note) => /ignored author text: Check: the tests pass/.test(note)));
+			assert.ok(brief.notes.some((note) => /ignored brief text: "Check: the tests pass"/.test(note)));
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}
@@ -220,6 +220,24 @@ describe("kiro review: the brief", () => {
 		});
 	});
 
+	test("a forced-color git config still counts every changed line", () => {
+		withTemp((root) => {
+			const cwd = path.join(root, "color-repo");
+			fs.mkdirSync(cwd);
+			git(cwd, ["init"]);
+			git(cwd, ["config", "user.email", "test@example.com"]);
+			git(cwd, ["config", "user.name", "Test"]);
+			git(cwd, ["config", "color.ui", "always"]);
+			fs.writeFileSync(path.join(cwd, "big.ts"), "start\n");
+			git(cwd, ["add", "."]);
+			git(cwd, ["commit", "-m", "baseline"]);
+			fs.writeFileSync(path.join(cwd, "big.ts"), Array.from({ length: 100 }, (_, index) => `line ${index}`).join("\n"));
+			const { change } = changeKey(cwd);
+			assert.equal(change.addedLines, 100);
+			assert.equal(isTrivial(change), false);
+		});
+	});
+
 	test("an untracked directory's files all count", () => {		withTemp((root) => {
 			const cwd = path.join(root, "dir-repo");
 			fs.mkdirSync(cwd);
@@ -259,7 +277,7 @@ describe("kiro review: the brief", () => {
 			assert.match(run.stdout, /^Scope: main$/m);
 			assert.doesNotMatch(run.stdout, /^Change key:/m, "a named scope names no key");
 			assert.match(run.stdout, /Note for Kiro/);
-			assert.match(run.stderr, /ignored author text/);
+			assert.match(run.stderr, /ignored brief text/);
 			assert.match(run.stderr, /does not unlock a commit/);
 		});
 	});

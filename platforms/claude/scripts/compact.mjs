@@ -3,15 +3,15 @@
 //
 //   compact.mjs pre     PreCompact: scan the transcript, save a reload manifest,
 //                       and print instructions for the summary (stdout).
-//   compact.mjs post    PostCompact: keep the summary for the journal, and log
-//                       one metrics line (session notes and plugin data).
+//   compact.mjs post    PostCompact: keep the summary for the session log, and
+//                       log one metrics line (task notes and plugin data).
 //   compact.mjs reload  SessionStart (compact): send the reload list as
 //                       additional context.
 //
-// The manifest holds the skills the session invoked, the active session notes
-// file (the last one the session wrote under <project notes>/sessions/), and
+// The manifest holds the skills the session invoked, the active task notes
+// file (the last one the session wrote under <project notes>/tasks/), and
 // the reference documents to read again: the project rules and summary, the
-// study the session notes link, the pinned documents, and other project notes
+// study the task notes link, the pinned documents, and other project notes
 // the session read. Working source files are not reloaded.
 //
 // State lives in $CLAUDE_PLUGIN_DATA/compact/ (a temp folder when unset):
@@ -23,48 +23,22 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../../shared/notes/notes.ts";
+import { lastDistinct, MAX_SKILLS, reloadContext as sharedReloadContext, reloadFiles, summaryInstructions, toolCalls } from "../../shared/compaction/manifest.ts";
+import { safeId } from "../../shared/notes/session-log.ts";
 import { projectDir } from "./notes-paths.mjs";
+import { readTranscript, toEntries } from "./transcript.ts";
+
+export { readTranscript, summaryInstructions };
 
 const AGENT_TYPE = "persona-agents:companion";
-const MAX_SKILLS = 12;
-const MAX_DOCS = 20;
+/** Claude Code reloads a skill through the Skill tool, not by reading its file. */
+const SKILL_STEP = "2. Re-invoke these skills with the Skill tool (an unchanged skill costs only a short note):";
 
 /** The state folder for compaction files. */
 export function stateDir(env = process.env) {
 	return join(env.CLAUDE_PLUGIN_DATA || join(tmpdir(), "persona-agents"), "compact");
-}
-
-/** A file-name-safe form of a session id. */
-const safeId = (id) => String(id || "unknown").replace(/[^A-Za-z0-9_-]/g, "_");
-
-/** The parsed JSON lines of a transcript; bad lines are skipped. */
-export function readTranscript(path) {
-	if (!path || !existsSync(path)) return [];
-	return readFileSync(path, "utf8")
-		.split("\n")
-		.filter(Boolean)
-		.flatMap((line) => {
-			try {
-				return [JSON.parse(line)];
-			} catch {
-				return [];
-			}
-		});
-}
-
-/** The main-chain tool_use blocks of a transcript, in order. */
-function toolUses(entries) {
-	const uses = [];
-	for (const entry of entries) {
-		if (entry.isSidechain || entry.type !== "assistant") continue;
-		const content = entry.message?.content;
-		if (!Array.isArray(content)) continue;
-		for (const block of content) if (block?.type === "tool_use") uses.push(block);
-	}
-	return uses;
 }
 
 /** The text of an entry's message content, string or blocks. */
@@ -98,84 +72,22 @@ function skillNames(entries) {
 	return names;
 }
 
-/** Keep the last `max` distinct values, ordered by their last use. */
-function lastDistinct(values, max) {
-	const seen = new Map();
-	values.forEach((value, index) => seen.set(value, index));
-	return [...seen.entries()]
-		.sort((a, b) => a[1] - b[1])
-		.map(([value]) => value)
-		.slice(-max);
-}
-
-/** The rule files and the summary of a project notes folder. */
-function projectStartupDocs(notesDir) {
-	const summary = join(notesDir, "summary.md");
-	return existsSync(summary) ? [...projectRules(notesDir), summary] : projectRules(notesDir);
-}
-
 /**
- * The reload manifest for a transcript and a project notes folder.
- * Docs: project rules and summary, the linked study, the pinned docs, then
- * other project notes the session read (not journal entries or other sessions).
- * The active notes file comes from the session id first, so a resumed session
- * that only read its notes still finds them.
+ * The reload manifest for a transcript and a project notes folder. The task
+ * notes file and the documents come from the shared choice; the skills come
+ * from Claude Code's own records of them.
  */
 export function buildManifest(entries, notesDir, sessionId = "") {
-	const uses = toolUses(entries);
+	const calls = toolCalls(toEntries(entries));
+	const pathsOf = (names) => calls.filter((call) => names.includes(call.name) && typeof call.arguments.path === "string").map((call) => call.arguments.path);
 	const skills = lastDistinct(skillNames(entries), MAX_SKILLS);
-	const sessionsDir = join(notesDir, "sessions") + sep;
-	const written = uses
-		.filter((use) => ["Write", "Edit", "MultiEdit"].includes(use.name))
-		.map((use) => use.input?.file_path)
-		.filter((path) => typeof path === "string" && path.startsWith(sessionsDir) && path.endsWith(".md"));
-	const sessionNotes = activeSessionNotes(notesDir, sessionId, written);
-	const notesText = sessionNotes && existsSync(sessionNotes) ? readFileSync(sessionNotes, "utf8") : "";
-	const skip = [join(notesDir, "journal") + sep, sessionsDir];
-	const readNotes = uses
-		.filter((use) => use.name === "Read" && typeof use.input?.file_path === "string")
-		.map((use) => use.input.file_path)
-		.filter((path) => path.startsWith(notesDir + sep) && !skip.some((prefix) => path.startsWith(prefix)));
-	const study = studyPath(notesText);
-	const docs = lastDistinct(
-		[...readNotes, ...projectStartupDocs(notesDir), ...(study ? [study] : []), ...pinnedDocs(notesText)],
-		MAX_DOCS,
-	).filter((path) => path !== sessionNotes);
-	return { sessionNotes, skills, docs, scan: { entries: entries.length, toolUses: uses.length } };
-}
-
-/** The PreCompact stdout: instructions that the summary must follow. */
-export function summaryInstructions(manifest) {
-	const lines = [
-		"Compaction instructions from the persona-agents companion:",
-		"- Keep the current task, the current plan step, the open decisions, and the owner's latest request word for word where short.",
-		"- Do not paraphrase skill text or project rules; they are reloaded after compaction.",
-	];
-	if (manifest.sessionNotes) {
-		lines.push(`- Keep this exact path in the summary: the session notes file ${manifest.sessionNotes}`);
-	}
-	return lines.join("\n");
+	const files = reloadFiles(notesDir, sessionId, pathsOf(["write", "edit"]), pathsOf(["read"]));
+	return { ...files, skills, scan: { entries: entries.length, toolUses: calls.length } };
 }
 
 /** The SessionStart (compact) context: what to reload, in order. */
 export function reloadContext(manifest) {
-	const lines = [
-		"# After compaction: reload before you continue",
-		"",
-		"Do every step below before any other work, even when the summary seems to cover it: the summary is lossy, the files are not.",
-		"",
-	];
-	if (manifest.sessionNotes) {
-		lines.push(`1. Read the session notes file first; it holds the plan: ${manifest.sessionNotes}`);
-	} else {
-		lines.push("1. No session notes file was found for this session.");
-	}
-	lines.push("2. Re-invoke these skills with the Skill tool (an unchanged skill costs only a short note):");
-	lines.push(...(manifest.skills.length ? manifest.skills.map((skill) => `   - ${skill}`) : ["   - none"]));
-	lines.push("3. Re-read these documents in full:");
-	lines.push(...(manifest.docs.length ? manifest.docs.map((doc) => `   - ${doc}`) : ["   - none"]));
-	lines.push("4. Do not re-read working source files now; read them again when the next step needs them.");
-	return lines.join("\n");
+	return sharedReloadContext({ taskNotes: manifest.taskNotes, skills: manifest.skills, docs: manifest.docs }, SKILL_STEP);
 }
 
 /** The latest compact_boundary metadata in a transcript, or {}. */
@@ -184,7 +96,7 @@ export function lastBoundary(entries) {
 	return boundary?.compactMetadata ?? {};
 }
 
-/** Append one line to the `## Log` section of a session notes file. */
+/** Append one line to the `## Log` section of a task notes file. */
 export function appendLog(path, line) {
 	if (!path || !existsSync(path)) return false;
 	const text = readFileSync(path, "utf8");
@@ -244,7 +156,7 @@ function run(mode, input) {
 			join(dir, "metrics.ndjson"),
 			`${JSON.stringify({ at: new Date().toISOString(), session: input.session_id, trigger: input.trigger, preTokens: meta.preTokens ?? null, postTokens: meta.postTokens ?? null, entries: manifest.scan?.entries ?? null, toolUses: manifest.scan?.toolUses ?? null, skills: manifest.skills.length, docs: manifest.docs.length })}\n`,
 		);
-		appendLog(manifest.sessionNotes, `${stamp()} — compaction (${input.trigger}${tokens}); reload: ${manifest.skills.length} skills, ${manifest.docs.length} docs`);
+		appendLog(manifest.taskNotes, `${stamp()} — compaction (${input.trigger}${tokens}); reload: ${manifest.skills.length} skills, ${manifest.docs.length} docs`);
 		return;
 	}
 

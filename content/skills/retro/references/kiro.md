@@ -11,7 +11,7 @@ node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platf
 
 It prints the retro instruction and the session facts: tool calls, changed
 files, denials and asks from the permission decisions log, independent
-reviews, compactions, hook calls, credits, context usage, the journal entry
+reviews, compactions, hook calls, credits, context usage, the session log
 path, and the model. It writes nothing.
 
 ## Which parts of the skill apply
@@ -28,7 +28,7 @@ Use the shared retrospective below, with these Kiro rules:
   them.
 - The review dimension reads the recorded reviewer runs and the stored
   verdicts. A review that was never recorded is not evidence.
-- Write nothing durable: no report file, no journal entry, no notes, no
+- Write nothing durable: no report file, no session log, no notes, no
   permission rule, no commit.
 
 ## Output

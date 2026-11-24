@@ -9,7 +9,13 @@
  *   2. each content/skills/<name>/SKILL.md `name:` equals its folder name;
  *   3. the plugin manifest ships exactly the skill folders of content/skills;
  *   4. every agents.json theme maps exactly the professions of
- *      content/professions, and each persona file exists.
+ *      content/professions, and each persona file exists;
+ *   5. the plugin.json theme options equal the agents.json themes;
+ *   6. each persona file has an H1 ending in "Persona" and the three
+ *      required sections, in order;
+ *   7. no README.md holds the package version;
+ *   8. content and docs use the task-notes skill and the `tasks/` and
+ *      `session-logs/` folders, never the old names.
  *
  * It does not check doctrine prose.
  */
@@ -45,6 +51,13 @@ function professionNames(): string[] {
 		.filter((name) => name.endsWith(".md"))
 		.map((name) => name.slice(0, -3))
 		.sort();
+}
+
+type Registry = Record<string, Record<string, { personaFile?: string }>>;
+
+/** content/agents.json: theme → profession → persona entry. */
+function registry(): Registry {
+	return JSON.parse(readText(path.join(contentDir, "agents.json"))) as Registry;
 }
 
 /** Text between a heading matching `heading` and the next `## ` heading. */
@@ -100,14 +113,11 @@ describe("condition 4: agents.json matches content/professions and content/perso
 	const VOICELESS = ["reviewer"];
 
 	test("every theme maps exactly the professions, to persona files that exist", () => {
-		const registry = JSON.parse(readText(path.join(contentDir, "agents.json"))) as Record<
-			string,
-			Record<string, { personaFile?: string }>
-		>;
+		const themes = registry();
 		const expected = professionNames().filter((name) => !VOICELESS.includes(name));
-		assert.ok(Object.keys(registry).length > 0, "agents.json must hold at least one theme");
+		assert.ok(Object.keys(themes).length > 0, "agents.json must hold at least one theme");
 		const bad: string[] = [];
-		for (const [theme, professions] of Object.entries(registry)) {
+		for (const [theme, professions] of Object.entries(themes)) {
 			const names = Object.keys(professions).sort();
 			if (JSON.stringify(names) !== JSON.stringify(expected)) bad.push(`${theme}: ${names.join(",")}`);
 			for (const [profession, entry] of Object.entries(professions)) {
@@ -116,5 +126,89 @@ describe("condition 4: agents.json matches content/professions and content/perso
 			}
 		}
 		assert.deepEqual(bad, [], "agents.json drifted from content/");
+	});
+});
+
+const registryThemes = (): string[] => Object.keys(registry()).sort();
+
+describe("condition 5: the plugin theme options match the registry", () => {
+	test("plugin.json userConfig.theme options equal the agents.json themes, and hold the default", () => {
+		const theme = JSON.parse(readText(path.join(repoRoot, ".claude-plugin", "plugin.json"))).userConfig.theme as { options: string[]; default: string };
+		assert.deepEqual([...theme.options].sort(), registryThemes());
+		assert.ok(theme.options.includes(theme.default), `default ${theme.default} is not an option`);
+	});
+});
+
+describe("condition 6: persona files follow the persona shape", () => {
+	const REQUIRED = ["## Personality", "## Speech Style", "## Rules"];
+	for (const [theme, professions] of Object.entries(registry())) {
+		for (const entry of Object.values(professions)) {
+			test(`${theme}/${entry.personaFile}`, () => {
+				const text = readText(path.join(contentDir, "personas", theme, entry.personaFile ?? ""));
+				assert.match(text.split("\n")[0], /^# \S.* Persona$/, "the first line is an H1 ending in Persona");
+				const headings = text.split("\n").filter((line) => REQUIRED.includes(line));
+				assert.deepEqual(headings, REQUIRED, "the required sections appear once each, in order");
+			});
+		}
+	}
+});
+
+/** Every README.md in the repository, outside dependencies and git internals. */
+function readmes(dir: string = repoRoot): string[] {
+	const found: string[] = [];
+	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+		if (entry.name === "node_modules" || entry.name === ".git") continue;
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) found.push(...readmes(full));
+		else if (entry.name === "README.md") found.push(full);
+	}
+	return found;
+}
+
+describe("condition 7: no README holds the package version", () => {
+	test("a release never needs a README edit", () => {
+		const version = JSON.parse(readText(path.join(repoRoot, "package.json"))).version as string;
+		// It also flags a third-party version that happens to equal the package
+		// version; rewording that one README line is the cheaper trade.
+		const pattern = new RegExp(`(?<![\\d.])${version.replaceAll(".", "\\.")}(?![\\d])`);
+		const files = readmes();
+		assert.ok(files.length > 0, "no README found");
+		const bad = files.filter((file) => pattern.test(readText(file))).map((file) => path.relative(repoRoot, file));
+		assert.deepEqual(bad, []);
+	});
+});
+
+/** Every Markdown file under a folder. */
+function markdownFiles(dir: string): string[] {
+	return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) return entry.name === "node_modules" ? [] : markdownFiles(full);
+		return entry.name.endsWith(".md") ? [full] : [];
+	});
+}
+
+describe("condition 8: task notes and session logs carry their new names", () => {
+	test("the task-notes skill replaces session-notes", () => {
+		assert.ok(skillFolders().includes("task-notes"));
+		assert.ok(!skillFolders().includes("session-notes"));
+	});
+
+	test("no shipped content or doc names the old folders or skill", () => {
+		// The migration note in README.md names the old folders on purpose.
+		const ALLOWED = /legacy-names/;
+		// Kiro's own session store (`<kiro home>/sessions/*/sess_<id>/`) keeps its name.
+		const OLD = /\bsessions\/(?!\*\/sess_)|(?<![\w-])journal\/|session-notes|\bjournal\.mjs\b|journal-end/;
+		const files = [contentDir, path.join(repoRoot, "docs"), path.join(repoRoot, "platforms"), path.join(repoRoot, "evals")]
+			.flatMap(markdownFiles)
+			.concat(["README.md", "AGENTS.md"].map((name) => path.join(repoRoot, name)));
+		const bad: string[] = [];
+		for (const file of files) {
+			readText(file)
+				.split("\n")
+				.forEach((line, index) => {
+					if (OLD.test(line) && !ALLOWED.test(line)) bad.push(`${path.relative(repoRoot, file)}:${index + 1}: ${line.trim()}`);
+				});
+		}
+		assert.deepEqual(bad, []);
 	});
 });

@@ -1,9 +1,9 @@
 /**
- * Checks the journal scripts: the per-session entry path (journal.mjs) and the
- * session-end safety net (journal-end.mjs). A fake claude binary stands in for
+ * Checks the session-log scripts: the per-session entry path (session-log.mjs)
+ * and the session-end safety net (session-log-end.mjs). A fake claude binary stands in for
  * the writer model; no test starts the real one.
  *
- * Run: node --experimental-strip-types --test tests/journal.test.ts
+ * Run: node --experimental-strip-types --test tests/session-log.test.ts
  */
 
 import { describe, test } from "node:test";
@@ -13,12 +13,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { dayOf, entryPath, findEntry, recentEntries } from "../platforms/claude/scripts/journal.mjs";
-import { conversationTail, writerPrompt, writtenSessionNotes } from "../platforms/claude/scripts/journal-end.mjs";
+import { dayOf, entryPath, findEntry, recentEntries } from "../platforms/claude/scripts/session-log.mjs";
+import { conversationTail, writerPrompt, writtenTaskNotes } from "../platforms/claude/scripts/session-log-end.mjs";
 
 const scripts = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts");
-const journalScript = path.join(scripts, "journal.mjs");
-const endScript = path.join(scripts, "journal-end.mjs");
+const sessionLogScript = path.join(scripts, "session-log.mjs");
+/** The flags the wrap-up skill and the hooks pass: Node 22.6 needs them for the TypeScript imports. */
+const STRIP = ["--experimental-strip-types", "--no-warnings"];
+const endScript = path.join(scripts, "session-log-end.mjs");
 
 interface Env {
 	tmp: string;
@@ -29,7 +31,7 @@ interface Env {
 }
 
 function withEnv(fn: (env: Env) => void | Promise<void>): Promise<void> {
-	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-journal-")));
+	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-session-log-")));
 	const env = {
 		tmp,
 		home: path.join(tmp, "home"),
@@ -63,12 +65,12 @@ async function waitFor(check: () => boolean, ms = 5000): Promise<boolean> {
 	return check();
 }
 
-describe("journal: entry path", () => {
+describe("session log: entry path", () => {
 	test("a new entry is <day>/<HHMM>-<session>.md; the same session gets the same file again", () =>
 		withEnv(({ notes }) => {
 			const now = new Date(2026, 0, 2, 9, 5);
 			const first = entryPath(notes, "s-1", now);
-			assert.equal(first, path.join(notes, "journal", "2026-01-02", "0905-s-1.md"));
+			assert.equal(first, path.join(notes, "session-logs", "2026-01-02", "0905-s-1.md"));
 			write(first, "# entry");
 			assert.equal(entryPath(notes, "s-1", new Date(2026, 0, 2, 17, 30)), first);
 		}));
@@ -84,14 +86,14 @@ describe("journal: entry path", () => {
 	test("a session id with path characters stays one file name", () =>
 		withEnv(({ notes }) => {
 			const file = entryPath(notes, "../evil/x", new Date(2026, 0, 2, 9, 0));
-			assert.equal(path.dirname(file), path.join(notes, "journal", "2026-01-02"));
+			assert.equal(path.dirname(file), path.join(notes, "session-logs", "2026-01-02"));
 		}));
 
 	test("two parallel sessions write two complete entries on the same day", () =>
 		withEnv(async (env) => {
 			const one = (session: string) =>
 				new Promise<string>((resolve, reject) => {
-					const child = spawn(process.execPath, [journalScript, "path", `--session=${session}`, `--cwd=${env.cwd}`, `--home=${env.home}`]);
+					const child = spawn(process.execPath, [...STRIP, sessionLogScript, "path", `--session=${session}`, `--cwd=${env.cwd}`, `--home=${env.home}`]);
 					let out = "";
 					child.stdout.on("data", (chunk) => (out += chunk));
 					child.on("close", (code) => (code === 0 ? resolve(out.trim()) : reject(new Error(`exit ${code}`))));
@@ -107,24 +109,34 @@ describe("journal: entry path", () => {
 
 	test("read prints the recent entries, oldest first", () =>
 		withEnv((env) => {
-			write(path.join(env.notes, "journal", "2026-01-01", "0900-a.md"), "# first");
-			write(path.join(env.notes, "journal", "2026-01-02", "0900-b.md"), "# second");
-			const out = spawnSync(process.execPath, [journalScript, "read", `--cwd=${env.cwd}`, `--home=${env.home}`], { encoding: "utf8" }).stdout;
+			write(path.join(env.notes, "session-logs", "2026-01-01", "0900-a.md"), "# first");
+			write(path.join(env.notes, "session-logs", "2026-01-02", "0900-b.md"), "# second");
+			const out = spawnSync(process.execPath, [...STRIP, sessionLogScript, "read", `--cwd=${env.cwd}`, `--home=${env.home}`], { encoding: "utf8" }).stdout;
 			assert.ok(out.indexOf("# first") < out.indexOf("# second"), out);
 		}));
 
 	test("path without a session exits 2", () => {
-		assert.equal(spawnSync(process.execPath, [journalScript, "path"], { encoding: "utf8" }).status, 2);
+		assert.equal(spawnSync(process.execPath, [...STRIP, sessionLogScript, "path"], { encoding: "utf8" }).status, 2);
 	});
 });
 
-describe("journal: safety-net sources", () => {
+describe("session log: safety-net sources", () => {
 	const use = (name: string, input: Record<string, unknown>) => ({ type: "assistant", message: { content: [{ type: "tool_use", name, input }] } });
 
-	test("the session notes written by the session are found, once each", () => {
+	test("the task notes written by the session are found, once each", () => {
 		const notes = "/n";
-		const entries = [use("Write", { file_path: "/n/sessions/a.md" }), use("Edit", { file_path: "/n/sessions/a.md" }), use("Write", { file_path: "/src/x.ts" })];
-		assert.deepEqual(writtenSessionNotes(entries, notes), ["/n/sessions/a.md"]);
+		const entries = [use("Write", { file_path: "/n/tasks/a.md" }), use("Edit", { file_path: "/n/tasks/a.md" }), use("Write", { file_path: "/src/x.ts" })];
+		assert.deepEqual(writtenTaskNotes(entries, notes), ["/n/tasks/a.md"]);
+	});
+
+	test("each Claude Code file tool marks a task notes file as written; a subagent's write does not", () => {
+		const entries = [
+			use("Write", { file_path: "/n/tasks/w.md" }),
+			use("Edit", { file_path: "/n/tasks/e.md" }),
+			use("MultiEdit", { file_path: "/n/tasks/m.md" }),
+			{ ...use("Write", { file_path: "/n/tasks/side.md" }), isSidechain: true },
+		];
+		assert.deepEqual(writtenTaskNotes(entries, "/n"), ["/n/tasks/w.md", "/n/tasks/e.md", "/n/tasks/m.md"]);
 	});
 
 	test("the conversation tail starts after the last compaction and skips meta lines", () => {
@@ -139,12 +151,12 @@ describe("journal: safety-net sources", () => {
 	});
 
 	test("the writer prompt names the session and carries every source", () => {
-		const prompt = writerPrompt({ session: "s-1", day: "2026-01-02", time: "09:00" }, { notes: [{ path: "/n/a.md", text: "PLAN" }], summaries: "SUM", tail: "TAIL" });
+		const prompt = writerPrompt({ session: "s-1", at: new Date(2026, 0, 2, 9, 0).toISOString() }, { notes: [{ path: "/n/a.md", text: "PLAN" }], summaries: "SUM", tail: "TAIL" });
 		for (const part of ["s-1", "2026-01-02 09:00", "/n/a.md", "PLAN", "SUM", "TAIL", "safety net"]) assert.ok(prompt.includes(part), part);
 	});
 });
 
-describe("journal: session-end hook", () => {
+describe("session log: session-end hook", () => {
 	const hookInput = (env: Env, extra: Record<string, unknown> = {}) =>
 		JSON.stringify({ hook_event_name: "SessionEnd", reason: "prompt_input_exit", session_id: "s-9", cwd: env.cwd, agent_type: "persona-agents:companion", ...extra });
 	const runHook = (env: Env, input: string, claude: string) =>
@@ -161,7 +173,7 @@ describe("journal: session-end hook", () => {
 			const claude = fakeClaude(env, "# 2026-01-02 09:00 — parser fix\n\n## Done\n\n- fixed");
 			const run = runHook(env, hookInput(env, { transcript_path: transcript }), claude);
 			assert.equal(run.status, 0, run.stderr);
-			const today = path.join(env.notes, "journal", dayOf(new Date()));
+			const today = path.join(env.notes, "session-logs", dayOf(new Date()));
 			assert.ok(await waitFor(() => fs.existsSync(today) && fs.readdirSync(today).some((name) => name.endsWith("-s-9.md"))), "no entry was written");
 			const file = findEntry(env.notes, "s-9", [dayOf(new Date())]);
 			assert.match(fs.readFileSync(file, "utf8"), /parser fix/);
@@ -183,6 +195,15 @@ describe("journal: session-end hook", () => {
 			assert.ok(await waitFor(() => findEntry(env.notes, "s-9", [dayOf(new Date())]) !== ""), "the writer child did not run");
 		}));
 
+	test("a malformed payload is removed, not left in the state folder", () =>
+		withEnv((env) => {
+			const payload = path.join(env.data, "compact", "session-log-s-bad.json");
+			write(payload, "{ truncated");
+			const run = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "write", payload, `--claude=${fakeClaude(env, "# x")}`], { encoding: "utf8" });
+			assert.notEqual(run.status, 0, "the parse error still surfaces");
+			assert.equal(fs.existsSync(payload), false);
+		}));
+
 	test("a session that already has an entry gets no second one", () =>
 		withEnv(async (env) => {
 			const existing = entryPath(env.notes, "s-9");
@@ -201,7 +222,7 @@ describe("journal: session-end hook", () => {
 			runHook(env, hookInput(env, { agent_type: "Explore" }), claude);
 			spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
 				input: hookInput(env),
-				env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data, PERSONA_AGENTS_JOURNAL_WRITER: "1" },
+				env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" },
 			});
 			await new Promise((resolve) => setTimeout(resolve, 300));
 			assert.equal(fs.existsSync(path.join(env.data, "compact")), false);
@@ -218,4 +239,14 @@ describe("journal: session-end hook", () => {
 			await new Promise((resolve) => setTimeout(resolve, 200));
 			assert.equal(findEntry(env.notes, "s-9", [dayOf(new Date())]), "");
 		}));
+});
+
+describe("session log: the wrap-up command", () => {
+	test("the wrap-up skill runs session-log.mjs with type stripping", () => {
+		// session-log.mjs imports the shared TypeScript; Node 22.6 cannot load it without the flag.
+		const skill = fs.readFileSync(path.join(scripts, "..", "..", "..", "content", "skills", "wrap-up", "SKILL.md"), "utf8");
+		const line = skill.split("\n").find((text) => text.includes("session-log.mjs"));
+		assert.ok(line);
+		assert.match(line, /node --experimental-strip-types --no-warnings "/);
+	});
 });

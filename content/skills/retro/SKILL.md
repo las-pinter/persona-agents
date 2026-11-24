@@ -11,6 +11,10 @@ If your system context says `Running in Kiro CLI`, first read
 prints this session's facts and says which parts of this file apply. Write
 nothing durable either way.
 
+If your system context says `Running in Pi`, the `/retro` message carries the
+session facts. Use them as the evidence; the **Session Facts** table below is
+Claude Code's and does not apply.
+
 # Retro
 
 ## Purpose
@@ -19,8 +23,9 @@ Review the current session and print the result in chat. Write nothing
 durable.
 
 On Pi, `/retro` gathers the session facts (tool calls, changed files,
-compactions, reviews, and every permission decision) and sends them here. On
-Claude Code, `/persona-agents:retro` starts the same work.
+compactions, reviews, and every permission decision) and sends them with the
+path of this skill. On Kiro CLI, `/retro` loads this skill. On Claude Code,
+`/persona-agents:retro` starts the same work.
 
 The spine is the After Action Review (AAR). It has four parts:
 
@@ -54,12 +59,12 @@ subagent.
 Review these sources only:
 
 - The current session.
-- The session notes files this session worked on.
-- The project journal entries of the three most recent days.
+- The task notes files this session worked on.
+- The project session logs of the three most recent days.
 - The project `summary.md`.
 - The project `rules/` folder.
 
-Do not scan earlier sessions. For a repeated-mistake check, use the journal
+Do not scan earlier sessions. For a repeated-mistake check, use the session logs
 entries named above and the git history in reach.
 
 ## Write Model (Print Only)
@@ -68,7 +73,7 @@ This retro writes no durable artifact:
 
 - No report file and no `retro/` folder.
 - No new skill and no skill edit.
-- No journal entry.
+- No session log.
 - No permission rule.
 
 Do not edit files, start a review, or commit. The retro reports and proposes
@@ -82,8 +87,8 @@ Collect evidence from these sources:
 |--------|----------|-------|
 | Session context | Live context | Messages, tool calls, denials, user turns |
 | Session transcript | See Session Facts | Tool calls, timestamps, usage, compactions |
-| Session notes | `<project notes>/sessions/` | Plan, decisions, pins, compaction log lines |
-| Journal | `<project notes>/journal/<day>/` | Earlier sessions: work, decisions, open items |
+| Task notes | `<project notes>/tasks/` | Plan, decisions, pins, compaction log lines, when an adapter or the agent wrote one |
+| Session logs | `<project notes>/session-logs/<day>/` | Earlier sessions: work, decisions, open items |
 | Project notes | `<project notes>/` | `summary.md`, `rules/`, studies |
 | Git history | Repo working tree | `git log`, `git diff`, `git status` |
 | Permission rules | See Session Facts | Current allow, ask, and deny rules |
@@ -92,7 +97,7 @@ Collect evidence from these sources:
 The session start text names the project notes folder. The permissions,
 tooling, and plan dimensions use those counts.
 
-The repeated-mistake check reads the journal files named in Review Scope.
+The repeated-mistake check reads the session logs files named in Review Scope.
 
 For a large transcript file, read only the fields you need. Do not load the
 whole file into context.
@@ -115,9 +120,9 @@ sweep internal. Print only a dimension with evidence.
 | 9 | Communication and reporting | Was the final report clear, complete, and free of false claims? |
 | 10 | Plans and estimates | Did the plan match the work, and where did it diverge? |
 | 11 | Knowledge and skill gaps | What did the agent not know that it needed? |
-| 12 | Repeated mistakes | Which mistake appeared before in journals or git history? |
+| 12 | Repeated mistakes | Which mistake appeared before in session logs or git history? |
 | 13 | Update-surface routing | For each lesson, which surface should change? |
-| 14 | Plan upkeep | Did the session notes or the study change before the work changed, or after? |
+| 14 | Plan upkeep | Did the task notes or the study change before the work changed, or after? |
 | 15 | Compaction and recovery | Did a compaction lose something the reload did not bring back? |
 
 ### Routing a Lesson
@@ -161,7 +166,7 @@ low is optional polish.
 ### Evidence Anchor
 
 Every finding cites one external evidence item. Use a git diff, a test result,
-a permission denial, or a session cost record. A journal entry or a
+a permission denial, or a session cost record. A session log or a
 transcript count is also evidence.
 
 Never anchor a finding to the agent's own self-grade. A self-grade is not
@@ -184,7 +189,7 @@ Route each finding to one surface from this set:
 | Surface | Holds |
 |---------|-------|
 | skill | A reusable procedure. |
-| notes | A project note, a rule, or a journal entry: a stored fact, decision, or lesson. |
+| notes | A project note, a rule, or a session log: a stored fact, decision, or lesson. |
 | prompt | A user instruction or a steering message. |
 | permission | A permission rule. |
 | tool/workflow | A tool call or a workflow step. |

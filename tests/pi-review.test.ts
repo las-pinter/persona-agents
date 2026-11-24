@@ -7,38 +7,44 @@
 
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	commitGate,
 	countDiffLines,
-	deriveDecisions,
-	deriveTask,
 	diffFiles,
 	failedChange,
 	isCommitCommand,
 	isTrivial,
 	makeChange,
+	parseVerdict,
+	reviewerFailure,
+	reviewKey,
+	REVIEWER_TIMEOUT_MS,
+	untrackedFiles,
+} from "../platforms/shared/review/review.ts";
+import {
+	buildBrief,
+	deriveDecisions,
+	deriveTask,
+	finalizeBrief,
+	isWorkingTreeScope,
 	nextAction,
 	normalizeScope,
 	oneLine,
 	oneLineCut,
 	parseReviewArgs,
-	buildBrief,
-	parseVerdict,
-	reviewerFailure,
-	reviewKey,
-	reviewerPrompt,
-	REVIEWER_TIMEOUT_MS,
-	finalizeBrief,
-	isWorkingTreeScope,
-	UNCOMMITTED,
 	promptForBrief,
 	resolveDecisions,
+	reviewerPrompt,
 	studyRows,
 	studyTitle,
 	subjectQueries,
 	subjectsFromQueries,
-	untrackedFiles,
-} from "../platforms/shared/review/review.ts";
+	UNCOMMITTED,
+} from "../platforms/shared/review/brief.ts";
+import { EXTENSION_FILE } from "../platforms/pi/scripts/review-run.ts";
 
 const DIFF = [
 	"diff --git a/src/gate.ts b/src/gate.ts",
@@ -606,5 +612,14 @@ describe("pi review: a failed reviewer child", () => {
 	test("no exit code at all is a failure, not a silent success", () => {
 		// The Pi SDK types the exit code as nullable; this guards that type.
 		assert.match(reviewerFailure({}), /no exit code/);
+	});
+});
+
+describe("pi review: the reviewer child", () => {
+	test("the child loads the package's extension entry point", () => {
+		// The reviewer child gets its profile and gate from this file, so a wrong path runs it ungated.
+		const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"));
+		const entry = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", pkg.pi.extensions[0]);
+		assert.equal(EXTENSION_FILE, entry);
 	});
 });

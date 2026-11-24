@@ -2,7 +2,7 @@
  * The Kiro compaction hooks (platforms/kiro/scripts/compact.ts).
  *
  * A fixture V3 session store and notes tree prove the manifest names the
- * session notes, the skills, and the documents, and that PostCompact keeps the
+ * task notes, the skills, and the documents, and that PostCompact keeps the
  * summary, writes one metrics line, and prints the reload list. The tests never
  * compact a real session.
  *
@@ -43,11 +43,11 @@ interface Fixture {
 	home: string;
 	cwd: string;
 	notes: string;
-	sessionNotes: string;
+	taskNotes: string;
 	doc: string;
 }
 
-/** A session that read a doc, wrote its session notes, and loaded a skill. */
+/** A session that read a doc, wrote its task notes, and loaded a skill. */
 function fixture(root: string): Fixture {
 	const kiro = path.join(root, "kiro");
 	const home = path.join(root, "home");
@@ -55,35 +55,35 @@ function fixture(root: string): Fixture {
 	const notes = path.join(home, "agent-notes", "project-notes", "common");
 	fs.mkdirSync(path.join(notes, "rules"), { recursive: true });
 	fs.mkdirSync(path.join(notes, "tech"), { recursive: true });
-	fs.mkdirSync(path.join(notes, "sessions"), { recursive: true });
+	fs.mkdirSync(path.join(notes, "tasks"), { recursive: true });
 	fs.writeFileSync(path.join(notes, "rules", "one.md"), "# One\n");
 	fs.writeFileSync(path.join(notes, "summary.md"), "# Summary\n");
 	fs.writeFileSync(path.join(notes, "tech", "a.md"), "# Tech\n");
-	const sessionNotes = path.join(notes, "sessions", "2026-11-20-task.md");
-	fs.writeFileSync(sessionNotes, "# Task\n\n- **Study:** none\n\n## Pinned\n");
+	const taskNotes = path.join(notes, "tasks", "2026-11-20-task.md");
+	fs.writeFileSync(taskNotes, "# Task\n\n- **Study:** none\n\n## Pinned\n");
 	const dir = path.join(kiro, "sessions", "hash", sessionId);
 	fs.mkdirSync(dir, { recursive: true });
 	const payloads = [
 		{ type: "tool_call", toolName: "read_file", args: { path: path.join(notes, "tech", "a.md") } },
-		{ type: "tool_call", toolName: "fs_write", args: { path: sessionNotes, text: "# Task" } },
+		{ type: "tool_call", toolName: "fs_write", args: { path: taskNotes, text: "# Task" } },
 		{ type: "tool_call", toolName: "load_resource", args: { id: "skill::study" } },
 		{ type: "session_metadata", key: "contextUsage", value: { usagePercentage: 81.5 } },
 	];
 	fs.writeFileSync(path.join(dir, "messages.jsonl"), `${payloads.map((payload) => JSON.stringify(payload)).join("\n")}\n`);
-	return { kiro, home, cwd, notes, sessionNotes, doc: path.join(notes, "tech", "a.md") };
+	return { kiro, home, cwd, notes, taskNotes, doc: path.join(notes, "tech", "a.md") };
 }
 
 describe("kiro compaction: the manifest", () => {
-	test("the state names the session notes, the skill, and the docs", () => {
+	test("the state names the task notes, the skill, and the docs", () => {
 		withTemp((root) => {
 			const f = fixture(root);
 			const { manifest, instructions } = prepareCompaction(f.kiro, f.cwd, f.home, sessionId, new Date("2026-11-20T10:00:00Z"));
-			assert.equal(manifest.sessionNotes, f.sessionNotes);
+			assert.equal(manifest.taskNotes, f.taskNotes);
 			assert.deepEqual(manifest.skills, ["study"]);
 			assert.ok(manifest.docs.includes(f.doc));
 			assert.ok(manifest.docs.includes(path.join(f.notes, "summary.md")));
 			assert.match(instructions, /Compaction instructions/);
-			assert.match(instructions, new RegExp(f.sessionNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+			assert.match(instructions, new RegExp(f.taskNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 			assert.ok(fs.existsSync(manifestFile(path.join(f.kiro, "persona-agents", "state"), sessionId)));
 		});
 	});
@@ -91,15 +91,15 @@ describe("kiro compaction: the manifest", () => {
 	test("a resumed session that only read its notes gets them from the Sessions line", () => {
 		withTemp((root) => {
 			const f = fixture(root);
-			const notesFile = path.join(f.notes, "sessions", "2026-11-20-task.md");
+			const notesFile = path.join(f.notes, "tasks", "2026-11-20-task.md");
 			fs.writeFileSync(notesFile, `# Task\n\n- **Status:** open\n- **Sessions:** ${sessionId}\n`);
 			// A second open file makes the only-open fallback useless, so only the
 			// Sessions line can choose the target.
-			fs.writeFileSync(path.join(f.notes, "sessions", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
+			fs.writeFileSync(path.join(f.notes, "tasks", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
 			const dir = path.join(f.kiro, "sessions", "hash", sessionId);
 			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${JSON.stringify({ type: "tool_call", toolName: "read_file", args: { path: f.doc } })}\n`);
 			const { manifest } = prepareCompaction(f.kiro, f.cwd, f.home, sessionId, new Date("2026-11-20T10:00:00Z"));
-			assert.equal(manifest.sessionNotes, notesFile);
+			assert.equal(manifest.taskNotes, notesFile);
 			assert.equal(manifest.session, sessionId);
 		});
 	});
@@ -108,7 +108,7 @@ describe("kiro compaction: the manifest", () => {
 		withTemp((root) => {
 			const f = fixture(root);
 			const { manifest, instructions } = prepareCompaction(f.kiro, f.cwd, f.home, "sess_missing", new Date("2026-11-20T10:00:00Z"));
-			assert.equal(manifest.sessionNotes, "");
+			assert.equal(manifest.taskNotes, "");
 			assert.deepEqual(manifest.skills, []);
 			assert.match(instructions, /Compaction instructions/);
 		});
@@ -130,8 +130,8 @@ describe("kiro compaction: the summary and the reload", () => {
 			);
 			const state = path.join(f.kiro, "persona-agents", "state");
 			assert.match(fs.readFileSync(summariesFile(state, sessionId), "utf8"), /We were porting Kiro\./);
-			assert.match(reload, /Read the session notes file first/);
-			assert.match(reload, new RegExp(f.sessionNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+			assert.match(reload, /Read the task notes file first/);
+			assert.match(reload, new RegExp(f.taskNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 			assert.match(reload, /- study/);
 			assert.match(reload, /load_resource/);
 			const metrics = fs.readFileSync(metricsFile(state), "utf8").trim().split("\n");
@@ -150,17 +150,17 @@ describe("kiro compaction: the summary and the reload", () => {
 			const state = path.join(f.kiro, "persona-agents", "state");
 			fs.mkdirSync(path.join(state, "compact"), { recursive: true });
 			const { reload } = finishCompaction(f.kiro, f.cwd, f.home, sessionId, { summary: "s" }, new Date("2026-11-20T10:01:00Z"));
-			assert.match(reload, new RegExp(f.sessionNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+			assert.match(reload, new RegExp(f.taskNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 		});
 	});
 
 	test("a PostCompact rebuild uses the session id when no manifest was saved", () => {
 		withTemp((root) => {
 			const f = fixture(root);
-			const notesFile = path.join(f.notes, "sessions", "2026-11-20-task.md");
+			const notesFile = path.join(f.notes, "tasks", "2026-11-20-task.md");
 			fs.writeFileSync(notesFile, `# Task\n\n- **Status:** open\n- **Sessions:** ${sessionId}\n`);
 			// Only the Sessions line can choose the target; the fallback sees two open files.
-			fs.writeFileSync(path.join(f.notes, "sessions", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
+			fs.writeFileSync(path.join(f.notes, "tasks", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
 			const dir = path.join(f.kiro, "sessions", "hash", sessionId);
 			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${JSON.stringify({ type: "tool_call", toolName: "read_file", args: { path: f.doc } })}\n`);
 			const state = path.join(f.kiro, "persona-agents", "state");

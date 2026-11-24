@@ -7,8 +7,10 @@
  *
  *   history: a git command that is not a read and not publish (add, commit,
  *            reset, rebase, tag writes, ...)
- *   publish: git push, gh pr/release/run, a git option that runs a program of
- *            the caller's choice, or any wrapped or runtime-shaped command
+ *   publish: git push, a gh pr/release/run write (create, merge, delete,
+ *            cancel, ...), a git option that runs a program of the caller's
+ *            choice, or any wrapped or runtime-shaped command. A gh read
+ *            action (view, list, status, diff, checks, search) is ungated.
  *   write:   a file-changing command or an output redirect to a file
  *   support: an inert part beside a history command: a `cd` into a session
  *            directory, a read-only git command, a project formatter, or a
@@ -29,13 +31,16 @@
  * header only (safeHeredocHeader).
  */
 
-import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, relative, resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import { normalizeHeredocs, safeHeredocHeader } from "./heredoc.ts";
 import { isFormatter, isInertFilter } from "./inert.ts";
 import { parseShellCommand } from "./shell-parse.ts";
 import { shellWords } from "./shell-words.ts";
+import { expandHome, insideDir } from "../paths.ts";
+import { hasSubstitution, writesFile, runtimeShaped } from "./scan.ts";
+
+export { insideDir };
 
 export { normalizeHeredocs } from "./heredoc.ts";
 export { shellWords } from "./shell-words.ts";
@@ -174,8 +179,8 @@ const GIT_INERT_READ = new Set([
 ]);
 /** Diff options that run a configured helper program. */
 const GIT_DIFF_PROGRAM = ["--ext-diff", "--textconv"];
-/** gh actions that only read (`gh issue list`, `gh repo view`). */
-const GH_READ_ACTIONS = new Set(["list", "view", "status", "diff", "checks", "search"]);
+/** gh actions that only read (`gh issue list`, `gh pr view`, `gh run list`). */
+const GH_READ_ACTIONS = new Set(["list", "ls", "view", "status", "diff", "checks", "search"]);
 const GH_READ_COMMANDS = new Set(["status", "search", "help", "version", "browse"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 /** Prefix commands that run the rest of the line, with options to skip. */
@@ -197,21 +202,6 @@ const GATED_WORD = new RegExp(
 
 const MAX_UNWRAP_DEPTH = 4;
 
-/** The real path when it exists, else the resolved path. */
-function realOrResolved(path: string): string {
-	try {
-		return realpathSync.native(path);
-	} catch {
-		return resolve(path);
-	}
-}
-
-/** True when `path` is `base` or inside it, resolving a symlink that exists. */
-export function insideDir(path: string, base: string): boolean {
-	const rel = relative(realOrResolved(base), realOrResolved(path));
-	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
 /**
  * A `cd` target as a resolved absolute path when it is a session directory,
  * else null. `~` expands to the home folder; an expansion, a glob, a quote
@@ -221,10 +211,9 @@ function cdPath(target: string, dir: string | undefined, options: GateOptions): 
 	if (target === "-" || /[$`*?[\]{}]/.test(target)) return null;
 	const home = options.home ?? homedir();
 	let path: string;
-	if (target === "" || target === "~") path = home;
-	else if (target.startsWith("~/")) path = resolve(home, target.slice(2));
-	else if (target.startsWith("~")) return null;
-	else path = target;
+	if (target === "") path = home;
+	else if (target.startsWith("~") && target !== "~" && !target.startsWith("~/")) return null;
+	else path = expandHome(target, home);
 	const base = dir ?? options.cwd;
 	const resolved = isAbsolute(path) ? resolve(path) : base === undefined ? null : resolve(base, path);
 	if (resolved === null || options.isSessionDir === undefined) return null;
@@ -236,157 +225,10 @@ function raise(hits: Hit[]): Hit[] {
 	return hits.map((hit) => (hit === "history" ? "publish" : hit === SUPPORT ? UNGATED : hit));
 }
 
-/**
- * True when bash changes the segment at run time in a way the words do not
- * show: a `$` expansion or substitution outside single quotes, an unquoted
- * glob or brace, or an output redirect to a file (`2>&1` and `>/dev/null`
- * stay plain). A history command with this shape is raised to ask.
- */
-function runtimeShaped(segment: string): boolean {
-	let quote: "'" | '"' | null = null;
-	for (let i = 0; i < segment.length; i++) {
-		const ch = segment[i];
-		if (quote === "'") {
-			if (ch === "'") quote = null;
-			continue;
-		}
-		if (ch === "\\") {
-			i++;
-			continue;
-		}
-		if (ch === "`" || (ch === "$" && /[A-Za-z_{(0-9*@#?$!-]/.test(segment[i + 1] ?? ""))) return true;
-		if (quote === '"') {
-			if (ch === '"') quote = null;
-			continue;
-		}
-		if (ch === "'" || ch === '"') quote = ch;
-		else if ("*?[{".includes(ch)) return true;
-	}
-	return writesFile(segment);
-}
-
-/** True when the segment redirects output to a file (`2>&1` and `>/dev/null` stay plain). */
-function writesFile(segment: string): boolean {
-	let quote: "'" | '"' | null = null;
-	for (let i = 0; i < segment.length; i++) {
-		const ch = segment[i];
-		if (quote) {
-			if (ch === quote) quote = null;
-			else if (ch === "\\" && quote === '"') i++;
-			continue;
-		}
-		if (ch === "\\") {
-			i++;
-			continue;
-		}
-		if (ch === "'" || ch === '"') quote = ch;
-		else if (ch === "<" && segment[i + 1] === ">") return true;
-		else if (ch === ">") {
-			let j = i + 1;
-			if (segment[j] === ">" || segment[j] === "|") j++;
-			while (segment[j] === " " || segment[j] === "\t") j++;
-			if (segment[j] === "&") {
-				// A dup is plain only when the whole target is an fd or `-`: `>&0file` writes a file.
-				if (!/^(\d+|-)(?=\s|$)/.test(segment.slice(j + 1))) return true;
-			} else if (!/^\/dev\/null(?=\s|$)/.test(segment.slice(j))) return true;
-		}
-	}
-	return false;
-}
-
-/**
- * The file targets of the output redirects in a command, in order, with their
- * quotes removed. `2>&1`, `>&2`, and `>/dev/null` are not targets: they change
- * no file. A target is returned as written, so the caller resolves it against
- * its own working directory.
- *
- * This exists so a platform can apply its write policy to `echo x > path`
- * exactly as it does to the `write` tool: a redirect to a file is a write, and
- * the path belongs to the policy, not only to the shell.
- */
-export function redirectTargets(command: string): string[] {
-	return redirectTargetsIn(normalizeHeredocs(command));
-}
-
-/** The redirect scan over text whose quoted commit heredocs are already removed. */
-function redirectTargetsIn(command: string): string[] {
-	const targets: string[] = [];
-	let quote: "'" | '"' | null = null;
-	for (let i = 0; i < command.length; i++) {
-		const ch = command[i];
-		if (quote) {
-			if (ch === quote) quote = null;
-			else if (ch === "\\" && quote === '"') i++;
-			continue;
-		}
-		if (ch === "\\") {
-			i++;
-			continue;
-		}
-		if (ch === "'" || ch === '"') {
-			quote = ch;
-			continue;
-		}
-		if (ch !== ">") continue;
-		let j = i + 1;
-		if (command[j] === ">") j++;
-		if (command[j] === "|") j++;
-		while (command[j] === " " || command[j] === "\t") j++;
-		if (command[j] === "&") {
-			// `>&2` and `>&-` are dups; `>&0file` writes `file`.
-			j++;
-			while (/\d|-/.test(command[j] ?? "")) j++;
-			if (command[j] === undefined || /\s|;|&|\|/.test(command[j])) continue;
-		}
-		// Read the target word, keeping the quotes out of it.
-		let target = "";
-		let inner: "'" | '"' | null = null;
-		while (j < command.length) {
-			const c = command[j];
-			if (inner) {
-				if (c === inner) inner = null;
-				else if (c === "\\" && inner === '"' && j + 1 < command.length) target += command[++j];
-				else target += c;
-				j++;
-				continue;
-			}
-			if (c === "'" || c === '"') {
-				inner = c;
-				j++;
-				continue;
-			}
-			if (c === "\\" && j + 1 < command.length) {
-				target += command[++j];
-				j++;
-				continue;
-			}
-			if (/\s|;|&|\|/.test(c)) break;
-			target += c;
-			j++;
-		}
-		if (target !== "" && target !== "/dev/null") targets.push(target);
-	}
-	return targets;
-}
-
 /** True when `git branch` arguments only list branches. */
 function isBranchListing(rest: string[]): boolean {
 	const LIST = new Set(["-a", "--all", "-r", "--remotes", "-l", "--list", "-v", "-vv", "--verbose", "--show-current", "--merged", "--no-merged", "--contains", "--no-contains", "--sort", "--format", "--column", "--no-column", "--points-at"]);
 	return rest.length === 0 || rest.includes("--show-current") || rest.includes("-l") || rest.includes("--list") || rest.every((arg) => !arg.startsWith("-") ? false : LIST.has(arg.split("=")[0]));
-}
-
-/** True when the command runs a `$(...)`, backtick, or `<(...)` substitution. */
-function hasSubstitution(command: string): boolean {
-	let single = false;
-	for (let i = 0; i < command.length; i++) {
-		const ch = command[i];
-		if (single) {
-			if (ch === "'") single = false;
-		} else if (ch === "\\") i++;
-		else if (ch === "'") single = true;
-		else if (ch === "`" || ("$<>".includes(ch) && command[i + 1] === "(")) return true;
-	}
-	return false;
 }
 
 /** One segment's hits and the directory it leaves the shell in. */
@@ -492,7 +334,9 @@ function classify(command: string, args: string[], afterPipe: boolean, runtime: 
 		let g = 0;
 		while (g < args.length && args[g].startsWith("-")) g += args[g] === "-R" || args[g] === "--repo" ? 2 : 1;
 		const sub = args[g];
-		if (sub !== undefined && GH_PUBLISH.has(sub)) return ["publish"];
+		// A publish sub-command's read action (`gh pr view`, `gh run list`) only
+		// reads; every other action (`gh pr merge`, `gh run delete`) is publish.
+		if (sub !== undefined && GH_PUBLISH.has(sub) && !GH_READ_ACTIONS.has(args[g + 1] ?? "")) return ["publish"];
 		if (sub === undefined || GH_READ_COMMANDS.has(sub) || GH_READ_ACTIONS.has(args[g + 1] ?? "")) return [UNGATED];
 		return ["write"];
 	}

@@ -1,13 +1,13 @@
 ---
-name: session-notes
-description: The working file for one task - goal, plan with step status, decisions, pinned documents, and a log. Create it when a task needs more than a few steps; update it whenever the plan changes. Compaction recovery and the journal read it.
+name: task-notes
+description: The working file for one task - goal, plan with step status, decisions, pinned documents, and a log. Create it when a task needs more than a few steps; update it whenever the plan changes. Compaction recovery and the session logs read it.
 ---
 
-# Session Notes
+# Task Notes
 
 ## Purpose
 
-The session notes file is the source of truth for the task you are working on.
+The task notes file is the source of truth for the task you are working on.
 Your context is a cache of it: compaction can drop the context at any time, but
 the file stays. Write the plan here, keep it current, and you can always pick
 the work up again.
@@ -20,12 +20,12 @@ the work up again.
   study's task table plus the steps of the current task.
 - A small, one-step change needs none.
 
-One file per task, not per Claude Code session. A task that spans several
+One file per task, not per agent session. A task that spans several
 sessions keeps one file. Several tasks in one session get one file each.
 
 ## Location
 
-`<project notes folder>/sessions/<YYYY-MM-DD>-<slug>.md`. The session start
+`<project notes folder>/tasks/<YYYY-MM-DD>-<slug>.md`. The session start
 text names the project notes folder. Use the `date` command for the date and a
 plain kebab-case slug.
 
@@ -75,7 +75,8 @@ plain kebab-case slug.
   when you need them. Project rules, the summary, the study, and this file are
   reloaded anyway and need no pin.
 - **Log** only what a later reader needs: a blocker, a rule change, a
-  compaction line (the hooks write those).
+  compaction line. Some adapters write the compaction line from a hook; when
+  none appears after a compaction, write it yourself.
 - Set `Status: done` when the task closes. An open file shows up at the next
   session start.
 - Keep the file under 200 lines. Move detail into the study or a project note.

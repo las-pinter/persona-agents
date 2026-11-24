@@ -1,14 +1,14 @@
 /**
- * The journal path and read CLI for the Kiro adapter.
+ * The session-log path and read CLI for the Kiro adapter.
  *
- *   node journal.ts path --session=<id> [--cwd=<dir>] [--home=<dir>]
+ *   node session-log.ts path --session=<id> [--cwd=<dir>] [--home=<dir>]
  *       Print this session's entry path: its existing entry from today or
  *       yesterday, else a new path for now. Creates the day folder.
- *   node journal.ts read [--days=<n>] [--cwd=<dir>] [--home=<dir>]
+ *   node session-log.ts read [--days=<n>] [--cwd=<dir>] [--home=<dir>]
  *       Print the entries of the last n day folders (default 3), oldest first.
  *
  * The project notes layout is the one every adapter writes:
- * `<home>/agent-notes/project-notes/<project>/journal/<day>/<HHMM>-<session>.md`.
+ * `<home>/agent-notes/project-notes/<project>/session-logs/<day>/<HHMM>-<session>.md`.
  * The wrap-up skill's Kiro reference calls this; the SessionEnd safety net uses
  * the same shared entry-path function.
  */
@@ -17,17 +17,13 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
-import { entryPath, recentJournal } from "../../shared/notes/journal.ts";
+import { entryPath, recentSessionLogs } from "../../shared/notes/session-log.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
+import { option } from "../../shared/argv.ts";
 
 /** This session's entry path for a working directory and home folder. */
-export function journalPath(cwd: string, home: string, sessionId: string, now: Date = new Date()): string {
+export function sessionLogPath(cwd: string, home: string, sessionId: string, now: Date = new Date()): string {
 	return entryPath(projectDir(cwd, home), sessionId, now);
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
@@ -38,7 +34,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 	if (command === "path") {
 		const session = option("session", process.argv);
 		if (!session) {
-			process.stderr.write("journal: path needs --session=<id>\n");
+			process.stderr.write("session-log: path needs --session=<id>\n");
 			process.exit(2);
 		}
 		const file = entryPath(notesDir, session);
@@ -46,11 +42,11 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 		process.stdout.write(`${file}\n`);
 	} else if (command === "read") {
 		const days = Number(option("days", process.argv) ?? 3);
-		for (const entry of recentJournal(notesDir, Number.isInteger(days) && days > 0 ? days : 3)) {
+		for (const entry of recentSessionLogs(notesDir, Number.isInteger(days) && days > 0 ? days : 3)) {
 			process.stdout.write(`\n<!-- ${entry.path} -->\n${entry.text}\n`);
 		}
 	} else {
-		process.stderr.write("usage: journal.ts path --session=<id> | read [--days=<n>]\n");
+		process.stderr.write("usage: session-log.ts path --session=<id> | read [--days=<n>]\n");
 		process.exit(2);
 	}
 }

@@ -93,7 +93,7 @@ export function personaText(contentDir: string, registry: Registry, theme: strin
  * with the persona instead of being repeated in each skill.
  */
 export const PERSONA_FREE_RULE =
-	"Code, commits, notes, studies, journals, and every other durable artifact stay persona-free. Follow the **persona-free-documents** skill.";
+	"Code, commits, notes, studies, session logs, and every other durable artifact stay persona-free. Follow the **persona-free-documents** skill.";
 
 /** The persona section: the voice, with the profession kept in charge. */
 export function personaSection(theme: string, persona: string): string {

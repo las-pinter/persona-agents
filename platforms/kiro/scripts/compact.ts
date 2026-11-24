@@ -8,7 +8,7 @@
  *                     conversation).
  *
  * The manifest is built from the V3 session store: the skills the session
- * loaded (`load_resource`), the session notes file it wrote last, and the
+ * loaded (`load_resource`), the task notes file it wrote last, and the
  * documents it read (the project rules and summary, the linked study, the
  * pinned paths). Working source files are not reloaded.
  *
@@ -31,6 +31,8 @@ import {
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { readSession } from "./session-store.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
+import { option } from "../../shared/argv.ts";
+import { safeId } from "./paths.ts";
 
 /** One saved compaction. */
 export interface CompactionState {
@@ -38,9 +40,6 @@ export interface CompactionState {
 	at: string;
 	manifest: Manifest;
 }
-
-/** A file-name-safe session id. */
-const safeId = (id: string): string => String(id || "unknown").replace(/[^A-Za-z0-9_-]/g, "_");
 
 /** The compaction state folder. */
 export const compactDir = (stateDir: string): string => join(stateDir, "compact");
@@ -130,11 +129,6 @@ export function finishCompaction(
 		})}\n`,
 	);
 	return { reload: kiroReloadText(manifest) };
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

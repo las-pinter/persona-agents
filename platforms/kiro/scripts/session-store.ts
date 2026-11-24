@@ -10,7 +10,7 @@
  *                   sub_agent_start, sub_agent_complete, ...
  *   sub-executions/ the child transcripts of sub-agent runs
  *
- * The shared notes, compaction, retro, and journal modules read a neutral
+ * The shared notes, compaction, retro, and session-log modules read a neutral
  * entry shape (`EntryLike`), so this module maps a Kiro session onto it. The
  * mapping is pure and takes the home and session id as arguments; the hooks
  * pass the real ones.
@@ -22,7 +22,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { EntryLike } from "../../shared/compaction/manifest.ts";
-import { parseVerdict, UNCOMMITTED } from "../../shared/review/review.ts";
+import { UNCOMMITTED } from "../../shared/review/brief.ts";
+import { parseVerdict } from "../../shared/review/review.ts";
 
 /** The session metadata this adapter reads. */
 export interface SessionMeta {
@@ -142,6 +143,9 @@ export const DEFAULT_REVIEWER = "pa-reviewer";
 
 /** A change key line: the review brief's metadata for the commit gate. */
 export const CHANGE_KEY = /Change key:\s*([0-9a-f]{16})\b/;
+
+/** The change key line the review brief carries. */
+export const changeKeyLine = (key: string): string => `Change key: ${key}`;
 
 /** The change key in a text, or "". */
 export function changeKeyIn(text: string): string {
@@ -266,7 +270,7 @@ export function mapPayloads(
 					entries.push({
 						type: "custom",
 						customType: "persona-agents:review",
-						data: { verdict, at: payload.timestamp ?? null },
+						data: { verdict },
 					});
 				}
 			}

@@ -19,6 +19,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_THEME } from "../../shared/context/context.ts";
+import { safeId } from "../../shared/notes/session-log.ts";
 
 /**
  * True when Kiro accepts this as its global directory: absolute, not a
@@ -49,8 +50,7 @@ export const configFile = (home: string): string => join(payloadDir(home), "conf
 /** The adapter's state folder: review records, compaction manifests, metrics. */
 export const stateDir = (home: string): string => join(payloadDir(home), "state");
 
-/** The agent profile folder. */
-export const agentsDir = (home: string): string => join(home, "agents");
+export { safeId };
 
 /** The global skills folder. */
 export const skillsDir = (home: string): string => join(home, "skills");

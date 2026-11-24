@@ -1,6 +1,6 @@
 /**
  * The Pi prompt context and read list (platforms/pi/scripts/context.ts,
- * notes.ts, journal.ts).
+ * notes.ts, session-log.ts).
  *
  * The sections are built from the shared content tree, so this suite also pins
  * the contract the Claude adapter depends on: the profession is sent verbatim,
@@ -26,8 +26,8 @@ import {
 	resolveTheme,
 	themeNames,
 } from "../platforms/pi/scripts/context.ts";
-import { entryPath, dayOf, recentEntries } from "../platforms/shared/notes/journal.ts";
-import { openSessionNotes, startupContext, unfinishedStudies } from "../platforms/shared/notes/notes.ts";
+import { entryPath, dayOf, recentEntries } from "../platforms/shared/notes/session-log.ts";
+import { openTaskNotes, startupContext, unfinishedStudies } from "../platforms/shared/notes/notes.ts";
 import { PROFILES } from "../platforms/pi/scripts/profile.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -93,13 +93,13 @@ describe("pi notes: the startup read list", () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-notes-"));
 		const notesDir = path.join(root, "agent-notes", "project-notes", "common");
 		fs.mkdirSync(path.join(notesDir, "rules"), { recursive: true });
-		fs.mkdirSync(path.join(notesDir, "sessions"), { recursive: true });
+		fs.mkdirSync(path.join(notesDir, "tasks"), { recursive: true });
 		fs.mkdirSync(path.join(notesDir, "studies"), { recursive: true });
 		fs.writeFileSync(path.join(notesDir, "rules", "house.md"), "# House\n");
 		fs.writeFileSync(path.join(notesDir, "rules", "notes.txt"), "not a rule\n");
 		fs.writeFileSync(path.join(notesDir, "summary.md"), "# Summary\n");
-		fs.writeFileSync(path.join(notesDir, "sessions", "2026-01-01-open.md"), "# Task\n\n- **Status:** open\n");
-		fs.writeFileSync(path.join(notesDir, "sessions", "2026-01-01-done.md"), "# Task\n\n- **Status:** done\n");
+		fs.writeFileSync(path.join(notesDir, "tasks", "2026-01-01-open.md"), "# Task\n\n- **Status:** open\n");
+		fs.writeFileSync(path.join(notesDir, "tasks", "2026-01-01-done.md"), "# Task\n\n- **Status:** done\n");
 		fs.writeFileSync(
 			path.join(notesDir, "studies", "index.md"),
 			[
@@ -113,10 +113,10 @@ describe("pi notes: the startup read list", () => {
 		return { root, notesDir, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
 	}
 
-	test("open session notes and unfinished studies are found, finished ones are not", () => {
+	test("open task notes and unfinished studies are found, finished ones are not", () => {
 		const fixture = notesFixture();
 		try {
-			const open = openSessionNotes(fixture.notesDir);
+			const open = openTaskNotes(fixture.notesDir);
 			assert.equal(open.length, 1);
 			assert.match(open[0], /open\.md$/);
 			const studies = unfinishedStudies(fixture.notesDir);
@@ -137,7 +137,7 @@ describe("pi notes: the startup read list", () => {
 			const summaryAt = text.indexOf("summary.md");
 			assert.ok(rulesAt > 0 && summaryAt > rulesAt, "rules come before the summary");
 			assert.doesNotMatch(text, /notes\.txt/);
-			assert.match(text, /sessions\/2026-01-01-open\.md/);
+			assert.match(text, /tasks\/2026-01-01-open\.md/);
 			assert.doesNotMatch(text, /2026-01-01-done\.md/);
 			assert.match(text, /Unfinished studies/);
 			assert.doesNotMatch(text, /Dead/);
@@ -172,14 +172,14 @@ describe("pi notes: the startup read list", () => {
 	});
 });
 
-describe("pi journal: one entry per session", () => {
+describe("pi session log: one entry per session", () => {
 	test("the last three day folders come back oldest first", () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-journal-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-session-log-"));
 		try {
 			const notesDir = path.join(root, "notes");
 			for (const day of ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]) {
-				fs.mkdirSync(path.join(notesDir, "journal", day), { recursive: true });
-				fs.writeFileSync(path.join(notesDir, "journal", day, "1200-s1.md"), `# ${day}\n`);
+				fs.mkdirSync(path.join(notesDir, "session-logs", day), { recursive: true });
+				fs.writeFileSync(path.join(notesDir, "session-logs", day, "1200-s1.md"), `# ${day}\n`);
 			}
 			const entries = recentEntries(notesDir, 3);
 			assert.equal(entries.length, 3);

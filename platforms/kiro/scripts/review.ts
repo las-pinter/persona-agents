@@ -13,25 +13,13 @@
  * file only reads the Kiro repository, the notes tree, and git.
  */
 
-import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-	buildBrief,
-	deriveTask,
-	finalizeBrief,
-	isWorkingTreeScope,
-	NO_VALUE,
-	parseReviewArgs,
-	promptForBrief,
-	subjectsFromQueries,
-	UNCOMMITTED,
-	type Brief,
-	type BriefInput,
-} from "../../shared/review/review.ts";
+import { NO_VALUE, parseReviewArgs, prepareBrief, promptForBrief, type Brief, type BriefInput, type GitRun } from "../../shared/review/brief.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey, git } from "./change.ts";
+import { option } from "../../shared/argv.ts";
+import { changeKeyLine } from "./session-store.ts";
 
 /** The brief and the change it names. */
 export interface ReviewBrief {
@@ -42,17 +30,8 @@ export interface ReviewBrief {
 	notes: string[];
 }
 
-/** Read a file as text, or null. */
-function readText(path: string): string | null {
-	try {
-		return readFileSync(path, "utf8");
-	} catch {
-		return null;
-	}
-}
-
-/** Submit a git call to the shared subject helper. */
-function runGit(cwd: string): (args: string[]) => Promise<{ code?: number | null; stdout?: string }> {
+/** Ask git in the repository for the shared brief builder. */
+function runGit(cwd: string): GitRun {
 	return async (args) => {
 		const result = git(cwd, args);
 		return { code: result.status, stdout: result.stdout };
@@ -60,58 +39,25 @@ function runGit(cwd: string): (args: string[]) => Promise<{ code?: number | null
 }
 
 /**
- * Build the brief from the author's input and the project notes.
- *
- * A field the author named is kept, `none` included. A missing task and
- * decisions come from the single study in progress; when no study names a
- * task, the commit subjects of the scope fill it.
+ * Build the brief from the author's input and the project notes, with the
+ * change key the commit gate reads when the review covers the working tree.
  */
 export async function buildReviewBrief(
 	input: BriefInput,
 	options: { cwd: string; notesDir: string; dropped?: string },
 ): Promise<ReviewBrief> {
-	const { brief, dropped, given } = buildBrief(input);
-	const extraDropped = (options.dropped ?? "").trim();
-	const indexFile = join(options.notesDir, "studies", "index.md");
-	const indexText = existsSync(indexFile) ? readText(indexFile) : "";
-	const finalized = finalizeBrief(brief, given, {
-		notesDir: options.notesDir,
-		indexText,
-		readFile: readText,
-	});
-	const notes = [
-		...(dropped.trim() === "" ? [] : [`ignored author text: ${dropped.replace(/\s+/g, " ").trim()}`]),
-		...(extraDropped === "" ? [] : [`ignored author text: ${extraDropped.replace(/\s+/g, " ").trim()}`]),
-		...finalized.notes,
-	];
-	let task = finalized.brief.task;
-	if (finalized.needsSubjects) {
-		const subjects = await subjectsFromQueries(finalized.brief.scope, runGit(options.cwd));
-		task = deriveTask("", "", subjects);
-	}
-	const { key } = changeKey(options.cwd);
-	// The commit gate compares the working-tree key. A review of a named ref,
-	// range, or path list did not see the whole uncommitted change, so it must
-	// not unlock a commit of it. An omitted scope is the working tree, so the
-	// brief carries the default and the reviewer reads what was reviewed.
-	const scope = isWorkingTreeScope(finalized.brief.scope) ? UNCOMMITTED : finalized.brief.scope;
-	const workingTree = isWorkingTreeScope(scope);
-	if (!workingTree) notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
-	return { brief: { ...finalized.brief, scope, task }, key: workingTree ? key : "", notes };
+	const prepared = await prepareBrief(input, { notesDir: options.notesDir, git: runGit(options.cwd), dropped: options.dropped });
+	const key = prepared.workingTree ? changeKey(options.cwd).key : "";
+	return { brief: prepared.brief, key, notes: prepared.notes };
 }
 
 /** The reviewer task: the shared prompt plus the change-key line. */
 export function reviewerTask(brief: ReviewBrief): string {
 	const lines = [promptForBrief(brief.brief, "Kiro")];
 	if (brief.key !== "") {
-		lines.push("", `Change key: ${brief.key}`, "This line is metadata for the commit gate, not a checklist.");
+		lines.push("", changeKeyLine(brief.key), "This line is metadata for the commit gate, not a checklist.");
 	}
 	return lines.join("\n");
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

@@ -23,9 +23,10 @@ import { homedir } from "node:os";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseVerdict } from "../../shared/review/review.ts";
-import { readSession, DEFAULT_REVIEWER } from "./session-store.ts";
+import { changeKeyIn, readSession, DEFAULT_REVIEWER } from "./session-store.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
 import { readReviews, recordReview } from "./state.ts";
+import { option } from "../../shared/argv.ts";
 
 /** One recorded verdict. */
 export interface RecordedReview {
@@ -35,10 +36,7 @@ export interface RecordedReview {
 }
 
 /** The key in a reviewer brief, or "". */
-export function keyOfPrompt(prompt: string): string {
-	const match = /Change key:\s*([0-9a-f]{16})\b/.exec(prompt);
-	return match ? match[1] : "";
-}
+export const keyOfPrompt = changeKeyIn;
 
 /**
  * Record every pa-reviewer run in a session that has not been recorded yet.
@@ -77,11 +75,6 @@ export function recordSessionReviews(
 		recorded.push({ key, verdict, subSession: run.subSessionId });
 	}
 	return recorded;
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

@@ -10,8 +10,8 @@ description: Decision rules for choosing between Context7, DeepWiki, and Exa bas
 ## Tool Names
 
 This skill names the capability (Context7, DeepWiki, Exa). Use the tool names
-that the session lists, such as `mcp__<server>__<tool>`. `config/mcp.json.example`
-holds a sample server setup.
+that the session lists, such as `mcp__<server>__<tool>`. The persona-agents
+repository holds a sample server setup in `config/mcp.json.example`.
 
 ## Research Rules
 
@@ -117,7 +117,7 @@ Is this about a SPECIFIC library/framework's API, config, or usage?
 
 ### Context7 — API Reference, Version-Specific Docs
 
-Always resolve a library ID first (resolve name per stack: see the table above):
+Always resolve a library ID first:
 ```
 resolve(libraryName="Next.js", query="...")
 → Use the resolved /org/project ID for the actual query

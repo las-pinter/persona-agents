@@ -87,6 +87,17 @@ describe("install.sh: settings merge", () => {
 		});
 	});
 
+	test("an update drops the gh ask rules the snippet retired and keeps the user's own", () => {
+		withConfig((dir, home) => {
+			fs.mkdirSync(dir);
+			const before = { permissions: { ask: ["Bash(gh pr:*)", "Bash(gh run:*)", "Bash(gh release:*)", "Bash(gh pr view:*)"] } };
+			fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify(before));
+			const run = install(dir, home);
+			assert.equal(run.status, 0, run.stderr);
+			assert.deepEqual(settingsOf(dir).permissions.ask, ["Bash(gh pr view:*)", ...snippet.permissions.ask]);
+		});
+	});
+
 	test("a second run changes nothing", () => {
 		withConfig((dir, home) => {
 			assert.equal(install(dir, home).status, 0);

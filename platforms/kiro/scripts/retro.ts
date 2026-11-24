@@ -9,14 +9,14 @@
  * session store and the adapter's state files, then prints the shared retro
  * instruction and the facts.
  *
- * A Kiro journal entry, when one exists, is named but not read: the retro's
+ * A Kiro session log, when one exists, is named but not read: the retro's
  * review scope is the live context plus the notes the model reads itself.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
-import { dayOf, findEntry } from "../../shared/notes/journal.ts";
+import { dayOf, findEntry } from "../../shared/notes/session-log.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import {
 	parseDecisions,
@@ -29,6 +29,7 @@ import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts"
 import { decisionsFile } from "./state.ts";
 import { metricsFile, summariesFile } from "./compact.ts";
 import { readSession } from "./session-store.ts";
+import { option } from "../../shared/argv.ts";
 
 /** The facts and the instruction a Kiro retro run gets. */
 export interface RetroFacts {
@@ -63,8 +64,8 @@ function decisionsFor(stateDir: string, session: string) {
 	}
 }
 
-/** The journal entry path of a session, when it has one. */
-function journalOf(notesDir: string, session: string, now: Date): string[] {
+/** The session log path of a session, when it has one. */
+function sessionLogOf(notesDir: string, session: string, now: Date): string[] {
 	const yesterday = new Date(now);
 	yesterday.setDate(now.getDate() - 1);
 	const file = findEntry(notesDir, session, [dayOf(now), dayOf(yesterday)]);
@@ -87,7 +88,7 @@ export function retroFacts(
 	const facts = summarizeSession({
 		entries,
 		decisions: decisionsFor(stateDir, sessionId),
-		journal: journalOf(notesDir, sessionId, now),
+		sessionLogs: sessionLogOf(notesDir, sessionId, now),
 	});
 	const extras: string[] = [];
 	if (session.contextUsage !== null) extras.push(`- context usage: ${session.contextUsage}%`);
@@ -114,11 +115,6 @@ export function retroFacts(
 	if (session.meta?.modelId) extras.push(`- model: ${session.meta.modelId}`);
 	const text = [facts, ...(extras.length ? ["", ...extras] : [])].join("\n");
 	return { instruction: RETRO_INSTRUCTION, facts: text };
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

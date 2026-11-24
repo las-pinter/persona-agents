@@ -1,7 +1,8 @@
 # Reviewer evals
 
-A `claude plugin eval` suite for the reviewer's behavior. It is not part of
-`npm test`; run it by hand when you want the behavioral check.
+A `claude plugin eval` suite for the reviewer's behavior on Claude Code. It
+is not part of `npm test`; run it by hand when you want the behavioral check.
+The Pi and Kiro CLI reviewer paths have no eval.
 
 ## The case
 

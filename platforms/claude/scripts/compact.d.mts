@@ -8,16 +8,16 @@ export interface Scan {
 }
 
 export interface Manifest {
-	sessionNotes: string;
+	taskNotes: string;
 	skills: string[];
 	docs: string[];
 	/** The scan counts recorded before the compaction, for the canary and metrics. */
 	scan: Scan;
 }
 export function stateDir(env?: NodeJS.ProcessEnv): string;
-export function readTranscript(path: string): Record<string, unknown>[];
+export function readTranscript(path: string | undefined): Record<string, unknown>[];
 export function buildManifest(entries: Record<string, unknown>[], notesDir: string, sessionId?: string): Manifest;
-export function summaryInstructions(manifest: Manifest): string;
+export function summaryInstructions(manifest: Pick<Manifest, "taskNotes">): string;
 export function reloadContext(manifest: Manifest): string;
 export function lastBoundary(entries: Record<string, unknown>[]): { preTokens?: number; postTokens?: number };
 export function appendLog(path: string, line: string): boolean;

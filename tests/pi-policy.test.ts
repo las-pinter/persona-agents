@@ -14,25 +14,9 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-	addRule,
-	appendDecision,
-	decidePolicy,
-	decisionRecord,
-	describeRules,
-	initPolicyFile,
-	isGatePath,
-	isInside,
-	isSecretPath,
-	loadPolicy,
-	parsePolicy,
-	piAgentDir,
-	suggestGrant,
-	type PolicyEnv,
-	type PolicyFileRef,
-	type PolicyState,
-} from "../platforms/pi/scripts/policy.ts";
+import { decidePolicy, decisionRecord, isGatePath, isInside, isSecretPath, suggestGrant, type PolicyEnv, type PolicyFileRef, type PolicyState } from "../platforms/pi/scripts/policy.ts";
 import { PROFILES } from "../platforms/pi/scripts/profile.ts";
+import { initPolicyFile, piAgentDir, parsePolicy, loadPolicy, describeRules, appendDecision, ruleTarget, addRule } from "../platforms/pi/scripts/policy-file.ts";
 
 const companion = PROFILES.companion;
 const reviewer = PROFILES.reviewer;
@@ -508,6 +492,26 @@ describe("pi policy: editing and reporting", () => {
 		}
 	});
 
+	test("addRule refuses a regex that does not compile and leaves the file loadable", () => {
+		const box = sandbox();
+		try {
+			const ref = box.refs[0];
+			initPolicyFile(ref);
+			assert.throws(() => addRule(ref, "companion", rule("bash", "^npm (run", "allow")), SyntaxError);
+			assert.equal(loadPolicy(box.refs, "companion").errors.length, 0);
+		} finally {
+			box.cleanup();
+		}
+	});
+
+	test("a project rule has no target in an untrusted project, never the user file", () => {
+		const user = { path: "/u/policy.json", scope: "user" as const };
+		const project = { path: "/p/.pi/persona-agents/policy.json", scope: "project" as const };
+		assert.equal(ruleTarget([user], true), undefined);
+		assert.equal(ruleTarget([user, project], true), project);
+		assert.equal(ruleTarget([user, project], false), user);
+	});
+
 	test("the report names each rule, its verdict, and where it lives", () => {
 		const { state, box } = stateFrom({ user: { profiles: { companion: { rules: [rule("bash", "^git push", "ask", "pushes need a look")] } } } });
 		try {
@@ -549,6 +553,18 @@ describe("pi policy: editing and reporting", () => {
 			const log = path.join(box.env.piAgentDir, "persona-agents", "decisions.ndjson");
 			appendDecision(log, decisionRecord(companion, "bash", { command: "git push" }, decision));
 			assert.equal(fs.readFileSync(log, "utf8").trim().split("\n").length, 1);
+		} finally {
+			box.cleanup();
+		}
+	});
+
+	test("a write decision record keeps the path and drops the file body", () => {
+		const box = sandbox();
+		try {
+			const input = { path: "notes.md", content: "API_KEY=secret" };
+			const decision = decidePolicy(companion, "write", input, { rules: [], errors: [], grants: [] }, box.env);
+			const record = JSON.parse(decisionRecord(companion, "write", input, decision));
+			assert.deepEqual(record.input, { path: "notes.md" });
 		} finally {
 			box.cleanup();
 		}

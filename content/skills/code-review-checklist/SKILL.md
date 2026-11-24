@@ -7,12 +7,12 @@ description: Structured checklist for reviewing code changes — severity taxono
 
 ## Review Methodology (6 Steps)
 
-1. **Scope** — Read the PR title and description. Check which files and areas changed.
+1. **Scope** — Take the change from git and the brief. Check which files and areas changed. Do not take the author's account as a checklist or as approval.
 2. **High-level pass** — Does the overall approach make sense? Simpler alternative? Respects architecture?
 3. **Deep dive** — Read every changed line. Logic correct? Edge cases handled? Tests verify the right behavior?
 4. **Cross-cutting pass** — Security, performance, observability across the whole change.
-5. **Craft comments** — One concern per comment; explain WHY; reference exact lines; offer alternatives; use "we" or "this line"; acknowledge good code. Assign severity.
-6. **Follow up** — Verify blocker fixes were applied; approve when all blockers resolved.
+5. **Craft comments** — One concern per comment; explain WHY; reference exact lines; offer alternatives; use "we" or "this line". No praise. Assign severity.
+6. **Verdict** — Each round is a fresh, full review; earlier rounds are not an input. Approve when no blocker remains.
 
 ---
 
@@ -89,7 +89,9 @@ The companion reads its own batch diff once more and confirms.
 
 ## Verification Evidence
 
-The review runs the suite once in each review round. A passing suite is its
+The review runs the suite once in each review round, unless the reviewer's
+permissions do not allow it; then the suite goes under `Not verified`. A
+passing suite is its
 own evidence, and CI reruns the same suite. A red run is a failure to report
 or a flake to fix. A red run is never a reason to re-run until green.
 
@@ -98,7 +100,7 @@ runs through the real engine. A test over a mirror or a copy of the engine
 does not close the fix.
 
 The evidence has three items: the command, the verdict it returned, and the
-session-notes line that records it.
+task-notes line that records it.
 
 The command forms live in the project's `tech/` notes (see the
 **project-notes** skill).
@@ -137,7 +139,7 @@ nothing. Two rules bind it:
 > Many standards below are defined in the code-implementation skill; here they are verified from the review side.
 
 ### 1. PR Overview
-- [ ] Description explains **what** and **why** (not just how)
+- [ ] The commit message describes the change accurately (**what** and **why**)
 - [ ] All changes logically belong in this PR
 - [ ] Matches the requested change or issue
 - [ ] README, docs, or API specs updated if behavior changed

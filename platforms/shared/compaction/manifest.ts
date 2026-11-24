@@ -2,7 +2,7 @@
  * What a compaction must not lose.
  *
  * Before the harness summarizes, the companion records the skills the session
- * used, the session notes file it wrote, and the documents it must read again.
+ * used, the task notes file it wrote, and the documents it must read again.
  * After the summary lands, the reload list names them in order.
  *
  * The summary is lossy; the files are not. This manifest is the bridge: it says
@@ -16,16 +16,18 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
-import { activeSessionNotes, pinnedDocs, projectRules, studyPath } from "../notes/notes.ts";
+import { isInside, sessionLogsDir, tasksDir } from "../notes/folders.ts";
+import { activeTaskNotes, pinnedDocs, projectRules, studyPath } from "../notes/notes.ts";
 
 /** The cap on skills reloaded after one compaction. */
 export const MAX_SKILLS = 12;
 /** The cap on documents reloaded after one compaction. */
 export const MAX_DOCS = 20;
 
-/** The part of a Pi session entry this module reads. */
+/** The part of a Pi session entry the shared modules read, plus a compaction summary. */
 export interface EntryLike {
 	type?: string;
+	summary?: string;
 	message?: { role?: string; content?: unknown };
 	customType?: string;
 	data?: unknown;
@@ -34,21 +36,21 @@ export interface EntryLike {
 export interface Manifest {
 	/** The current session id, or "". */
 	session: string;
-	/** The active session notes file, or "". */
-	sessionNotes: string;
+	/** The active task notes file, or "". */
+	taskNotes: string;
 	/** Skill names, in the order they were last used. */
 	skills: string[];
 	/** Absolute document paths to read again. */
 	docs: string[];
 }
 
-interface ToolCall {
+export interface ToolCall {
 	name: string;
 	arguments: Record<string, unknown>;
 }
 
 /** The tool calls of the main chain, in order. */
-function toolCalls(entries: EntryLike[]): ToolCall[] {
+export function toolCalls(entries: EntryLike[]): ToolCall[] {
 	const calls: ToolCall[] = [];
 	for (const entry of entries) {
 		if (entry.type !== "message" || entry.message?.role !== "assistant") continue;
@@ -91,7 +93,7 @@ export function skillOfPath(path: string): string | null {
 }
 
 /** The last `max` distinct values, ordered by their last use. */
-function lastDistinct(values: string[], max: number): string[] {
+export function lastDistinct(values: string[], max: number): string[] {
 	const seen = new Map<string, number>();
 	values.forEach((value, index) => seen.set(value, index));
 	return [...seen.entries()]
@@ -113,45 +115,56 @@ export function buildManifest(entries: EntryLike[], notesDir: string, sessionId 
 	const skillsFromText = messageTexts(entries).flatMap((text) => [...text.matchAll(/\/skill:([a-z0-9-]+)/g)].map((match) => match[1]));
 	const skills = lastDistinct([...skillsFromReads, ...skillsFromText], MAX_SKILLS);
 
-	// The active notes file: the session-id match first, then the last one the
-	// session wrote, then the only open notes file.
-	const sessionsDir = join(notesDir, "sessions") + sep;
 	const written = calls
 		.filter((call) => ["write", "edit", "patch", "apply_patch"].includes(call.name))
-		.map((call) => (typeof call.arguments.path === "string" ? call.arguments.path : ""))
-		.filter((path) => path.startsWith(sessionsDir) && path.endsWith(".md"));
-	const sessionNotes = activeSessionNotes(notesDir, sessionId, written);
-	const notesText = sessionNotes && existsSync(sessionNotes) ? readFileSync(sessionNotes, "utf8") : "";
+		.map((call) => (typeof call.arguments.path === "string" ? call.arguments.path : ""));
+	return { session: sessionId, skills, ...reloadFiles(notesDir, sessionId, written, readPaths) };
+}
+
+/**
+ * The task notes file and the documents to reload, from the paths a session
+ * wrote and read. Every adapter extracts the paths from its own transcript
+ * and shares this choice.
+ */
+export function reloadFiles(notesDir: string, sessionId: string, written: string[], readPaths: string[]): { taskNotes: string; docs: string[] } {
+	// The active notes file: the session-id match first, then the last one the
+	// session wrote, then the only open notes file.
+	const tasks = tasksDir(notesDir);
+	const writtenNotes = written.filter((path) => isInside(tasks, path) && path.endsWith(".md"));
+	const taskNotes = activeTaskNotes(notesDir, sessionId, writtenNotes);
+	const notesText = taskNotes && existsSync(taskNotes) ? readFileSync(taskNotes, "utf8") : "";
 
 	// Documents: project rules and summary, notes the session read, the linked
-	// study, then the pinned ones. Journal entries and other sessions are not
+	// study, then the pinned ones. Session logs and other tasks are not
 	// reloaded: their content is history, not the plan.
 	const startup = [...projectRules(notesDir), join(notesDir, "summary.md")].filter((path) => existsSync(path));
 	const readNotes = readPaths.filter(
 		(path) =>
-			path.startsWith(notesDir + sep) && !path.startsWith(join(notesDir, "journal") + sep) && !path.startsWith(sessionsDir),
+			path.startsWith(notesDir + sep) && !isInside(sessionLogsDir(notesDir), path) && !isInside(tasks, path),
 	);
 	const study = studyPath(notesText);
 	const docs = lastDistinct([...readNotes, ...startup, ...(study ? [study] : []), ...pinnedDocs(notesText)], MAX_DOCS).filter(
-		(path) => path !== sessionNotes,
+		(path) => path !== taskNotes,
 	);
-
-	return { session: sessionId, sessionNotes, skills, docs };
+	return { taskNotes, docs };
 }
 
 /** The focus the summary must follow. Passed to Pi's own summarizer. */
-export function summaryInstructions(manifest: Manifest): string {
+export function summaryInstructions(manifest: Pick<Manifest, "taskNotes">): string {
 	const lines = [
 		"Compaction instructions from the persona-agents companion:",
 		"- Keep the current task, the current plan step, the open decisions, and the owner's latest request word for word where short.",
 		"- Do not paraphrase skill text or project rules; they are reloaded after compaction.",
 	];
-	if (manifest.sessionNotes) lines.push(`- Keep this exact path in the summary: the session notes file ${manifest.sessionNotes}`);
+	if (manifest.taskNotes) lines.push(`- Keep this exact path in the summary: the task notes file ${manifest.taskNotes}`);
 	return lines.join("\n");
 }
 
+/** Pi's skill step: a skill is reloaded by reading its file. */
+export const READ_SKILLS_STEP = "2. Re-read these skills (their `SKILL.md`):";
+
 /** The message sent right after a compaction: what to reload, in order. */
-export function reloadContext(manifest: Manifest): string {
+export function reloadContext(manifest: Pick<Manifest, "taskNotes" | "skills" | "docs"> & { session?: string }, skillStep = READ_SKILLS_STEP): string {
 	const lines = [
 		"# After compaction: reload before you continue",
 		"",
@@ -160,11 +173,11 @@ export function reloadContext(manifest: Manifest): string {
 	if (manifest.session) lines.push("", `Session id: ${manifest.session}`);
 	lines.push("");
 	lines.push(
-		manifest.sessionNotes
-			? `1. Read the session notes file first; it holds the plan: ${manifest.sessionNotes}`
-			: "1. No session notes file was found for this session.",
+		manifest.taskNotes
+			? `1. Read the task notes file first; it holds the plan: ${manifest.taskNotes}`
+			: "1. No task notes file was found for this session.",
 	);
-	lines.push("2. Re-read these skills (their `SKILL.md`):");
+	lines.push(skillStep);
 	lines.push(...(manifest.skills.length ? manifest.skills.map((skill) => `   - ${skill}`) : ["   - none"]));
 	lines.push("3. Re-read these documents in full:");
 	lines.push(...(manifest.docs.length ? manifest.docs.map((doc) => `   - ${doc}`) : ["   - none"]));

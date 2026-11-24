@@ -1,17 +1,17 @@
 /**
- * The journal safety net for a Kiro companion session that ends without a
+ * The session-log safety net for a Kiro companion session that ends without a
  * wrap-up.
  *
- *   journal-end.ts hook             SessionEnd: when this session has no entry
+ *   session-log-end.ts hook             SessionEnd: when this session has no entry
  *                                   and has material, save a payload and start
  *                                   the writer as a detached process. Returns
  *                                   at once; the SessionEnd budget is short.
- *   journal-end.ts write <payload>  The detached writer: build the prompt, run
+ *   session-log-end.ts write <payload>  The detached writer: build the prompt, run
  *                                   a small headless model through the
  *                                   `pa-writer` agent, and write the entry if it
  *                                   is still missing.
  *
- * The source text is the session notes the session wrote, the compaction
+ * The source text is the task notes the session wrote, the compaction
  * summaries compact.ts kept, and the conversation after the last compaction.
  * The writer agent has no tools; it only writes one markdown entry.
  *
@@ -25,11 +25,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { dayOf, entryPath, findEntry } from "../../shared/notes/journal.ts";
-import { hasMaterial, sources, writerPrompt } from "../../shared/notes/journal-net.ts";
+import { dayOf, entryPath, findEntry } from "../../shared/notes/session-log.ts";
+import { hasMaterial, sources, writerPrompt } from "../../shared/notes/session-log-net.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
 import { readSession } from "./session-store.ts";
+import { option } from "../../shared/argv.ts";
+import { safeId } from "./paths.ts";
 
 /** The headless model the writer uses. */
 export const WRITER_MODEL = process.env.PERSONA_AGENTS_WRITER_MODEL || "claude-haiku-4.5";
@@ -39,7 +41,7 @@ export const WRITER_AGENT = "pa-writer";
 export const WRITER_TIMEOUT_MS = 180_000;
 
 /** One saved writer job. */
-export interface JournalPayload {
+export interface SessionLogPayload {
 	session: string;
 	notesDir: string;
 	/** ISO time the session ended. */
@@ -54,14 +56,11 @@ export interface JournalPayload {
 	prompt: string;
 }
 
-/** A file-name-safe session id. */
-const safeId = (id: string): string => String(id || "unknown").replace(/[^A-Za-z0-9_-]/g, "_");
-
 /** The writer payload folder. */
-export const journalStateDir = (stateDir: string): string => join(stateDir, "journal");
+export const sessionLogStateDir = (stateDir: string): string => join(stateDir, "session-log");
 
 /** The payload file of a session. */
-export const payloadFile = (stateDir: string, session: string): string => join(journalStateDir(stateDir), `${safeId(session)}.json`);
+export const payloadFile = (stateDir: string, session: string): string => join(sessionLogStateDir(stateDir), `${safeId(session)}.json`);
 
 /** The compaction summaries compact.ts kept, or "". */
 function summariesText(stateDir: string, session: string): string {
@@ -85,7 +84,7 @@ export function buildPayload(
 	kiroHome: string,
 	kiroCli: string,
 	summaries = "",
-): JournalPayload | null {
+): SessionLogPayload | null {
 	const yesterday = new Date(at);
 	yesterday.setDate(at.getDate() - 1);
 	if (findEntry(notesDir, session, [dayOf(at), dayOf(yesterday)])) return null;
@@ -101,7 +100,7 @@ export function buildPayload(
 		kiroHome,
 		kiroCli,
 		entry: entryPath(notesDir, session, at),
-		prompt: writerPrompt({ session, notesDir, at: at.toISOString(), sources: material }, material),
+		prompt: writerPrompt({ session, at: at.toISOString() }, material),
 	};
 }
 
@@ -116,7 +115,7 @@ export const detachedSpawn: SpawnWriter = (command, args) => {
 
 /** What a hook run did, for the tests and the debug log. */
 export interface HookRun {
-	payload: JournalPayload | null;
+	payload: SessionLogPayload | null;
 	spawned: boolean;
 }
 
@@ -149,7 +148,7 @@ export function runHook(
 		summariesText(stateDir, session),
 	);
 	if (!payload) return { payload: null, spawned: false };
-	mkdirSync(journalStateDir(stateDir), { recursive: true });
+	mkdirSync(sessionLogStateDir(stateDir), { recursive: true });
 	const file = payloadFile(stateDir, session);
 	writeFileSync(file, `${JSON.stringify(payload)}\n`);
 	const script = options.script ?? fileURLToPath(import.meta.url);
@@ -163,9 +162,9 @@ export function runHook(
  * still has none. A failure is silent; an entry is a convenience.
  */
 export function writeEntry(file: string, options: { kiroCli?: string } = {}): boolean {
-	let payload: JournalPayload;
+	let payload: SessionLogPayload;
 	try {
-		payload = JSON.parse(readFileSync(file, "utf8")) as JournalPayload;
+		payload = JSON.parse(readFileSync(file, "utf8")) as SessionLogPayload;
 	} catch {
 		return false;
 	}
@@ -185,11 +184,6 @@ export function writeEntry(file: string, options: { kiroCli?: string } = {}): bo
 	} finally {
 		rmSync(file, { force: true });
 	}
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

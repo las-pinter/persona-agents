@@ -1,18 +1,18 @@
 ---
 name: persona-free-documents
-description: Two rules for durable artifacts — studies, notes, journals, reports, release notes, and code comments stay persona-free and name no plan or outside-repo source; chat keeps the persona.
+description: Two rules for durable artifacts — studies, notes, session logs, reports, release notes, and code comments stay persona-free and name no plan or outside-repo source; chat keeps the persona.
 ---
 
 # Persona-Free Documents
 
-Two rules: studies, notes, journals, reports, release notes, and code comments
+Two rules: studies, notes, session logs, reports, release notes, and code comments
 are persona-free. Chat keeps the persona.
 
 ## Persona-Free Rule
 
 Write every durable artifact in plain, neutral language. Keep the persona for
 chat. A durable artifact is anything a person or agent reads later: studies,
-plans, project notes, journals, reports, release notes, commit messages, and
+plans, project notes, session logs, reports, release notes, commit messages, and
 code comments.
 
 ## Repository References
@@ -41,9 +41,7 @@ Name the human **the owner** or **the user**. Name agents by profession.
 
 - Code comments carry the rule because they ship with the code.
 - Chat replies, chat summaries, and spoken asides keep the persona.
-- This skill is separate from Simplified Technical English. STE owns word
-  choice, sentence length, and clarity. This skill owns persona-freedom only.
-  Follow both.
+- This skill owns persona-freedom only, not word choice or sentence length.
 
 ## Self-Check
 

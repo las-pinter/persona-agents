@@ -6,7 +6,8 @@
  * text they are given, so the counts are testable and no renderer holds logic.
  */
 
-import { oneLine, parseVerdict } from "../../shared/review/review.ts";
+import { oneLine } from "../../shared/review/brief.ts";
+import { parseVerdict } from "../../shared/review/review.ts";
 
 /** What a review's one line needs. */
 export interface ReviewSummary {
@@ -189,13 +190,13 @@ export function toolCallLine(tool: string, args: Record<string, unknown>): strin
 	}
 }
 
-/** `journal  written: <path>`, or the text itself when it names no file. */
-export function journalLine(text: string): string {
+/** `session-log  written: <path>`, or the text itself when it names no file. */
+export function sessionLogLine(text: string): string {
 	for (const line of text.split("\n")) {
 		const trimmed = line.trim();
-		if (trimmed.startsWith("journal entry written: ")) {
-			return `journal  written: ${trimmed.slice("journal entry written: ".length).trim()}`;
+		if (trimmed.startsWith("session log written: ")) {
+			return `session-log  written: ${trimmed.slice("session log written: ".length).trim()}`;
 		}
 	}
-	return `journal  ${oneLine(text, 80)}`;
+	return `session-log  ${oneLine(text, 80)}`;
 }

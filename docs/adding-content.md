@@ -19,7 +19,9 @@ A theme needs one `content/agents.json` entry and one persona file.
    the 10,000-character hook cap.
 
 The Pi adapter needs no step: it reads `content/agents.json` and the persona
-file at run time and takes its theme list from the registry.
+file at run time and takes its theme list from the registry. Kiro CLI copies
+the content into its payload, so run `./install.sh --kiro` to pick up a new
+theme.
 
 ## Adding or changing a persona
 
@@ -49,16 +51,25 @@ You are <Name>, the <Title>. [Who they are, and why they do the work themselves.
 
 The rules that apply:
 
-- The first line is `# <Name> the <Title> Persona`, an ATX header.
+- The first line is an ATX H1 that ends in `Persona`, usually
+  `# <Name> the <Title> Persona`.
 - The required sections are `## Personality`, `## Speech Style`, and
-  `## Rules`. `## Notes` (lore only) is optional.
-- The persona sets the chat voice only. Do not put work rules, journal rules,
+  `## Rules`, in that order. Any other section (such as `## Notes`) holds
+  voice or lore only.
+- `tests/doc-lint.test.ts` checks the header and the required sections.
+- The persona sets the chat voice only. Do not put work rules, session-log rules,
   or delegation in a persona; the profession and the skills own the work.
 - Match the voice to the theme.
 
-To try a persona, set the theme in `/config` and start
-`claude --agent persona-agents:companion`. To try a change from a clone, add
-`--plugin-dir <clone>`.
+To try a persona:
+
+- Claude Code: set the theme in `/config` and start
+  `claude --agent persona-agents:companion`; add `--plugin-dir <clone>` to try
+  a change from a clone.
+- Pi: `pi --agent persona-agents:companion --persona <theme>`, or
+  `/persona <theme>` in a running session.
+- Kiro CLI: `./install.sh --kiro --theme <theme>`, then
+  `kiro-cli --agent pa-companion`.
 
 ## Adding a skill
 
@@ -67,10 +78,15 @@ A skill is a workflow document that the companion loads at run time.
 1. Create `content/skills/<skill-name>/SKILL.md`. The `name:` in its
    frontmatter must equal the folder name. State what the skill is for, when
    to load it, and the steps. Put scripts in a `scripts/` subfolder, or in
-   `platforms/claude/scripts/` when a hook shares them.
-2. A skill can use `${CLAUDE_SKILL_DIR}` (its own folder) and
-   `${CLAUDE_SESSION_ID}` (the session id) in its text. A skill that must run
-   in a separate context sets `context: fork` and an `agent`.
+   `platforms/shared/` when more than one adapter runs them.
+2. Keep the text harness-neutral. Claude Code substitutes
+   `${CLAUDE_SKILL_DIR}` and `${CLAUDE_SESSION_ID}`; Pi substitutes nothing;
+   the Kiro installer substitutes `{{PERSONA_AGENTS_KIRO_SKILL_DIR}}` and
+   `{{PERSONA_AGENTS_KIRO_ROOT}}`. When a step differs per harness, add a
+   `## Platform branch` section that keys on the `Running in <harness>` line
+   of the system context, and put the Kiro procedure in `references/kiro.md`
+   (see `review`, `retro`, and `wrap-up`). A skill that must run in a separate
+   context on Claude Code sets `context: fork` and an `agent`.
 3. Add the skill folder to `skills` in `.claude-plugin/plugin.json`.
 4. When the companion should know the skill, name it in the `## Skills` list of
    `content/professions/companion.md`, and in the working method where it

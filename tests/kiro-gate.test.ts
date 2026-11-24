@@ -75,8 +75,9 @@ describe("kiro doctrine: the companion", () => {
 				"git -c core.hooksPath=/tmp commit -m x",
 				"git pull --upload-pack='touch x' origin",
 				"gh pr create",
+				"gh pr merge 4 --squash",
 				"gh release create v1",
-				"gh run list",
+				"gh run delete 3",
 			]) {
 				assert.equal(commandDecision("companion", command, context).verdict, "ask", command);
 			}
@@ -300,7 +301,7 @@ describe("kiro doctrine: the reviewer", () => {
 	test("a read or a test command is left to the policy", () => {
 		withTemp((root) => {
 			const context = ctx(root, path.join(root, "state"));
-			for (const command of ["git status", "git diff", "npm test", "node --test tests/x.test.ts", "ls"]) {
+			for (const command of ["git status", "git diff", "npm test", "node --test tests/x.test.ts", "ls", "gh pr view 1", "gh run list"]) {
 				assert.equal(commandDecision("reviewer", command, context).verdict, "allow", command);
 			}
 		});

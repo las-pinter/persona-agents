@@ -10,7 +10,7 @@
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import type { EntryLike } from "../platforms/shared/compaction/manifest.ts";
-import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, toolCalls } from "../platforms/shared/retro/retro.ts";
+import { parseDecisions, RETRO_INSTRUCTION, retroMessage, sessionDecisions, summarizeSession, toolCalls } from "../platforms/shared/retro/retro.ts";
 
 function assistant(...calls: { name: string; args: Record<string, unknown> }[]): EntryLike {
 	return {
@@ -83,11 +83,17 @@ describe("pi retro: the facts", () => {
 		assert.match(facts, /… and 5 more/);
 	});
 
-	test("journal entries and the instruction are named", () => {
-		const facts = summarizeSession({ entries: [], decisions: [], journal: ["/notes/journal/2026-01-01/1200-s1.md"] });
-		assert.match(facts, /journal:/);
+	test("session logs and the instruction are named", () => {
+		const facts = summarizeSession({ entries: [], decisions: [], sessionLogs: ["/notes/session-logs/2026-01-01/1200-s1.md"] });
+		assert.match(facts, /session logs:/);
 		assert.match(facts, /1200-s1\.md/);
 		assert.match(RETRO_INSTRUCTION, /print only/);
 		assert.match(RETRO_INSTRUCTION, /Write nothing durable/);
+	});
+
+	test("the retro message names the skill file before the facts", () => {
+		const message = retroMessage("/pkg/content/skills/retro/SKILL.md", "facts: none");
+		assert.match(message, /^Read the retro skill at \/pkg\/content\/skills\/retro\/SKILL\.md/);
+		assert.match(message, /facts: none$/);
 	});
 });

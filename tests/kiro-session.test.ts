@@ -148,25 +148,25 @@ describe("kiro session store: the shared entry shape", () => {
 });
 
 describe("kiro session store: the shared modules read the mapping", () => {
-	test("the compaction manifest finds the skill, the session notes, and the docs", () => {
+	test("the compaction manifest finds the skill, the task notes, and the docs", () => {
 		withTemp((root) => {
 			const notes = path.join(root, "notes");
-			const sessions = path.join(notes, "sessions");
+			const sessions = path.join(notes, "tasks");
 			fs.mkdirSync(sessions, { recursive: true });
-			const sessionNotes = path.join(sessions, "2026-11-20-task.md");
-			fs.writeFileSync(sessionNotes, "# Task\n\n- **Study:** none\n\n## Pinned\n");
+			const taskNotes = path.join(sessions, "2026-11-20-task.md");
+			fs.writeFileSync(taskNotes, "# Task\n\n- **Study:** none\n\n## Pinned\n");
 			const doc = path.join(notes, "summary.md");
 			fs.writeFileSync(doc, "# Summary\n");
 			const facts = mapPayloads(
 				[
 					{ type: "tool_call", toolName: "read_file", args: { path: doc } },
-					{ type: "tool_call", toolName: "fs_write", args: { path: sessionNotes, text: "# Task" } },
+					{ type: "tool_call", toolName: "fs_write", args: { path: taskNotes, text: "# Task" } },
 					{ type: "tool_call", toolName: "load_resource", args: { id: "skill::study" } },
 				],
 				{ skillsDir: path.join(root, "skills") },
 			);
 			const manifest = buildManifest(facts.entries, notes);
-			assert.equal(manifest.sessionNotes, sessionNotes);
+			assert.equal(manifest.taskNotes, taskNotes);
 			assert.deepEqual(manifest.skills, ["study"]);
 			assert.ok(manifest.docs.includes(doc));
 		});
@@ -175,7 +175,7 @@ describe("kiro session store: the shared modules read the mapping", () => {
 	test("the retro counts the tool calls, the changed files, and the review", () => {
 		withTemp(() => {
 			const facts = mapPayloads(payloads(), { skillsDir: "/kiro/skills" });
-			const text = summarizeSession({ entries: facts.entries, decisions: [], journal: [] });
+			const text = summarizeSession({ entries: facts.entries, decisions: [], sessionLogs: [] });
 			assert.match(text, /tool calls: 4/);
 			assert.match(text, /files changed: 1/);
 			assert.match(text, /independent reviews: 1 \(Approve\)/);

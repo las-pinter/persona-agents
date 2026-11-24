@@ -1,8 +1,8 @@
 /**
- * The session notes format, the lookups, and the startup read list every
+ * The task notes format, the lookups, and the startup read list every
  * adapter shares.
  *
- * A session notes file names the sessions that worked on its task:
+ * A task notes file names the sessions that worked on its task:
  *
  *   - **Sessions:** <id>, <id>
  *
@@ -18,10 +18,11 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
-import { recentEntries } from "./journal.ts";
+import { recentEntries } from "./session-log.ts";
+import { isInside, tasksDir } from "./folders.ts";
 
-/** The most recent journal day folders read at session start. */
-export const JOURNAL_DAYS = 3;
+/** The most recent session-log day folders read at session start. */
+export const SESSION_LOG_DAYS = 3;
 
 /** Study stages that count as unfinished. */
 export const UNFINISHED_STAGES = new Set(["draft", "ready", "in-progress"]);
@@ -40,20 +41,20 @@ export function projectRules(notesDir: string): string[] {
 	return notesFiles(join(notesDir, "rules"));
 }
 
-/** The bullet paths under `## Pinned` in a session notes text. */
+/** The bullet paths under `## Pinned` in a task notes text. */
 export function pinnedDocs(text: string): string[] {
 	const match = /^##\s+Pinned\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(text);
 	if (!match) return [];
 	return [...match[1].matchAll(/^-\s+`?([^`\s]+)`?\s*$/gm)].map((m) => m[1]).filter((p) => p.startsWith(sep));
 }
 
-/** The study path on the `Study:` line of a session notes text, or "". */
+/** The study path on the `Study:` line of a task notes text, or "". */
 export function studyPath(text: string): string {
 	const match = /^- \*\*Study:\*\*\s*`?([^`\s]+)`?/m.exec(text);
 	return match && match[1].startsWith(sep) ? match[1] : "";
 }
 
-/** The session ids on the `Sessions:` line of a session notes text, in order. */
+/** The session ids on the `Sessions:` line of a task notes text, in order. */
 export function sessionsOf(text: string): string[] {
 	const match = /^-\s+\*\*Sessions:\*\*\s*(.+)$/im.exec(text);
 	if (!match) return [];
@@ -68,9 +69,9 @@ export function notesListsSession(text: string, sessionId: string): boolean {
 	return sessionId !== "" && sessionsOf(text).includes(sessionId);
 }
 
-/** Session notes files whose Status line says open. */
-export function openSessionNotes(notesDir: string): string[] {
-	return notesFiles(join(notesDir, "sessions")).filter((path) => /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
+/** Task notes files whose Status line says open. */
+export function openTaskNotes(notesDir: string): string[] {
+	return notesFiles(tasksDir(notesDir)).filter((path) => /^- \*\*Status:\*\*\s*open\b/im.test(readFileSync(path, "utf8")));
 }
 
 /** One row of `studies/index.md`, in file order. */
@@ -122,25 +123,25 @@ function newestByMtime(paths: string[]): string {
 /**
  * The active notes file for a session.
  *
- * 1. A file under `sessions/` whose `Sessions:` line names the id, newest
+ * 1. A file under `tasks/` whose `Sessions:` line names the id, newest
  *    modification first. A session may run several tasks with one file each,
  *    so the newest match is the current task.
- * 2. The last file the session wrote under `sessions/`.
+ * 2. The last file the session wrote under `tasks/`.
  * 3. The only open notes file.
  * 4. "" when none applies.
  */
-export function activeSessionNotes(notesDir: string, sessionId: string, written: string[]): string {
-	const sessionsDir = join(notesDir, "sessions");
+export function activeTaskNotes(notesDir: string, sessionId: string, written: string[]): string {
+	const dir = tasksDir(notesDir);
 	if (sessionId !== "") {
-		const matches = notesFiles(sessionsDir).filter((path) => notesListsSession(readFileSync(path, "utf8"), sessionId));
+		const matches = notesFiles(dir).filter((path) => notesListsSession(readFileSync(path, "utf8"), sessionId));
 		const newest = newestByMtime(matches);
 		if (newest) return newest;
 	}
 	const lastWritten = [...written]
 		.reverse()
-		.find((path) => path.startsWith(sessionsDir + sep) && path.endsWith(".md") && existsSync(path));
+		.find((path) => isInside(dir, path) && path.endsWith(".md") && existsSync(path));
 	if (lastWritten) return lastWritten;
-	const open = openSessionNotes(notesDir);
+	const open = openTaskNotes(notesDir);
 	return open.length === 1 ? open[0] : "";
 }
 
@@ -160,11 +161,11 @@ export function startupContext(notesDir: string, project: string, sessionId = ""
 		"Before your first answer, read these in full (rules in this order, then the summary):",
 		...bullets([...rules, ...(existsSync(summary) ? [summary] : [])]),
 		"",
-		`Then read the journal of the last ${JOURNAL_DAYS} days with entries:`,
-		...bullets(recentEntries(notesDir, JOURNAL_DAYS)),
+		`Then read the session logs of the last ${SESSION_LOG_DAYS} days with entries:`,
+		...bullets(recentEntries(notesDir, SESSION_LOG_DAYS)),
 		"",
-		"Open session notes (read each; offer to resume or close it):",
-		...bullets(openSessionNotes(notesDir)),
+		"Open task notes (read each; offer to resume or close it):",
+		...bullets(openTaskNotes(notesDir)),
 		"",
 		"Unfinished studies (read a study only when the task names it):",
 		...bullets(unfinishedStudies(notesDir)),

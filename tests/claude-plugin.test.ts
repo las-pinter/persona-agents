@@ -387,3 +387,20 @@ describe("claude plugin: context hook", () => {
 		assert.ok(runContext("profession", companionInput(), "nosuch").context);
 	});
 });
+
+describe("claude plugin: review wiring", () => {
+	test("the review fork sets no background key, so it takes the background default", () => {
+		const skill = fs.readFileSync(path.join(contentDir, "skills", "review", "SKILL.md"), "utf8");
+		const frontmatter = skill.split(/^---$/m)[1] ?? "";
+		assert.match(frontmatter, /^context: fork$/m);
+		// A `background: false` made the invoking turn wait on the reviewer.
+		assert.doesNotMatch(frontmatter, /^background:/m);
+	});
+
+	test("the stall guard reaches the companion with and without a persona", () => {
+		for (const theme of ["goblin", "nosuch"]) {
+			const persona = runContext("persona", companionInput(), theme);
+			assert.match(persona.context ?? "", /Stall guard/, theme);
+		}
+	});
+});

@@ -26,24 +26,24 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { isCommitCommand, isTrivial } from "../../shared/review/review.ts";
+import { commitGate, isCommitCommand, isTrivial, type Verdict as ReviewVerdict } from "../../shared/review/review.ts";
 import { commandSegments, gateCommand, gitSubcommand, insideDir, shellWords, unwrapSegment, SUPPORT, UNGATED, type GateHit, type Hit } from "../../shared/shell/gates.ts";
 import { projectDir } from "../../shared/notes/notes-paths.ts";
 import { changeKey } from "./change.ts";
 import { appendDecision, reviewFor } from "./state.ts";
 import { kiroHome as resolveKiroHome, stateDir as stateDirOf } from "./paths.ts";
+import { option } from "../../shared/argv.ts";
+import { expandHome } from "../../shared/paths.ts";
 
 export type AgentProfile = "companion" | "reviewer";
 export type Verdict = "allow" | "ask" | "deny";
 
 /** Why the doctrine stops a reviewer's shell write or history command. */
 export const HISTORY_DENY =
-	"only the companion writes git history or runs gh pr / gh release / gh run; suggest a commit instead";
+	"only the companion writes git history or runs a gh pr / release / run write; suggest a commit instead";
 /** Why a publish command asks the owner. */
 export const PUBLISH_ASK =
-	"git push, gh pr, gh release, gh run, a git config override, or a wrapped git command needs your approval";
-/** Why an unreviewed commit asks the owner. */
-export const REVIEW_ASK = "this change has no independent review, so the commit needs your approval";
+	"git push, a gh pr / release / run write, a git config override, or a wrapped git command needs your approval";
 /** Why a commit against another repository asks the owner. */
 export const OTHER_REPO_ASK = "a commit against another repository needs your approval";
 /** Why a command that is not git work asks the owner. */
@@ -102,7 +102,7 @@ function commitOutsideRepo(command: string, cwd: string): boolean {
 			const target = words[i + 1] ?? "";
 			if (target === "") dir = homedir();
 			else if (target !== "-" && !/[$`*?[\]{}]/.test(target)) {
-				dir = target === "~" ? homedir() : target.startsWith("~/") ? resolve(homedir(), target.slice(2)) : resolve(dir, target);
+				dir = resolve(dir, expandHome(target, homedir()));
 			}
 			if (words[i + 2] !== "&&") {
 				i += 2;
@@ -173,14 +173,11 @@ export function commandDecision(profile: AgentProfile, command: string, ctx: Gat
 	}
 
 	const { change, key } = changeKey(ctx.cwd);
-	if (isTrivial(change)) return { verdict: "allow", reason: "a trivial change needs no review before a commit", key };
 	const review = reviewFor(ctx.stateDir, key);
 	// The Stop hook writes the sub-session. A hand-written entry that omits it
 	// is ignored; one that sets it is indistinguishable from a real record.
 	const usable = review && review.subSession ? review : null;
-	if (usable?.verdict === "Approve") return { verdict: "allow", reason: "an independent review approved this exact change", key };
-	if (usable) return { verdict: "ask", reason: `the review returned ${usable.verdict}, so this commit needs your approval`, key };
-	return { verdict: "ask", reason: REVIEW_ASK, key };
+	return { ...commitGate({ trivial: isTrivial(change), reviewed: usable ? (usable.verdict as ReviewVerdict) : null }), key };
 }
 
 /** The decision for one hook event, with the event's guards applied. */
@@ -224,11 +221,6 @@ export function logDecision(profile: AgentProfile, tool: string, command: string
 		reason: decision.reason,
 		command,
 	});
-}
-
-function option(name: string, argv: string[]): string | undefined {
-	const arg = argv.find((value) => value.startsWith(`--${name}=`));
-	return arg ? arg.slice(name.length + 3) : undefined;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

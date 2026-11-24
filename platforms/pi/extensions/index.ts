@@ -13,32 +13,31 @@
  *   tool_call          the permission gate: allow, ask with the UI, or block
  *   session_compact    queue the reload list for the next run
  *
- * A session without `--agent persona-agents:<name>` gets no sections, no gate,
- * and no commands: a plain Pi session is unchanged. Every fault is contained:
+ * A session without `--agent persona-agents:<name>` gets no sections and no
+ * gate; the commands and tools are registered but refuse. Every fault is contained:
  * a bad theme or an unreadable policy refuses the agent and says why, rather
  * than running half-configured.
  *
- * The file stays one module because every event handler shares the one session
- * object; splitting it would thread that state through several files.
+ * The event handlers share one session object (`../scripts/session.ts`). The
+ * permission dialog, the review run, and the row renderers that take it live in
+ * `../scripts/`; this file keeps the handlers, the commands, and the tools.
  */
 
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Text } from "@earendil-works/pi-tui";
 import { loadRegistry, promptSections, resolveTheme, themeNames, type Registry } from "../scripts/context.ts";
-import { dayOf, entryPath, findEntry, recentJournal } from "../../shared/notes/journal.ts";
-import { hasMaterial, sources, type Payload } from "../../shared/notes/journal-net.ts";
-import { buildManifest, reloadContext, summaryInstructions, type EntryLike, type Manifest } from "../../shared/compaction/manifest.ts";
-import { parsePermissionsArgs } from "../scripts/commands.ts";
+import { dayOf, entryPath, findEntry, recentSessionLogs } from "../../shared/notes/session-log.ts";
+import { hasMaterial, sources, type Payload } from "../../shared/notes/session-log-net.ts";
+import { buildManifest, reloadContext, summaryInstructions, type EntryLike } from "../../shared/compaction/manifest.ts";
 import { startupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "../../shared/notes/notes-paths.ts";
 import {
 	BUILTIN_TOOLS,
-	journalLine,
+	sessionLogLine,
 	listLine,
 	permissionsLine,
 	retroLine,
@@ -47,49 +46,16 @@ import {
 	toolCallLine,
 } from "../scripts/summary.ts";
 import { contentDir, homeDir } from "../scripts/paths.ts";
-import { reviewerBody } from "../scripts/review-body.ts";
-import {
-	addRule,
-	appendDecision,
-	decidePolicy,
-	decisionRecord,
-	describeRules,
-	initPolicyFile,
-	loadPolicy,
-	piAgentDir,
-	suggestGrant,
-	type PolicyEnv,
-	type PolicyFileRef,
-	type PolicyState,
-	type Rule,
-	type Verdict,
-} from "../scripts/policy.ts";
+import { appendDecision, loadPolicy, piAgentDir } from "../scripts/policy-file.ts";
+import { decidePolicy, decisionRecord, type PolicyEnv, type PolicyFileRef } from "../scripts/policy.ts";
 import { DEFAULT_THEME, resolveProfile, type Profile } from "../scripts/profile.ts";
-import { parseDecisions, RETRO_INSTRUCTION, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
-import {
-	buildBrief,
-	commitGate,
-	deriveTask,
-	failedChange,
-	finalizeBrief,
-	isCommitCommand,
-	isTrivial,
-	isWorkingTreeScope,
-	makeChange,
-	oneLine,
-	parseReviewArgs,
-	parseVerdict,
-	promptForBrief,
-	reviewerFailure,
-	reviewKey,
-	REVIEWER_TIMEOUT_MS,
-	subjectsFromQueries,
-	untrackedFiles,
-	type Brief,
-	type BriefInput,
-	type Change,
-	type Verdict as ReviewVerdict,
-} from "../../shared/review/review.ts";
+import { parseDecisions, retroMessage, sessionDecisions, summarizeSession, type DecisionLine } from "../../shared/retro/retro.ts";
+import { oneLine, parseReviewArgs, type BriefInput } from "../../shared/review/brief.ts";
+import { isCommitCommand, type Verdict as ReviewVerdict } from "../../shared/review/review.ts";
+import { type Session } from "../scripts/session.ts";
+import { permissionsCommand, handleAsk } from "../scripts/permissions-ui.ts";
+import { executeReview, piInvocation, reviewGate } from "../scripts/review-run.ts";
+import { collapsedRow, bodyText } from "../scripts/render.ts";
 
 /** The message type of the read list, so a renderer can find it later. */
 const READ_LIST = "persona-agents:read-list";
@@ -97,56 +63,6 @@ const READ_LIST = "persona-agents:read-list";
 const RELOAD_LIST = "persona-agents:reload-list";
 /** The section names this extension owns in the system prompt. */
 const SECTIONS = ["profession", "persona", "platform"] as const;
-/** The plain text of a tool result or a message body. */
-function bodyText(content: unknown): string {
-	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return "";
-	return content
-		.filter((part): part is { type: string; text?: string } => typeof part === "object" && part !== null && "type" in part)
-		.filter((part) => part.type === "text")
-		.map((part) => part.text ?? "")
-		.join("\n");
-}
-
-/** One line that never wraps, whatever the terminal width. */
-class CollapsedRow implements Component {
-	private readonly text: string;
-
-	constructor(text: string) {
-		this.text = text;
-	}
-
-	render(width: number): string[] {
-		return [truncateToWidth(this.text, width)];
-	}
-
-	invalidate(): void {}
-}
-
-/** A collapsed row: the mark, then the one line the summarizer built. */
-function collapsedRow(theme: { fg(color: string, text: string): string }, line: string): Component {
-	return new CollapsedRow(`${theme.fg("accent", "▸ ")}${line}`);
-}
-
-interface Session {
-	/** The id of this Pi session, from its manager: an inherited env var is not it. */
-	id: string;
-	profile: Profile;
-	theme: string;
-	registry: Registry;
-	env: PolicyEnv;
-	policy: PolicyState;
-	refs: PolicyFileRef[];
-	/** The read list is sent on the first run, and again after a compaction. */
-	startupSent: boolean;
-	reloadPending: boolean;
-	/** The manifest saved before a compaction, sent once the summary lands. */
-	manifest: Manifest | null;
-	/** Review verdicts, by the key of the change they cover. */
-	reviews: Map<string, ReviewVerdict>;
-	/** Set when the owner chose to stop asking about commits this session. */
-	skipReview: boolean;
-}
 
 function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
 	const refs: PolicyFileRef[] = [
@@ -160,6 +76,11 @@ function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
 /** True when the log keeps allowed calls too (the audit trail is otherwise failures only). */
 function logsAllows(): boolean {
 	return process.env.PERSONA_AGENTS_DEBUG === "1";
+}
+
+/** The status-line text: the profile, and the theme when it has a persona. */
+function statusText(profile: Profile, theme: string): string {
+	return `🎭 ${profile.name}${profile.persona ? ` · ${theme}` : ""}`;
 }
 
 /** Start the agent for this session, or return null and explain why. */
@@ -230,161 +151,9 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 	if (policy.errors.length > 0) {
 		for (const error of policy.errors) ctx.ui.notify(`${error.message} — the gate fails closed until this is fixed`, "error");
 	}
-	ctx.ui.setStatus("persona-agents", `🎭 ${profile.name}${profile.persona ? ` · ${theme}` : ""}`);
+	ctx.ui.setStatus("persona-agents", statusText(profile, theme));
 	ctx.ui.notify(`persona-agents: ${profile.name} (${profile.persona ? theme : "no persona"}), notes: ${notesDir}`, "info");
 	return session;
-}
-
-/** The permission policy after a file change, re-read so the next call sees it. */
-function reloadPolicy(session: Session): void {
-	session.policy = loadPolicy(session.refs, session.profile.name);
-}
-
-/** The ask dialog, by answer. A label is read once, from here. */
-const ASK = {
-	once: "Run once",
-	session: "Always this session",
-	project: "Always in this project",
-	user: "Always for me",
-	deny: "Deny",
-} as const;
-const ASK_OPTIONS: string[] = Object.values(ASK);
-
-/** Handle one ask: ask the owner and apply the answer. Returns a block result or undefined. */
-async function handleAsk(
-	ctx: ExtensionContext,
-	session: Session,
-	tool: string,
-	input: Record<string, unknown>,
-	decision: { verdict: Verdict; reason: string },
-): Promise<{ block: true; reason: string } | undefined> {
-	if (!ctx.hasUI) {
-		return { block: true, reason: `${decision.reason} (no UI to ask here, so the call is denied)` };
-	}
-	const grant = suggestGrant(tool, input, session.env);
-	const choice = await ctx.ui.select(`${decision.reason}\n\n${tool}: ${grant.matched}`, ASK_OPTIONS);
-	if (choice === ASK.session) {
-		session.policy.grants.push({ tool, match: grant.match, reason: decision.reason });
-		ctx.ui.notify(`persona-agents: allowed for this session — ${tool} /${grant.match}/`, "info");
-		return undefined;
-	}
-	if (choice === ASK.project || choice === ASK.user) {
-		const scope = choice === ASK.project ? "project" : "user";
-		const ref = session.refs.find((candidate) => candidate.scope === scope);
-		if (!ref) {
-			ctx.ui.notify("persona-agents: no project policy file; add the rule to your user policy instead", "warning");
-			return { block: true, reason: decision.reason };
-		}
-		const rule: Rule = { tool, match: grant.match, verdict: "allow", reason: decision.reason };
-		try {
-			addRule(ref, session.profile.name, rule);
-			reloadPolicy(session);
-			ctx.ui.notify(`persona-agents: added an allow rule to ${ref.path}`, "info");
-			return undefined;
-		} catch (error) {
-			ctx.ui.notify(`persona-agents: could not write ${ref.path}: ${(error as Error).message}`, "error");
-			return { block: true, reason: decision.reason };
-		}
-	}
-	if (choice === ASK.deny) {
-		// A deny from the dialog is a decision for this once; say so plainly.
-		ctx.ui.notify("persona-agents: denied; ask again or add a deny rule to the policy", "warning");
-	}
-	return { block: true, reason: decision.reason };
-}
-
-/** The text `/permissions` prints. */
-function permissionsReport(session: Session): string {
-	const lines = [
-		`# Permissions — ${session.profile.id}`,
-		"",
-		`Policy files (project first when trusted):`,
-		...session.refs.map((ref) => `- ${ref.scope}: ${ref.path}`),
-		"",
-		"## Rules (first match wins; the built-in doctrine decides when none match)",
-		...describeRules(session.policy),
-	];
-	if (session.policy.grants.length > 0) {
-		lines.push("", "## Session grants (this session only)", ...session.policy.grants.map((grant) => `- allow ${grant.tool} /${grant.match}/`));
-	}
-	if (session.policy.errors.length > 0) {
-		lines.push("", "## Load errors — the gate fails closed", ...session.policy.errors.map((error) => `- ${error.message}`));
-	}
-	lines.push(
-		"",
-		"## Built-in floor (no file can loosen it)",
-		"- credential and secret paths, destructive system commands, remote scripts piped to a shell",
-		"- writes to git hooks, Pi settings, and the policy files themselves",
-		"",
-		"Narrow a rule with /permissions allow|ask|deny <tool> <regex> [--project].",
-	);
-	return lines.join("\n");
-}
-
-/** The text `/permissions check` prints for one command. */
-function checkReport(session: Session, command: string): string {
-	const input = { command };
-	const decision = decidePolicy(session.profile, "bash", input, session.policy, session.env);
-	return [
-		`# ${decision.verdict} — ${command}`,
-		"",
-		`- source: ${decision.source}`,
-		`- reason: ${decision.reason}`,
-		...(decision.matched ? [`- matched: ${decision.matched}`] : []),
-	].join("\n");
-}
-
-/** `/permissions` for a live session: list, explain, or edit the policy. */
-function permissionsCommand(pi: ExtensionAPI, session: Session, args: string, ctx: ExtensionContext): void {
-	const parsed = parsePermissionsArgs(args);
-	if (parsed.action === "invalid") {
-		ctx.ui.notify(parsed.message, "warning");
-		return;
-	}
-	if (parsed.action === "list") {
-		pi.sendMessage({ customType: "persona-agents:permissions", content: permissionsReport(session), display: true });
-		return;
-	}
-	if (parsed.action === "check") {
-		if (!parsed.command) {
-			ctx.ui.notify("usage: /permissions check <shell command>", "warning");
-			return;
-		}
-		pi.sendMessage({ customType: "persona-agents:permissions", content: checkReport(session, parsed.command), display: true });
-		return;
-	}
-	if (parsed.action === "edit") {
-		ctx.ui.notify(session.refs.map((ref) => `${ref.scope}: ${ref.path}`).join("\n"), "info");
-		return;
-	}
-	if (parsed.action === "init") {
-		const ref = session.refs.find((candidate) => candidate.scope === "user") ?? session.refs[0];
-		initPolicyFile(ref);
-		reloadPolicy(session);
-		ctx.ui.notify(`persona-agents: policy file ready at ${ref.path}`, "info");
-		return;
-	}
-	if (parsed.action !== "rule") {
-		ctx.ui.notify("usage: /permissions allow|ask|deny <tool> <regex> [--project]", "warning");
-		return;
-	}
-	const rule = parsed.rule;
-	const ref = session.refs.find((candidate) => candidate.scope === (rule.project ? "project" : "user")) ?? session.refs[0];
-	if (!ref) {
-		ctx.ui.notify("persona-agents: no policy file to write", "warning");
-		return;
-	}
-	try {
-		addRule(ref, session.profile.name, { tool: rule.tool, match: rule.match, verdict: rule.verdict, reason: rule.reason });
-		reloadPolicy(session);
-		const errors = session.policy.errors.map((error) => error.message);
-		ctx.ui.notify(
-			errors.length > 0 ? `persona-agents: rule added, but the policy does not load: ${errors[0]}` : `persona-agents: ${rule.verdict} rule added to ${ref.path}`,
-			errors.length > 0 ? "error" : "info",
-		);
-	} catch (error) {
-		ctx.ui.notify(`persona-agents: ${(error as Error).message}`, "error");
-	}
 }
 
 /** `/persona` for a live session: show or switch the theme. */
@@ -401,213 +170,8 @@ function personaCommand(pi: ExtensionAPI, session: Session, args: string, ctx: E
 		return;
 	}
 	pi.appendEntry("persona-agents:theme", { theme: session.theme });
-	ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
+	ctx.ui.setStatus("persona-agents", statusText(session.profile, session.theme));
 	ctx.ui.notify(`persona-agents: theme ${session.theme} applies from your next message`, "info");
-}
-
-/** The command and arguments that start another Pi process. */
-function piInvocation(): { command: string; args: string[] } {
-	const script = process.argv[1];
-	if (script && existsSync(script)) return { command: process.execPath, args: [script] };
-	return { command: "pi", args: [] };
-}
-
-/** The change a commit would record: the diff, the untracked paths, and their fingerprint. */
-async function readChange(pi: ExtensionAPI, cwd: string): Promise<Change> {
-	// Keep non-ASCII paths readable; a space still quotes, and `unquotePath` undoes it.
-	const quote = ["-c", "core.quotePath=false"];
-	// `-uall` lists each file of an untracked directory, not just the folder.
-	const status = await pi.exec("git", [...quote, "status", "--porcelain", "-uall"], { cwd });
-	let diff = await pi.exec("git", [...quote, "diff", "HEAD"], { cwd });
-	if (diff.stdout.trim() === "" && status.stdout.trim() === "") {
-		// A clean tree commits nothing, so review the last commit instead.
-		diff = await pi.exec("git", [...quote, "show", "HEAD", "--format="], { cwd });
-	}
-	const change = makeChange(
-		diff.stdout,
-		status.stdout,
-		"",
-		// An untracked file is not in the diff; its lines still count toward the
-		// trivial-change limit. A file over the cap is measured by size, not read.
-		untrackedFiles(status.stdout).map((path) => {
-			const full = join(cwd, path);
-			try {
-				const size = statSync(full).size;
-				if (size > 1024 * 1024) return "\n".repeat(Math.ceil(size / 1024));
-				return readText(full) ?? "";
-			} catch {
-				return "";
-			}
-		}),
-	);
-	// A failed read is not a small change; the gate must ask.
-	if (status.code !== 0 || diff.code !== 0) return failedChange();
-	// The signature hashes every changed file's worktree content and mode, so
-	// the key is the same before and after `git add` and changes on a chmod.
-	const signature = [...change.files]
-		.sort()
-		.map((path) => {
-			try {
-				// Git tracks only the executable bit, so the key does too. A file
-				// over the cap is measured by size and mtime, not read whole.
-				const stat = statSync(join(cwd, path));
-				const mode = stat.mode & 0o111 ? "exec" : "file";
-				if (stat.size > 1024 * 1024) return `${path}:${mode}:${stat.size}:${stat.mtimeMs}`;
-				const content = createHash("sha256").update(readFileSync(join(cwd, path))).digest("hex");
-				return `${path}:${mode}:${content}`;
-			} catch {
-				return `${path}:missing`;
-			}
-		})
-		.join("\n");
-	return { ...change, signature };
-}
-
-/** Read a file for the brief: its text, or null when it cannot be read. */
-function readText(path: string): string | null {
-	try {
-		return readFileSync(path, "utf8");
-	} catch {
-		return null;
-	}
-}
-
-/**
- * The brief one review starts from: the author's fields cut once, then the
- * missing ones filled from the notes. Git is asked for commit subjects only
- * when the notes name no task, so a study review costs no git call.
- */
-async function prepareBrief(
-	pi: ExtensionAPI,
-	session: Session,
-	input: BriefInput,
-): Promise<{ brief: Brief; dropped: string; notes: string[] }> {
-	const prepared = buildBrief(input);
-	const indexPath = join(session.env.notesDir, "studies", "index.md");
-	// Absent is normal (""), unreadable is not (null), and the two are not the same note.
-	const indexText = existsSync(indexPath) ? readText(indexPath) : "";
-	const finalized = finalizeBrief(prepared.brief, prepared.given, {
-		notesDir: session.env.notesDir,
-		indexText,
-		readFile: readText,
-	});
-	let brief = finalized.brief;
-	// No scope means the uncommitted change, which has no commits of its own.
-	if (finalized.needsSubjects && brief.scope !== "") {
-		const subjects = await subjectsFromQueries(brief.scope, async (args) => pi.exec("git", args, { cwd: session.env.cwd }));
-		brief = { ...brief, task: deriveTask("", "", subjects) };
-	}
-	return { brief, dropped: prepared.dropped, notes: finalized.notes };
-}
-
-/** Run the reviewer in its own process: read-only tools, its own profile, its own gate. */
-async function runReviewer(
-	pi: ExtensionAPI,
-	cwd: string,
-	brief: Brief,
-	signal?: AbortSignal,
-): Promise<{ text: string; verdict: ReviewVerdict | null }> {
-	const invocation = piInvocation();
-	const result = await pi.exec(
-		invocation.command,
-		[
-			...invocation.args,
-			// The child loads this extension explicitly, so the reviewer profile and
-			// its policy apply even when the package is not installed.
-			"--extension",
-			fileURLToPath(import.meta.url),
-			"-p",
-			"--no-session",
-			"--agent",
-			"persona-agents:reviewer",
-			"--tools",
-			"read,grep,find,ls,bash",
-			"--append-system-prompt",
-			reviewerBody(),
-			promptForBrief(brief),
-		],
-		{ cwd, timeout: REVIEWER_TIMEOUT_MS, signal },
-	);
-	const failure = reviewerFailure({ ...result, aborted: signal?.aborted === true });
-	if (failure !== "") throw new Error(failure);
-	const text = result.stdout.trim();
-	return { text, verdict: parseVerdict(text) };
-}
-
-/** A review request: the fields the caller holds, and the text it dropped. */
-interface ReviewRequest {
-	input: BriefInput;
-	/** Text the caller removed before the fields, named back in the result. */
-	dropped?: string;
-}
-
-/**
- * Run a review, remember its verdict for the exact change, and return the
- * reviewer's text with the key and the notes that belong beside it.
- */
-async function executeReview(
-	pi: ExtensionAPI,
-	session: Session,
-	request: ReviewRequest,
-	signal?: AbortSignal,
-): Promise<{ text: string; verdict: ReviewVerdict | null; key: string; notes: string[] }> {
-	const change = await readChange(pi, session.env.cwd);
-	const prepared = await prepareBrief(pi, session, request.input);
-	// Only a review of the whole working tree unlocks a commit of it. A named
-	// ref, range, or path list did not see the uncommitted change.
-	const key = isWorkingTreeScope(prepared.brief.scope) ? reviewKey(change) : "";
-	const notes = [...prepared.notes];
-	const dropped = [prepared.dropped, request.dropped ?? ""].filter((part) => part !== "").join("\n");
-	if (dropped !== "") notes.push(`ignored brief text: "${oneLine(dropped, 200)}"`);
-	if (key === "") notes.push("the scope is not the uncommitted change, so this review does not unlock a commit");
-	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
-	if (verdict && key !== "") {
-		session.reviews.set(key, verdict);
-		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
-	}
-	return { text, verdict, key, notes };
-}
-
-/** The ask when a commit has no covering review. */
-async function reviewGate(
-	pi: ExtensionAPI,
-	ctx: ExtensionContext,
-	session: Session,
-): Promise<{ block: true; reason: string } | undefined> {
-	if (session.skipReview) return undefined;
-	let change: Change;
-	try {
-		change = await readChange(pi, session.env.cwd);
-	} catch {
-		// A failed read is unknown, not trivial: ask rather than allow silently.
-		return { block: true, reason: "the change could not be read, so this commit needs your approval" };
-	}
-	const key = reviewKey(change);
-	const gate = commitGate({ trivial: isTrivial(change), reviewed: session.reviews.get(key) ?? null });
-	if (gate.verdict === "allow") return undefined;
-	if (!ctx.hasUI) return { block: true, reason: gate.reason };
-	const shape = `${change.files.length} files, +${change.addedLines} -${change.removedLines}`;
-	const choice = await ctx.ui.select(`${gate.reason}\n\n${shape}`, [
-		"Run the review now",
-		"Commit anyway",
-		"Always allow this session",
-		"Cancel",
-	]);
-	if (choice === "Commit anyway") return undefined;
-	if (choice === "Always allow this session") {
-		session.skipReview = true;
-		return undefined;
-	}
-	if (choice === "Run the review now") {
-		try {
-			const { text, verdict, notes } = await executeReview(pi, session, { input: {} });
-			const extra = notes.map((note) => `\n${note}`).join("");
-			return { block: true, reason: `review finished: ${verdict ?? "no verdict"}. Fix what it asks, then commit again.\n\n${text}${extra}` };
-		} catch (error) {
-			return { block: true, reason: `the review could not run: ${(error as Error).message}` };
-		}
-	}
-	return { block: true, reason: gate.reason };
 }
 
 export default function personaAgents(pi: ExtensionAPI): void {
@@ -642,7 +206,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				session.reviews.set(data.key, data.verdict as ReviewVerdict);
 			}
 		}
-		ctx.ui.setStatus("persona-agents", `🎭 ${session.profile.name}${session.profile.persona ? ` · ${session.theme}` : ""}`);
+		ctx.ui.setStatus("persona-agents", statusText(session.profile, session.theme));
 	});
 
 	pi.on("before_agent_start", (event, ctx) => {
@@ -772,26 +336,26 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		try {
 			const dir = join(piAgentDir(), "persona-agents");
 			mkdirSync(dir, { recursive: true });
-			const file = join(dir, `journal-${session.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+			const file = join(dir, `session-log-${session.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
 			writeFileSync(file, JSON.stringify(payload));
 			// Detached: a shutdown must not wait for a model, and this process is
 			// about to exit. The writer removes its own payload.
 			const child = spawn(
 				process.execPath,
-				["--experimental-strip-types", "--no-warnings", fileURLToPath(new URL("../scripts/journal-writer.ts", import.meta.url)), file],
-				{ detached: true, stdio: "ignore", env: { ...process.env, PERSONA_AGENTS_JOURNAL_WRITER: "1" } },
+				["--experimental-strip-types", "--no-warnings", fileURLToPath(new URL("../scripts/session-log-writer.ts", import.meta.url)), file],
+				{ detached: true, stdio: "ignore", env: { ...process.env, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" } },
 			);
 			child.unref();
 		} catch {
-			// A journal entry is a convenience; a failed spawn is not worth an error.
+			// A session log is a convenience; a failed spawn is not worth an error.
 		}
 	});
 
 	pi.registerTool({
-		name: "journal",
-		label: "Journal",
+		name: "session-log",
+		label: "Session log",
 		description:
-			"This session's journal entry: `path` for where it goes, `write` to save the whole entry there, `recent` to read the last days. Use `path` first when you wrap up.",
+			"This session's log: `path` for where it goes, `write` to save the whole entry there, `recent` to read the last days. Use `path` first when you wrap up.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -805,7 +369,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		renderResult(result, { expanded }, theme) {
 			const text = bodyText(result.content);
 			if (expanded) return new Text(text, 0, 0);
-			return collapsedRow(theme, journalLine(text));
+			return collapsedRow(theme, sessionLogLine(text));
 		},
 		async execute(_toolCallId, params) {
 			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
@@ -817,25 +381,25 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			}
 			if (action === "write") {
 				const text = typeof params.text === "string" ? params.text : "";
-				if (text.trim() === "") return { content: [{ type: "text", text: "journal write needs the entry text" }], isError: true };
+				if (text.trim() === "") return { content: [{ type: "text", text: "session-log write needs the entry text" }], isError: true };
 				const path = entryPath(notesDir, session.id);
 				mkdirSync(dirname(path), { recursive: true });
 				writeFileSync(path, text.endsWith("\n") ? text : `${text}\n`);
-				return { content: [{ type: "text", text: `journal entry written: ${path}` }], details: { path } };
+				return { content: [{ type: "text", text: `session log written: ${path}` }], details: { path } };
 			}
 			if (action === "recent") {
 				const days = typeof params.days === "number" && params.days > 0 ? Math.min(params.days, 30) : 3;
-				const entries = recentJournal(notesDir, days);
+				const entries = recentSessionLogs(notesDir, days);
 				return {
 					content: [
 						{
 							type: "text",
-							text: entries.length ? entries.map((entry) => `<!-- ${entry.path} -->\n${entry.text}`).join("\n\n") : "no journal entries",
+							text: entries.length ? entries.map((entry) => `<!-- ${entry.path} -->\n${entry.text}`).join("\n\n") : "no session logs",
 						},
 					],
 				};
 			}
-			return { content: [{ type: "text", text: "journal action must be path, write, or recent" }], isError: true };
+			return { content: [{ type: "text", text: "session-log action must be path, write, or recent" }], isError: true };
 		},
 	});
 
@@ -856,10 +420,10 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			const facts = summarizeSession({
 				entries: ctx.sessionManager.getEntries() as EntryLike[],
 				decisions,
-				journal: existsSync(entry) ? [entry] : [],
+				sessionLogs: existsSync(entry) ? [entry] : [],
 			});
 			pi.sendMessage(
-				{ customType: "persona-agents:retro", content: `${RETRO_INSTRUCTION}\n\n${facts}`, display: true },
+				{ customType: "persona-agents:retro", content: retroMessage(join(contentDir(), "skills", "retro", "SKILL.md"), facts), display: true },
 				{ triggerTurn: true },
 			);
 		},
