@@ -39,12 +39,13 @@ export function readTranscript(path: string | undefined): TranscriptEntry[] {
  * on the main chain, else the fallback. Claude Code records the current folder
  * on each line, and a `cd` into an additional working directory changes it,
  * so a later `cwd` (and the hook input `cwd`) can name a folder of another
- * project or of none.
+ * project or of none. Session bookkeeping lines (`mode`, `agent-setting`)
+ * carry a null `cwd`, so the first string `cwd` is a conversation line.
  */
 export function startDir(transcriptPath: string | undefined, fallback: string): string {
 	if (!transcriptPath || !existsSync(transcriptPath)) return fallback;
-	// Parse line by line and stop at the first hit: the start folder sits near
-	// the head, and a long session's transcript runs to megabytes.
+	// The file is read whole; only the JSON parsing stops at the first hit,
+	// which sits near the head of the transcript.
 	for (const line of readFileSync(transcriptPath, "utf8").split("\n")) {
 		if (!line.includes('"cwd"')) continue;
 		let entry: TranscriptEntry;
