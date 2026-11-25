@@ -69,10 +69,20 @@ worktree of a repository shares one notes folder. Outside a repository the
 project is `common`. The notes folder is
 `<home>/agent-notes/project-notes/<project>/`.
 
+The folder that names the project is the one the session started in: the
+first `cwd` of the session transcript (`transcript.ts`, `startDir`). Claude
+Code records the current folder on each transcript line and in the hook
+input, and a `cd` into an additional working directory, such as the notes
+folder, changes both. The startup, compaction, and session-end hooks and
+`session-log.mjs` read the start folder; a transcript with no `cwd` yet falls
+back to the hook input `cwd`.
+
 `session-log.mjs` gives a session its entry path,
 `session-logs/<YYYY-MM-DD>/<HHMM>-<session>.md`, and reuses the session's entry from
 today or yesterday. The `wrap-up` skill calls it with the session id from the
-`${CLAUDE_SESSION_ID}` substitution.
+`${CLAUDE_SESSION_ID}` substitution; the script finds that session's
+transcript under the Claude config folder (`CLAUDE_CONFIG_DIR`, else
+`~/.claude`) to read the start folder. `--cwd=<dir>` overrides it.
 
 ## Doctrine
 
