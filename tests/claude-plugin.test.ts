@@ -72,7 +72,7 @@ function preload(source: string): string {
 
 /** A settings file body that selects a theme, the way /config writes it. */
 function themeSettings(theme: string): string {
-	return JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { theme } } } });
+	return JSON.stringify({ pluginConfigs: { "companion-agents@companion-agents": { options: { theme } } } });
 }
 
 /**
@@ -85,7 +85,7 @@ function runContext(
 	theme?: string,
 	settings: SettingsFiles = {},
 ): HookRun {
-	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-context-"));
+	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-context-"));
 	let result: SpawnSyncReturns<string>;
 	try {
 		const managedFile = path.join(tmp, "managed-settings.json");
@@ -109,7 +109,7 @@ function runContext(
 			CLAUDE_CONFIG_DIR: configDir,
 		};
 		delete env.CLAUDE_PLUGIN_OPTION_THEME;
-		delete env.PERSONA_AGENTS_DEBUG;
+		delete env.COMPANION_AGENTS_DEBUG;
 		if (settings.noConfigDir) delete env.CLAUDE_CONFIG_DIR;
 		if (theme !== undefined) env.CLAUDE_PLUGIN_OPTION_THEME = theme;
 		// The test seam: a hook argument, which a settings env block cannot set.
@@ -137,7 +137,7 @@ function runContext(
 
 /** A companion SessionStart input; compaction restarts the session with source "compact". */
 function companionInput(source = "startup"): Record<string, unknown> {
-	return { hook_event_name: "SessionStart", source, agent_type: "persona-agents:companion", session_id: "sess-1" };
+	return { hook_event_name: "SessionStart", source, agent_type: "companion-agents:companion", session_id: "sess-1" };
 }
 
 describe("claude plugin: context hook", () => {
@@ -177,7 +177,7 @@ describe("claude plugin: context hook", () => {
 	});
 
 	test("the session part is silent without a session id", () => {
-		const run = runContext("session", { hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:companion" });
+		const run = runContext("session", { hook_event_name: "SessionStart", source: "startup", agent_type: "companion-agents:companion" });
 		assert.equal(run.status, 0);
 		assert.equal(run.context, null);
 	});
@@ -190,7 +190,7 @@ describe("claude plugin: context hook", () => {
 		for (const input of [
 			{ hook_event_name: "SessionStart", source: "startup" },
 			{ hook_event_name: "SessionStart", source: "startup", agent_type: "Explore" },
-			{ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:reviewer" },
+			{ hook_event_name: "SessionStart", source: "startup", agent_type: "companion-agents:reviewer" },
 		]) {
 			for (const part of ["profession", "persona", "session"]) {
 				const run = runContext(part, input);
@@ -224,8 +224,8 @@ describe("claude plugin: context hook", () => {
 		});
 
 		const wrongTypeBodies: Record<string, unknown> = {
-			"theme is a number": { pluginConfigs: { "persona-agents@persona-agents": { options: { theme: 7 } } } },
-			"options is null": { pluginConfigs: { "persona-agents@persona-agents": { options: null } } },
+			"theme is a number": { pluginConfigs: { "companion-agents@companion-agents": { options: { theme: 7 } } } },
+			"options is null": { pluginConfigs: { "companion-agents@companion-agents": { options: null } } },
 			"pluginConfigs is an array": { pluginConfigs: [] },
 			"the file holds JSON null": null,
 		};
@@ -356,7 +356,7 @@ describe("claude plugin: context hook", () => {
 			const run = runContext("persona", companionInput(), undefined, {
 				dropIns: {
 					"10-a.json": themeSettings(themeA),
-					"20-b.json": JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: {} } } }),
+					"20-b.json": JSON.stringify({ pluginConfigs: { "companion-agents@companion-agents": { options: {} } } }),
 				},
 			});
 			assert.equal(themeOf(run), themeA);

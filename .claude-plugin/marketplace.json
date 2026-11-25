@@ -1,10 +1,10 @@
 {
-  "name": "persona-agents",
+  "name": "companion-agents",
   "owner": { "name": "Las Pinter" },
   "description": "A persona companion agent for Claude Code",
   "plugins": [
     {
-      "name": "persona-agents",
+      "name": "companion-agents",
       "source": "./",
       "description": "A companion agent that plans, builds, tests, and commits with you, in the voice of a switchable persona theme"
     }

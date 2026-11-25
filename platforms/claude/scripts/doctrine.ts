@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// doctrine — Claude Code PreToolUse hook (Bash) for persona-agents.
+// doctrine — Claude Code PreToolUse hook (Bash) for companion-agents.
 //
 // The settings snippet (platforms/claude/settings/recommended.json) holds the
 // base permission rules. This hook adds what settings rules cannot express,
-// for the persona-agents agents (agent type `persona-agents:<name>`):
+// for the companion-agents agents (agent type `companion-agents:<name>`):
 //
 //   any local git command that is not a read and not a push
 //                     companion: allow when every other part is inert (a `cd`
@@ -47,7 +47,7 @@
 // Any other agent, or a session without one, gets no decision, so Claude
 // Code's own permission flow runs unchanged.
 //
-// Set PERSONA_AGENTS_DEBUG=1 to append each hook input and decision to
+// Set COMPANION_AGENTS_DEBUG=1 to append each hook input and decision to
 // $CLAUDE_PLUGIN_DATA/doctrine.log.
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
@@ -57,7 +57,7 @@ import { gateCommand, insideDir, SUPPORT, UNGATED, type GateHit } from "../../sh
 import { sessionDirs } from "./session-dirs.ts";
 
 
-const PREFIX = "persona-agents:";
+const PREFIX = "companion-agents:";
 
 export type Verdict = "allow" | "ask" | "deny";
 
@@ -136,7 +136,7 @@ export function decide(input: HookInput, additionalDirs: string[] = []): Decisio
 function strongest(hits: Decision[], profession: string): Decision | null {
 	const pick = hits.find((hit) => hit.verdict === "deny") ?? hits.find((hit) => hit.verdict === "ask") ?? hits[0];
 	if (!pick) return null;
-	return { verdict: pick.verdict, reason: `persona-agents doctrine (${profession}): ${pick.reason}` };
+	return { verdict: pick.verdict, reason: `companion-agents doctrine (${profession}): ${pick.reason}` };
 }
 
 // Run as a hook: PreToolUse JSON on stdin, a permission decision on stdout.
@@ -147,7 +147,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
 	// The settings read is lazy: only a command with a `cd` part needs it.
 	const additionalDirs = /\bcd\s/.test(command) ? sessionDirs(cwd || process.cwd()) : [];
 	const decision = decide(input, additionalDirs);
-	if (process.env.PERSONA_AGENTS_DEBUG && process.env.CLAUDE_PLUGIN_DATA) {
+	if (process.env.COMPANION_AGENTS_DEBUG && process.env.CLAUDE_PLUGIN_DATA) {
 		mkdirSync(process.env.CLAUDE_PLUGIN_DATA, { recursive: true });
 		appendFileSync(join(process.env.CLAUDE_PLUGIN_DATA, "doctrine.log"), `${JSON.stringify({ input, decision })}\n`);
 	}

@@ -40,30 +40,30 @@ export async function handleAsk(
 	const choice = await ctx.ui.select(`${decision.reason}\n\n${tool}: ${grant.matched}`, ASK_OPTIONS);
 	if (choice === ASK.session) {
 		session.policy.grants.push({ tool, match: grant.match, reason: decision.reason });
-		ctx.ui.notify(`persona-agents: allowed for this session — ${tool} /${grant.match}/`, "info");
+		ctx.ui.notify(`companion-agents: allowed for this session — ${tool} /${grant.match}/`, "info");
 		return undefined;
 	}
 	if (choice === ASK.project || choice === ASK.user) {
 		const scope = choice === ASK.project ? "project" : "user";
 		const ref = session.refs.find((candidate) => candidate.scope === scope);
 		if (!ref) {
-			ctx.ui.notify("persona-agents: no project policy file; add the rule to your user policy instead", "warning");
+			ctx.ui.notify("companion-agents: no project policy file; add the rule to your user policy instead", "warning");
 			return { block: true, reason: decision.reason };
 		}
 		const rule: Rule = { tool, match: grant.match, verdict: "allow", reason: decision.reason };
 		try {
 			addRule(ref, session.profile.name, rule);
 			reloadPolicy(session);
-			ctx.ui.notify(`persona-agents: added an allow rule to ${ref.path}`, "info");
+			ctx.ui.notify(`companion-agents: added an allow rule to ${ref.path}`, "info");
 			return undefined;
 		} catch (error) {
-			ctx.ui.notify(`persona-agents: could not write ${ref.path}: ${(error as Error).message}`, "error");
+			ctx.ui.notify(`companion-agents: could not write ${ref.path}: ${(error as Error).message}`, "error");
 			return { block: true, reason: decision.reason };
 		}
 	}
 	if (choice === ASK.deny) {
 		// A deny from the dialog is a decision for this once; say so plainly.
-		ctx.ui.notify("persona-agents: denied; ask again or add a deny rule to the policy", "warning");
+		ctx.ui.notify("companion-agents: denied; ask again or add a deny rule to the policy", "warning");
 	}
 	return { block: true, reason: decision.reason };
 }
@@ -117,7 +117,7 @@ export function permissionsCommand(pi: ExtensionAPI, session: Session, args: str
 		return;
 	}
 	if (parsed.action === "list") {
-		pi.sendMessage({ customType: "persona-agents:permissions", content: permissionsReport(session), display: true });
+		pi.sendMessage({ customType: "companion-agents:permissions", content: permissionsReport(session), display: true });
 		return;
 	}
 	if (parsed.action === "check") {
@@ -125,7 +125,7 @@ export function permissionsCommand(pi: ExtensionAPI, session: Session, args: str
 			ctx.ui.notify("usage: /permissions check <shell command>", "warning");
 			return;
 		}
-		pi.sendMessage({ customType: "persona-agents:permissions", content: checkReport(session, parsed.command), display: true });
+		pi.sendMessage({ customType: "companion-agents:permissions", content: checkReport(session, parsed.command), display: true });
 		return;
 	}
 	if (parsed.action === "edit") {
@@ -136,7 +136,7 @@ export function permissionsCommand(pi: ExtensionAPI, session: Session, args: str
 		const ref = session.refs.find((candidate) => candidate.scope === "user") ?? session.refs[0];
 		initPolicyFile(ref);
 		reloadPolicy(session);
-		ctx.ui.notify(`persona-agents: policy file ready at ${ref.path}`, "info");
+		ctx.ui.notify(`companion-agents: policy file ready at ${ref.path}`, "info");
 		return;
 	}
 	if (parsed.action !== "rule") {
@@ -146,7 +146,7 @@ export function permissionsCommand(pi: ExtensionAPI, session: Session, args: str
 	const rule = parsed.rule;
 	const ref = ruleTarget(session.refs, rule.project);
 	if (!ref) {
-		ctx.ui.notify("persona-agents: no project policy file, because Pi does not trust this project; nothing was written", "warning");
+		ctx.ui.notify("companion-agents: no project policy file, because Pi does not trust this project; nothing was written", "warning");
 		return;
 	}
 	try {
@@ -154,10 +154,10 @@ export function permissionsCommand(pi: ExtensionAPI, session: Session, args: str
 		reloadPolicy(session);
 		const errors = session.policy.errors.map((error) => error.message);
 		ctx.ui.notify(
-			errors.length > 0 ? `persona-agents: rule added, but the policy does not load: ${errors[0]}` : `persona-agents: ${rule.verdict} rule added to ${ref.path}`,
+			errors.length > 0 ? `companion-agents: rule added, but the policy does not load: ${errors[0]}` : `companion-agents: ${rule.verdict} rule added to ${ref.path}`,
 			errors.length > 0 ? "error" : "info",
 		);
 	} catch (error) {
-		ctx.ui.notify(`persona-agents: ${(error as Error).message}`, "error");
+		ctx.ui.notify(`companion-agents: ${(error as Error).message}`, "error");
 	}
 }

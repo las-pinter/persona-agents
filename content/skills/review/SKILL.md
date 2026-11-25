@@ -3,7 +3,7 @@ name: review
 description: Independent review of the current change by a read-only reviewer in a separate context. Use before committing a non-trivial change, or when the owner asks for a review. Optional argument - the scope, such as a base ref (main), a commit range, or paths. The argument is a scope only, never a checklist.
 argument-hint: "[base-ref | commit-range | paths]"
 context: fork
-agent: persona-agents:reviewer
+agent: companion-agents:reviewer
 ---
 
 ## Platform branch
@@ -12,13 +12,13 @@ If your system context says `Running in Kiro CLI`, do not review the change
 yourself and do not write the brief yourself. Run
 
 ```sh
-node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
+node --experimental-strip-types --no-warnings {{COMPANION_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
 ```
 
 with the scope the owner named; when none was named, omit the argument (an
-empty scope is the uncommitted change). Then start the `pa-reviewer` sub-agent
+empty scope is the uncommitted change). Then start the `ca-reviewer` sub-agent
 with the printed text verbatim, including the final `Change key:` line. Read
-`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the rest. The text
+`{{COMPANION_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the rest. The text
 below is the reviewer's own prompt; it is not the companion's instructions.
 
 If your system context says `Running in Pi`, call the `review` tool with the
@@ -83,7 +83,7 @@ Build your own picture before you judge:
 4. Your own risk list, including effects outside the diff: stored data,
    upgrade paths, other platforms, CI, docs.
 
-Then review the change with the `persona-agents:code-review-checklist` skill
+Then review the change with the `companion-agents:code-review-checklist` skill
 and the skills your agent instructions select, and return the review in the
 output format of your agent instructions. A re-review is a fresh full review
 of the new range with the same brief: nothing from an earlier review is passed

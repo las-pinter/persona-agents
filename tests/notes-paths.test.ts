@@ -28,7 +28,7 @@ function git(cwd: string, ...args: string[]): void {
 
 function withTmp(fn: (tmp: string) => void): void {
 	// realpath: macOS tmp dirs are symlinks, and git reports the real path.
-	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-notes-")));
+	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-notes-")));
 	try {
 		fn(tmp);
 	} finally {
@@ -60,7 +60,7 @@ describe("notes-paths: project name", () => {
 	});
 
 	test("a missing folder is the common project, not an error", () => {
-		assert.equal(projectName(path.join(os.tmpdir(), "persona-agents-no-such-dir-x")), COMMON_PROJECT);
+		assert.equal(projectName(path.join(os.tmpdir(), "companion-agents-no-such-dir-x")), COMMON_PROJECT);
 	});
 
 	test("a bare repository drops the .git suffix; a submodule uses its module name", () => {

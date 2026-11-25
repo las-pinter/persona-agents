@@ -8,8 +8,8 @@
  * context for `Running in Kiro CLI` and points at `references/kiro.md`.
  *
  * The installer substitutes two tokens:
- *   {{PERSONA_AGENTS_KIRO_SKILL_DIR}}  the installed skill folder
- *   {{PERSONA_AGENTS_KIRO_ROOT}}      the installed payload root
+ *   {{COMPANION_AGENTS_KIRO_SKILL_DIR}}  the installed skill folder
+ *   {{COMPANION_AGENTS_KIRO_ROOT}}      the installed payload root
  *
  * Run: node --experimental-strip-types --test tests/kiro-skills.test.ts
  */
@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const skillsRoot = path.join(repoRoot, "content", "skills");
 const BRANCH = "Running in Kiro CLI";
-const SKILL_DIR = "{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md";
-const ROOT_TOKEN = "{{PERSONA_AGENTS_KIRO_ROOT}}";
+const SKILL_DIR = "{{COMPANION_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md";
+const ROOT_TOKEN = "{{COMPANION_AGENTS_KIRO_ROOT}}";
 
 const harnessBound: Record<string, RegExp> = {
 	review: /review\.ts/,
@@ -67,7 +67,7 @@ describe("kiro skills: the platform branch", () => {
 		const skill = fs.readFileSync(path.join(skillsRoot, "review", "SKILL.md"), "utf8");
 		assert.match(skill, /^---\nname: review\n/);
 		assert.match(skill, /^context: fork$/m);
-		assert.match(skill, /^agent: persona-agents:reviewer$/m);
+		assert.match(skill, /^agent: companion-agents:reviewer$/m);
 	});
 
 	test("the retro skill stays print-only and slash-invoked", () => {

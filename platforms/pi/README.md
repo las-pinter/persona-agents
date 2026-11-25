@@ -48,13 +48,13 @@ of `content/` names no harness.
 
 ```bash
 pi install <source>            # git URL or local path; package.json carries the pi block
-pi --agent persona-agents:companion
+pi --agent companion-agents:companion
 ```
 
 `package.json` has no separate manifest: the `pi` block points at the extension
 and at `content/skills`, which Pi advertises and loads on demand.
 
-`--agent persona-agents:<name>` resolves at session start. An id in the
+`--agent companion-agents:<name>` resolves at session start. An id in the
 namespace that names no profile refuses the session and lists the known
 agents. A session without the flag gets no sections and no gate; the commands
 and tools are registered but refuse to run.
@@ -114,7 +114,7 @@ code without the author's reasoning.
 - The **`review` tool** takes `scope`, `task`, and `decisions`; the `/review`
   command takes a bare scope or `scope=` / `task=` / `decisions=` labels, and a
   quoted value may hold a label of its own. Both spawn
-  `pi --extension <this file> -p --no-session --agent persona-agents:reviewer
+  `pi --extension <this file> -p --no-session --agent companion-agents:reviewer
   --tools read,grep,find,ls,bash --append-system-prompt <body> <task>`. Passing
   `--extension` means the reviewer profile and the policy apply even when the
   package is not installed; the tool list is a second, structural guarantee.
@@ -137,7 +137,7 @@ silently.
 
 ## Collapsed output
 
-Every persona-agents surface prints one line in the transcript: the review tool
+Every companion-agents surface prints one line in the transcript: the review tool
 result, the `/review` notice, the commit-gate message, `/permissions`, `/retro`,
 the `session-log` tool result, and the read and reload lists. `scripts/summary.ts`
 builds each line from the text the surface already prints, and the renderers in
@@ -191,7 +191,7 @@ A session that ends without a wrap-up still leaves an entry.
   the standard format; nothing else in the plugin touches the session-log tree.
 - **The safety net** runs on `session_shutdown` with reason `quit`, and only for
   the companion. If the session has no entry and has material, it writes a
-  payload to `<pi agent dir>/persona-agents/session-log-<session>.json` and detaches
+  payload to `<pi agent dir>/companion-agents/session-log-<session>.json` and detaches
   `node --experimental-strip-types platforms/pi/scripts/session-log-writer.ts`. The
   writer runs one headless Pi request (`-p -nt --no-session`, no tools), and
   writes the entry only when it still does not exist. The material is capped:
@@ -225,8 +225,8 @@ hit wins:
      extension folder, and the policy files — through a file tool or a shell
      redirect.
 2. **Rules** — your files, project before user, file order, first match:
-   - `<pi agent dir>/persona-agents/policy.json`
-   - `<repo>/.pi/persona-agents/policy.json` (only when the project is trusted)
+   - `<pi agent dir>/companion-agents/policy.json`
+   - `<repo>/.pi/companion-agents/policy.json` (only when the project is trusted)
 3. **Session grants** — the rules added from an ask with "Always this
    session".
 4. **Doctrine** — the built-in default for the profile: the companion runs git
@@ -262,8 +262,8 @@ denies every call and names the file and the entry. Use `/permissions` to list
 the effective rules with their scope and line, `check` to explain one command,
 and `allow|ask|deny` to append a rule.
 
-Every ask and deny, and every allow when `PERSONA_AGENTS_DEBUG=1`, appends one
-JSON line to `<pi agent dir>/persona-agents/decisions.ndjson`. A log write
+Every ask and deny, and every allow when `COMPANION_AGENTS_DEBUG=1`, appends one
+JSON line to `<pi agent dir>/companion-agents/decisions.ndjson`. A log write
 failure never blocks a tool call.
 
 There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
@@ -272,13 +272,13 @@ There is no UI in print, JSON, or RPC mode, so an ask becomes a deny there.
 
 | Variable | Meaning |
 | --- | --- |
-| `PERSONA_AGENTS_THEME` | The persona theme, when `--persona` is absent. |
-| `PERSONA_AGENTS_DEBUG=1` | Log allowed decisions too. |
+| `COMPANION_AGENTS_THEME` | The persona theme, when `--persona` is absent. |
+| `COMPANION_AGENTS_DEBUG=1` | Log allowed decisions too. |
 | `PI_CODING_AGENT_DIR` | The Pi agent dir: policy file, decisions log. `PI_CODING_AGENT` is pi's own `"true"` marker and is never a path. |
 
 **Upgrade note.** Earlier builds read `PI_CODING_AGENT` as a path, which is
 `"true"`, so the user policy and the decision log were written under
-`<cwd>/true/persona-agents/` in every repository. Those files are no longer
+`<cwd>/true/` in every repository. Those files are no longer
 read. Re-apply any `/permissions` grants you need with
 `/permissions allow <tool> <regex>`, and delete the stray `true/` folder.
 

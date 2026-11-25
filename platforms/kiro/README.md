@@ -9,7 +9,7 @@ commits with the owner, in the voice of a persona theme. It targets
 kiro-cli 3.4.0 or newer (the V3 engine) and is tested on 3.5.0. Unlike the
 Claude and Pi adapters, the Kiro adapter is a **self-contained payload**: the
 installer copies `content/`, `platforms/shared/`, and `platforms/kiro/` into
-`$KIRO_HOME/persona-agents/`, so a moved or deleted clone does not break a
+`$KIRO_HOME/companion-agents/`, so a moved or deleted clone does not break a
 running install.
 
 ## Install and update
@@ -34,27 +34,35 @@ Flags:
   `kiro-cli` command for the version check and for the session-end session-log
   writer, which the installer wires into the hook.
 
-The environment variable `PERSONA_AGENTS_WRITER_MODEL` picks the model of that
+The environment variable `COMPANION_AGENTS_WRITER_MODEL` picks the model of that
 session-log writer.
 
 The installer (`install.ts`) writes:
 
-- `<kiro home>/persona-agents/` — the payload: `content/`, `platforms/shared/`,
+- `<kiro home>/companion-agents/` — the payload: `content/`, `platforms/shared/`,
   `platforms/kiro/`, and `config.json` (`{ "theme": "<name>" }`). `state/` is
   never removed.
 - `<kiro home>/skills/<name>/` — the skills, with
-  `{{PERSONA_AGENTS_KIRO_SKILL_DIR}}` and `{{PERSONA_AGENTS_KIRO_ROOT}}`
+  `{{COMPANION_AGENTS_KIRO_SKILL_DIR}}` and `{{COMPANION_AGENTS_KIRO_ROOT}}`
   substituted for the installed paths.
-- `<kiro home>/agents/pa-companion.json`, `pa-reviewer.json`,
-  `pa-writer.json`.
+- `<kiro home>/agents/ca-companion.json`, `ca-reviewer.json`,
+  `ca-writer.json`.
 - Nothing else. `chat.defaultAgent` is read to warn about a name that no file
   and no built-in provides; it is never rewritten.
 
 A skill folder is replaced only when it carries the marker
-`.persona-agents.json`. The installer stops before any write when a folder
+`.companion-agents.json`. The installer stops before any write when a folder
 lacks the marker; `--force` renames it to `<name>.bak-<timestamp>` and replaces
 it. A marked folder for a skill that is no longer shipped is removed.
 A version below 3.4.0 is refused before any write.
+
+An install made under the old project name (5.x) is adopted
+(`platforms/kiro/legacy.ts`): a skill folder with the old marker counts as
+marked; the old payload folder becomes `<kiro home>/companion-agents/` when that
+folder is absent, so the theme and the state carry over, and stays with a
+warning otherwise; each old agent file is renamed to `<file>.bak-<timestamp>`.
+A `chat.defaultAgent` that
+names an old agent is warned about, never rewritten.
 
 Update with `git pull` and `./install.sh --kiro`. A file whose text the
 installer would change is backed up as `<file>.bak-<timestamp>`; a file that
@@ -62,7 +70,7 @@ already matches is left alone, so an unchanged run writes no backup. Start the
 companion with:
 
 ```bash
-kiro-cli --agent pa-companion
+kiro-cli --agent ca-companion
 ```
 
 ## Layout
@@ -83,7 +91,7 @@ kiro-cli --agent pa-companion
   - `compact.ts` — the pre-compaction manifest and the post-compaction reload.
   - `session-log-end.ts` — the SessionEnd safety net and its detached writer.
   - `retro.ts` — the session facts.
-- **Agents**: the `pa-reviewer` prompt is the shared
+- **Agents**: the `ca-reviewer` prompt is the shared
   `content/professions/reviewer.md`, read from the payload at install time,
   plus a Kiro note (skills have no namespace; the checklist skill is
   `code-review-checklist`). The reviewer selects the skills that name the
@@ -102,18 +110,18 @@ The payload keeps the repository layout so the relative imports between
 
 ## The three agents
 
-- **`pa-companion`** — the main session. The prompt is
+- **`ca-companion`** — the main session. The prompt is
   `content/professions/companion.md`, inlined into the config because Kiro
   rejects an absolute `file://` prompt; tools `read`, `write`, `shell`, `web`,
-  `subagent/pa-reviewer`; resources are the installed `skill://` files. No
+  `subagent/ca-reviewer`; resources are the installed `skill://` files. No
   model is pinned: the owner's session model is used.
-- **`pa-reviewer`** — read-only, separate context. Tools `read`, `web`,
+- **`ca-reviewer`** — read-only, separate context. Tools `read`, `web`,
   `shell`; no file-write tool. Its `permissions.rules` deny every `fs_write`,
   and a PreToolUse hook blocks shell writes the gate can see and every command
   that writes history or publishes (commit, tag, push). Reading git history is
   allowed. A `python` or `node` heredoc body runs as code the gate does not
   read, as `python -c` already did.
-- **`pa-writer`** — the session-log writer. Tools `[]`; no permissions. It writes
+- **`ca-writer`** — the session-log writer. Tools `[]`; no permissions. It writes
   the entry text from the material the SessionEnd net gives it.
 
 ## Hooks
@@ -126,7 +134,7 @@ session.
 | companion | `SessionStart` | `context.ts session`: the platform note and the theme persona (the profession is the agent prompt). |
 | companion | `SessionStart` | `context.ts startup`: the session id and the read list. |
 | companion | `PermissionRequest` | `gate.ts permission`: allow a git command or a reviewed/trivial commit; return no decision otherwise, so Kiro shows its own prompt. A chain of git work and inert parts (a session cd, a read, a formatter, a pipe filter, a quoted commit heredoc) is allowed; a cd outside the session asks, and the commit review still runs inside a chain. |
-| companion | `Stop` | `review-record.ts`: scan the V3 store for a `sub_agent_complete` from `pa-reviewer` and store its verdict against the change key. |
+| companion | `Stop` | `review-record.ts`: scan the V3 store for a `sub_agent_complete` from `ca-reviewer` and store its verdict against the change key. |
 | companion | `PreCompact` | `compact.ts pre`: store the manifest and print guidance for the summarizer. |
 | companion | `PostCompact` | `compact.ts post`: store the summary and print the ordered reload list. |
 | companion | `SessionEnd` | `session-log-end.ts hook`: detach the session-log writer when the session has no entry. |
@@ -152,7 +160,7 @@ also take `--home=` (the notes home, for tests) and `--cwd=` in tests.
 Kiro skills cannot fork into a sub-agent the way a Claude skill can. The Kiro
 branch of the shared `review` skill therefore runs `review.ts` to build the
 three-field brief (`Scope`, `Task`, `Decisions`) and the change key, then
-passes the brief to the `pa-reviewer` sub-agent. With no scope the brief is the
+passes the brief to the `ca-reviewer` sub-agent. With no scope the brief is the
 uncommitted change, and only that scoped review carries a key: a named ref,
 range, or path list does not see the whole working tree, so it cannot unlock a
 commit.
@@ -201,7 +209,7 @@ Each session has its own file.
 The safety net runs on `SessionEnd` for an interactive exit. When the session
 has no entry and has material, it writes a payload and detaches
 `session-log-end.ts write`; that process runs
-`kiro-cli chat --agent pa-writer --no-interactive --model claude-haiku-4.5
+`kiro-cli chat --agent ca-writer --no-interactive --model claude-haiku-4.5
 <prompt>` and writes the entry only when it still does not exist. A
 `--no-interactive` or scripted session gets no SessionEnd, so it gets no entry:
 run the wrap-up there. A failed writer is silent by design.
@@ -224,18 +232,18 @@ and `subagent`; an unmatched call is `ask`.
 
 - The companion may read the project, `~/agent-notes`, and the payload; it may
   write the project and `~/agent-notes`; it may load any installed skill and
-  spawn `pa-reviewer`; it may run the read-only git commands, the test
+  spawn `ca-reviewer`; it may run the read-only git commands, the test
   commands, and a node script (the adapter scripts include the review brief,
   the retro facts, and the session-log path) without a prompt.
 - Both agents deny secret paths: `**/.env`, `**/.env.*`, `**/.ssh/**`,
   `**/.aws/**`, `**/*.pem`, `**/id_rsa*`, `**/.netrc`.
-- The companion may not write the payload, the `pa-*` agent files, the skill
+- The companion may not write the payload, the `ca-*` agent files, the skill
   folders, or `$KIRO_HOME/settings/`.
 - The reviewer denies every `fs_write` and keeps shell for the one test run it
   reports; the PreToolUse gate blocks shell writes the rules cannot see.
 
 The decision log is `<state>/decisions.ndjson`; review records are
-`<state>/reviews.json`. State lives in `$KIRO_HOME/persona-agents/state/` and
+`<state>/reviews.json`. State lives in `$KIRO_HOME/companion-agents/state/` and
 survives an update. Edit `permissions.rules` in the installed agent file to
 tune the rules; a new session picks the change up.
 
@@ -255,7 +263,7 @@ tune the rules; a new session picks the change up.
 - **The V3 session store is undocumented.** The reader locates
   `sessions/*/sess_<id>/messages.jsonl`, ignores unknown payloads, and fails
   soft. The retro and session log lose their source if the layout changes.
-- **Kiro skills cannot fork.** The review skill starts `pa-reviewer` as a
+- **Kiro skills cannot fork.** The review skill starts `ca-reviewer` as a
   sub-agent instead of a fork.
 - **`chat.defaultAgent` is not changed.** A default that names no agent is
   warned about, not fixed.

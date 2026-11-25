@@ -23,7 +23,7 @@ const reviewer = PROFILES.reviewer;
 
 /** A temp project + home + Pi agent dir, cleaned up by the caller. */
 function sandbox(): { root: string; env: PolicyEnv; refs: PolicyFileRef[]; cleanup: () => void } {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-"));
 	const env: PolicyEnv = {
 		cwd: path.join(root, "project"),
 		home: path.join(root, "home"),
@@ -33,8 +33,8 @@ function sandbox(): { root: string; env: PolicyEnv; refs: PolicyFileRef[]; clean
 	fs.mkdirSync(env.cwd, { recursive: true });
 	fs.mkdirSync(env.notesDir, { recursive: true });
 	const refs: PolicyFileRef[] = [
-		{ path: path.join(env.piAgentDir, "persona-agents", "policy.json"), scope: "user" },
-		{ path: path.join(env.cwd, ".pi", "persona-agents", "policy.json"), scope: "project" },
+		{ path: path.join(env.piAgentDir, "companion-agents", "policy.json"), scope: "user" },
+		{ path: path.join(env.cwd, ".pi", "companion-agents", "policy.json"), scope: "project" },
 	];
 	env.policyFiles = refs.map((ref) => ref.path);
 	return { root, env, refs, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
@@ -506,7 +506,7 @@ describe("pi policy: editing and reporting", () => {
 
 	test("a project rule has no target in an untrusted project, never the user file", () => {
 		const user = { path: "/u/policy.json", scope: "user" as const };
-		const project = { path: "/p/.pi/persona-agents/policy.json", scope: "project" as const };
+		const project = { path: "/p/.pi/companion-agents/policy.json", scope: "project" as const };
 		assert.equal(ruleTarget([user], true), undefined);
 		assert.equal(ruleTarget([user, project], true), project);
 		assert.equal(ruleTarget([user, project], false), user);
@@ -546,11 +546,11 @@ describe("pi policy: editing and reporting", () => {
 			const policy: PolicyState = { rules: [], errors: [], grants: [] };
 			const decision = decidePolicy(companion, "bash", { command: "git push" }, policy, box.env);
 			const record = JSON.parse(decisionRecord(companion, "bash", { command: "git push" }, decision, { session: "s1" }));
-			assert.equal(record.agent, "persona-agents:companion");
+			assert.equal(record.agent, "companion-agents:companion");
 			assert.equal(record.verdict, "ask");
 			assert.equal(record.source, "doctrine");
 			assert.equal(record.session, "s1");
-			const log = path.join(box.env.piAgentDir, "persona-agents", "decisions.ndjson");
+			const log = path.join(box.env.piAgentDir, "companion-agents", "decisions.ndjson");
 			appendDecision(log, decisionRecord(companion, "bash", { command: "git push" }, decision));
 			assert.equal(fs.readFileSync(log, "utf8").trim().split("\n").length, 1);
 		} finally {

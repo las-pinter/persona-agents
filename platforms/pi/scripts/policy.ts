@@ -188,7 +188,7 @@ export function candidates(tool: string, input: Record<string, unknown>, env: Po
 /** True when a path is one an agent may never write: the gate's own machinery. */
 export function isGatePath(path: string, env: PolicyEnv): boolean {
 	if (GATE_FILES.test(path)) return true;
-	if (isInside(path, join(env.piAgentDir, "persona-agents"))) return true;
+	if (isInside(path, join(env.piAgentDir, "companion-agents"))) return true;
 	if (isInside(path, join(env.piAgentDir, "extensions"))) return true;
 	if (path === join(env.piAgentDir, "settings.json")) return true;
 	for (const file of env.policyFiles ?? []) {

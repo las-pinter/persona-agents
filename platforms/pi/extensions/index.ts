@@ -1,7 +1,7 @@
 /**
- * persona-agents for Pi — the wiring.
+ * companion-agents for Pi — the wiring.
  *
- * `pi --agent persona-agents:companion` runs a Pi session as the companion: one
+ * `pi --agent companion-agents:companion` runs a Pi session as the companion: one
  * agent that plans, implements, tests, reviews, and commits with the owner, in
  * the voice of a persona theme. The logic lives in `../scripts/` as pure
  * modules; this file only connects it to Pi's events.
@@ -13,7 +13,7 @@
  *   tool_call          the permission gate: allow, ask with the UI, or block
  *   session_compact    queue the reload list for the next run
  *
- * A session without `--agent persona-agents:<name>` gets no sections and no
+ * A session without `--agent companion-agents:<name>` gets no sections and no
  * gate; the commands and tools are registered but refuse. Every fault is contained:
  * a bad theme or an unreadable policy refuses the agent and says why, rather
  * than running half-configured.
@@ -58,24 +58,24 @@ import { executeReview, piInvocation, reviewGate } from "../scripts/review-run.t
 import { collapsedRow, bodyText } from "../scripts/render.ts";
 
 /** The message type of the read list, so a renderer can find it later. */
-const READ_LIST = "persona-agents:read-list";
+const READ_LIST = "companion-agents:read-list";
 /** The message type of the reload list sent after a compaction. */
-const RELOAD_LIST = "persona-agents:reload-list";
+const RELOAD_LIST = "companion-agents:reload-list";
 /** The section names this extension owns in the system prompt. */
 const SECTIONS = ["profession", "persona", "platform"] as const;
 
 function policyRefs(cwd: string, trusted: boolean): PolicyFileRef[] {
 	const refs: PolicyFileRef[] = [
 		// The user file comes first in the list; loadPolicy orders by scope.
-		{ path: join(piAgentDir(), "persona-agents", "policy.json"), scope: "user" },
+		{ path: join(piAgentDir(), "companion-agents", "policy.json"), scope: "user" },
 	];
-	if (trusted) refs.push({ path: join(cwd, ".pi", "persona-agents", "policy.json"), scope: "project" });
+	if (trusted) refs.push({ path: join(cwd, ".pi", "companion-agents", "policy.json"), scope: "project" });
 	return refs;
 }
 
 /** True when the log keeps allowed calls too (the audit trail is otherwise failures only). */
 function logsAllows(): boolean {
-	return process.env.PERSONA_AGENTS_DEBUG === "1";
+	return process.env.COMPANION_AGENTS_DEBUG === "1";
 }
 
 /** The status-line text: the profile, and the theme when it has a persona. */
@@ -104,7 +104,7 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 	try {
 		registry = loadRegistry(content);
 		const flag = pi.getFlag("persona");
-		const wanted = typeof flag === "string" ? flag : process.env.PERSONA_AGENTS_THEME || DEFAULT_THEME;
+		const wanted = typeof flag === "string" ? flag : process.env.COMPANION_AGENTS_THEME || DEFAULT_THEME;
 		theme = resolveTheme(registry, wanted);
 		// Read the sections once so a broken profession or persona refuses the
 		// session now, not on the first tool call.
@@ -151,8 +151,8 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 	if (policy.errors.length > 0) {
 		for (const error of policy.errors) ctx.ui.notify(`${error.message} — the gate fails closed until this is fixed`, "error");
 	}
-	ctx.ui.setStatus("persona-agents", statusText(profile, theme));
-	ctx.ui.notify(`persona-agents: ${profile.name} (${profile.persona ? theme : "no persona"}), notes: ${notesDir}`, "info");
+	ctx.ui.setStatus("companion-agents", statusText(profile, theme));
+	ctx.ui.notify(`companion-agents: ${profile.name} (${profile.persona ? theme : "no persona"}), notes: ${notesDir}`, "info");
 	return session;
 }
 
@@ -160,7 +160,7 @@ function startSession(pi: ExtensionAPI, ctx: ExtensionContext): Session | null {
 function personaCommand(pi: ExtensionAPI, session: Session, args: string, ctx: ExtensionContext): void {
 	const wanted = args.trim();
 	if (wanted === "") {
-		ctx.ui.notify(`persona-agents: theme ${session.theme}; available: ${themeNames(session.registry).join(", ")}`, "info");
+		ctx.ui.notify(`companion-agents: theme ${session.theme}; available: ${themeNames(session.registry).join(", ")}`, "info");
 		return;
 	}
 	try {
@@ -169,16 +169,16 @@ function personaCommand(pi: ExtensionAPI, session: Session, args: string, ctx: E
 		ctx.ui.notify((error as Error).message, "error");
 		return;
 	}
-	pi.appendEntry("persona-agents:theme", { theme: session.theme });
-	ctx.ui.setStatus("persona-agents", statusText(session.profile, session.theme));
-	ctx.ui.notify(`persona-agents: theme ${session.theme} applies from your next message`, "info");
+	pi.appendEntry("companion-agents:theme", { theme: session.theme });
+	ctx.ui.setStatus("companion-agents", statusText(session.profile, session.theme));
+	ctx.ui.notify(`companion-agents: theme ${session.theme} applies from your next message`, "info");
 }
 
-export default function personaAgents(pi: ExtensionAPI): void {
+export default function companionAgents(pi: ExtensionAPI): void {
 	let session: Session | null = null;
 
 	pi.registerFlag("agent", {
-		description: 'Run as a persona-agents agent, e.g. "persona-agents:companion"',
+		description: 'Run as a companion-agents agent, e.g. "companion-agents:companion"',
 		type: "string",
 	});
 	pi.registerFlag("persona", {
@@ -190,23 +190,23 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		session = null;
 		session = startSession(pi, ctx);
 		if (!session) {
-			ctx.ui.setStatus("persona-agents", undefined);
+			ctx.ui.setStatus("companion-agents", undefined);
 			return;
 		}
 		// A theme chosen with /persona earlier in this session survives a reload.
 		for (const entry of ctx.sessionManager.getEntries()) {
-			if (entry.type !== "custom" || entry.customType !== "persona-agents:theme") continue;
+			if (entry.type !== "custom" || entry.customType !== "companion-agents:theme") continue;
 			const theme = (entry.data as { theme?: unknown } | undefined)?.theme;
 			if (typeof theme === "string" && Object.hasOwn(session.registry, theme)) session.theme = theme;
 		}
 		for (const entry of ctx.sessionManager.getEntries()) {
-			if (entry.type !== "custom" || entry.customType !== "persona-agents:review") continue;
+			if (entry.type !== "custom" || entry.customType !== "companion-agents:review") continue;
 			const data = entry.data as { key?: unknown; verdict?: unknown } | undefined;
 			if (typeof data?.key === "string" && typeof data.verdict === "string" && ["Approve", "Request Changes", "Reject"].includes(data.verdict)) {
 				session.reviews.set(data.key, data.verdict as ReviewVerdict);
 			}
 		}
-		ctx.ui.setStatus("persona-agents", statusText(session.profile, session.theme));
+		ctx.ui.setStatus("companion-agents", statusText(session.profile, session.theme));
 	});
 
 	pi.on("before_agent_start", (event, ctx) => {
@@ -259,7 +259,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		} catch (error) {
 			// A cancelled compaction is not a failure worth a notice; Pi handles it.
 			if (!event.signal.aborted) {
-				ctx.ui.notify(`persona-agents: keeping Pi's default summary: ${(error as Error).message}`, "warning");
+				ctx.ui.notify(`companion-agents: keeping Pi's default summary: ${(error as Error).message}`, "warning");
 			}
 			return undefined;
 		}
@@ -270,7 +270,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		const manifest =
 			session.manifest ?? buildManifest(ctx.sessionManager.getEntries() as EntryLike[], session.env.notesDir, ctx.sessionManager.getSessionId());
 		session.manifest = null;
-		pi.appendEntry("persona-agents:compacted", {
+		pi.appendEntry("companion-agents:compacted", {
 			at: new Date().toISOString(),
 			reason: event.reason,
 			skills: manifest.skills.length,
@@ -308,10 +308,10 @@ export default function personaAgents(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("permissions", {
-		description: "Show or edit the persona-agents permission policy",
+		description: "Show or edit the companion-agents permission policy",
 		handler: (args, ctx) => {
 			if (!session) {
-				ctx.ui.notify("persona-agents: not running as a persona-agents agent (start with --agent persona-agents:companion)", "warning");
+				ctx.ui.notify("companion-agents: not running as a companion-agents agent (start with --agent companion-agents:companion)", "warning");
 				return;
 			}
 			permissionsCommand(pi, session, args, ctx);
@@ -334,7 +334,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		};
 		if (!hasMaterial(payload.sources)) return;
 		try {
-			const dir = join(piAgentDir(), "persona-agents");
+			const dir = join(piAgentDir(), "companion-agents");
 			mkdirSync(dir, { recursive: true });
 			const file = join(dir, `session-log-${session.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
 			writeFileSync(file, JSON.stringify(payload));
@@ -343,7 +343,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			const child = spawn(
 				process.execPath,
 				["--experimental-strip-types", "--no-warnings", fileURLToPath(new URL("../scripts/session-log-writer.ts", import.meta.url)), file],
-				{ detached: true, stdio: "ignore", env: { ...process.env, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" } },
+				{ detached: true, stdio: "ignore", env: { ...process.env, COMPANION_AGENTS_SESSION_LOG_WRITER: "1" } },
 			);
 			child.unref();
 		} catch {
@@ -372,7 +372,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			return collapsedRow(theme, sessionLogLine(text));
 		},
 		async execute(_toolCallId, params) {
-			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
+			if (!session) return { content: [{ type: "text", text: "companion-agents: not running as a companion-agents agent" }], isError: true };
 			const notesDir = session.env.notesDir;
 			const action = String(params.action);
 			if (action === "path") {
@@ -407,7 +407,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		description: "Print-only retrospective of this session, from the facts it recorded",
 		handler: (_args, ctx) => {
 			if (!session) {
-				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
+				ctx.ui.notify("companion-agents: not running as a companion-agents agent", "warning");
 				return;
 			}
 			let decisions: DecisionLine[] = [];
@@ -423,7 +423,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				sessionLogs: existsSync(entry) ? [entry] : [],
 			});
 			pi.sendMessage(
-				{ customType: "persona-agents:retro", content: retroMessage(join(contentDir(), "skills", "retro", "SKILL.md"), facts), display: true },
+				{ customType: "companion-agents:retro", content: retroMessage(join(contentDir(), "skills", "retro", "SKILL.md"), facts), display: true },
 				{ triggerTurn: true },
 			);
 		},
@@ -451,7 +451,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 			return collapsedRow(theme, reviewLine(summarizeReview(text)));
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
-			if (!session) return { content: [{ type: "text", text: "persona-agents: not running as a persona-agents agent" }], isError: true };
+			if (!session) return { content: [{ type: "text", text: "companion-agents: not running as a companion-agents agent" }], isError: true };
 			const input: BriefInput = {};
 			if (typeof params.scope === "string") input.scope = params.scope;
 			if (typeof params.task === "string") input.task = params.task;
@@ -473,7 +473,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		description: "Run an independent review of the current change: a scope, or scope=/task=/decisions= labels",
 		handler: (args, ctx) => {
 			if (!session) {
-				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
+				ctx.ui.notify("companion-agents: not running as a companion-agents agent", "warning");
 				return;
 			}
 			const parsed = parseReviewArgs(args);
@@ -481,7 +481,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 				.then(({ text, verdict, notes, key }) => {
 					const extra = notes.map((note) => `\n${note}`).join("");
 					pi.sendMessage({
-						customType: "persona-agents:review",
+						customType: "companion-agents:review",
 						content: `## Review\n\n${verdict ?? "no verdict"}\n\n${text}${extra}\n\nreview key: ${key}`,
 						display: true,
 					});
@@ -503,19 +503,19 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		};
 	});
 
-	pi.registerMessageRenderer("persona-agents:review", (message, options, theme) => {
+	pi.registerMessageRenderer("companion-agents:review", (message, options, theme) => {
 		const text = bodyText(message.content);
 		if (options.expanded) return new Text(text, 0, 0);
 		return collapsedRow(theme, reviewLine(summarizeReview(text)));
 	});
 
-	pi.registerMessageRenderer("persona-agents:permissions", (message, options, theme) => {
+	pi.registerMessageRenderer("companion-agents:permissions", (message, options, theme) => {
 		const text = bodyText(message.content);
 		if (options.expanded) return new Text(text, 0, 0);
 		return collapsedRow(theme, permissionsLine(text));
 	});
 
-	pi.registerMessageRenderer("persona-agents:retro", (message, options, theme) => {
+	pi.registerMessageRenderer("companion-agents:retro", (message, options, theme) => {
 		const text = bodyText(message.content);
 		if (options.expanded) return new Text(text, 0, 0);
 		return collapsedRow(theme, retroLine(text));
@@ -533,7 +533,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 		description: "Show or change the persona theme for this session",
 		handler: (args, ctx) => {
 			if (!session) {
-				ctx.ui.notify("persona-agents: not running as a persona-agents agent", "warning");
+				ctx.ui.notify("companion-agents: not running as a companion-agents agent", "warning");
 				return;
 			}
 			personaCommand(pi, session, args, ctx);
@@ -542,7 +542,7 @@ export default function personaAgents(pi: ExtensionAPI): void {
 
 }
 
-/** The decisions log: `<pi agent dir>/persona-agents/decisions.ndjson`. */
+/** The decisions log: `<pi agent dir>/companion-agents/decisions.ndjson`. */
 function logFile(): string {
-	return join(piAgentDir(), "persona-agents", "decisions.ndjson");
+	return join(piAgentDir(), "companion-agents", "decisions.ndjson");
 }

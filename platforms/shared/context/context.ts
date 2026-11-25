@@ -43,10 +43,10 @@ export function loadRegistry(contentDir: string): Registry {
 	try {
 		parsed = JSON.parse(readFileSync(file, "utf8"));
 	} catch (error) {
-		throw new ContentError(`persona-agents: cannot read ${file}: ${(error as Error).message}`);
+		throw new ContentError(`companion-agents: cannot read ${file}: ${(error as Error).message}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new ContentError(`persona-agents: ${file} must hold an object`);
+		throw new ContentError(`companion-agents: ${file} must hold an object`);
 	}
 	return parsed as Registry;
 }
@@ -60,7 +60,7 @@ export function themeNames(registry: Registry): string[] {
 export function resolveTheme(registry: Registry, wanted: string | undefined | null): string {
 	if (!wanted) return DEFAULT_THEME;
 	if (Object.hasOwn(registry, wanted)) return wanted;
-	throw new ContentError(`persona-agents: unknown persona theme "${wanted}"; known themes: ${themeNames(registry).join(", ")}`);
+	throw new ContentError(`companion-agents: unknown persona theme "${wanted}"; known themes: ${themeNames(registry).join(", ")}`);
 }
 
 /** The profession rules, verbatim. */
@@ -69,7 +69,7 @@ export function professionText(contentDir: string, profession: string): string {
 	try {
 		return readFileSync(file, "utf8").trim();
 	} catch (error) {
-		throw new ContentError(`persona-agents: cannot read ${file}: ${(error as Error).message}`);
+		throw new ContentError(`companion-agents: cannot read ${file}: ${(error as Error).message}`);
 	}
 }
 
@@ -82,7 +82,7 @@ export function personaText(contentDir: string, registry: Registry, theme: strin
 	try {
 		return readFileSync(file, "utf8").trim();
 	} catch (error) {
-		throw new ContentError(`persona-agents: cannot read ${file}: ${(error as Error).message}`);
+		throw new ContentError(`companion-agents: cannot read ${file}: ${(error as Error).message}`);
 	}
 }
 

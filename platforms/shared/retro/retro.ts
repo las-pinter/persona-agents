@@ -73,7 +73,7 @@ export function summarizeSession(input: FactsInput): string {
 	];
 	const compactions = input.entries.filter((entry) => entry.type === "compaction").length;
 	const reviews = input.entries
-		.filter((entry) => entry.customType === "persona-agents:review")
+		.filter((entry) => entry.customType === "companion-agents:review")
 		.map((entry) => (entry.data as { verdict?: unknown } | undefined)?.verdict)
 		.filter((verdict): verdict is string => typeof verdict === "string");
 

@@ -27,7 +27,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const gateScript = path.join(repoRoot, "platforms", "kiro", "scripts", "gate.ts");
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-gate-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-gate-"));
 	try {
 		fn(root);
 	} finally {
@@ -344,7 +344,7 @@ describe("kiro doctrine: the hook output", () => {
 	});
 
 	test("PreToolUse blocks a deny with exit 2 and passes everything else", () => {
-		assert.deepEqual(preToolResult({ verdict: "deny", reason: "read-only" }), { exitCode: 2, stderr: "persona-agents doctrine: read-only\n" });
+		assert.deepEqual(preToolResult({ verdict: "deny", reason: "read-only" }), { exitCode: 2, stderr: "companion-agents doctrine: read-only\n" });
 		assert.deepEqual(preToolResult({ verdict: "allow", reason: "" }), { exitCode: 0, stderr: "" });
 		assert.deepEqual(preToolResult({ verdict: "ask", reason: "" }), { exitCode: 0, stderr: "" });
 	});

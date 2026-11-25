@@ -152,7 +152,7 @@ export function reloadFiles(notesDir: string, sessionId: string, written: string
 /** The focus the summary must follow. Passed to Pi's own summarizer. */
 export function summaryInstructions(manifest: Pick<Manifest, "taskNotes">): string {
 	const lines = [
-		"Compaction instructions from the persona-agents companion:",
+		"Compaction instructions from the companion-agents companion:",
 		"- Keep the current task, the current plan step, the open decisions, and the owner's latest request word for word where short.",
 		"- Do not paraphrase skill text or project rules; they are reloaded after compaction.",
 	];

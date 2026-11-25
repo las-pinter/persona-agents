@@ -1,18 +1,18 @@
 /**
  * Agent profiles for the Pi adapter.
  *
- * One profile per agent under the `persona-agents:` namespace. The profile
+ * One profile per agent under the `companion-agents:` namespace. The profile
  * decides what the agent is allowed to do, and which tools it gets; the persona
  * decides only how it sounds. A Pi identity is therefore data, not code: adding
  * an agent means adding an entry here and, for a persona-bearing agent, a
  * persona file under content/personas/.
  *
- * `pi --agent persona-agents:companion` resolves at session start. An unknown
+ * `pi --agent companion-agents:companion` resolves at session start. An unknown
  * value refuses the session instead of guessing a profile: a silently wrong
  * profile is worse than a startup error.
  */
 
-export const AGENT_PREFIX = "persona-agents:";
+export const AGENT_PREFIX = "companion-agents:";
 /** The theme used when neither the flag nor the settings name one. */
 export { DEFAULT_THEME } from "../../shared/context/context.ts";
 
@@ -96,5 +96,5 @@ export function profileIds(): string[] {
 export function resolveProfile(value: string | undefined | null): Profile | null {
 	const profile = profileOf(value);
 	if (profile || typeof value !== "string" || !isAgentId(value)) return profile;
-	throw new Error(`persona-agents: unknown agent "${value}"; known agents: ${profileIds().join(", ")}`);
+	throw new Error(`companion-agents: unknown agent "${value}"; known agents: ${profileIds().join(", ")}`);
 }

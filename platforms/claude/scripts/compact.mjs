@@ -19,7 +19,7 @@
 //   <session>.summaries.md   every compact summary of the session
 //   metrics.ndjson           one line per compaction, for tuning the threshold
 //
-// Only the companion (agent_type persona-agents:companion) gets any effect.
+// Only the companion (agent_type companion-agents:companion) gets any effect.
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -32,13 +32,13 @@ import { readTranscript, toEntries } from "./transcript.ts";
 
 export { readTranscript, summaryInstructions };
 
-const AGENT_TYPE = "persona-agents:companion";
+const AGENT_TYPE = "companion-agents:companion";
 /** Claude Code reloads a skill through the Skill tool, not by reading its file. */
 const SKILL_STEP = "2. Re-invoke these skills with the Skill tool (an unchanged skill costs only a short note):";
 
 /** The state folder for compaction files. */
 export function stateDir(env = process.env) {
-	return join(env.CLAUDE_PLUGIN_DATA || join(tmpdir(), "persona-agents"), "compact");
+	return join(env.CLAUDE_PLUGIN_DATA || join(tmpdir(), "companion-agents"), "compact");
 }
 
 /** The text of an entry's message content, string or blocks. */
@@ -54,7 +54,7 @@ function entryText(entry) {
 
 /**
  * The skills a session invoked, in order: a `Skill` tool call, or a typed
- * `/persona-agents:<skill>` command, which Claude Code records as user text
+ * `/companion-agents:<skill>` command, which Claude Code records as user text
  * with a `<command-name>` marker instead of a tool call.
  */
 function skillNames(entries) {
@@ -65,8 +65,8 @@ function skillNames(entries) {
 				if (block?.type === "tool_use" && block.name === "Skill" && typeof block.input?.skill === "string") names.push(block.input.skill);
 			}
 		}
-		for (const match of entryText(entry).matchAll(/<command-name>\/persona-agents:([a-z0-9-]+)<\/command-name>/g)) {
-			names.push(`persona-agents:${match[1]}`);
+		for (const match of entryText(entry).matchAll(/<command-name>\/companion-agents:([a-z0-9-]+)<\/command-name>/g)) {
+			names.push(`companion-agents:${match[1]}`);
 		}
 	}
 	return names;
@@ -135,7 +135,7 @@ function run(mode, input) {
 		writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 		if (manifest.scan.entries > 0 && manifest.scan.toolUses === 0) {
 			process.stderr.write(
-				`persona-agents: the transcript holds ${manifest.scan.entries} entries but no tool calls; the reload list may be incomplete\n`,
+				`companion-agents: the transcript holds ${manifest.scan.entries} entries but no tool calls; the reload list may be incomplete\n`,
 			);
 		}
 		process.stdout.write(summaryInstructions(manifest));

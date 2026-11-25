@@ -5,7 +5,7 @@
  * Kiro records a sub-agent run as `sub_agent_start` / `sub_agent_complete`
  * payloads in the parent session, not as a tool call, and it fires no
  * PostToolUse hook for it. The Stop hook runs after the turn, reads the parent
- * session, and pairs each pa-reviewer run with its brief:
+ * session, and pairs each ca-reviewer run with its brief:
  *
  *   - the change key is the `Change key: <16 hex>` line in the brief the
  *     companion passed to the reviewer;
@@ -39,7 +39,7 @@ export interface RecordedReview {
 export const keyOfPrompt = changeKeyIn;
 
 /**
- * Record every pa-reviewer run in a session that has not been recorded yet.
+ * Record every ca-reviewer run in a session that has not been recorded yet.
  *
  * The run carries the key from its prompt, or, when the model passed only part
  * of the printed brief, from the brief text in the transcript before the run.

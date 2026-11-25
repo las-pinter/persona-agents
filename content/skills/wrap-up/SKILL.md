@@ -6,7 +6,7 @@ description: Write or rewrite this session's log, and close or update the task n
 ## Platform branch
 
 If your system context says `Running in Kiro CLI`, read
-`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the session-log path and
+`{{COMPANION_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md` for the session-log path and
 the write step. Then continue with steps 3 to 5 and the entry format below.
 
 # Wrap-Up

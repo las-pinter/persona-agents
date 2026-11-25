@@ -1,9 +1,9 @@
-# persona-agents 🎭
+# companion-agents 🎭
 
 > **"Your AI agents, but make it fun."**
 
 Tired of AI agents with all the personality of a loading spinner? Same.
-`persona-agents` gives you one hands-on **companion** — an agent that plans,
+`companion-agents` gives you one hands-on **companion** — an agent that plans,
 builds, tests, and commits with you — in the voice of a character you pick.
 It runs on three harnesses from one shared content tree:
 [Claude Code](https://claude.com/claude-code), [Pi](https://pi.dev), and
@@ -20,7 +20,7 @@ himself. You're welcome.*
 
 ---
 
-[![License](https://img.shields.io/github/license/las-pinter/persona-agents)](LICENSE)
+[![License](https://img.shields.io/github/license/las-pinter/companion-agents)](LICENSE)
 
 ## Why one companion?
 
@@ -46,16 +46,16 @@ Pick one harness or several; each installs on its own.
 ## Install on Claude Code
 
 ```bash
-claude plugin marketplace add las-pinter/persona-agents
-claude plugin install persona-agents@persona-agents --config theme=goblin
+claude plugin marketplace add las-pinter/companion-agents
+claude plugin install companion-agents@companion-agents --config theme=goblin
 ```
 
 Then merge the recommended settings into your user `settings.json`:
 
 ```bash
-git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents  # or git pull in an existing clone
-~/persona-agents/install.sh --claude --dry-run   # preview
-~/persona-agents/install.sh --claude
+git clone https://github.com/las-pinter/companion-agents.git ~/companion-agents  # or git pull in an existing clone
+~/companion-agents/install.sh --claude --dry-run   # preview
+~/companion-agents/install.sh --claude
 ```
 
 > **Review `install.sh` before you run it.** It changes
@@ -74,14 +74,14 @@ does three things:
 Start the companion:
 
 ```bash
-claude --agent persona-agents:companion
+claude --agent companion-agents:companion
 ```
 
 Change the theme any time in `/config` (**Persona theme**). A new session or
 `/clear` picks it up.
 
-Update with `claude plugin marketplace update persona-agents`, then
-`claude plugin update persona-agents@persona-agents`, and restart. When a
+Update with `claude plugin marketplace update companion-agents`, then
+`claude plugin update companion-agents@companion-agents`, and restart. When a
 release changes the settings snippet or `install.sh`, also run `git pull` and
 `./install.sh --claude` in the clone.
 
@@ -92,8 +92,8 @@ The same content runs on [Pi](https://pi.dev) through the adapter in
 extension carries its own permission gate.
 
 ```bash
-pi install https://github.com/las-pinter/persona-agents
-pi --agent persona-agents:companion --persona goblin
+pi install https://github.com/las-pinter/companion-agents
+pi --agent companion-agents:companion --persona goblin
 ```
 
 - `--agent` selects the agent. Without it, Pi adds no prompt sections and no
@@ -105,8 +105,8 @@ pi --agent persona-agents:companion --persona goblin
   appends a rule to the policy file. When Pi asks, the dialog can add the rule
   for you: this session, this project, or every project.
 
-Policy lives in `~/.pi/agent/persona-agents/policy.json`, and per repository in
-`.pi/persona-agents/policy.json` (read only when Pi trusts the project). A
+Policy lives in `~/.pi/agent/companion-agents/policy.json`, and per repository in
+`.pi/companion-agents/policy.json` (read only when Pi trusts the project). A
 built-in floor (credentials, destructive
 commands, writes to git hooks and the gate's own files) cannot be loosened from
 either file.
@@ -122,18 +122,18 @@ copies a self-contained payload, so a moved or deleted clone does not break the
 install.
 
 ```bash
-git clone https://github.com/las-pinter/persona-agents.git ~/persona-agents  # or git pull in an existing clone
-~/persona-agents/install.sh --kiro --dry-run   # preview
-~/persona-agents/install.sh --kiro --theme goblin
-kiro-cli --agent pa-companion
+git clone https://github.com/las-pinter/companion-agents.git ~/companion-agents  # or git pull in an existing clone
+~/companion-agents/install.sh --kiro --dry-run   # preview
+~/companion-agents/install.sh --kiro --theme goblin
+kiro-cli --agent ca-companion
 ```
 
 - `--theme <name>` picks the persona theme; a first install defaults to
   `goblin`, and a rerun without the flag keeps the current theme. The next
   session picks it up.
-- The installer writes `~/.kiro/persona-agents/`, the skills in
-  `~/.kiro/skills/`, and the agents `pa-companion`, `pa-reviewer`, and
-  `pa-writer`. It never changes `chat.defaultAgent`; it warns when that setting
+- The installer writes `~/.kiro/companion-agents/`, the skills in
+  `~/.kiro/skills/`, and the agents `ca-companion`, `ca-reviewer`, and
+  `ca-writer`. It never changes `chat.defaultAgent`; it warns when that setting
   names an agent that does not exist.
 - A skill folder it does not own stops the install; `--force` backs it up and
   replaces it.
@@ -162,7 +162,7 @@ gets none, so run the wrap-up skill there. The
   changes there first, then in the code.
 - **Review.** Before a non-trivial commit, the companion runs a read-only
   reviewer in a separate context: the review skill on Claude Code
-  (`/persona-agents:review`) and Kiro CLI, `/review` or the `review` tool on
+  (`/companion-agents:review`) and Kiro CLI, `/review` or the `review` tool on
   Pi. The reviewer cannot edit files or run shell writes. On Pi and Kiro CLI, a
   commit of an unreviewed non-trivial change asks first; Claude Code has no
   such commit gate.
@@ -173,13 +173,13 @@ gets none, so run the wrap-up skill there. The
   companion reloads them before it continues — so the plan, the skills, and the
   key documents survive.
 - **Wrap-up.** On Pi `/skill:wrap-up`, on Claude Code
-  `/persona-agents:wrap-up`, on Kiro CLI `/wrap-up`; each writes this session's
+  `/companion-agents:wrap-up`, on Kiro CLI `/wrap-up`; each writes this session's
   session log.
   Each session writes its own file, so parallel sessions never collide. If you
   exit without a wrap-up, a background writer creates a shorter entry for you
   (on Pi only when you quit, not on `/new` or `/resume`; on Kiro CLI only after
   an interactive exit).
-- **Retro.** `/retro` on Pi and Kiro CLI, `/persona-agents:retro` on Claude
+- **Retro.** `/retro` on Pi and Kiro CLI, `/companion-agents:retro` on Claude
   Code: a blameless review of the session with findings and actions. It writes
   no files.
 
@@ -208,15 +208,15 @@ merge those by hand.
 
 ## Uninstall
 
-- **Claude Code:** `claude plugin uninstall persona-agents@persona-agents`.
+- **Claude Code:** `claude plugin uninstall companion-agents@companion-agents`.
   `install.sh` left a `settings.json.bak-<timestamp>` next to your settings;
   remove the merged entries by hand or restore that backup.
-- **Pi:** `pi remove https://github.com/las-pinter/persona-agents`. The policy
-  files and the decisions log stay in `~/.pi/agent/persona-agents/` until you
+- **Pi:** `pi remove https://github.com/las-pinter/companion-agents`. The policy
+  files and the decisions log stay in `~/.pi/agent/companion-agents/` until you
   delete them.
-- **Kiro CLI:** in `$KIRO_HOME` (default `~/.kiro`), delete `persona-agents/`,
-  the `pa-*` agent files in `agents/`, and the skill folders in `skills/` that
-  hold a `.persona-agents.json` marker. The installer's `.bak-<timestamp>`
+- **Kiro CLI:** in `$KIRO_HOME` (default `~/.kiro`), delete `companion-agents/`,
+  the `ca-*` agent files in `agents/`, and the skill folders in `skills/` that
+  hold a `.companion-agents.json` marker. The installer's `.bak-<timestamp>`
   copies can go too.
 
 Your notes and session logs in `~/agent-notes/` are yours; no uninstall touches

@@ -90,7 +90,7 @@ describe("pi context: the content tree", () => {
 
 describe("pi notes: the startup read list", () => {
 	function notesFixture(): { root: string; notesDir: string; cleanup: () => void } {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-notes-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-notes-"));
 		const notesDir = path.join(root, "agent-notes", "project-notes", "common");
 		fs.mkdirSync(path.join(notesDir, "rules"), { recursive: true });
 		fs.mkdirSync(path.join(notesDir, "tasks"), { recursive: true });
@@ -160,7 +160,7 @@ describe("pi notes: the startup read list", () => {
 	});
 
 	test("a missing notes folder still gives a usable list", () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-empty-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-empty-"));
 		try {
 			const notesDir = path.join(root, "agent-notes", "project-notes", "common");
 			const text = startupContext(notesDir, "common");
@@ -174,7 +174,7 @@ describe("pi notes: the startup read list", () => {
 
 describe("pi session log: one entry per session", () => {
 	test("the last three day folders come back oldest first", () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-session-log-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-session-log-"));
 		try {
 			const notesDir = path.join(root, "notes");
 			for (const day of ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]) {
@@ -191,7 +191,7 @@ describe("pi session log: one entry per session", () => {
 	});
 
 	test("an entry path is reused for today and yesterday, and a session id is made safe", () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-entry-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-entry-"));
 		try {
 			const notesDir = path.join(root, "notes");
 			const now = new Date(2026, 0, 2, 15, 30);

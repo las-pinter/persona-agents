@@ -139,7 +139,7 @@ function neutralTool(name: string): string {
 }
 
 /** The reviewer name whose completion becomes a review entry. */
-export const DEFAULT_REVIEWER = "pa-reviewer";
+export const DEFAULT_REVIEWER = "ca-reviewer";
 
 /** A change key line: the review brief's metadata for the commit gate. */
 export const CHANGE_KEY = /Change key:\s*([0-9a-f]{16})\b/;
@@ -160,7 +160,7 @@ export function changeKeyIn(text: string): string {
  * A `load_resource` call with `skill::<name>` becomes a read of
  * `<skillsDir>/<name>/SKILL.md`, which is the path the shared compaction
  * manifest scans for skill names. A reviewer sub-agent completion becomes a
- * `persona-agents:review` custom entry with the parsed verdict, so the shared
+ * `companion-agents:review` custom entry with the parsed verdict, so the shared
  * retro counts it without a second parser.
  */
 export function mapPayloads(
@@ -269,7 +269,7 @@ export function mapPayloads(
 				if (verdict) {
 					entries.push({
 						type: "custom",
-						customType: "persona-agents:review",
+						customType: "companion-agents:review",
 						data: { verdict },
 					});
 				}

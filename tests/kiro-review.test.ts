@@ -27,7 +27,7 @@ const recordScript = path.join(repoRoot, "platforms", "kiro", "scripts", "review
 const sessionId = "sess_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-review-"));
 	try {
 		fn(root);
 	} finally {
@@ -69,7 +69,7 @@ function notesWithStudy(root: string): string {
 
 describe("kiro review: the brief", () => {
 	test("the study in progress fills the task and the decisions file", async () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-review-"));
 		try {
 			const cwd = repoWithChange(root);
 			const notes = notesWithStudy(root);
@@ -90,7 +90,7 @@ describe("kiro review: the brief", () => {
 	});
 
 	test("a named field is kept, none included", async () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-review-"));
 		try {
 			const cwd = repoWithChange(root);
 			const notes = notesWithStudy(root);
@@ -106,7 +106,7 @@ describe("kiro review: the brief", () => {
 	});
 
 	test("author text that is not a scope is cut and named back", async () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-review-"));
 		try {
 			const cwd = repoWithChange(root);
 			const notes = notesWithStudy(root);
@@ -119,7 +119,7 @@ describe("kiro review: the brief", () => {
 	});
 
 	test("with no study, an empty scope names no task", async () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-review-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-review-"));
 		try {
 			const cwd = repoWithChange(root);
 			const brief = await buildReviewBrief({}, { cwd, notesDir: path.join(root, "empty-notes") });
@@ -318,7 +318,7 @@ describe("kiro review: the verdict recorder", () => {
 
 	test("an approved reviewer run is recorded under its key", () => {
 		withTemp((root) => {
-			const kiro = store(root, [{ agent: "pa-reviewer", key: "0123456789abcdef", response: "## Summary\nFine.\n\n## Verdict\nApprove - good." }]);
+			const kiro = store(root, [{ agent: "ca-reviewer", key: "0123456789abcdef", response: "## Summary\nFine.\n\n## Verdict\nApprove - good." }]);
 			const stateDir = path.join(root, "state");
 			const recorded = recordSessionReviews(kiro, sessionId, stateDir);
 			assert.equal(recorded.length, 1);
@@ -331,8 +331,8 @@ describe("kiro review: the verdict recorder", () => {
 	test("the newest verdict for a key survives a second scan", () => {
 		withTemp((root) => {
 			const kiro = store(root, [
-				{ agent: "pa-reviewer", key: "5555555555555555", response: "## Verdict\nApprove - the first run." },
-				{ agent: "pa-reviewer", key: "5555555555555555", response: "## Verdict\nRequest Changes - the second run." },
+				{ agent: "ca-reviewer", key: "5555555555555555", response: "## Verdict\nApprove - the first run." },
+				{ agent: "ca-reviewer", key: "5555555555555555", response: "## Verdict\nRequest Changes - the second run." },
 			]);
 			const stateDir = path.join(root, "state");
 			assert.equal(recordSessionReviews(kiro, sessionId, stateDir).length, 2);
@@ -350,8 +350,8 @@ describe("kiro review: the verdict recorder", () => {
 			const payloads = [
 				{ type: "tool_result", content: "Output:\nScope: the uncommitted change in this repository\n\nChange key: 6666666666666666\n" },
 				{ type: "tool_result", content: "Output:\nScope: main...HEAD\n\nReview one change.\n" },
-				{ type: "sub_agent_start", subSessionId: "sub-x", subAgentName: "pa-reviewer", prompt: "Review one change." },
-				{ type: "sub_agent_complete", subSessionId: "sub-x", subAgentName: "pa-reviewer", response: "## Verdict\nApprove - nope.", status: "success" },
+				{ type: "sub_agent_start", subSessionId: "sub-x", subAgentName: "ca-reviewer", prompt: "Review one change." },
+				{ type: "sub_agent_complete", subSessionId: "sub-x", subAgentName: "ca-reviewer", response: "## Verdict\nApprove - nope.", status: "success" },
 			];
 			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${payloads.map((payload) => JSON.stringify({ timestamp: "2026-11-20T00:00:00Z", payload })).join("\n")}\n`);
 			const stateDir = path.join(root, "state");
@@ -363,10 +363,10 @@ describe("kiro review: the verdict recorder", () => {
 	test("a request for changes is recorded, and a non-reviewer or a keyless run is not", () => {
 		withTemp((root) => {
 			const kiro = store(root, [
-				{ agent: "pa-reviewer", key: "1111111111111111", response: "## Verdict\nRequest Changes - fix it." },
+				{ agent: "ca-reviewer", key: "1111111111111111", response: "## Verdict\nRequest Changes - fix it." },
 				{ agent: "someone-else", key: "2222222222222222", response: "## Verdict\nApprove - nope." },
-				{ agent: "pa-reviewer", response: "## Verdict\nApprove - no key." },
-				{ agent: "pa-reviewer", key: "3333333333333333", response: "## Verdict\nApprove - failed.", status: "error" },
+				{ agent: "ca-reviewer", response: "## Verdict\nApprove - no key." },
+				{ agent: "ca-reviewer", key: "3333333333333333", response: "## Verdict\nApprove - failed.", status: "error" },
 			]);
 			const stateDir = path.join(root, "state");
 			const recorded = recordSessionReviews(kiro, sessionId, stateDir);
@@ -380,7 +380,7 @@ describe("kiro review: the verdict recorder", () => {
 	test("a truncated prompt still records the key from the brief in the transcript", () => {
 		withTemp((root) => {
 			const kiro = store(root, [
-				{ agent: "pa-reviewer", briefKey: "4444444444444444", response: "## Verdict\nApprove - the brief was in the transcript." },
+				{ agent: "ca-reviewer", briefKey: "4444444444444444", response: "## Verdict\nApprove - the brief was in the transcript." },
 			]);
 			const stateDir = path.join(root, "state");
 			const recorded = recordSessionReviews(kiro, sessionId, stateDir);
@@ -398,7 +398,7 @@ describe("kiro review: the verdict recorder", () => {
 
 	test("the CLI writes the record from the Stop event", () => {
 		withTemp((root) => {
-			const kiro = store(root, [{ agent: "pa-reviewer", key: "abcdefabcdefabcd", response: "## Verdict\nApprove - good." }]);
+			const kiro = store(root, [{ agent: "ca-reviewer", key: "abcdefabcdefabcd", response: "## Verdict\nApprove - good." }]);
 			const run = spawnSync(
 				process.execPath,
 				["--experimental-strip-types", "--no-warnings", recordScript, `--home=${root}`, `--kiro-home=${kiro}`],
@@ -406,7 +406,7 @@ describe("kiro review: the verdict recorder", () => {
 			);
 			assert.equal(run.status, 0, run.stderr);
 			assert.equal(run.stdout, "");
-			assert.equal(reviewFor(path.join(kiro, "persona-agents", "state"), "abcdefabcdefabcd")?.verdict, "Approve");
+			assert.equal(reviewFor(path.join(kiro, "companion-agents", "state"), "abcdefabcdefabcd")?.verdict, "Approve");
 		});
 	});
 });
@@ -418,6 +418,6 @@ describe("kiro review: the skill branch", () => {
 		assert.match(skill, /references\/kiro\.md/);
 		const reference = fs.readFileSync(path.join(repoRoot, "content", "skills", "review", "references", "kiro.md"), "utf8");
 		assert.match(reference, /review\.ts/);
-		assert.match(reference, /pa-reviewer/);
+		assert.match(reference, /ca-reviewer/);
 	});
 });

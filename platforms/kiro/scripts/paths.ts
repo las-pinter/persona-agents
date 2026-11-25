@@ -1,9 +1,9 @@
 /**
  * The Kiro adapter's paths.
  *
- *   <kiro home>/persona-agents/   the installed payload (this adapter and the
+ *   <kiro home>/companion-agents/   the installed payload (this adapter and the
  *                                 shared modules, plus a copy of content/)
- *   <kiro home>/persona-agents/config.json   the selected theme
+ *   <kiro home>/companion-agents/config.json   the selected theme
  *   <kiro home>/agents/           the agent profiles the installer writes
  *   <kiro home>/skills/           the skills the installer copies
  *   <kiro home>/sessions/         the V3 session store
@@ -42,7 +42,7 @@ export function kiroHome(env: NodeJS.ProcessEnv = process.env, home: string = ho
 }
 
 /** The installed payload folder. */
-export const payloadDir = (home: string): string => join(home, "persona-agents");
+export const payloadDir = (home: string): string => join(home, "companion-agents");
 
 /** The theme config file. */
 export const configFile = (home: string): string => join(payloadDir(home), "config.json");

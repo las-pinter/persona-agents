@@ -14,12 +14,12 @@ import { inProject, managedOption, realHome, settingsOption, userConfigDir } fro
 
 /** A settings file body that sets one sample option, the way /config writes a plugin option. */
 function optionSettings(value: string): string {
-	return JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { sample_option: value } } } });
+	return JSON.stringify({ pluginConfigs: { "companion-agents@companion-agents": { options: { sample_option: value } } } });
 }
 
 describe("plugin-options: explicit-path readers", () => {
 	const withTmp = (fn: (tmp: string) => void) => {
-		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-options-"));
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-options-"));
 		try {
 			fn(tmp);
 		} finally {
@@ -36,7 +36,7 @@ describe("plugin-options: explicit-path readers", () => {
 			assert.equal(settingsOption(file, "theme"), "");
 			fs.writeFileSync(file, "{ not json");
 			assert.equal(settingsOption(file, "sample_option"), "");
-			fs.writeFileSync(file, JSON.stringify({ pluginConfigs: { "persona-agents@persona-agents": { options: { x: 1 } } } }));
+			fs.writeFileSync(file, JSON.stringify({ pluginConfigs: { "companion-agents@companion-agents": { options: { x: 1 } } } }));
 			assert.equal(settingsOption(file, "x"), "");
 		});
 	});

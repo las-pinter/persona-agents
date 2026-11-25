@@ -323,7 +323,7 @@ describe("pi review: the scope text", () => {
 
 describe("pi review: the study a brief names", () => {
 	const ONE = [
-		"# Studies — persona-agents",
+		"# Studies — companion-agents",
 		"",
 		"| Study | Stage | Updated | Path |",
 		"|-------|-------|---------|------|",

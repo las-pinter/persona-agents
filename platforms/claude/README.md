@@ -16,7 +16,7 @@ marketplace (`.claude-plugin/marketplace.json`). The plugin copies no content.
     `content/professions/reviewer.md`, the one home for the reviewer rules and
     output format, and it has no Edit, Write, NotebookEdit, or Agent tool. The
     `review` skill (`content/skills/review/`, `context: fork`,
-    `agent: persona-agents:reviewer`) starts it as a background subagent: the
+    `agent: companion-agents:reviewer`) starts it as a background subagent: the
     invoking turn does not block, the run shows a subagent row, and it can be
     stopped. The companion commits only after the result. Its platform note
     (`scripts/context.mjs`) adds the stall guard: a background timer started
@@ -40,7 +40,7 @@ is unchanged.
 |-------|--------|-----|
 | SessionStart (all) | `context.mjs profession`, `context.mjs persona`, `context.mjs session` | The companion profession, the theme persona, and the session id, also after a compaction and on resume. Separate hooks, because Claude Code caps each hook string at 10,000 characters. |
 | SessionStart (startup, clear) | `startup.mjs` | The read list: project rules and summary, the last three session-log days, open task notes, unfinished studies. Paths only. |
-| PreCompact | `compact.mjs pre` | Reads the transcript for the invoked skills (a `Skill` tool call or a typed `/persona-agents:<skill>` command) and the reference documents; finds the active task notes file by the session id on its `Sessions` line, then the last file written under `tasks/`, then the only open notes file; saves a reload manifest; prints the summary instructions; warns once when a non-empty transcript yields no tool calls. |
+| PreCompact | `compact.mjs pre` | Reads the transcript for the invoked skills (a `Skill` tool call or a typed `/companion-agents:<skill>` command) and the reference documents; finds the active task notes file by the session id on its `Sessions` line, then the last file written under `tasks/`, then the only open notes file; saves a reload manifest; prints the summary instructions; warns once when a non-empty transcript yields no tool calls. |
 | PostCompact | `compact.mjs post` | Keeps the summary for the session-log writer, appends a metrics line with the scan counts, and logs the compaction in the task notes. |
 | SessionStart (compact) | `compact.mjs reload` | Sends the reload list. The profession requires the companion to work through it. |
 | SessionEnd | `session-log-end.mjs hook` | When the session has no session log, starts a detached writer (a small headless model run with no tools) and returns at once. |

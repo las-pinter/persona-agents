@@ -1,4 +1,4 @@
-// plugin-options — read a persona-agents userConfig option live, at hook run time.
+// plugin-options — read a companion-agents userConfig option live, at hook run time.
 //
 // Claude Code sets CLAUDE_PLUGIN_OPTION_<NAME> once at start, so a change in
 // /config would need a restart. The hooks read the live settings files first:
@@ -30,7 +30,7 @@ import { homedir, userInfo } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 // Another marketplace name gives another key, so the lookup misses it and falls back to the env var.
-const PLUGIN_ID = "persona-agents@persona-agents";
+const PLUGIN_ID = "companion-agents@companion-agents";
 const MANAGED_SETTINGS = {
 	linux: "/etc/claude-code/managed-settings.json",
 	darwin: "/Library/Application Support/ClaudeCode/managed-settings.json",

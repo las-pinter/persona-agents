@@ -43,7 +43,7 @@ const text = (role: string, value: string): EntryLike => ({ type: "message", mes
 const compaction = (summary: string): EntryLike => ({ type: "compaction", summary });
 
 function notesTree(): { root: string; notesDir: string; taskNotes: string; cleanup: () => void } {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-net-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-net-"));
 	const notesDir = path.join(root, "agent-notes", "project-notes", "demo");
 	const taskNotes = path.join(notesDir, "tasks", "2026-01-01-gate.md");
 	fs.mkdirSync(path.dirname(taskNotes), { recursive: true });

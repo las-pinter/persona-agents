@@ -25,7 +25,7 @@ const contentDir = path.join(repoRoot, "content");
 const script = (name: string): string => path.join(repoRoot, "platforms", "kiro", "scripts", name);
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-context-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-context-"));
 	try {
 		fn(root);
 	} finally {
@@ -47,12 +47,12 @@ describe("kiro paths: the global folder and the theme", () => {
 	test("the theme comes from config.json, with goblin as the fallback", () => {
 		withTemp((root) => {
 			assert.equal(readTheme(root), "goblin");
-			fs.mkdirSync(path.join(root, "persona-agents"), { recursive: true });
-			fs.writeFileSync(path.join(root, "persona-agents", "config.json"), '{"theme":"pub"}');
+			fs.mkdirSync(path.join(root, "companion-agents"), { recursive: true });
+			fs.writeFileSync(path.join(root, "companion-agents", "config.json"), '{"theme":"pub"}');
 			assert.equal(readTheme(root), "pub");
-			fs.writeFileSync(path.join(root, "persona-agents", "config.json"), "not json");
+			fs.writeFileSync(path.join(root, "companion-agents", "config.json"), "not json");
 			assert.equal(readTheme(root), "goblin");
-			fs.writeFileSync(path.join(root, "persona-agents", "config.json"), '{"theme":""}');
+			fs.writeFileSync(path.join(root, "companion-agents", "config.json"), '{"theme":""}');
 			assert.equal(readTheme(root), "goblin");
 		});
 	});
@@ -77,8 +77,8 @@ describe("kiro context: the persona and the platform note", () => {
 
 	test("an unknown theme drops the persona and reports the reason", () => {
 		withTemp((root) => {
-			fs.mkdirSync(path.join(root, "persona-agents"), { recursive: true });
-			fs.writeFileSync(path.join(root, "persona-agents", "config.json"), '{"theme":"nosuch"}');
+			fs.mkdirSync(path.join(root, "companion-agents"), { recursive: true });
+			fs.writeFileSync(path.join(root, "companion-agents", "config.json"), '{"theme":"nosuch"}');
 			const result = contextFor("session", { session_id: "sess_1" }, { contentDir, home: root, kiroHome: root });
 			assert.ok(result);
 			assert.match(result.text, /Running in Kiro CLI/);

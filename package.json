@@ -1,6 +1,6 @@
 {
-  "name": "persona-agents",
-  "version": "5.2.0",
+  "name": "companion-agents",
+  "version": "6.0.0",
   "description": "A persona companion agent with skills, project notes, and session logs, for Claude Code, Pi, and Kiro CLI",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   "scripts": {
     "lint": "shellcheck install.sh",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test --test-reporter=dot --test-reporter-destination=stdout --test-reporter=spec --test-reporter-destination=/tmp/persona-agents-test.log \"tests/*.test.ts\""
+    "test": "node --experimental-strip-types --test --test-reporter=dot --test-reporter-destination=stdout --test-reporter=spec --test-reporter-destination=/tmp/companion-agents-test.log \"tests/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "^22",

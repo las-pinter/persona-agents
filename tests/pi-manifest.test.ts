@@ -32,7 +32,7 @@ function userText(text: string): EntryLike {
 
 /** A project notes tree with rules, a summary, one task notes file, and a study. */
 function fixture(): { root: string; notesDir: string; taskNotes: string; study: string; cleanup: () => void } {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-manifest-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-manifest-"));
 	const notesDir = path.join(root, "agent-notes", "project-notes", "demo");
 	const study = path.join(notesDir, "studies", "live", "study.md");
 	const taskNotes = path.join(notesDir, "tasks", "2026-01-01-gate.md");
@@ -157,7 +157,7 @@ describe("pi manifest: what to reload", () => {
 	});
 
 	test("a missing notes folder yields no documents and no crash", () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-pi-empty-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-pi-empty-"));
 		try {
 			const manifest = buildManifest([], path.join(root, "nowhere"));
 			assert.deepEqual(manifest.docs, []);

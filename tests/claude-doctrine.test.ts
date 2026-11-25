@@ -1,7 +1,7 @@
 /**
  * The Claude Code doctrine hook (platforms/claude/scripts/doctrine.ts).
  *
- * Per persona-agents agent: a plain git add/commit/pull/merge/rebase/tag is
+ * Per companion-agents agent: a plain git add/commit/pull/merge/rebase/tag is
  * allowed for the companion; git push, gh pr/release/run writes, the ask exceptions,
  * and wrapped forms ask for the companion; every other agent (the reviewer)
  * is denied all of these and every shell write it can see. Agents outside the
@@ -28,13 +28,13 @@ const PROFESSIONS = ["companion", "reviewer"];
 
 /** The verdict for one agent running one shell command ("none" for no decision). */
 function bash(profession: string, command: string): string {
-	return decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.verdict ?? "none";
+	return decide({ agent_type: `companion-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.verdict ?? "none";
 }
 
 /** The verdict with a session cwd and its additional directories. */
 function bashAt(profession: string, command: string, cwd: string, additionalDirs: string[] = []): string {
 	return (
-		decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command }, cwd }, additionalDirs)
+		decide({ agent_type: `companion-agents:${profession}`, tool_name: "Bash", tool_input: { command }, cwd }, additionalDirs)
 			?.verdict ?? "none"
 	);
 }
@@ -506,7 +506,7 @@ describe("doctrine: fail closed", () => {
 	test("the fail-closed scan returns only the gate it matched", () => {
 		const command = "python3 - <<EOF\nmv a b\nEOF";
 		const reason = (profession: string): string =>
-			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
+			decide({ agent_type: `companion-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
 		assert.equal(bash("companion", command), "none");
 		assert.equal(bash("reviewer", command), "deny");
 		assert.match(reason("reviewer"), /read-only/);
@@ -515,7 +515,7 @@ describe("doctrine: fail closed", () => {
 
 	test("an ask explains the approval; a deny names who may run it", () => {
 		const reason = (profession: string, command: string): string =>
-			decide({ agent_type: `persona-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
+			decide({ agent_type: `companion-agents:${profession}`, tool_name: "Bash", tool_input: { command } })?.reason ?? "";
 		assert.match(reason("companion", "git push"), /needs your approval/);
 		assert.match(reason("companion", "git commit --amend"), /without a prompt/);
 		assert.match(reason("companion", "git pull --upload-pack='touch x' origin"), /needs your approval/);
@@ -566,7 +566,7 @@ describe("doctrine: scope", () => {
 	});
 
 	test("other tools are left alone", () => {
-		assert.equal(decide({ agent_type: "persona-agents:reviewer", tool_name: "Read", tool_input: { file_path: "/x" } }), null);
+		assert.equal(decide({ agent_type: "companion-agents:reviewer", tool_name: "Read", tool_input: { file_path: "/x" } }), null);
 	});
 
 	test("shell words drop quotes and keep escapes", () => {
@@ -588,26 +588,26 @@ describe("doctrine: hook wiring", () => {
 
 	test("a hit prints a PreToolUse permission decision", () => {
 		const out = JSON.parse(
-			run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git push" } }),
+			run({ agent_type: "companion-agents:reviewer", tool_name: "Bash", tool_input: { command: "git push" } }),
 		) as { hookSpecificOutput: Record<string, string> };
 		assert.equal(out.hookSpecificOutput.hookEventName, "PreToolUse");
 		assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
-		assert.match(out.hookSpecificOutput.permissionDecisionReason, /persona-agents doctrine \(reviewer\)/);
+		assert.match(out.hookSpecificOutput.permissionDecisionReason, /companion-agents doctrine \(reviewer\)/);
 	});
 
 	test("a plain commit prints an allow for the companion", () => {
 		const out = JSON.parse(
-			run({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command: "git commit -m m" } }),
+			run({ agent_type: "companion-agents:companion", tool_name: "Bash", tool_input: { command: "git commit -m m" } }),
 		) as { hookSpecificOutput: Record<string, string> };
 		assert.equal(out.hookSpecificOutput.permissionDecision, "allow");
 	});
 
 	test("no hit prints nothing", () => {
-		assert.equal(run({ agent_type: "persona-agents:reviewer", tool_name: "Bash", tool_input: { command: "git status" } }), "");
+		assert.equal(run({ agent_type: "companion-agents:reviewer", tool_name: "Bash", tool_input: { command: "git status" } }), "");
 	});
 
 	test("the hook reads the additional directories from the settings", () => {
-		const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-doctrine-"));
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-doctrine-"));
 		try {
 			const project = path.join(root, "project");
 			const config = path.join(root, "config");
@@ -621,7 +621,7 @@ describe("doctrine: hook wiring", () => {
 			fs.writeFileSync(managed, "{}");
 			const env = { CLAUDE_CONFIG_DIR: config, CLAUDE_PROJECT_DIR: project };
 			const args = [`--managed-settings=${managed}`];
-			const input = (command: string) => ({ agent_type: "persona-agents:companion", tool_name: "Bash", tool_input: { command }, cwd: project });
+			const input = (command: string) => ({ agent_type: "companion-agents:companion", tool_name: "Bash", tool_input: { command }, cwd: project });
 			const allowed = JSON.parse(run(input(`cd ${extra} && git commit -m x`), env, args)) as {
 				hookSpecificOutput: Record<string, string>;
 			};

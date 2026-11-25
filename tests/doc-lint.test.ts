@@ -1,5 +1,5 @@
 /**
- * Structural doc-lint for the persona-agents content tree.
+ * Structural doc-lint for the companion-agents content tree.
  *
  * Runs under plain Node (type stripping) with no extra dependencies:
  *   node --experimental-strip-types --test tests/doc-lint.test.ts

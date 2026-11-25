@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — install the persona-agents adapters for Claude Code and Kiro CLI.
+# install.sh — install the companion-agents adapters for Claude Code and Kiro CLI.
 #
 # Usage:
 #   ./install.sh [--claude] [--kiro] [--theme <name>] [--dry-run] [--force]
@@ -12,9 +12,9 @@
 # home folder. The old file is kept as settings.json.bak-<timestamp>. The target
 # is $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json. Needs jq.
 #
-# Kiro CLI: copies a self-contained payload into <kiro home>/persona-agents/,
-# installs the skills into <kiro home>/skills/, and writes pa-companion,
-# pa-reviewer, and pa-writer into <kiro home>/agents/. The kiro home is
+# Kiro CLI: copies a self-contained payload into <kiro home>/companion-agents/,
+# installs the skills into <kiro home>/skills/, and writes ca-companion,
+# ca-reviewer, and ca-writer into <kiro home>/agents/. The kiro home is
 # $KIRO_HOME, else ~/.kiro. Needs kiro-cli 3.4.0 or newer and Node 22.6 or
 # newer.
 #
@@ -39,7 +39,7 @@ KIRO_CLI_ARG="${KIRO_CLI:-kiro-cli}"
 
 usage() {
     cat <<'EOF'
-Install the persona-agents adapters for Claude Code and Kiro CLI.
+Install the companion-agents adapters for Claude Code and Kiro CLI.
 
 Usage:
   ./install.sh [--claude] [--kiro] [--theme <name>] [--dry-run] [--force]
@@ -50,7 +50,7 @@ Usage:
   --theme <name>     Write the Kiro persona theme (default: goblin).
   --dry-run          Print what would change and write nothing.
   --force            Back up and replace a Kiro skill folder not owned by
-                     persona-agents.
+                     companion-agents.
   --kiro-home=<dir>  The Kiro global directory (default: $KIRO_HOME or ~/.kiro).
   --kiro-cli=<path>  The kiro-cli command to check (default: $KIRO_CLI or
                      kiro-cli).
@@ -230,7 +230,7 @@ fi
 if ((DO_CLAUDE)); then
     echo
     echo "Install the plugin, if you have not:"
-    echo "  claude plugin marketplace add las-pinter/persona-agents"
-    echo "  claude plugin install persona-agents@persona-agents"
-    echo "Start the companion: claude --agent persona-agents:companion"
+    echo "  claude plugin marketplace add las-pinter/companion-agents"
+    echo "  claude plugin install companion-agents@companion-agents"
+    echo "Start the companion: claude --agent companion-agents:companion"
 fi

@@ -30,7 +30,7 @@ const compactScript = path.join(repoRoot, "platforms", "kiro", "scripts", "compa
 const sessionId = "sess_12345678-1234-1234-1234-123456789012";
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-compact-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-compact-"));
 	try {
 		fn(root);
 	} finally {
@@ -84,7 +84,7 @@ describe("kiro compaction: the manifest", () => {
 			assert.ok(manifest.docs.includes(path.join(f.notes, "summary.md")));
 			assert.match(instructions, /Compaction instructions/);
 			assert.match(instructions, new RegExp(f.taskNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-			assert.ok(fs.existsSync(manifestFile(path.join(f.kiro, "persona-agents", "state"), sessionId)));
+			assert.ok(fs.existsSync(manifestFile(path.join(f.kiro, "companion-agents", "state"), sessionId)));
 		});
 	});
 
@@ -128,7 +128,7 @@ describe("kiro compaction: the summary and the reload", () => {
 				{ summary: "We were porting Kiro.", summaryPath: "/tmp/summary.md", trigger: "auto", contextUsage: 81.5 },
 				new Date("2026-11-20T10:01:00Z"),
 			);
-			const state = path.join(f.kiro, "persona-agents", "state");
+			const state = path.join(f.kiro, "companion-agents", "state");
 			assert.match(fs.readFileSync(summariesFile(state, sessionId), "utf8"), /We were porting Kiro\./);
 			assert.match(reload, /Read the task notes file first/);
 			assert.match(reload, new RegExp(f.taskNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -147,7 +147,7 @@ describe("kiro compaction: the summary and the reload", () => {
 	test("a PostCompact without a saved manifest rebuilds it from the store", () => {
 		withTemp((root) => {
 			const f = fixture(root);
-			const state = path.join(f.kiro, "persona-agents", "state");
+			const state = path.join(f.kiro, "companion-agents", "state");
 			fs.mkdirSync(path.join(state, "compact"), { recursive: true });
 			const { reload } = finishCompaction(f.kiro, f.cwd, f.home, sessionId, { summary: "s" }, new Date("2026-11-20T10:01:00Z"));
 			assert.match(reload, new RegExp(f.taskNotes.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -163,7 +163,7 @@ describe("kiro compaction: the summary and the reload", () => {
 			fs.writeFileSync(path.join(f.notes, "tasks", "2026-11-19-other.md"), "# Other\n\n- **Status:** open\n");
 			const dir = path.join(f.kiro, "sessions", "hash", sessionId);
 			fs.writeFileSync(path.join(dir, "messages.jsonl"), `${JSON.stringify({ type: "tool_call", toolName: "read_file", args: { path: f.doc } })}\n`);
-			const state = path.join(f.kiro, "persona-agents", "state");
+			const state = path.join(f.kiro, "companion-agents", "state");
 			fs.mkdirSync(path.join(state, "compact"), { recursive: true });
 			const { reload } = finishCompaction(f.kiro, f.cwd, f.home, sessionId, { summary: "s" }, new Date("2026-11-20T10:01:00Z"));
 			assert.ok(reload.includes(notesFile));
