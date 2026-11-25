@@ -23,10 +23,9 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, r
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { DEFAULT_THEME, loadRegistry, resolveTheme, type Registry } from "../shared/context/context.ts";
+import { loadRegistry, resolveTheme, type Registry } from "../shared/context/context.ts";
 import { readTheme, validKiroHome } from "./scripts/paths.ts";
 import { option } from "../shared/argv.ts";
-import { findLegacy, hasLegacyMarker, legacyActions, legacyTheme, legacyWarnings, migrateLegacy, type LegacyInstall } from "./legacy.ts";
 
 /** The minimum Kiro CLI version with PermissionRequest and the compaction hooks. */
 export const MIN_VERSION: [number, number, number] = [3, 4, 0];
@@ -67,8 +66,6 @@ export interface Plan {
 	skills: SkillPlan[];
 	skillNames: string[];
 	warnings: string[];
-	/** What a 5.x install under the old name left behind. */
-	legacy: LegacyInstall;
 }
 
 export interface Preflight {
@@ -126,29 +123,19 @@ export function skillFolders(contentDir: string): string[] {
 /** The status of a skill destination. */
 function skillStatus(dest: string): SkillPlan["status"] {
 	if (!existsSync(dest)) return "none";
-	return isOurs(dest) ? "ours" : "foreign";
-}
-
-/** True when a skill folder carries our marker, or the marker of the old name. */
-function isOurs(dir: string): boolean {
-	return existsSync(join(dir, SKILL_MARKER)) || hasLegacyMarker(dir);
-}
-
-/** The owner's `chat.defaultAgent`, or "" when unset or unreadable. */
-function defaultAgentName(kiroHome: string): string {
-	try {
-		const cli = JSON.parse(readFileSync(join(kiroHome, "settings", "cli.json"), "utf8")) as { "chat.defaultAgent"?: unknown };
-		return typeof cli["chat.defaultAgent"] === "string" ? cli["chat.defaultAgent"] : "";
-	} catch {
-		return "";
-	}
+	return existsSync(join(dest, SKILL_MARKER)) ? "ours" : "foreign";
 }
 
 /** The warning for a default agent that no file and no built-in names. */
 export function defaultAgentWarning(kiroHome: string, installing: readonly string[] = AGENT_NAMES): string {
-	const name = defaultAgentName(kiroHome);
-	if (!name || installing.includes(name) || BUILTIN_AGENTS.has(name) || existsSync(join(kiroHome, "agents", `${name}.json`))) return "";
-	return `chat.defaultAgent is set to "${name}", which no agent file or built-in provides; Kiro will warn at launch`;
+	try {
+		const cli = JSON.parse(readFileSync(join(kiroHome, "settings", "cli.json"), "utf8")) as { "chat.defaultAgent"?: unknown };
+		const name = typeof cli["chat.defaultAgent"] === "string" ? cli["chat.defaultAgent"] : "";
+		if (!name || installing.includes(name) || BUILTIN_AGENTS.has(name) || existsSync(join(kiroHome, "agents", `${name}.json`))) return "";
+		return `chat.defaultAgent is set to "${name}", which no agent file or built-in provides; Kiro will warn at launch`;
+	} catch {
+		return "";
+	}
 }
 
 /** The plan, or the reason the install cannot run. */
@@ -160,15 +147,14 @@ export function preflight(options: InstallOptions): Preflight {
 	} catch (error) {
 		return { plan: null, error: (error as Error).message };
 	}
-	const payload = join(options.kiroHome, "companion-agents");
-	const legacy = findLegacy(options.kiroHome, payload);
-	const wanted = options.theme ?? readTheme(options.kiroHome, legacy.adoptPayload ? legacyTheme(options.kiroHome, DEFAULT_THEME) : DEFAULT_THEME);
+	const wanted = options.theme ?? readTheme(options.kiroHome);
 	let theme: string;
 	try {
 		theme = resolveTheme(registry, wanted);
 	} catch (error) {
 		return { plan: null, error: (error as Error).message };
 	}
+	const payload = join(options.kiroHome, "companion-agents");
 	const skillsRoot = join(options.kiroHome, "skills");
 	const skills = skillFolders(contentDir).map((name) => {
 		const dest = join(skillsRoot, name);
@@ -181,9 +167,9 @@ export function preflight(options: InstallOptions): Preflight {
 			error: `these skill folders are not owned by companion-agents:\n  ${foreign.join("\n  ")}\nMove them, or rerun with --force to back them up and replace them.`,
 		};
 	}
-	const warnings = [defaultAgentWarning(options.kiroHome), ...legacyWarnings(legacy, defaultAgentName(options.kiroHome))].filter((warning) => warning !== "");
+	const warnings = [defaultAgentWarning(options.kiroHome)].filter((warning) => warning !== "");
 	return {
-		plan: { kiroHome: options.kiroHome, payload, theme, skills, skillNames: skills.map((skill) => skill.name), warnings, legacy },
+		plan: { kiroHome: options.kiroHome, payload, theme, skills, skillNames: skills.map((skill) => skill.name), warnings },
 		error: "",
 	};
 }
@@ -351,7 +337,7 @@ function retiredSkills(plan: Plan): string[] {
 	const root = join(plan.kiroHome, "skills");
 	if (!existsSync(root)) return [];
 	const shipped = new Set(plan.skills.map((skill) => basename(skill.dest)));
-	return readdirSync(root).filter((name) => !shipped.has(name) && isOurs(join(root, name)));
+	return readdirSync(root).filter((name) => !shipped.has(name) && existsSync(join(root, name, SKILL_MARKER)));
 }
 
 /** The tool-less session-log writer agent. */
@@ -428,15 +414,11 @@ export function install(options: InstallOptions & { kiroCli?: string }): { ok: b
 	actions.push(`theme: ${plan.theme}`);
 	actions.push(`skills: ${plan.skills.length}`);
 	if (options.dryRun) {
-		actions.push(...legacyActions(plan.legacy, plan.payload));
 		for (const skill of plan.skills) actions.push(`  skill ${skill.name}: ${skill.status === "foreign" ? "back up and replace (--force)" : "install"}`);
 		for (const name of retiredSkills(plan)) actions.push(`  skill ${name}: remove (retired)`);
 		actions.push(`agents: ${AGENT_NAMES.join(", ")}`);
 		return { ok: true, error: "", plan, actions };
 	}
-
-	// 0. A 5.x install under the old name: adopt its payload, drop its agents.
-	actions.push(...migrateLegacy(plan.legacy, plan.payload, stamp));
 
 	// 1. Payload: replace only our three folders; state/ and config.json stay.
 	const payload = plan.payload;
