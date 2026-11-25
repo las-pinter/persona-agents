@@ -10,8 +10,9 @@ description: Decision rules for choosing between Context7, DeepWiki, and Exa bas
 ## Tool Names
 
 This skill names the capability (Context7, DeepWiki, Exa). Use the tool names
-that the session lists, such as `mcp__<server>__<tool>`. The companion-agents
-repository holds a sample server setup in `config/mcp.json.example`.
+that the session lists; each harness names MCP tools its own way. The
+companion-agents repository holds a sample server setup in
+`config/mcp.json.example`.
 
 ## Research Rules
 

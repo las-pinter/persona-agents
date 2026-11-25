@@ -22,7 +22,7 @@ description: Language-agnostic code implementation workflow for features, bugs, 
 Before touching a single line:
 
 - Read project configs (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`) — identify language, framework, test runner, linter.
-- Read convention docs: `AGENTS.md`, `CLAUDE.md`, `README.md`, `.editorconfig`.
+- Read convention docs: `AGENTS.md`, the harness's own instruction files (`CLAUDE.md`, `.kiro/steering/`), `README.md`, `.editorconfig`.
 - The previous green commit is the evidence of the starting state. If the
   previous commit is not green, report it before the first edit. Do not run the
   test suite before the first edit. Run the suite only after a change.

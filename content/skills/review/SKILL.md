@@ -78,7 +78,8 @@ Read it yourself from git, from the scope:
 Build your own picture before you judge:
 
 1. The repository, its branch, and `git log` for the scope.
-2. The project rules: `AGENTS.md`, `CLAUDE.md`, and the conventions they name.
+2. The project rules: `AGENTS.md`, the harness's own instruction files
+   (`CLAUDE.md`, `.kiro/steering/`), and the conventions they name.
 3. The decisions file, when it is not `none`.
 4. Your own risk list, including effects outside the diff: stored data,
    upgrade paths, other platforms, CI, docs.
