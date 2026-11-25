@@ -22,7 +22,7 @@ import {
 import { notesListsSession, pinnedDocs, studyPath } from "../platforms/shared/notes/notes.ts";
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "platforms", "claude", "scripts", "compact.mjs");
-const COMPANION = "persona-agents:companion";
+const COMPANION = "companion-agents:companion";
 
 interface Env {
 	tmp: string;
@@ -34,7 +34,7 @@ interface Env {
 
 /** A temp home, a non-git working folder (project "common"), and a plugin data folder. */
 function withEnv(fn: (env: Env) => void): void {
-	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-compact-")));
+	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-compact-")));
 	try {
 		const home = path.join(tmp, "home");
 		const cwd = path.join(tmp, "work");
@@ -130,10 +130,10 @@ describe("compact: manifest scan", () => {
 		withEnv(({ notes }) => {
 			const typed = {
 				type: "user",
-				message: { content: "<command-message>persona-agents:retro</command-message>\n<command-name>/persona-agents:retro</command-name>" },
+				message: { content: "<command-message>companion-agents:retro</command-message>\n<command-name>/companion-agents:retro</command-name>" },
 			};
-			const manifest = buildManifest([typed, use("Skill", { skill: "persona-agents:study" })], notes);
-			assert.deepEqual(manifest.skills, ["persona-agents:retro", "persona-agents:study"]);
+			const manifest = buildManifest([typed, use("Skill", { skill: "companion-agents:study" })], notes);
+			assert.deepEqual(manifest.skills, ["companion-agents:retro", "companion-agents:study"]);
 		});
 	});
 
@@ -187,7 +187,7 @@ describe("compact: manifest scan", () => {
 
 describe("compact: texts", () => {
 	const scan = { entries: 0, toolUses: 0 };
-	const manifest = { taskNotes: "/n/tasks/2026-01-01-x.md", skills: ["persona-agents:study"], docs: ["/n/summary.md"], scan };
+	const manifest = { taskNotes: "/n/tasks/2026-01-01-x.md", skills: ["companion-agents:study"], docs: ["/n/summary.md"], scan };
 
 	test("the summary instructions carry the task notes path", () => {
 		assert.ok(summaryInstructions(manifest).includes(manifest.taskNotes));
@@ -196,7 +196,7 @@ describe("compact: texts", () => {
 	test("the reload context lists the notes, the skills, and the docs, under the hook cap", () => {
 		const text = reloadContext(manifest);
 		for (const item of [manifest.taskNotes, ...manifest.skills, ...manifest.docs]) assert.ok(text.includes(item), item);
-		const big = { taskNotes: "/n/s.md", skills: Array(12).fill("persona-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`), scan };
+		const big = { taskNotes: "/n/s.md", skills: Array(12).fill("companion-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`), scan };
 		assert.ok(reloadContext(big).length < 10_000);
 	});
 
@@ -239,7 +239,7 @@ describe("compact: hook processes", () => {
 			const notesFile = path.join(env.notes, "tasks", "2026-01-01-task.md");
 			write(notesFile, taskNotesText("none", []));
 			const transcript = path.join(env.tmp, "t.jsonl");
-			const lines = [use("Skill", { skill: "persona-agents:study" }), use("Write", { file_path: notesFile })];
+			const lines = [use("Skill", { skill: "companion-agents:study" }), use("Write", { file_path: notesFile })];
 			write(transcript, lines.map((line) => JSON.stringify(line)).join("\n"));
 
 			const pre = run(env, "pre", { hook_event_name: "PreCompact", trigger: "auto", transcript_path: transcript });
@@ -258,7 +258,7 @@ describe("compact: hook processes", () => {
 			assert.equal(reload.status, 0, reload.stderr);
 			const context = JSON.parse(reload.stdout).hookSpecificOutput.additionalContext as string;
 			assert.ok(context.includes(notesFile));
-			assert.ok(context.includes("persona-agents:study"));
+			assert.ok(context.includes("companion-agents:study"));
 		});
 	});
 

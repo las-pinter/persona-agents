@@ -8,7 +8,7 @@
  *                                   at once; the SessionEnd budget is short.
  *   session-log-end.ts write <payload>  The detached writer: build the prompt, run
  *                                   a small headless model through the
- *                                   `pa-writer` agent, and write the entry if it
+ *                                   `ca-writer` agent, and write the entry if it
  *                                   is still missing.
  *
  * The source text is the task notes the session wrote, the compaction
@@ -34,9 +34,9 @@ import { option } from "../../shared/argv.ts";
 import { safeId } from "./paths.ts";
 
 /** The headless model the writer uses. */
-export const WRITER_MODEL = process.env.PERSONA_AGENTS_WRITER_MODEL || "claude-haiku-4.5";
+export const WRITER_MODEL = process.env.COMPANION_AGENTS_WRITER_MODEL || "claude-haiku-4.5";
 /** The tool-less agent the writer runs as. */
-export const WRITER_AGENT = "pa-writer";
+export const WRITER_AGENT = "ca-writer";
 /** The writer's deadline. */
 export const WRITER_TIMEOUT_MS = 180_000;
 

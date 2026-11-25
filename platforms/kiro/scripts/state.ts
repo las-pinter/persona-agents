@@ -3,7 +3,7 @@
  *
  *   reviews.json       one record per reviewed change, keyed by the change key
  *   decisions.ndjson   one line per gate decision that asked or denied (and
- *                      every allow when PERSONA_AGENTS_DEBUG is set)
+ *                      every allow when COMPANION_AGENTS_DEBUG is set)
  *
  * The review record is what the commit gate reads: a review covers the exact
  * change it reviewed, and an edit after it changes the key. The records are

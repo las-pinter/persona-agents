@@ -17,7 +17,7 @@ function fakeGit(): { git: GitRun; calls: string[][] } {
 
 function withNotes(run: (notesDir: string) => Promise<void>): () => Promise<void> {
 	return async () => {
-		const notesDir = fs.mkdtempSync(path.join(os.tmpdir(), "pa-brief-"));
+		const notesDir = fs.mkdtempSync(path.join(os.tmpdir(), "ca-brief-"));
 		try {
 			await run(notesDir);
 		} finally {

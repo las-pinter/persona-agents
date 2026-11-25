@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { startupContext as sharedStartupContext } from "../../shared/notes/notes.ts";
 import { projectDir, projectName } from "./notes-paths.mjs";
 
-const AGENT_TYPE = "persona-agents:companion";
+const AGENT_TYPE = "companion-agents:companion";
 
 /**
  * The startup context text for a working directory.

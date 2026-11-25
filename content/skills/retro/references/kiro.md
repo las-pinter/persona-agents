@@ -6,7 +6,7 @@ The session id is in your system context, on the line `Session id: <id>`.
 Run this with the shell tool, from the repository root:
 
 ```sh
-node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/retro.ts --session=<id>
+node --experimental-strip-types --no-warnings {{COMPANION_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/retro.ts --session=<id>
 ```
 
 It prints the retro instruction and the session facts: tool calls, changed
@@ -21,7 +21,7 @@ Use the shared retrospective below, with these Kiro rules:
 - Use the printed facts as the evidence. The **Session Facts** table in the
   shared skill is Claude Code's; it does not apply here.
 - The permissions dimension reads the decisions log
-  (`<kiro home>/persona-agents/state/decisions.ndjson`). The facts line is
+  (`<kiro home>/companion-agents/state/decisions.ndjson`). The facts line is
   the evidence. Do not claim a permission audit log beyond it.
 - Cost is reported in credits, not money. Report the credits line.
 - Compactions come from the adapter's metrics file. The facts line counts

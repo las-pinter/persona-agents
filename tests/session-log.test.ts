@@ -31,7 +31,7 @@ interface Env {
 }
 
 function withEnv(fn: (env: Env) => void | Promise<void>): Promise<void> {
-	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-session-log-")));
+	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-session-log-")));
 	const env = {
 		tmp,
 		home: path.join(tmp, "home"),
@@ -158,7 +158,7 @@ describe("session log: safety-net sources", () => {
 
 describe("session log: session-end hook", () => {
 	const hookInput = (env: Env, extra: Record<string, unknown> = {}) =>
-		JSON.stringify({ hook_event_name: "SessionEnd", reason: "prompt_input_exit", session_id: "s-9", cwd: env.cwd, agent_type: "persona-agents:companion", ...extra });
+		JSON.stringify({ hook_event_name: "SessionEnd", reason: "prompt_input_exit", session_id: "s-9", cwd: env.cwd, agent_type: "companion-agents:companion", ...extra });
 	const runHook = (env: Env, input: string, claude: string) =>
 		spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
 			input,
@@ -222,7 +222,7 @@ describe("session log: session-end hook", () => {
 			runHook(env, hookInput(env, { agent_type: "Explore" }), claude);
 			spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", endScript, "hook", `--home=${env.home}`, `--claude=${claude}`], {
 				input: hookInput(env),
-				env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" },
+				env: { ...process.env, CLAUDE_PLUGIN_DATA: env.data, COMPANION_AGENTS_SESSION_LOG_WRITER: "1" },
 			});
 			await new Promise((resolve) => setTimeout(resolve, 300));
 			assert.equal(fs.existsSync(path.join(env.data, "compact")), false);

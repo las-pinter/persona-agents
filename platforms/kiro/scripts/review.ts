@@ -1,11 +1,11 @@
 /**
- * The Kiro review brief: what the pa-reviewer sub-agent is asked to review.
+ * The Kiro review brief: what the ca-reviewer sub-agent is asked to review.
  *
  *   node review.ts ["<scope>"] [--scope=..] [--task=..] [--decisions=..]
  *                   [--cwd=..] [--home=..] [--notes=..]
  *
  * The output is the reviewer task, ending with the change key. The companion
- * passes it verbatim to the `pa-reviewer` sub-agent; the reviewer reads the
+ * passes it verbatim to the `ca-reviewer` sub-agent; the reviewer reads the
  * change from git itself. The change key is metadata for the commit gate (the
  * Stop hook records the verdict against it), never a checklist.
  *
@@ -83,7 +83,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 	const home = option("home", process.argv) ?? homedir();
 	const notesDir = option("notes", process.argv) ?? projectDir(cwd, home);
 	const brief = await buildReviewBrief(input, { cwd, notesDir, dropped: parsed.dropped });
-	for (const note of brief.notes) process.stderr.write(`persona-agents: ${note}\n`);
-	if (brief.brief.task === NO_VALUE) process.stderr.write("persona-agents: the brief names no task\n");
+	for (const note of brief.notes) process.stderr.write(`companion-agents: ${note}\n`);
+	if (brief.brief.task === NO_VALUE) process.stderr.write("companion-agents: the brief names no task\n");
 	process.stdout.write(`${reviewerTask(brief)}\n`);
 }

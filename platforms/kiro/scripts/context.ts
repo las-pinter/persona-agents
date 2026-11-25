@@ -85,7 +85,7 @@ export function contextFor(
 			const reason = error instanceof ContentError ? error.message : String(error);
 			return {
 				text: platformNote(sessionId),
-				warning: `persona-agents: ${reason}; running without a persona`,
+				warning: `companion-agents: ${reason}; running without a persona`,
 			};
 		}
 	}

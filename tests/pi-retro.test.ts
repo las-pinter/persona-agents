@@ -22,7 +22,7 @@ function assistant(...calls: { name: string; args: Record<string, unknown> }[]):
 /** An entry as the retro reads it: tool calls, reviews, and a compaction summary. */
 type FactEntry = EntryLike & { customType?: string; data?: unknown; summary?: string };
 
-const decision = (overrides: Record<string, unknown>): string => JSON.stringify({ at: "2026-01-01T00:00:00Z", session: "s1", agent: "persona-agents:companion", ...overrides });
+const decision = (overrides: Record<string, unknown>): string => JSON.stringify({ at: "2026-01-01T00:00:00Z", session: "s1", agent: "companion-agents:companion", ...overrides });
 
 describe("pi retro: the decisions log", () => {
 	test("bad and blank lines are skipped, good ones are kept", () => {
@@ -57,8 +57,8 @@ describe("pi retro: the facts", () => {
 	test("compactions, reviews, and permission verdicts are reported", () => {
 		const entries: FactEntry[] = [
 			{ type: "compaction", summary: "s" },
-			{ type: "custom", customType: "persona-agents:review", data: { verdict: "Approve" } },
-			{ type: "custom", customType: "persona-agents:review", data: { verdict: "Request Changes" } },
+			{ type: "custom", customType: "companion-agents:review", data: { verdict: "Approve" } },
+			{ type: "custom", customType: "companion-agents:review", data: { verdict: "Request Changes" } },
 		];
 		const decisions = parseDecisions(
 			[

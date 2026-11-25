@@ -20,7 +20,7 @@ function settings(file: string, dirs: unknown): void {
 }
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-dirs-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-dirs-"));
 	try {
 		fn(root);
 	} finally {

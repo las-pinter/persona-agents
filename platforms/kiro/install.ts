@@ -4,14 +4,14 @@
  *   node --experimental-strip-types install.ts --kiro-home=<dir>
  *        [--theme=<name>] [--dry-run] [--force] [--kiro-cli=<path>]
  *
- * It copies a self-contained payload into `<kiro home>/persona-agents/`
+ * It copies a self-contained payload into `<kiro home>/companion-agents/`
  * (content/, platforms/shared/, platforms/kiro/), installs the skills into
- * `<kiro home>/skills/`, and writes `pa-companion`, `pa-reviewer`, and
- * `pa-writer` into `<kiro home>/agents/`. The payload keeps the repository
+ * `<kiro home>/skills/`, and writes `ca-companion`, `ca-reviewer`, and
+ * `ca-writer` into `<kiro home>/agents/`. The payload keeps the repository
  * layout, so the relative imports between the scripts still resolve.
  *
  * A skill folder is replaced only when it carries our marker
- * (`.persona-agents.json`). A folder owned by someone else stops the install
+ * (`.companion-agents.json`). A folder owned by someone else stops the install
  * before any write; `--force` backs it up and replaces it.
  *
  * The owner's `chat.defaultAgent` is never changed. The installer warns when it
@@ -30,11 +30,11 @@ import { option } from "../shared/argv.ts";
 /** The minimum Kiro CLI version with PermissionRequest and the compaction hooks. */
 export const MIN_VERSION: [number, number, number] = [3, 4, 0];
 /** The marker that says a skill folder belongs to this installer. */
-export const SKILL_MARKER = ".persona-agents.json";
+export const SKILL_MARKER = ".companion-agents.json";
 /** The agents Kiro ships; a default naming one of these needs no file. */
 export const BUILTIN_AGENTS = new Set(["kiro_default", "kiro_help", "kiro_planner"]);
 /** The three agents this installer writes. */
-export const AGENT_NAMES = ["pa-companion", "pa-reviewer", "pa-writer"] as const;
+export const AGENT_NAMES = ["ca-companion", "ca-reviewer", "ca-writer"] as const;
 
 export interface InstallOptions {
 	/** The repository root that holds content/ and platforms/. */
@@ -154,7 +154,7 @@ export function preflight(options: InstallOptions): Preflight {
 	} catch (error) {
 		return { plan: null, error: (error as Error).message };
 	}
-	const payload = join(options.kiroHome, "persona-agents");
+	const payload = join(options.kiroHome, "companion-agents");
 	const skillsRoot = join(options.kiroHome, "skills");
 	const skills = skillFolders(contentDir).map((name) => {
 		const dest = join(skillsRoot, name);
@@ -164,7 +164,7 @@ export function preflight(options: InstallOptions): Preflight {
 	if (foreign.length > 0 && !options.force) {
 		return {
 			plan: null,
-			error: `these skill folders are not owned by persona-agents:\n  ${foreign.join("\n  ")}\nMove them, or rerun with --force to back them up and replace them.`,
+			error: `these skill folders are not owned by companion-agents:\n  ${foreign.join("\n  ")}\nMove them, or rerun with --force to back them up and replace them.`,
 		};
 	}
 	const warnings = [defaultAgentWarning(options.kiroHome)].filter((warning) => warning !== "");
@@ -217,11 +217,11 @@ export function companionRules(payload: string, kiroHome: string): unknown[] {
 	return [
 		// Denies first, so a first-match engine and a deny-overrides engine agree.
 		{ capability: "fs_read", match: SECRET_PATHS, effect: "deny" },
-		{ capability: "fs_write", match: [`${payload}/**`, `${agents}/pa-*`, `${skills}/**`, `${kiroHome}/settings/**`], effect: "deny" },
+		{ capability: "fs_write", match: [`${payload}/**`, `${agents}/ca-*`, `${skills}/**`, `${kiroHome}/settings/**`], effect: "deny" },
 		{ capability: "fs_read", match: ["./**", "~/agent-notes/**", `${payload}/**`], effect: "allow" },
 		{ capability: "fs_write", match: ["./**", "~/agent-notes/**"], effect: "allow" },
 		{ capability: "skill", match: ["*"], effect: "allow" },
-		{ capability: "subagent", match: ["pa-reviewer"], effect: "allow" },
+		{ capability: "subagent", match: ["ca-reviewer"], effect: "allow" },
 		{ capability: "shell", match: [...READ_COMMANDS, ...TEST_COMMANDS, ...SCRIPT_COMMANDS], effect: "allow" },
 	];
 }
@@ -242,43 +242,43 @@ export function companionHooks(payload: string, kiroHome: string, kiroCli: strin
 	const kiro = `--kiro-home=${kiroHome}`;
 	return [
 		{
-			name: "persona-agents-context",
+			name: "companion-agents-context",
 			trigger: "SessionStart",
 			action: { type: "command", command: nodeCommand(payload, "context.ts", ["session", kiro]) },
 			timeout: 10,
 		},
 		{
-			name: "persona-agents-startup",
+			name: "companion-agents-startup",
 			trigger: "SessionStart",
 			action: { type: "command", command: nodeCommand(payload, "context.ts", ["startup", kiro]) },
 			timeout: 10,
 		},
 		{
-			name: "persona-agents-commit-gate",
+			name: "companion-agents-commit-gate",
 			trigger: "PermissionRequest",
 			action: { type: "command", command: nodeCommand(payload, "gate.ts", ["permission", "companion", kiro]) },
 			timeout: 10,
 		},
 		{
-			name: "persona-agents-review-record",
+			name: "companion-agents-review-record",
 			trigger: "Stop",
 			action: { type: "command", command: nodeCommand(payload, "review-record.ts", [kiro]) },
 			timeout: 10,
 		},
 		{
-			name: "persona-agents-precompact",
+			name: "companion-agents-precompact",
 			trigger: "PreCompact",
 			action: { type: "command", command: nodeCommand(payload, "compact.ts", ["pre", kiro]) },
 			timeout: 30,
 		},
 		{
-			name: "persona-agents-postcompact",
+			name: "companion-agents-postcompact",
 			trigger: "PostCompact",
 			action: { type: "command", command: nodeCommand(payload, "compact.ts", ["post", kiro]) },
 			timeout: 30,
 		},
 		{
-			name: "persona-agents-session-log-end",
+			name: "companion-agents-session-log-end",
 			trigger: "SessionEnd",
 			action: { type: "command", command: nodeCommand(payload, "session-log-end.ts", ["hook", kiro, `--kiro-cli=${kiroCli}`]) },
 			timeout: 10,
@@ -290,7 +290,7 @@ export function companionHooks(payload: string, kiroHome: string, kiroCli: strin
 export function reviewerHooks(payload: string, kiroHome: string): unknown[] {
 	return [
 		{
-			name: "persona-agents-reviewer-gate",
+			name: "companion-agents-reviewer-gate",
 			trigger: "PreToolUse",
 			action: { type: "command", command: nodeCommand(payload, "gate.ts", ["pretool", "reviewer", `--kiro-home=${kiroHome}`]) },
 			timeout: 10,
@@ -302,12 +302,12 @@ export function reviewerHooks(payload: string, kiroHome: string): unknown[] {
 export function companionAgent(plan: Plan, registry: Registry, kiroCli: string): Record<string, unknown> {
 	const entry = registry[plan.theme]?.companion;
 	return {
-		name: "pa-companion",
-		description: entry?.description ?? "The persona-agents companion: one agent that plans, builds, tests, and commits with the owner, in a persona voice.",
+		name: "ca-companion",
+		description: entry?.description ?? "The companion-agents companion: one agent that plans, builds, tests, and commits with the owner, in a persona voice.",
 		// Kiro rejects an absolute `file://` prompt, so the body is inlined.
 		prompt: readFileSync(join(plan.payload, "content", "professions", "companion.md"), "utf8"),
 		...(entry?.welcomeMessage ? { welcomeMessage: entry.welcomeMessage } : {}),
-		tools: ["read", "write", "shell", "web", "subagent/pa-reviewer"],
+		tools: ["read", "write", "shell", "web", "subagent/ca-reviewer"],
 		resources: plan.skillNames.map((name) => `skill://${join(plan.kiroHome, "skills", name, "SKILL.md")}`),
 		permissions: { rules: companionRules(plan.payload, plan.kiroHome) },
 		hooks: companionHooks(plan.payload, plan.kiroHome, kiroCli),
@@ -317,7 +317,7 @@ export function companionAgent(plan: Plan, registry: Registry, kiroCli: string):
 /** The reviewer agent config: read-only, own context, the checklist skill. */
 export function reviewerAgent(plan: Plan): Record<string, unknown> {
 	return {
-		name: "pa-reviewer",
+		name: "ca-reviewer",
 		description: "Independent, read-only review of a change, in a separate context. Returns findings with severity and location and a verdict. Started by the companion's review skill.",
 		prompt: [
 			readFileSync(join(plan.payload, "content", "professions", "reviewer.md"), "utf8").trim(),
@@ -343,7 +343,7 @@ function retiredSkills(plan: Plan): string[] {
 /** The tool-less session-log writer agent. */
 export function writerAgent(): Record<string, unknown> {
 	return {
-		name: "pa-writer",
+		name: "ca-writer",
 		description: "Writes one session log from the material the session-end safety net provides. No tools.",
 		prompt:
 			"You write one session log from the material you are given. Output only the entry, in markdown, at most 30 lines, plain and factual, no persona voice, never a persona's voice. Do not use tools.",
@@ -369,8 +369,8 @@ export function substituteSkillTokens(dir: string, skillDir: string, root: strin
 	for (const file of markdownFiles(dir)) {
 		const text = readFileSync(file, "utf8");
 		const next = text
-			.replaceAll("{{PERSONA_AGENTS_KIRO_SKILL_DIR}}", skillDir)
-			.replaceAll("{{PERSONA_AGENTS_KIRO_ROOT}}", root);
+			.replaceAll("{{COMPANION_AGENTS_KIRO_SKILL_DIR}}", skillDir)
+			.replaceAll("{{COMPANION_AGENTS_KIRO_ROOT}}", root);
 		if (next !== text) {
 			writeFileSync(file, next);
 			changed++;
@@ -441,14 +441,14 @@ export function install(options: InstallOptions & { kiroCli?: string }): { ok: b
 		else if (existsSync(skill.dest)) rmSync(skill.dest, { recursive: true, force: true });
 		cpSync(skill.src, skill.dest, { recursive: true });
 		substituteSkillTokens(skill.dest, skill.dest, payload);
-		writeFileSync(join(skill.dest, SKILL_MARKER), `${JSON.stringify({ name: "persona-agents", version }, null, 2)}\n`);
+		writeFileSync(join(skill.dest, SKILL_MARKER), `${JSON.stringify({ name: "companion-agents", version }, null, 2)}\n`);
 	}
 
 	// 3. Agents.
 	const agents = {
-		"pa-companion": companionAgent(plan, registry, options.kiroCli ?? "kiro-cli"),
-		"pa-reviewer": reviewerAgent(plan),
-		"pa-writer": writerAgent(),
+		"ca-companion": companionAgent(plan, registry, options.kiroCli ?? "kiro-cli"),
+		"ca-reviewer": reviewerAgent(plan),
+		"ca-writer": writerAgent(),
 	};
 	for (const [name, config] of Object.entries(agents)) {
 		writeIfChanged(join(plan.kiroHome, "agents", `${name}.json`), `${JSON.stringify(config, null, 2)}\n`, stamp);
@@ -493,7 +493,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
 	for (const action of result.actions) process.stdout.write(`${prefix}${action}\n`);
 	if (!dryRun) {
 		process.stdout.write(`Kiro installed for ${basename(kiroHome)} (kiro-cli ${check.version}).\n`);
-		process.stdout.write("Start the companion: kiro-cli --agent pa-companion\n");
+		process.stdout.write("Start the companion: kiro-cli --agent ca-companion\n");
 		process.stdout.write("Update: git pull, then ./install.sh --kiro\n");
 	}
 }

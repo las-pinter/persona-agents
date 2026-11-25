@@ -37,7 +37,7 @@ import { readTranscript, toEntries } from "./transcript.ts";
 
 export { writerPrompt };
 
-const AGENT_TYPE = "persona-agents:companion";
+const AGENT_TYPE = "companion-agents:companion";
 const WRITER_MODEL = "haiku";
 const WRITER_TIMEOUT_MS = 180_000;
 
@@ -78,7 +78,7 @@ function hook(input, claudeArg) {
 	const child = spawn(process.execPath, args, {
 		detached: true,
 		stdio: "ignore",
-		env: { ...process.env, PERSONA_AGENTS_SESSION_LOG_WRITER: "1" },
+		env: { ...process.env, COMPANION_AGENTS_SESSION_LOG_WRITER: "1" },
 	});
 	child.unref();
 }
@@ -123,7 +123,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	if (mode === "hook") {
 		const input = JSON.parse(readFileSync(0, "utf8"));
 		const claudeArg = process.argv.find((value) => value.startsWith("--claude="));
-		if (input.agent_type === AGENT_TYPE && input.session_id && !process.env.PERSONA_AGENTS_SESSION_LOG_WRITER) hook(input, claudeArg);
+		if (input.agent_type === AGENT_TYPE && input.session_id && !process.env.COMPANION_AGENTS_SESSION_LOG_WRITER) hook(input, claudeArg);
 	} else if (mode === "write" && process.argv[3]) {
 		// The test seam: `--claude=<path>` replaces the claude binary. The hook never passes it,
 		// and an argument, unlike an env var, cannot come from a project settings env block.

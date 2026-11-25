@@ -39,7 +39,7 @@ interface Temp {
 }
 
 function withTemp(fn: (temp: Temp) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-install-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-install-"));
 	try {
 		fn({ root, home: path.join(root, "home"), kiro: path.join(root, "kiro") });
 	} finally {
@@ -111,7 +111,7 @@ describe("kiro install: a fresh install", () => {
 		withTemp((temp) => {
 			const result = fresh(temp);
 			assert.ok(result.ok, result.error);
-			const payload = path.join(temp.kiro, "persona-agents");
+			const payload = path.join(temp.kiro, "companion-agents");
 			assert.ok(fs.existsSync(path.join(payload, "content", "professions", "companion.md")));
 			assert.ok(fs.existsSync(path.join(payload, "platforms", "shared", "context", "context.ts")));
 			assert.ok(fs.existsSync(path.join(payload, "platforms", "kiro", "scripts", "gate.ts")));
@@ -124,19 +124,19 @@ describe("kiro install: a fresh install", () => {
 			assert.deepEqual(installed, skillFolders(contentDir));
 			for (const name of installed) {
 				assert.deepEqual(readJson(path.join(temp.kiro, "skills", name, SKILL_MARKER)), {
-					name: "persona-agents",
+					name: "companion-agents",
 					version: packageVersion(repoRoot),
 				});
 			}
 		});
 	});
 
-	test("pa-companion carries the persona prompt, the skills, and every inline hook", () => {
+	test("ca-companion carries the persona prompt, the skills, and every inline hook", () => {
 		withTemp((temp) => {
 			assert.ok(fresh(temp).ok);
-			const agent = readJson(path.join(temp.kiro, "agents", "pa-companion.json"));
+			const agent = readJson(path.join(temp.kiro, "agents", "ca-companion.json"));
 			assert.match(String(agent.prompt), /^# Companion\n/);
-			assert.deepEqual(agent.tools, ["read", "write", "shell", "web", "subagent/pa-reviewer"]);
+			assert.deepEqual(agent.tools, ["read", "write", "shell", "web", "subagent/ca-reviewer"]);
 			assert.equal((agent.resources as string[]).length, skillFolders(contentDir).length);
 			assert.ok((agent.resources as string[]).every((resource) => resource.includes(`/skills/`) && resource.endsWith("/SKILL.md")));
 			const triggers = (agent.hooks as Array<Record<string, unknown>>).map((hook) => hook.trigger);
@@ -155,10 +155,10 @@ describe("kiro install: a fresh install", () => {
 		});
 	});
 
-	test("pa-reviewer is read-only and gated; pa-writer has no tools", () => {
+	test("ca-reviewer is read-only and gated; ca-writer has no tools", () => {
 		withTemp((temp) => {
 			assert.ok(fresh(temp).ok);
-			const reviewer = readJson(path.join(temp.kiro, "agents", "pa-reviewer.json"));
+			const reviewer = readJson(path.join(temp.kiro, "agents", "ca-reviewer.json"));
 			const profession = fs.readFileSync(path.join(contentDir, "professions", "reviewer.md"), "utf8").trim();
 			assert.ok(String(reviewer.prompt).startsWith(profession), "the reviewer prompt is the shared profession");
 			assert.match(String(reviewer.prompt), /Skill names carry no plugin prefix here/);
@@ -173,7 +173,7 @@ describe("kiro install: a fresh install", () => {
 			assert.ok(!(shell?.match as string[]).includes("node *"), "the reviewer keeps the narrow test commands");
 			assert.ok((shell?.match as string[]).includes("npm test"));
 			assert.ok(!(shell?.match as string[]).includes("npm run *"), "the reviewer may not run an arbitrary project script");
-			const writer = readJson(path.join(temp.kiro, "agents", "pa-writer.json"));
+			const writer = readJson(path.join(temp.kiro, "agents", "ca-writer.json"));
 			assert.deepEqual(writer.tools, []);
 		});
 	});
@@ -184,16 +184,16 @@ describe("kiro install: a fresh install", () => {
 			const skills = path.join(temp.kiro, "skills");
 			const branch = fs.readFileSync(path.join(skills, "review", "SKILL.md"), "utf8");
 			assert.ok(
-				branch.includes(path.join(temp.kiro, "persona-agents", "platforms", "kiro", "scripts", "review.ts")),
+				branch.includes(path.join(temp.kiro, "companion-agents", "platforms", "kiro", "scripts", "review.ts")),
 				"the branch names the installed script",
 			);
 			assert.ok(branch.includes("references/kiro.md"), "the branch names the reference");
 			for (const [file, text] of Object.entries(tree(skills))) {
 				if (!file.endsWith(".md")) continue;
-				assert.ok(!text.includes("{{PERSONA_AGENTS_KIRO_"), `${file} keeps no token`);
+				assert.ok(!text.includes("{{COMPANION_AGENTS_KIRO_"), `${file} keeps no token`);
 			}
 			const wrap = fs.readFileSync(path.join(skills, "wrap-up", "references", "kiro.md"), "utf8");
-			assert.ok(wrap.includes(path.join(temp.kiro, "persona-agents", "platforms", "kiro", "scripts", "session-log.ts")));
+			assert.ok(wrap.includes(path.join(temp.kiro, "companion-agents", "platforms", "kiro", "scripts", "session-log.ts")));
 		});
 	});
 });
@@ -212,8 +212,8 @@ describe("kiro install: the second run and the theme", () => {
 	test("--theme writes the config and the matching persona details", () => {
 		withTemp((temp) => {
 			assert.ok(install({ root: repoRoot, kiroHome: temp.kiro, theme: "cyberpunk", now: FIXED }).ok);
-			assert.equal(readJson(path.join(temp.kiro, "persona-agents", "config.json")).theme, "cyberpunk");
-			const agent = readJson(path.join(temp.kiro, "agents", "pa-companion.json"));
+			assert.equal(readJson(path.join(temp.kiro, "companion-agents", "config.json")).theme, "cyberpunk");
+			const agent = readJson(path.join(temp.kiro, "agents", "ca-companion.json"));
 			assert.equal(typeof agent.welcomeMessage, "string");
 			assert.ok(String(agent.description).length > 0);
 		});
@@ -223,7 +223,7 @@ describe("kiro install: the second run and the theme", () => {
 		withTemp((temp) => {
 			assert.ok(install({ root: repoRoot, kiroHome: temp.kiro, theme: "cyberpunk", now: FIXED }).ok);
 			assert.ok(fresh(temp).ok);
-			assert.equal(readJson(path.join(temp.kiro, "persona-agents", "config.json")).theme, "cyberpunk");
+			assert.equal(readJson(path.join(temp.kiro, "companion-agents", "config.json")).theme, "cyberpunk");
 		});
 	});
 
@@ -238,7 +238,7 @@ describe("kiro install: the second run and the theme", () => {
 	test("the state folder survives an update", () => {
 		withTemp((temp) => {
 			assert.ok(fresh(temp).ok);
-			const state = path.join(temp.kiro, "persona-agents", "state");
+			const state = path.join(temp.kiro, "companion-agents", "state");
 			fs.mkdirSync(state, { recursive: true });
 			fs.writeFileSync(path.join(state, "keep.txt"), "keep\n");
 			assert.ok(fresh(temp).ok);
@@ -285,9 +285,9 @@ describe("kiro install: dry run and conflicts", () => {
 			fs.writeFileSync(path.join(foreign, "SKILL.md"), "# someone else's review\n");
 			const result = fresh(temp);
 			assert.equal(result.ok, false);
-			assert.match(result.error, /not owned by persona-agents/);
+			assert.match(result.error, /not owned by companion-agents/);
 			assert.match(result.error, /--force/);
-			assert.ok(!fs.existsSync(path.join(temp.kiro, "persona-agents")));
+			assert.ok(!fs.existsSync(path.join(temp.kiro, "companion-agents")));
 			assert.ok(!fs.existsSync(path.join(temp.kiro, "agents")));
 			assert.equal(fs.readFileSync(path.join(foreign, "SKILL.md"), "utf8"), "# someone else's review\n");
 		});
@@ -329,7 +329,7 @@ describe("kiro install: the owner's settings", () => {
 		withTemp((temp) => {
 			const settings = path.join(temp.kiro, "settings");
 			fs.mkdirSync(settings, { recursive: true });
-			fs.writeFileSync(path.join(settings, "cli.json"), `${JSON.stringify({ "chat.defaultAgent": "pa-companion" })}\n`);
+			fs.writeFileSync(path.join(settings, "cli.json"), `${JSON.stringify({ "chat.defaultAgent": "ca-companion" })}\n`);
 			const checked = preflight({ root: repoRoot, kiroHome: temp.kiro });
 			assert.equal(checked.plan?.warnings.length, 0);
 		});
@@ -365,8 +365,8 @@ describe("kiro install: the version check", () => {
 			const real = runInstaller([`--kiro-home=${temp.kiro}`, `--kiro-cli=${cli}`]);
 			assert.equal(real.status, 0, real.stderr);
 			assert.match(real.stdout, /kiro-cli 3\.5\.0/);
-			assert.match(real.stdout, /--agent pa-companion/);
-			assert.ok(fs.existsSync(path.join(temp.kiro, "agents", "pa-companion.json")));
+			assert.match(real.stdout, /--agent ca-companion/);
+			assert.ok(fs.existsSync(path.join(temp.kiro, "agents", "ca-companion.json")));
 		});
 	});
 
@@ -429,7 +429,7 @@ describe("install.sh: the adapter flags", () => {
 			const cli = fakeCli(temp);
 			const run = runShell(["--kiro", `--kiro-home=${temp.kiro}`, `--kiro-cli=${cli}`], { HOME: temp.home });
 			assert.equal(run.status, 0, run.stderr);
-			assert.ok(fs.existsSync(path.join(temp.kiro, "agents", "pa-reviewer.json")));
+			assert.ok(fs.existsSync(path.join(temp.kiro, "agents", "ca-reviewer.json")));
 			assert.ok(!fs.existsSync(path.join(temp.home, ".claude", "settings.json")));
 		});
 	});
@@ -441,7 +441,7 @@ describe("install.sh: the adapter flags", () => {
 			const run = runShell([`--kiro-cli=${cli}`], { HOME: temp.home, CLAUDE_CONFIG_DIR: config });
 			assert.equal(run.status, 0, run.stderr);
 			assert.ok(fs.existsSync(path.join(config, "settings.json")));
-			assert.ok(fs.existsSync(path.join(temp.home, ".kiro", "agents", "pa-companion.json")));
+			assert.ok(fs.existsSync(path.join(temp.home, ".kiro", "agents", "ca-companion.json")));
 			assert.equal(fs.readdirSync(path.join(temp.home, ".kiro", "skills")).length, skillFolders(contentDir).length);
 		});
 	});
@@ -506,7 +506,7 @@ describe("install.sh: the adapter flags", () => {
 			});
 			assert.equal(run.status, 1);
 			assert.match(run.stderr, /Node 22\.6 or newer/);
-			assert.ok(!fs.existsSync(path.join(temp.kiro, "persona-agents")));
+			assert.ok(!fs.existsSync(path.join(temp.kiro, "companion-agents")));
 		});
 	});
 
@@ -519,7 +519,7 @@ describe("install.sh: the adapter flags", () => {
 				PATH: `${path.dirname(node)}:${process.env.PATH}`,
 			});
 			assert.equal(run.status, 0, run.stderr);
-			assert.ok(fs.existsSync(path.join(temp.kiro, "persona-agents", "config.json")));
+			assert.ok(fs.existsSync(path.join(temp.kiro, "companion-agents", "config.json")));
 		});
 	});
 
@@ -528,7 +528,7 @@ describe("install.sh: the adapter flags", () => {
 			const cli = fakeCli(temp);
 			const run = runShell(["--kiro", "--theme", "cyberpunk", `--kiro-home=${temp.kiro}`, `--kiro-cli=${cli}`], { HOME: temp.home });
 			assert.equal(run.status, 0, run.stderr);
-			assert.equal(readJson(path.join(temp.kiro, "persona-agents", "config.json")).theme, "cyberpunk");
+			assert.equal(readJson(path.join(temp.kiro, "companion-agents", "config.json")).theme, "cyberpunk");
 		});
 	});
 });

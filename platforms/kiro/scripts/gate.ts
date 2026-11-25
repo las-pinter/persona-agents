@@ -204,14 +204,14 @@ export function permissionOutput(decision: Decision): string {
 /** The PreToolUse result: exit 2 and stderr for a deny, exit 0 otherwise. */
 export function preToolResult(decision: Decision): { exitCode: number; stderr: string } {
 	if (decision.verdict === "deny") {
-		return { exitCode: 2, stderr: `persona-agents doctrine: ${decision.reason}\n` };
+		return { exitCode: 2, stderr: `companion-agents doctrine: ${decision.reason}\n` };
 	}
 	return { exitCode: 0, stderr: "" };
 }
 
 /** Log the decision the way the retro reads it. */
 export function logDecision(profile: AgentProfile, tool: string, command: string, decision: Decision, ctx: GateContext): void {
-	if (decision.verdict === "allow" && !process.env.PERSONA_AGENTS_DEBUG) return;
+	if (decision.verdict === "allow" && !process.env.COMPANION_AGENTS_DEBUG) return;
 	appendDecision(ctx.stateDir, {
 		at: (ctx.now ?? new Date()).toISOString(),
 		session: ctx.sessionId,

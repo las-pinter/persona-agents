@@ -1,5 +1,5 @@
 {
-  "description": "Give the persona-agents companion its profession rules, persona, startup read list, compaction recovery, and session-log safety net, and enforce the commit doctrine",
+  "description": "Give the companion-agents companion its profession rules, persona, startup read list, compaction recovery, and session-log safety net, and enforce the commit doctrine",
   "hooks": {
     "SessionStart": [
       {

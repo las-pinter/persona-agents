@@ -96,7 +96,7 @@ export function retroFacts(
 		extras.push(`- credits: main ${session.credits.main}, delegated ${session.credits.delegated}, auxiliary ${session.credits.auxiliary}`);
 	}
 	if (session.subAgents.length > 0) {
-		const reviewers = session.subAgents.filter((run) => run.agent === "pa-reviewer").length;
+		const reviewers = session.subAgents.filter((run) => run.agent === "ca-reviewer").length;
 		extras.push(`- sub-agent runs: ${session.subAgents.length} (reviewer ${reviewers})`);
 	}
 	if (session.hooks.length > 0) {

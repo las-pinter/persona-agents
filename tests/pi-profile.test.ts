@@ -23,16 +23,16 @@ import {
 
 describe("pi profiles: resolution", () => {
 	test("an agent id is namespaced", () => {
-		assert.equal(AGENT_PREFIX, "persona-agents:");
-		assert.equal(isAgentId("persona-agents:companion"), true);
+		assert.equal(AGENT_PREFIX, "companion-agents:");
+		assert.equal(isAgentId("companion-agents:companion"), true);
 		assert.equal(isAgentId("companion"), false);
 		assert.equal(isAgentId("Explore"), false);
 	});
 
 	test("the companion and the reviewer resolve", () => {
-		assert.equal(profileOf("persona-agents:companion")?.name, "companion");
-		assert.equal(profileOf("persona-agents:reviewer")?.name, "reviewer");
-		assert.deepEqual(profileIds().sort(), ["persona-agents:companion", "persona-agents:reviewer"]);
+		assert.equal(profileOf("companion-agents:companion")?.name, "companion");
+		assert.equal(profileOf("companion-agents:reviewer")?.name, "reviewer");
+		assert.deepEqual(profileIds().sort(), ["companion-agents:companion", "companion-agents:reviewer"]);
 	});
 
 	test("a plain session resolves to no profile and stays unchanged", () => {
@@ -42,8 +42,8 @@ describe("pi profiles: resolution", () => {
 	});
 
 	test("an unknown agent in our namespace throws and lists the known ones", () => {
-		assert.throws(() => resolveProfile("persona-agents:nosuch"), /unknown agent "persona-agents:nosuch"/);
-		assert.throws(() => resolveProfile("persona-agents:nosuch"), /persona-agents:companion, persona-agents:reviewer/);
+		assert.throws(() => resolveProfile("companion-agents:nosuch"), /unknown agent "companion-agents:nosuch"/);
+		assert.throws(() => resolveProfile("companion-agents:nosuch"), /companion-agents:companion, companion-agents:reviewer/);
 	});
 
 	test("one session profile is advertised, the reviewer stays a subagent", () => {

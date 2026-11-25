@@ -14,14 +14,14 @@ When a new version is released:
    State the correct install steps:
    - A change to `content/`, `platforms/claude/`, `platforms/shared/`, or
      `.claude-plugin/` needs the plugin update: `claude plugin marketplace
-     update persona-agents`, then `claude plugin update
-     persona-agents@persona-agents`, then a restart.
+     update companion-agents`, then `claude plugin update
+     companion-agents@companion-agents`, then a restart.
    - A change to `content/`, `platforms/pi/`, `platforms/shared/`, or the `pi`
      block of `package.json` needs the Pi package update: `pi update
      --extensions`, then a new session so the extension reloads.
    - A change to `content/`, `platforms/kiro/`, or `platforms/shared/` needs
      the Kiro adapter update: `git pull` in the clone, then
-     `./install.sh --kiro`. The payload under `$KIRO_HOME/persona-agents/` is a
+     `./install.sh --kiro`. The payload under `$KIRO_HOME/companion-agents/` is a
      copy, so a pull alone leaves the installed adapter on the old code. When
      the clone is gone, re-clone it first; the payload cannot update itself.
    - A change to `platforms/claude/settings/recommended.json` or `install.sh`
@@ -53,7 +53,7 @@ The doctrine lives in three places:
   of `gh pr`, `gh run`, and `gh release` ask. Their read actions (`view`,
   `list` / `ls`, `status`, `diff`, `checks`, `search`) pass.
 - The PreToolUse hook `platforms/claude/scripts/doctrine.ts`, for the
-  persona-agents agents. The command classification it uses lives in
+  companion-agents agents. The command classification it uses lives in
   `platforms/shared/shell/` and is shared with the Pi gate
   (`platforms/pi/scripts/policy.ts`) and the Kiro gate, so the adapters cannot
   drift apart. The companion runs any git command with no prompt when every
@@ -75,8 +75,8 @@ The doctrine lives in three places:
   those directories removes the allowance, so Claude Code's own flow decides.
   Every other plugin agent is denied all of these and every shell write the
   hook can see.
-- The Kiro gate `platforms/kiro/scripts/gate.ts`, for `pa-companion` and
-  `pa-reviewer`. A `PermissionRequest` hook allows a git command and
+- The Kiro gate `platforms/kiro/scripts/gate.ts`, for `ca-companion` and
+  `ca-reviewer`. A `PermissionRequest` hook allows a git command and
   a reviewed or trivial commit; anything else returns no decision, so Kiro's
   native prompt asks. A PreToolUse hook denies the reviewer every shell write
   the gate can see and every command that writes history or publishes; reading
@@ -104,7 +104,7 @@ so a `$VAR`, a backtick, or a `~user` word there is not expanded and the rule
 cannot place it.
 The settings ask list matches `gh pr <action>` prefixes, so a global flag
 before the action (`gh pr -R o/r merge 1`) falls outside it; the doctrine hook
-still asks for that command for the persona-agents agents, and a plain session
+still asks for that command for the companion-agents agents, and a plain session
 relies on Claude Code's own flow. The hook reads the word after the
 sub-command as the action, so a flag there also makes a read ask
 (`gh pr -R o/r view 1`); it fails safe.

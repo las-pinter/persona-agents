@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// context — Claude Code SessionStart hook for the persona-agents companion.
+// context — Claude Code SessionStart hook for the companion-agents companion.
 //
-// The companion agent (`persona-agents:companion`) has an empty body, so it
+// The companion agent (`companion-agents:companion`) has an empty body, so it
 // keeps Claude Code's own system prompt. This hook supplies its instructions
 // from content/ instead, as additional context:
 //
@@ -17,7 +17,7 @@
 // tests/claude-plugin.test.ts keeps every part under it. Any other agent, or
 // a session without one, gets no output.
 //
-// Set PERSONA_AGENTS_DEBUG=1 to append each hook input to
+// Set COMPANION_AGENTS_DEBUG=1 to append each hook input to
 // $CLAUDE_PLUGIN_DATA/hook-input.log. plugin-options.mjs reads the theme option
 // live from the settings files at each run.
 
@@ -26,14 +26,14 @@ import { join } from "node:path";
 import { DEFAULT_THEME, PERSONA_FREE_RULE } from "../../shared/context/context.ts";
 import { pluginOption } from "./plugin-options.mjs";
 
-const AGENT_TYPE = "persona-agents:companion";
+const AGENT_TYPE = "companion-agents:companion";
 const PROFESSION = "companion";
 
 const part = process.argv[2];
 const root = process.env.CLAUDE_PLUGIN_ROOT;
 const input = JSON.parse(readFileSync(0, "utf8"));
 
-if (process.env.PERSONA_AGENTS_DEBUG && process.env.CLAUDE_PLUGIN_DATA) {
+if (process.env.COMPANION_AGENTS_DEBUG && process.env.CLAUDE_PLUGIN_DATA) {
 	mkdirSync(process.env.CLAUDE_PLUGIN_DATA, { recursive: true });
 	appendFileSync(join(process.env.CLAUDE_PLUGIN_DATA, "hook-input.log"), `${JSON.stringify(input)}\n`);
 }
@@ -48,7 +48,7 @@ function professionContext() {
 
 /** Claude Code mechanics the companion needs with or without a persona. */
 const PLATFORM_LINES = [
-	"- Load a skill by name with the Skill tool: the skill `<name>` is `persona-agents:<name>`.",
+	"- Load a skill by name with the Skill tool: the skill `<name>` is `companion-agents:<name>`.",
 	"- The review skill starts the reviewer as a background subagent, and only its result wakes you. Stall guard: in the same turn, start `sleep 1200` as a background shell command (it may ask once). If that timer finishes before the review result, load `TaskStop` with ToolSearch, stop the reviewer with it, and report the review as incomplete. If the result arrives first, stop the timer.",
 ];
 
@@ -60,14 +60,14 @@ function personaContext() {
 	if (!entry) {
 		// A missing mapping must not block the session: warn the owner, and still
 		// carry the persona-free rule, which travels with the persona.
-		process.stderr.write(`persona-agents: no ${theme} persona for the ${PROFESSION}; running without one\n`);
+		process.stderr.write(`companion-agents: no ${theme} persona for the ${PROFESSION}; running without one\n`);
 		return [`# Running in Claude Code (no persona)`, "", PERSONA_FREE_RULE, "", ...PLATFORM_LINES].join("\n");
 	}
 	const persona = readFileSync(join(content, "personas", theme, entry.personaFile), "utf8").trim();
 	const lines = [
 		`# Running in Claude Code (persona theme: ${theme})`,
 		"",
-		`You are the persona-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. ${PERSONA_FREE_RULE}`,
+		`You are the companion-agents companion. Speak as the persona below in chat: use its name, voice, and quirks, also when you introduce yourself. Your profession rules arrive as a separate block and take precedence over the persona on what you do. ${PERSONA_FREE_RULE}`,
 		"",
 		...PLATFORM_LINES,
 	];

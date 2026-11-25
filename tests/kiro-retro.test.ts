@@ -24,7 +24,7 @@ const sessionId = "sess_abcdefab-1111-2222-3333-444444444444";
 const otherSession = "sess_other";
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-retro-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-retro-"));
 	try {
 		fn(root);
 	} finally {
@@ -60,15 +60,15 @@ function fixture(root: string): Fixture {
 		{ type: "tool_call", toolName: "fs_write", args: { path: taskNotes, text: "# Task" } },
 		{ type: "tool_call", toolName: "execute_bash", args: { command: "npm test" } },
 		{ type: "tool_result", status: "denied", title: "Run Command", content: "blocked" },
-		{ type: "sub_agent_start", subSessionId: "sub-1", subAgentName: "pa-reviewer", prompt: "Change key: 0123456789abcdef" },
-		{ type: "sub_agent_complete", subSessionId: "sub-1", subAgentName: "pa-reviewer", response: "## Verdict\nApprove - fine.", status: "success" },
+		{ type: "sub_agent_start", subSessionId: "sub-1", subAgentName: "ca-reviewer", prompt: "Change key: 0123456789abcdef" },
+		{ type: "sub_agent_complete", subSessionId: "sub-1", subAgentName: "ca-reviewer", response: "## Verdict\nApprove - fine.", status: "success" },
 		{ type: "ContextualHookInvoked", name: "kiro-session-start" },
 		{ type: "session_metadata", key: "creditSplit", value: { main: 1.5, delegated: 0.5, auxiliary: 0.25 } },
 		{ type: "session_metadata", key: "contextUsage", value: { usagePercentage: 81.5 } },
 	];
 	fs.writeFileSync(path.join(dir, "messages.jsonl"), `${payloads.map((payload) => JSON.stringify(payload)).join("\n")}\n`);
-	fs.writeFileSync(path.join(dir, "session.json"), JSON.stringify({ id: sessionId, agentMode: "pa-companion", modelId: "claude-haiku-4.5" }));
-	const state = path.join(kiro, "persona-agents", "state");
+	fs.writeFileSync(path.join(dir, "session.json"), JSON.stringify({ id: sessionId, agentMode: "ca-companion", modelId: "claude-haiku-4.5" }));
+	const state = path.join(kiro, "companion-agents", "state");
 	fs.mkdirSync(path.join(state, "compact"), { recursive: true });
 	fs.writeFileSync(
 		path.join(state, "decisions.ndjson"),

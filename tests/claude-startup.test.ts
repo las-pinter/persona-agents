@@ -20,7 +20,7 @@ const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", 
 
 /** A temp home with a non-git working folder; the project is "common". */
 function withNotes(fn: (paths: { home: string; cwd: string; dir: string }) => void): void {
-	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-startup-")));
+	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-startup-")));
 	try {
 		const home = path.join(tmp, "home");
 		const cwd = path.join(tmp, "work");
@@ -116,7 +116,7 @@ describe("startup hook: process", () => {
 	test("the companion gets SessionStart additional context under the cap", () => {
 		withNotes(({ home, cwd, dir }) => {
 			write(path.join(dir, "summary.md"), "# s");
-			const result = run({ hook_event_name: "SessionStart", source: "startup", agent_type: "persona-agents:companion", cwd }, home);
+			const result = run({ hook_event_name: "SessionStart", source: "startup", agent_type: "companion-agents:companion", cwd }, home);
 			assert.equal(result.status, 0, result.stderr);
 			const output = JSON.parse(result.stdout) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
 			assert.equal(output.hookSpecificOutput.hookEventName, "SessionStart");
@@ -127,7 +127,7 @@ describe("startup hook: process", () => {
 	});
 
 	test("another agent and a plain session get no output", () => {
-		for (const agent of [undefined, "persona-agents:reviewer", "Explore"]) {
+		for (const agent of [undefined, "companion-agents:reviewer", "Explore"]) {
 			const result = run({ hook_event_name: "SessionStart", source: "startup", agent_type: agent, cwd: os.tmpdir() });
 			assert.equal(result.status, 0);
 			assert.equal(result.stdout, "", String(agent));

@@ -30,7 +30,7 @@ const writerScript = path.join(repoRoot, "platforms", "kiro", "scripts", "sessio
 const sessionId = "sess_99999999-8888-7777-6666-555555555555";
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-session-log-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-session-log-"));
 	try {
 		fn(root);
 	} finally {
@@ -123,7 +123,7 @@ describe("kiro session-log net: the hook", () => {
 			assert.equal(calls[0].command, process.execPath);
 			assert.ok(calls[0].args.includes("write"));
 			assert.ok(calls[0].args.some((arg) => arg.startsWith("--kiro-cli=")));
-			const file = payloadFile(path.join(f.kiro, "persona-agents", "state"), sessionId);
+			const file = payloadFile(path.join(f.kiro, "companion-agents", "state"), sessionId);
 			assert.ok(fs.existsSync(file));
 			const saved = JSON.parse(fs.readFileSync(file, "utf8")) as { session: string; prompt: string };
 			assert.equal(saved.session, sessionId);

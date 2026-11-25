@@ -25,7 +25,7 @@ import {
 } from "../platforms/kiro/scripts/session-store.ts";
 
 function withTemp(fn: (root: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-kiro-session-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-kiro-session-"));
 	try {
 		fn(root);
 	} finally {
@@ -54,11 +54,11 @@ const payloads = (): Record<string, unknown>[] => [
 	{ type: "tool_call", toolName: "fs_write", args: { path: "/repo/src/a.ts", text: "fixed" } },
 	{ type: "tool_call", toolName: "execute_bash", args: { command: "npm test" } },
 	{ type: "tool_result", status: "denied", title: "Run Command", content: "blocked by the gate" },
-	{ type: "sub_agent_start", subSessionId: "sub-1", subAgentName: "pa-reviewer", prompt: "Change key: abc123def456" },
+	{ type: "sub_agent_start", subSessionId: "sub-1", subAgentName: "ca-reviewer", prompt: "Change key: abc123def456" },
 	{
 		type: "sub_agent_complete",
 		subSessionId: "sub-1",
-		subAgentName: "pa-reviewer",
+		subAgentName: "ca-reviewer",
 		response: "## Summary\nFine.\n\n## Verdict\nApprove - the change is small.",
 		status: "success",
 	},
@@ -88,10 +88,10 @@ describe("kiro session store: finding and reading", () => {
 
 	test("readSession reads the metadata and the facts", () => {
 		withTemp((root) => {
-			writeSession(root, payloads(), { id: sessionId, agentMode: "pa-companion", modelId: "claude-haiku-4.5" });
+			writeSession(root, payloads(), { id: sessionId, agentMode: "ca-companion", modelId: "claude-haiku-4.5" });
 			const session = readSession(root, sessionId);
 			assert.ok(session);
-			assert.equal(session.meta?.agentMode, "pa-companion");
+			assert.equal(session.meta?.agentMode, "ca-companion");
 			assert.equal(session.hooks.length, 1);
 			assert.equal(session.credits?.main, 1.5);
 			assert.equal(session.contextUsage, 12.5);
@@ -128,9 +128,9 @@ describe("kiro session store: the shared entry shape", () => {
 		assert.equal(facts.denials.length, 1);
 		assert.match(facts.denials[0].message, /blocked by the gate/);
 		assert.equal(facts.subAgents.length, 1);
-		assert.equal(facts.subAgents[0].agent, "pa-reviewer");
+		assert.equal(facts.subAgents[0].agent, "ca-reviewer");
 		assert.equal(facts.subAgents[0].status, "success");
-		const review = facts.entries.find((entry) => entry.customType === "persona-agents:review");
+		const review = facts.entries.find((entry) => entry.customType === "companion-agents:review");
 		assert.ok(review);
 		assert.equal((review.data as { verdict: string }).verdict, "Approve");
 		assert.equal(facts.credits?.delegated, 0.5);
@@ -139,11 +139,11 @@ describe("kiro session store: the shared entry shape", () => {
 
 	test("a reviewer run with no verdict adds no review entry", () => {
 		const facts = mapPayloads(
-			[{ type: "sub_agent_start", subSessionId: "s", subAgentName: "pa-reviewer", prompt: "" }, { type: "sub_agent_complete", subSessionId: "s", subAgentName: "pa-reviewer", response: "no heading", status: "success" }],
+			[{ type: "sub_agent_start", subSessionId: "s", subAgentName: "ca-reviewer", prompt: "" }, { type: "sub_agent_complete", subSessionId: "s", subAgentName: "ca-reviewer", response: "no heading", status: "success" }],
 			{ skillsDir: "/kiro/skills" },
 		);
 		assert.equal(facts.subAgents.length, 1);
-		assert.equal(facts.entries.some((entry) => entry.customType === "persona-agents:review"), false);
+		assert.equal(facts.entries.some((entry) => entry.customType === "companion-agents:review"), false);
 	});
 });
 

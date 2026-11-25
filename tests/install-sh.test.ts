@@ -27,7 +27,7 @@ interface Run {
 }
 
 function withConfig(fn: (dir: string, home: string) => void): void {
-	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-install-"));
+	const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-install-"));
 	try {
 		const dir = path.join(tmp, "config");
 		const home = path.join(tmp, "home");

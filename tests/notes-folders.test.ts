@@ -18,7 +18,7 @@ import { activeTaskNotes, openTaskNotes, startupContext } from "../platforms/sha
 import { writtenTaskNotes } from "../platforms/shared/notes/session-log-net.ts";
 
 function withNotes(fn: (notes: string) => void): void {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), "persona-agents-folders-"));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "companion-agents-folders-"));
 	try {
 		fn(path.join(root, "notes"));
 	} finally {

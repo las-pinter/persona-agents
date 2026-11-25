@@ -1,4 +1,4 @@
-/** The state one persona-agents Pi session keeps across its event handlers. */
+/** The state one companion-agents Pi session keeps across its event handlers. */
 
 import { type Registry } from "./context.ts";
 import { type Manifest } from "../../shared/compaction/manifest.ts";

@@ -1,11 +1,11 @@
 {
-  "name": "persona-agents",
-  "displayName": "Persona Agents",
+  "name": "companion-agents",
+  "displayName": "Companion Agents",
   "description": "A companion agent that plans, builds, tests, and commits with you, in the voice of a switchable persona theme",
   "author": {
     "name": "Las Pinter"
   },
-  "repository": "https://github.com/las-pinter/persona-agents",
+  "repository": "https://github.com/las-pinter/companion-agents",
   "license": "MIT",
   "keywords": [
     "agents",

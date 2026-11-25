@@ -1,14 +1,14 @@
 # Review on Kiro CLI
 
 You are the companion. The review runs in a separate context with the
-`pa-reviewer` sub-agent, so it judges the change without your reasoning.
+`ca-reviewer` sub-agent, so it judges the change without your reasoning.
 
 ## Steps
 
 1. Build the brief. Run this with the shell tool, from the repository root:
 
    ```sh
-   node --experimental-strip-types --no-warnings {{PERSONA_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
+   node --experimental-strip-types --no-warnings {{COMPANION_AGENTS_KIRO_ROOT}}/platforms/kiro/scripts/review.ts "<scope>"
    ```
 
    Replace `<scope>` with the scope the owner named; when none was named, drop
@@ -25,7 +25,7 @@ You are the companion. The review runs in a separate context with the
    review of a named ref, range, or paths names no key either: it did not see
    the whole uncommitted change, so it does not unlock a commit of it.
 
-2. Start the `pa-reviewer` sub-agent with the printed task verbatim, including
+2. Start the `ca-reviewer` sub-agent with the printed task verbatim, including
    the final `Change key:` line. Do not add a checklist, your own risk list, or
    your reasoning: the brief says what was done and where, never what to check.
    The companion's tools list allows only this sub-agent.

@@ -51,7 +51,7 @@ async function runReviewer(
 			"-p",
 			"--no-session",
 			"--agent",
-			"persona-agents:reviewer",
+			"companion-agents:reviewer",
 			"--tools",
 			"read,grep,find,ls,bash",
 			"--append-system-prompt",
@@ -96,7 +96,7 @@ export async function executeReview(
 	const { text, verdict } = await runReviewer(pi, session.env.cwd, prepared.brief, signal);
 	if (verdict && key !== "") {
 		session.reviews.set(key, verdict);
-		pi.appendEntry("persona-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
+		pi.appendEntry("companion-agents:review", { at: new Date().toISOString(), key, verdict, files: change.files });
 	}
 	return { text, verdict, key, notes };
 }

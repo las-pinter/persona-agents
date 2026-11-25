@@ -64,12 +64,12 @@ The rules that apply:
 To try a persona:
 
 - Claude Code: set the theme in `/config` and start
-  `claude --agent persona-agents:companion`; add `--plugin-dir <clone>` to try
+  `claude --agent companion-agents:companion`; add `--plugin-dir <clone>` to try
   a change from a clone.
-- Pi: `pi --agent persona-agents:companion --persona <theme>`, or
+- Pi: `pi --agent companion-agents:companion --persona <theme>`, or
   `/persona <theme>` in a running session.
 - Kiro CLI: `./install.sh --kiro --theme <theme>`, then
-  `kiro-cli --agent pa-companion`.
+  `kiro-cli --agent ca-companion`.
 
 ## Adding a skill
 
@@ -81,8 +81,8 @@ A skill is a workflow document that the companion loads at run time.
    `platforms/shared/` when more than one adapter runs them.
 2. Keep the text harness-neutral. Claude Code substitutes
    `${CLAUDE_SKILL_DIR}` and `${CLAUDE_SESSION_ID}`; Pi substitutes nothing;
-   the Kiro installer substitutes `{{PERSONA_AGENTS_KIRO_SKILL_DIR}}` and
-   `{{PERSONA_AGENTS_KIRO_ROOT}}`. When a step differs per harness, add a
+   the Kiro installer substitutes `{{COMPANION_AGENTS_KIRO_SKILL_DIR}}` and
+   `{{COMPANION_AGENTS_KIRO_ROOT}}`. When a step differs per harness, add a
    `## Platform branch` section that keys on the `Running in <harness>` line
    of the system context, and put the Kiro procedure in `references/kiro.md`
    (see `review`, `retro`, and `wrap-up`). A skill that must run in a separate

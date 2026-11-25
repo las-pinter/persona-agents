@@ -1,13 +1,13 @@
 ---
 name: retro
-description: Print-only blameless retrospective of the current companion session - the AAR spine, a 15-dimension sweep, and routed actions. Run it with /persona-agents:retro.
+description: Print-only blameless retrospective of the current companion session - the AAR spine, a 15-dimension sweep, and routed actions. Run it with /companion-agents:retro.
 disable-model-invocation: true
 ---
 
 ## Platform branch
 
 If your system context says `Running in Kiro CLI`, first read
-`{{PERSONA_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md`. It names the script that
+`{{COMPANION_AGENTS_KIRO_SKILL_DIR}}/references/kiro.md`. It names the script that
 prints this session's facts and says which parts of this file apply. Write
 nothing durable either way.
 
@@ -25,7 +25,7 @@ durable.
 On Pi, `/retro` gathers the session facts (tool calls, changed files,
 compactions, reviews, and every permission decision) and sends them with the
 path of this skill. On Kiro CLI, `/retro` loads this skill. On Claude Code,
-`/persona-agents:retro` starts the same work.
+`/companion-agents:retro` starts the same work.
 
 The spine is the After Action Review (AAR). It has four parts:
 
@@ -39,7 +39,7 @@ condition to change, not a person to blame.
 
 ## When to Run
 
-Run this skill when the owner types `/persona-agents:retro` or asks for a
+Run this skill when the owner types `/companion-agents:retro` or asks for a
 session retrospective. Run it yourself, in this session; do not hand it to a
 subagent.
 
@@ -50,8 +50,8 @@ subagent.
 | Session id | `${CLAUDE_SESSION_ID}` |
 | Transcript | `~/.claude/projects/<cwd-slug>/${CLAUDE_SESSION_ID}.jsonl`. The slug is the working directory with each character that is not a letter or a digit changed to `-` (`/home/dev/project` → `-home-dev-project`). Subagent transcripts (the review runs) are in `~/.claude/projects/<cwd-slug>/${CLAUDE_SESSION_ID}/subagents/*.jsonl`. |
 | Transcript format | JSON Lines. Each line is one message or event. Tool results hold the permission denials. Each assistant message holds a `message.usage` object. A `system` line with `subtype: "compact_boundary"` marks a compaction and carries `compactMetadata` (`trigger`, `preTokens`, `postTokens`). |
-| Permission rules | The `permissions` block of `~/.claude/settings.json`, `.claude/settings.json`, and `.claude/settings.local.json`, and the persona-agents PreToolUse hook (`platforms/claude/scripts/doctrine.ts` in the plugin folder). |
-| Permission audit log | None. The hook writes `doctrine.log` in the plugin data folder only when `PERSONA_AGENTS_DEBUG` is set. Use it as evidence only if it exists. |
+| Permission rules | The `permissions` block of `~/.claude/settings.json`, `.claude/settings.json`, and `.claude/settings.local.json`, and the companion-agents PreToolUse hook (`platforms/claude/scripts/doctrine.ts` in the plugin folder). |
+| Permission audit log | None. The hook writes `doctrine.log` in the plugin data folder only when `COMPANION_AGENTS_DEBUG` is set. Use it as evidence only if it exists. |
 | Cost source | The `message.usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`, in the session and subagent transcripts. They give token counts, not money. Report the totals. |
 
 ## Review Scope
