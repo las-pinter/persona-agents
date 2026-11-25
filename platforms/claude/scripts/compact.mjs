@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import { lastDistinct, MAX_SKILLS, reloadContext as sharedReloadContext, reloadFiles, summaryInstructions, toolCalls } from "../../shared/compaction/manifest.ts";
 import { safeId } from "../../shared/notes/session-log.ts";
 import { projectDir } from "./notes-paths.mjs";
-import { readTranscript, toEntries } from "./transcript.ts";
+import { hookStartDir, readTranscript, toEntries } from "./transcript.ts";
 
 export { readTranscript, summaryInstructions };
 
@@ -125,8 +125,7 @@ function run(mode, input) {
 	mkdirSync(dir, { recursive: true });
 	const id = safeId(input.session_id);
 	const manifestFile = join(dir, `${id}.json`);
-	const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-	const notesDir = projectDir(cwd, homeArg());
+	const notesDir = projectDir(hookStartDir(input), homeArg());
 
 	const sessionId = typeof input.session_id === "string" ? input.session_id : "";
 

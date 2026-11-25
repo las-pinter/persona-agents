@@ -33,7 +33,7 @@ import {
 } from "../../shared/notes/session-log-net.ts";
 import { dayOf, entryPath, findEntry, safeSession } from "../../shared/notes/session-log.ts";
 import { projectDir } from "./notes-paths.mjs";
-import { readTranscript, toEntries } from "./transcript.ts";
+import { hookStartDir, readTranscript, toEntries } from "./transcript.ts";
 
 export { writerPrompt };
 
@@ -52,8 +52,7 @@ export function conversationTail(entries) {
 }
 
 function hook(input, claudeArg) {
-	const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-	const notesDir = projectDir(cwd, homeArg());
+	const notesDir = projectDir(hookStartDir(input), homeArg());
 	const now = new Date();
 	const yesterday = new Date(now);
 	yesterday.setDate(now.getDate() - 1);

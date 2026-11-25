@@ -9,7 +9,8 @@
  * to Pi's names, and a compact boundary as a `compaction` entry.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { EntryLike } from "../../shared/compaction/manifest.ts";
 
 /** One parsed transcript line. */
@@ -31,6 +32,49 @@ export function readTranscript(path: string | undefined): TranscriptEntry[] {
 				return [];
 			}
 		});
+}
+
+/**
+ * The folder the session started in: the first `cwd` its transcript records
+ * on the main chain, else the fallback. Claude Code records the current folder
+ * on each line, and a `cd` into an additional working directory changes it,
+ * so a later `cwd` (and the hook input `cwd`) can name a folder of another
+ * project or of none.
+ */
+export function startDir(transcriptPath: string | undefined, fallback: string): string {
+	if (!transcriptPath || !existsSync(transcriptPath)) return fallback;
+	// Parse line by line and stop at the first hit: the start folder sits near
+	// the head, and a long session's transcript runs to megabytes.
+	for (const line of readFileSync(transcriptPath, "utf8").split("\n")) {
+		if (!line.includes('"cwd"')) continue;
+		let entry: TranscriptEntry;
+		try {
+			entry = JSON.parse(line) as TranscriptEntry;
+		} catch {
+			continue;
+		}
+		if (entry.isSidechain === true) continue;
+		if (typeof entry.cwd === "string" && entry.cwd !== "") return entry.cwd;
+	}
+	return fallback;
+}
+
+/** The start folder for a hook input: from its transcript, else its `cwd`, else the process folder. */
+export function hookStartDir(input: { transcript_path?: unknown; cwd?: unknown }): string {
+	const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : process.cwd();
+	return startDir(typeof input.transcript_path === "string" ? input.transcript_path : undefined, cwd);
+}
+
+/** The transcript of a session under a Claude config folder (`<config>/projects/<dir>/<id>.jsonl`), or "". */
+export function findTranscript(configDir: string, sessionId: string): string {
+	if (!configDir || !/^[A-Za-z0-9_-]+$/.test(sessionId)) return "";
+	const projects = join(configDir, "projects");
+	if (!existsSync(projects)) return "";
+	for (const dir of readdirSync(projects)) {
+		const file = join(projects, dir, `${sessionId}.jsonl`);
+		if (existsSync(file)) return file;
+	}
+	return "";
 }
 
 /** One content block in the shared shape: a file tool's `file_path` becomes `path`. */
