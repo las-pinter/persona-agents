@@ -1,28 +1,54 @@
+<div align="center">
+
 # companion-agents 🎭
 
-> **"Your AI agents, but make it fun."**
+**Your AI agents, but make it fun.**
+
+One hands-on companion that plans, builds, tests, and commits with you,
+in the voice of a character you pick.
+
+[![License](https://img.shields.io/github/license/las-pinter/companion-agents)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/las-pinter/companion-agents/ci.yml?branch=main&label=CI)](https://github.com/las-pinter/companion-agents/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/las-pinter/companion-agents)](https://github.com/las-pinter/companion-agents/releases/latest)
+<br>
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-D97757)](#-install-on-claude-code)
+[![Pi](https://img.shields.io/badge/Pi-package-5B8DEF)](#-install-on-pi)
+[![Kiro CLI](https://img.shields.io/badge/Kiro%20CLI-adapter-8B5CF6)](#-install-on-kiro-cli)
+
+![Eight companions answer the same prompt](docs/demo/personas.gif)
+
+<sub>Scripted illustration of the eight themes. Real output varies by model and run.</sub>
+
+</div>
 
 Tired of AI agents with all the personality of a loading spinner? Same.
-`companion-agents` gives you one hands-on **companion** — an agent that plans,
-builds, tests, and commits with you — in the voice of a character you pick.
-It runs on three harnesses from one shared content tree:
+`companion-agents` gives you one **companion** that does the whole job with
+you, from one shared content tree on three harnesses:
 [Claude Code](https://claude.com/claude-code), [Pi](https://pi.dev), and
 [Kiro CLI](https://kiro.dev). Because AI-assisted development shouldn't feel
 like filing taxes.
-
-*A goblin chief, a tech-priest, an ork warboss, a drunk landlord, a caveman, a
-90s hacker, an office cat, and a quest giver who finally goes on the quest
-himself. You're welcome.*
 
 > ⚠️ **Work in Progress** — This repo is actively evolving. The companion, the
 > personas, and the skills will change, grow, and occasionally break things.
 > You have been warned.
 
----
+## 🧙 The Companions
 
-[![License](https://img.shields.io/github/license/las-pinter/companion-agents)](LICENSE)
+| Theme | Companion | Description |
+| --- | --- | --- |
+| `goblin` (default) | **Bossnik** | Fierce Goblin Chief, fanatically loyal to the Evil Wizard (you). The horde ran off, so he builds the trap himself |
+| `wh40k` | **Magos Omicron-Delta-9-Archaeon** | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), performs every rite personally |
+| `wh40kOrk` | **WARBOSS GRIMGOB** | **DA BIGGEST AN' DA BOSS!** Da boyz is gone, so 'e digs 'is own trenches. WAAAGH! |
+| `pub` | **Seamus O'Shaun** | The Landlord — runs the whole pub single-handed, has been "quality testing" the ale since noon |
+| `caveman` | **Zhen** | The Core — builds with minimum words. Maximum signal, zero noise *(inspired by [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman))* |
+| `cyberpunk` | **Zero Cool** | The BEST hacker on the west coast. Sunglasses indoors. Runs the whole job solo. "We're in." |
+| `catcrew` | **Chairman Meow** | Sits on keyboard. Types with paws. Demands treats. Takes credit for everything — and now deserves it |
+| `fantasy` | **The Quest Giver** | Left the town square to go on the QUESTS himself. Speaks in CAPITAL LETTERS |
 
-## Why one companion?
+The persona sets the voice in chat only. Code, commits, notes, and session logs
+stay persona-free.
+
+## 💡 Why one companion?
 
 Earlier versions ran a crew: an orchestrator that handed every task to a
 planner, an implementer, a tester, and a reviewer. Every hand-off cost a cold
@@ -33,7 +59,38 @@ Profession knowledge lives in skills it loads when it needs them. Only the
 independent review still runs in a separate context, because a fresh pair of
 eyes is the point of a review.
 
-## Prerequisites
+- 🗺️ **Plans first** — an interview and a study you accept before any code.
+- 🔨 **Builds and tests itself** — one context, no lossy hand-offs.
+- 🔍 **Independent review** — a read-only reviewer in a separate context.
+- 📜 **Remembers** — project notes, task notes, and session logs on disk that
+  survive compaction and new sessions.
+- 🛡️ **Asks before it publishes** — commits run freely; a push, a pull request,
+  or a release asks you.
+
+## 🚀 Quick start
+
+```bash
+# Claude Code
+claude plugin marketplace add las-pinter/companion-agents
+claude plugin install companion-agents@companion-agents --config theme=goblin
+claude --agent companion-agents:companion
+
+# Pi
+pi install https://github.com/las-pinter/companion-agents
+pi --agent companion-agents:companion --persona goblin
+
+# Kiro CLI
+git clone https://github.com/las-pinter/companion-agents.git ~/companion-agents
+~/companion-agents/install.sh --kiro --theme goblin
+kiro-cli --agent ca-companion
+```
+
+The sections below hold the prerequisites, the recommended Claude Code
+settings, and the update steps for each harness.
+
+## 📦 Install
+
+### Prerequisites
 
 Pick one harness or several; each installs on its own.
 
@@ -43,7 +100,10 @@ Pick one harness or several; each installs on its own.
 - **Pi:** nothing more.
 - **Kiro CLI:** version 3.4.0 or newer.
 
-## Install on Claude Code
+### 🟠 Install on Claude Code
+
+<details>
+<summary>Plugin, recommended settings, start, update</summary>
 
 ```bash
 claude plugin marketplace add las-pinter/companion-agents
@@ -85,7 +145,12 @@ Update with `claude plugin marketplace update companion-agents`, then
 release changes the settings snippet or `install.sh`, also run `git pull` and
 `./install.sh --claude` in the clone.
 
-## Install on Pi
+</details>
+
+### 🔵 Install on Pi
+
+<details>
+<summary>Package, persona flag, permissions, update</summary>
 
 The same content runs on [Pi](https://pi.dev) through the adapter in
 [platforms/pi/](platforms/pi/README.md). Pi needs no settings merge: the
@@ -114,7 +179,12 @@ either file.
 Update with `pi update --extensions`, then start a new session so the
 extension reloads.
 
-## Install on Kiro CLI
+</details>
+
+### 🟣 Install on Kiro CLI
+
+<details>
+<summary>Installer, theme, agents, gate, update</summary>
 
 The same content runs on [Kiro CLI](https://kiro.dev) 3.4.0 or newer through
 the adapter in [platforms/kiro/](platforms/kiro/README.md). The installer
@@ -149,7 +219,14 @@ trivial. The automatic session log needs an interactive exit; a headless run
 gets none, so run the wrap-up skill there. The
 [Kiro adapter docs](platforms/kiro/README.md) hold the hook and gate details.
 
-## How the companion works
+</details>
+
+## ⚙️ How the companion works
+
+![Bossnik plans, builds, tests, reviews, commits, and asks before the push](docs/demo/workflow.gif)
+
+<sub>Scripted illustration. The `ai:` prefix is this repository's commit rule; in your
+repository the companion follows your commit form, or asks before the first commit.</sub>
 
 - **Session start.** A hook gives the companion its read list: the project
   rules and summary, the last three days of the project session logs, any open
@@ -187,7 +264,10 @@ Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
 the repository's folder name (shared by all its worktrees), or `common`
 outside a repository.
 
-## Notes folders after an update
+## 🗂️ Notes folders after an update
+
+<details>
+<summary>Move notes from the old folder names (once per project)</summary>
 
 Task notes live in `tasks/` and session logs in `session-logs/` inside each
 project notes folder. Earlier releases used two other folder names, and
@@ -206,7 +286,9 @@ mv -n journal/* session-logs/ && rmdir journal        # legacy-names
 remaining entries have a same-named file or day folder in the new folder;
 merge those by hand.
 
-## Uninstall
+</details>
+
+## 🧹 Uninstall
 
 - **Claude Code:** `claude plugin uninstall companion-agents@companion-agents`.
   `install.sh` left a `settings.json.bak-<timestamp>` next to your settings;
@@ -222,28 +304,7 @@ merge those by hand.
 Your notes and session logs in `~/agent-notes/` are yours; no uninstall touches
 them.
 
-## The Companions
-
-![Themed agents answering the same prompt](docs/demo/personas.gif)
-
-One real captured run: four themes' personas answer the same prompt. Model
-output varies between runs.
-
-| Theme | Companion | Description |
-| --- | --- | --- |
-| `goblin` (default) | **Bossnik** | Fierce Goblin Chief, fanatically loyal to the Evil Wizard (you). The horde ran off, so he builds the trap himself |
-| `wh40k` | **Magos Omicron-Delta-9-Archaeon** | Technoarchaeologist. Sarcastic, hyper-precise (87.3333...%), performs every rite personally |
-| `wh40kOrk` | **WARBOSS GRIMGOB** | **DA BIGGEST AN' DA BOSS!** Da boyz is gone, so 'e digs 'is own trenches. WAAAGH! |
-| `pub` | **Seamus O'Shaun** | The Landlord — runs the whole pub single-handed, has been "quality testing" the ale since noon |
-| `caveman` | **Zhen** | The Core — builds with minimum words. Maximum signal, zero noise *(inspired by [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman))* |
-| `cyberpunk` | **Zero Cool** | The BEST hacker on the west coast. Sunglasses indoors. Runs the whole job solo. "We're in." |
-| `catcrew` | **Chairman Meow** | Sits on keyboard. Types with paws. Demands treats. Takes credit for everything — and now deserves it |
-| `fantasy` | **The Quest Giver** | Left the town square to go on the QUESTS himself. Speaks in CAPITAL LETTERS |
-
-The persona sets the voice in chat only. Code, commits, notes, and session logs
-stay persona-free.
-
-## Contributing
+## 🤝 Contributing
 
 The Claude Code adapter is in [platforms/claude/README.md](platforms/claude/README.md),
 the Pi adapter in [platforms/pi/README.md](platforms/pi/README.md), and the
