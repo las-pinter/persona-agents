@@ -56,6 +56,14 @@ lacks the marker; `--force` renames it to `<name>.bak-<timestamp>` and replaces
 it. A marked folder for a skill that is no longer shipped is removed.
 A version below 3.4.0 is refused before any write.
 
+An install made under the old project name (5.x) is adopted
+(`platforms/kiro/legacy.ts`): a skill folder with the old marker counts as
+marked; the old payload folder becomes `<kiro home>/companion-agents/` when that
+folder is absent, so the theme and the state carry over, and stays with a
+warning otherwise; each old agent file is renamed to `<file>.bak-<timestamp>`.
+A `chat.defaultAgent` that
+names an old agent is warned about, never rewritten.
+
 Update with `git pull` and `./install.sh --kiro`. A file whose text the
 installer would change is backed up as `<file>.bak-<timestamp>`; a file that
 already matches is left alone, so an unchanged run writes no backup. Start the
