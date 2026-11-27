@@ -196,6 +196,9 @@ describe("compact: texts", () => {
 	test("the reload context lists the notes, the skills, and the docs, under the hook cap", () => {
 		const text = reloadContext(manifest);
 		for (const item of [manifest.taskNotes, ...manifest.skills, ...manifest.docs]) assert.ok(text.includes(item), item);
+		// A reloaded skill is instructions, not work: `review` must not start
+		// a review just because a compaction happened.
+		assert.match(text, /Reloading a skill loads its instructions/);
 		const big = { taskNotes: "/n/s.md", skills: Array(12).fill("companion-agents:some-long-skill-name"), docs: Array(20).fill(`/${"d".repeat(200)}.md`), scan };
 		assert.ok(reloadContext(big).length < 10_000);
 	});

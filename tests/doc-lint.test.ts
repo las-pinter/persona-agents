@@ -17,7 +17,9 @@
  *   8. content and docs use the task-notes skill and the `tasks/` and
  *      `session-logs/` folders, never the old names;
  *   9. the companion profession lists exactly the skills the model may start:
- *      every other skill is slash-only (`disable-model-invocation: true`).
+ *      every other skill is slash-only (`disable-model-invocation: true`);
+ *  10. a skill names the argument placeholder at most once: Claude Code and
+ *      Kiro CLI replace every occurrence, so a second mention reads as blank.
  *
  * It does not check doctrine prose.
  */
@@ -224,4 +226,13 @@ describe("condition 9: a skill the companion does not list is slash-only", () =>
 		);
 		assert.deepEqual(listed, modelInvoked);
 	});
+});
+
+describe("condition 10: a skill names the argument placeholder at most once", () => {
+	for (const folder of skillFolders()) {
+		test(folder, () => {
+			const count = readText(path.join(skillsRoot, folder, "SKILL.md")).split("$ARGUMENTS").length - 1;
+			assert.ok(count <= 1, `${folder}/SKILL.md names $ARGUMENTS ${count} times`);
+		});
+	}
 });

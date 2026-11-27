@@ -87,6 +87,9 @@ describe("pi manifest: what to reload", () => {
 				path.join(box.notesDir, "pinned", "api.md"),
 			]);
 			assert.equal(manifest.docs.includes(box.taskNotes), false, "the task notes are step 1, not a doc");
+			// A reloaded skill is instructions, not work: `review` must not
+			// start a review just because a compaction happened.
+			assert.match(reloadContext(manifest), /Reloading a skill loads its instructions/);
 		} finally {
 			box.cleanup();
 		}

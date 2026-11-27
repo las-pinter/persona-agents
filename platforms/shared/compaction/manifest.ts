@@ -163,6 +163,14 @@ export function summaryInstructions(manifest: Pick<Manifest, "taskNotes">): stri
 /** Pi's skill step: a skill is reloaded by reading its file. */
 export const READ_SKILLS_STEP = "2. Re-read these skills (their `SKILL.md`):";
 
+/**
+ * What a reloaded skill is for. Some skills act when they run (a review, a
+ * commit, a wrap-up); a compaction must reload their instructions without
+ * starting their work, or the reload becomes an unprompted action on the tree.
+ */
+export const SKILL_RELOAD_NOTE =
+	"Reloading a skill loads its instructions, nothing more: do not start a skill's work (a review, a commit, a wrap-up) until the plan reaches that step.";
+
 /** The message sent right after a compaction: what to reload, in order. */
 export function reloadContext(manifest: Pick<Manifest, "taskNotes" | "skills" | "docs"> & { session?: string }, skillStep = READ_SKILLS_STEP): string {
 	const lines = [
@@ -179,6 +187,7 @@ export function reloadContext(manifest: Pick<Manifest, "taskNotes" | "skills" | 
 	);
 	lines.push(skillStep);
 	lines.push(...(manifest.skills.length ? manifest.skills.map((skill) => `   - ${skill}`) : ["   - none"]));
+	if (manifest.skills.length) lines.push(`   ${SKILL_RELOAD_NOTE}`);
 	lines.push("3. Re-read these documents in full:");
 	lines.push(...(manifest.docs.length ? manifest.docs.map((doc) => `   - ${doc}`) : ["   - none"]));
 	lines.push("4. Do not re-read working source files now; read them again when the next step needs them.");
