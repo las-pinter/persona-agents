@@ -102,7 +102,13 @@ function runInstaller(args: string[], env: Record<string, string> = {}): { statu
 }
 
 function runShell(args: string[], env: Record<string, string>): { status: number; stdout: string; stderr: string } {
-	const run = spawnSync("bash", [shellScript, ...args], { encoding: "utf8", env: { ...process.env, ...env } });
+	// A scratch home and config folder, and no inherited Dandelion folder, so
+	// the Dandelion step never reaches the machine's real config.
+	const home = env.HOME;
+	assert.ok(home, "runShell needs a HOME in env");
+	const scratch: NodeJS.ProcessEnv = { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, ".config"), ...env };
+	delete scratch.DANDELION_PLUGINS_DIR;
+	const run = spawnSync("bash", [shellScript, ...args], { encoding: "utf8", env: scratch });
 	return { status: run.status ?? 1, stdout: run.stdout, stderr: run.stderr };
 }
 
