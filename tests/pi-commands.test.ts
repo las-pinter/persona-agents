@@ -8,7 +8,7 @@
 
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { parsePermissionsArgs } from "../platforms/pi/scripts/commands.ts";
+import { parsePermissionsArgs, visualizeMessage } from "../platforms/pi/scripts/commands.ts";
 
 describe("pi commands: /permissions arguments", () => {
 	test("an empty argument or list asks for the report", () => {
@@ -74,6 +74,26 @@ describe("pi commands: /permissions arguments", () => {
 			const parsed = parsePermissionsArgs(args);
 			assert.equal(parsed.action, "invalid", args);
 			if (parsed.action === "invalid") assert.match(parsed.message, /^usage: \/permissions/);
+		}
+	});
+});
+
+describe("pi commands: /visualize message", () => {
+	const skill = "/pkg/content/skills/visualize/SKILL.md";
+
+	test("the message names the skill file", () => {
+		const message = visualizeMessage(skill, "");
+		assert.match(message, /^Read the visualize skill at \/pkg\/content\/skills\/visualize\/SKILL\.md and follow it\.$/m);
+	});
+
+	test("the argument travels verbatim, trimmed", () => {
+		const message = visualizeMessage(skill, "  slides the review flow — for the team ");
+		assert.match(message, /^Argument: slides the review flow — for the team$/m);
+	});
+
+	test("an empty argument asks for the default one-pager", () => {
+		for (const args of ["", "   "]) {
+			assert.match(visualizeMessage(skill, args), /^Argument: none \(the default html one-pager about this session\)\.$/m, JSON.stringify(args));
 		}
 	});
 });

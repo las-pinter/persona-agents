@@ -33,6 +33,7 @@
     "./content/skills/study/",
     "./content/skills/test-case-structure/",
     "./content/skills/test-strategy-selection/",
+    "./content/skills/visualize/",
     "./content/skills/wrap-up/"
   ],
   "hooks": "./platforms/claude/hooks/hooks.json",

@@ -14,6 +14,7 @@ import {
 	permissionsLine,
 	retroLine,
 	reviewLine,
+	visualizeLine,
 	summarizeReview,
 } from "../platforms/pi/scripts/summary.ts";
 
@@ -160,6 +161,12 @@ describe("pi summary: the other surfaces", () => {
 
 	test("a facts text with nothing counted reads as zeros", () => {
 		assert.equal(retroLine("no facts here"), "retro  0 tool calls · 0 files · 0 reviews");
+	});
+
+	test("the visualize line shows the argument, or default without one", () => {
+		const read = "Read the visualize skill at /pkg/SKILL.md and follow it.";
+		assert.equal(visualizeLine(`${read}\nArgument: slides the review flow`), "visualize  slides the review flow");
+		assert.equal(visualizeLine(`${read}\nArgument: none (the default html one-pager about this session).`), "visualize  default");
 	});
 
 	test("a list counts its paths and its lines", () => {

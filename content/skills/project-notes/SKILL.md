@@ -27,6 +27,7 @@ Every line must earn its place. The companion reads and writes them.
 │       ├── rules/<slug>.md            (one rule per file)
 │       ├── tasks/YYYY-MM-DD-<slug>.md  (task-notes skill)
 │       ├── session-logs/YYYY-MM-DD/<HHMM>-<session>.md  (wrap-up skill)
+│       ├── visuals/YYYY-MM-DD/<HHMM>-<slug>.<ext>  (visualize skill)
 │       └── studies/
 │           ├── index.md
 │           ├── legacy_studies/
@@ -63,6 +64,7 @@ A release note file uses `<version>.md`. Study folders use `YYYY-MM-DD-<slug>`.
 | `releases/` | On each release, one note per version. |
 | `audit/` | On each audit, one note per audit. |
 | `rules/` | On rule create, update, or retire. |
+| `visuals/` | When the owner runs the visualize command; one file per run. |
 | `studies/index.md` | On study creation and on every stage change. |
 | `studies/legacy_studies/` | When archiving an old study. |
 | `<study>/study.md` | On study creation, on every interview round, and when a decision changes. |

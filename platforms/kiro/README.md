@@ -216,6 +216,13 @@ decisions, credit split, context usage, sub-agent runs, hook invocations, the
 session log, and the model. It writes no files and prints the instruction
 plus a `## Session facts` table.
 
+## Visualize
+
+`/visualize` runs the shared skill with no Kiro branch: Kiro CLI expands
+`$ARGUMENTS` in a skill run as a slash command, so the text after the command
+reaches the skill. The skill writes one file under the notes folder's
+`visuals/`, which the companion may write without a prompt.
+
 ## Permissions
 
 Kiro has a native permission engine, so the adapter adds rules rather than a

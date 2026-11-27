@@ -146,6 +146,13 @@ export function retroLine(facts: string): string {
 	return `retro  ${tools} tool calls · ${files} files · ${reviews} ${reviewWord}`;
 }
 
+/** `visualize  slides the review flow`, or `visualize  default` with no argument. */
+export function visualizeLine(message: string): string {
+	const line = message.split("\n").find((text) => text.startsWith("Argument: "));
+	const argument = line === undefined || line.startsWith("Argument: none") ? "default" : line.slice("Argument: ".length);
+	return `visualize  ${argument}`;
+}
+
 /** `read list  6 paths · 18 lines` */
 export function listLine(name: string, text: string): string {
 	const paths = text.split("\n").filter(isBullet).length;

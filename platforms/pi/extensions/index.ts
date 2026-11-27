@@ -44,6 +44,7 @@ import {
 	reviewLine,
 	summarizeReview,
 	toolCallLine,
+	visualizeLine,
 } from "../scripts/summary.ts";
 import { contentDir, homeDir } from "../scripts/paths.ts";
 import { appendDecision, loadPolicy, piAgentDir } from "../scripts/policy-file.ts";
@@ -56,6 +57,7 @@ import { type Session } from "../scripts/session.ts";
 import { permissionsCommand, handleAsk } from "../scripts/permissions-ui.ts";
 import { executeReview, piInvocation, reviewGate } from "../scripts/review-run.ts";
 import { collapsedRow, bodyText } from "../scripts/render.ts";
+import { visualizeMessage } from "../scripts/commands.ts";
 
 /** The message type of the read list, so a renderer can find it later. */
 const READ_LIST = "companion-agents:read-list";
@@ -429,6 +431,20 @@ export default function companionAgents(pi: ExtensionAPI): void {
 		},
 	});
 
+	pi.registerCommand("visualize", {
+		description: "Visual document of this session: [html|slides|md] [what to show]",
+		handler: (args, ctx) => {
+			if (!session) {
+				ctx.ui.notify("companion-agents: not running as a companion-agents agent", "warning");
+				return;
+			}
+			pi.sendMessage(
+				{ customType: "companion-agents:visualize", content: visualizeMessage(join(contentDir(), "skills", "visualize", "SKILL.md"), args), display: true },
+				{ triggerTurn: true },
+			);
+		},
+	});
+
 	pi.registerTool({
 		name: "review",
 		label: "Review",
@@ -519,6 +535,12 @@ export default function companionAgents(pi: ExtensionAPI): void {
 		const text = bodyText(message.content);
 		if (options.expanded) return new Text(text, 0, 0);
 		return collapsedRow(theme, retroLine(text));
+	});
+
+	pi.registerMessageRenderer("companion-agents:visualize", (message, options, theme) => {
+		const text = bodyText(message.content);
+		if (options.expanded) return new Text(text, 0, 0);
+		return collapsedRow(theme, visualizeLine(text));
 	});
 
 	for (const [type, name] of [[READ_LIST, "read list"], [RELOAD_LIST, "reload list"]] as const) {
