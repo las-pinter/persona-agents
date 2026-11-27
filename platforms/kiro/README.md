@@ -22,9 +22,10 @@ running install.
 
 Flags:
 
-- `--claude` / `--kiro` restrict the run; with neither, both are installed.
-  When `kiro-cli` is absent the Kiro step is skipped with a message, unless
-  `--kiro` was named.
+- `--claude` / `--kiro` restrict the run; with no flag at all, both adapters
+  are installed. (`--dandelion` / `--no-dandelion` alone run only the Dandelion
+  step.) When `kiro-cli` is absent the Kiro step is skipped with a message,
+  unless `--kiro` was named.
 - `--theme <name>` writes the persona theme. When the flag is absent the
   installer keeps the theme already in `config.json`, or writes `goblin` on a
   first install.
