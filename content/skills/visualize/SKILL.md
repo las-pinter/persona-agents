@@ -8,8 +8,8 @@ disable-model-invocation: true
 ## Platform branch
 
 If your system context says `Running in Pi`, the `/visualize` message carries
-the argument. Use it as the argument below; the `$ARGUMENTS` text in this file
-does not apply.
+the argument. Use it as the argument below; ignore the `The argument:` line
+under Purpose.
 
 # Visualize
 
