@@ -15,7 +15,9 @@
  *      required sections, in order;
  *   7. no README.md holds the package version;
  *   8. content and docs use the task-notes skill and the `tasks/` and
- *      `session-logs/` folders, never the old names.
+ *      `session-logs/` folders, never the old names;
+ *   9. the companion profession lists exactly the skills the model may start:
+ *      every other skill is slash-only (`disable-model-invocation: true`).
  *
  * It does not check doctrine prose.
  */
@@ -210,5 +212,16 @@ describe("condition 8: task notes and session logs carry their new names", () =>
 				});
 		}
 		assert.deepEqual(bad, []);
+	});
+});
+
+describe("condition 9: a skill the companion does not list is slash-only", () => {
+	test("companion ## Skills equals the skills without disable-model-invocation", () => {
+		const section = sectionAfterHeading(readText(path.join(professionsDir, "companion.md")), /^##\s+Skills\s*$/m);
+		const listed = boldNames(section).sort();
+		const modelInvoked = skillFolders().filter(
+			(folder) => frontmatterValue(readText(path.join(skillsRoot, folder, "SKILL.md")), "disable-model-invocation") !== "true",
+		);
+		assert.deepEqual(listed, modelInvoked);
 	});
 });

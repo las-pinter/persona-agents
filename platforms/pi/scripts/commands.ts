@@ -1,5 +1,5 @@
 /**
- * The argument grammar of the `/permissions` command.
+ * The argument handling of the `/permissions` and `/visualize` commands.
  *
  * Kept out of the extension wiring so the grammar is testable: a mistyped
  * command should say what it wanted, not add a rule nobody meant.
@@ -9,6 +9,8 @@
  *   /permissions init                         create the user policy file
  *   /permissions edit                         print the file paths
  *   /permissions allow|ask|deny <tool> <regex> [— reason] [--project]
+ *
+ *   /visualize [html|slides|md] [focus]       the visualize skill, with the text as its argument
  */
 
 import type { Verdict } from "./policy.ts";
@@ -62,4 +64,17 @@ export function parsePermissionsArgs(args: string): ParsedArguments {
 			project,
 		},
 	};
+}
+
+/**
+ * The message `/visualize` sends. Pi does not expand `$ARGUMENTS` in a skill
+ * file, so the argument travels in the message; the skill's Pi branch reads it
+ * from here.
+ */
+export function visualizeMessage(skillFile: string, args: string): string {
+	const argument = args.trim();
+	return [
+		`Read the visualize skill at ${skillFile} and follow it.`,
+		argument === "" ? "Argument: none (the default html one-pager about this session)." : `Argument: ${argument}`,
+	].join("\n");
 }

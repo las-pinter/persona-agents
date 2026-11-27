@@ -259,6 +259,11 @@ repository the companion follows your commit form, or asks before the first comm
 - **Retro.** `/retro` on Pi and Kiro CLI, `/companion-agents:retro` on Claude
   Code: a blameless review of the session with findings and actions. It writes
   no files.
+- **Visualize.** `/visualize` on Pi and Kiro CLI, `/companion-agents:visualize`
+  on Claude Code: one graphic-first document about the session, saved in
+  `visuals/` in the project notes. The default is a self-contained HTML
+  one-pager; add `slides` or `md` for a deck or Markdown, and any text to say
+  what to show (`/visualize slides the review flow`).
 
 Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
 the repository's folder name (shared by all its worktrees), or `common`

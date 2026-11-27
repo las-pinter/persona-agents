@@ -23,7 +23,8 @@ of `content/` names no harness.
   - `context.ts` — the Pi platform note over the shared prompt builder.
   - `policy.ts` — the permission gate: floors, rules, grants, doctrine;
     `policy-file.ts` — reading and writing the policy files and the decision log.
-  - `commands.ts` — the `/permissions` argument grammar.
+  - `commands.ts` — the `/permissions` argument grammar and the `/visualize`
+    message.
   - `paths.ts` — the package paths; `session-log-writer.ts` — the detached writer.
   - Pieces of the extension that take the Pi API or the session state:
     `session.ts` (the session state), `permissions-ui.ts` (the ask dialog and
@@ -139,10 +140,11 @@ silently.
 
 Every companion-agents surface prints one line in the transcript: the review tool
 result, the `/review` notice, the commit-gate message, `/permissions`, `/retro`,
-the `session-log` tool result, and the read and reload lists. `scripts/summary.ts`
-builds each line from the text the surface already prints, and the renderers in
-the extension return it; `ctrl+o` (`app.tools.expand`) opens the full text. A
-long line is truncated to the width, never wrapped, so one surface is one row.
+`/visualize`, the `session-log` tool result, and the read and reload lists.
+`scripts/summary.ts` builds each line from the text the surface already prints,
+and the renderers in the extension return it; `ctrl+o` (`app.tools.expand`)
+opens the full text. A long line is truncated to the width, never wrapped, so
+one surface is one row.
 
 There is no panel and no click handling: Pi sends mouse events only in fullscreen
 mode and only to components that implement `handleMouse`, and `ctrl+o` reaches
