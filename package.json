@@ -1,6 +1,6 @@
 {
   "name": "companion-agents",
-  "version": "6.1.1",
+  "version": "6.2.0",
   "description": "A persona companion agent with skills, project notes, and session logs, for Claude Code, Pi, and Kiro CLI",
   "private": true,
   "type": "module",

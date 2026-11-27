@@ -3,7 +3,8 @@
 #
 # Usage:
 #   ./install.sh [--claude] [--kiro] [--theme <name>] [--dry-run] [--force]
-#                [--kiro-home=<dir>] [--kiro-cli=<path>] [--help]
+#                [--kiro-home=<dir>] [--kiro-cli=<path>] [--no-dandelion]
+#                [--help]
 #
 # Claude Code: merges the recommended settings snippet
 # (platforms/claude/settings/recommended.json) into the user settings. The merge
@@ -20,6 +21,15 @@
 #
 # With no adapter flag, both are installed. When kiro-cli is absent, the Kiro
 # step is skipped with a message unless --kiro was named.
+#
+# Dandelion: a real run, after the adapter steps succeed and whatever the
+# adapter flags, registers the visuals collection (the files /visualize writes)
+# with Dandelion's Documents page by writing
+# <plugins>/companion-agents-visuals.json. <plugins> is $DANDELION_PLUGINS_DIR
+# when set, else ${XDG_CONFIG_HOME:-~/.config}/dandelion/plugins. The step runs
+# only when Dandelion is present: $DANDELION_PLUGINS_DIR is set or the dandelion
+# config folder exists. --no-dandelion skips it and deletes that one file, never
+# the folder.
 
 set -euo pipefail
 
@@ -36,6 +46,8 @@ THEME=""
 FORCE=0
 KIRO_HOME_ARG="${KIRO_HOME:-}"
 KIRO_CLI_ARG="${KIRO_CLI:-kiro-cli}"
+DO_DANDELION=1
+DANDELION_ID="companion-agents-visuals"
 
 usage() {
     cat <<'EOF'
@@ -43,7 +55,7 @@ Install the companion-agents adapters for Claude Code and Kiro CLI.
 
 Usage:
   ./install.sh [--claude] [--kiro] [--theme <name>] [--dry-run] [--force]
-               [--kiro-home=<dir>] [--kiro-cli=<path>] [--help]
+               [--kiro-home=<dir>] [--kiro-cli=<path>] [--no-dandelion] [--help]
 
   --claude           Install the Claude Code settings merge only.
   --kiro             Install the Kiro CLI adapter only.
@@ -54,9 +66,14 @@ Usage:
   --kiro-home=<dir>  The Kiro global directory (default: $KIRO_HOME or ~/.kiro).
   --kiro-cli=<path>  The kiro-cli command to check (default: $KIRO_CLI or
                      kiro-cli).
+  --no-dandelion     Do not register the visuals collection with Dandelion,
+                     and remove the registration if it exists.
 
 With no adapter flag, both are installed. When kiro-cli is absent, the Kiro
 step is skipped with a message unless --kiro was named.
+
+When Dandelion is installed, a real run also registers the /visualize documents
+as a collection on its Documents page.
 
 Claude Code needs jq. Kiro CLI needs Node 22.6 or newer and kiro-cli 3.4.0 or
 newer.
@@ -102,6 +119,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --kiro-cli=*)
         KIRO_CLI_ARG="${1#*=}"
+        shift
+        ;;
+    --no-dandelion)
+        DO_DANDELION=0
         shift
         ;;
     -h | --help)
@@ -219,12 +240,95 @@ install_kiro() {
     node --experimental-strip-types --no-warnings "$KIRO_INSTALLER" "${args[@]}"
 }
 
+dandelion_manifest() {
+    cat <<EOF
+{
+  "schema": 1,
+  "id": "$DANDELION_ID",
+  "name": "Agent visuals",
+  "icon": "chart",
+  "root": "~/agent-notes/project-notes",
+  "include": ["{project}/visuals/{day}/**/*.{html,md}"],
+  "group": ["project", "day"]
+}
+EOF
+}
+
+install_dandelion() {
+    local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dandelion"
+    local plugins="${DANDELION_PLUGINS_DIR:-$config_dir/plugins}"
+    local file="$plugins/$DANDELION_ID.json"
+
+    if ((DO_DANDELION == 0)); then
+        if [[ -f "$file" ]]; then
+            if ((DRY_RUN)); then
+                echo "Dry run: would remove the Dandelion visuals collection: $file"
+            else
+                rm -f -- "$file"
+                echo "Removed the Dandelion visuals collection: $file"
+            fi
+        fi
+        return 0
+    fi
+
+    if [[ -z "${DANDELION_PLUGINS_DIR:-}" && ! -d "$config_dir" ]]; then
+        echo "Dandelion not found; skipping the visuals collection."
+        return 0
+    fi
+
+    local manifest root="$HOME/agent-notes/project-notes"
+    manifest="$(dandelion_manifest)"
+    local up_to_date=0
+    if [[ -f "$file" && "$(cat "$file")" == "$manifest" ]]; then
+        up_to_date=1
+    fi
+
+    if ((DRY_RUN)); then
+        if ((up_to_date)); then
+            echo "Dandelion visuals collection already up to date: $file"
+        else
+            echo "Dry run: $file would become:"
+            echo "$manifest"
+        fi
+        if [[ ! -d "$root" ]]; then
+            echo "Dry run: would create $root"
+        fi
+        return 0
+    fi
+
+    # Dandelion lists a manifest whose root is missing as a warning row, so the
+    # root is recreated even when the manifest is already up to date.
+    mkdir -p "$root"
+    if ((up_to_date)); then
+        echo "Dandelion visuals collection already up to date: $file"
+        return 0
+    fi
+
+    mkdir -p "$plugins"
+    local tmp
+    # The temporary name does not end in .json, so Dandelion never reads it.
+    tmp="$(mktemp "$plugins/.$DANDELION_ID.XXXXXX")"
+    printf '%s\n' "$manifest" >"$tmp"
+    mv "$tmp" "$file"
+    echo "Registered the Dandelion visuals collection: $file"
+}
+
+# --no-dandelion removes the registration before the adapter steps, so a
+# missing jq or a failing adapter still lets the removal run.
+if ((DO_DANDELION == 0)); then
+    install_dandelion
+fi
+
 if ((DO_CLAUDE)); then
     install_claude
 fi
 
 if ((DO_KIRO)); then
     install_kiro
+fi
+
+if ((DO_DANDELION)); then
+    install_dandelion
 fi
 
 if ((DO_CLAUDE)); then

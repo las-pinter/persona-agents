@@ -120,7 +120,11 @@ git clone https://github.com/las-pinter/companion-agents.git ~/companion-agents 
 
 > **Review `install.sh` before you run it.** It changes
 > `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) and keeps a
-> `settings.json.bak-<timestamp>` copy. It keeps every existing key.
+> `settings.json.bak-<timestamp>` copy. It keeps every existing key. When
+> Dandelion is installed, a real run, whatever the adapter flags, also writes
+> `companion-agents-visuals.json` into Dandelion's plugin folder and creates
+> `~/agent-notes/project-notes`; `--no-dandelion` skips that and removes the
+> file.
 
 The settings snippet ([platforms/claude/settings/recommended.json](platforms/claude/settings/recommended.json))
 does three things:
@@ -264,6 +268,11 @@ repository the companion follows your commit form, or asks before the first comm
   `visuals/` in the project notes. The default is a self-contained HTML
   one-pager; add `slides` or `md` for a deck or Markdown, and any text to say
   what to show (`/visualize slides the review flow`).
+  If Dandelion is installed on this machine, `install.sh` also registers these
+  files as a collection on its Documents page, grouped by project and day;
+  `--no-dandelion` removes the registration. Pi installs without `install.sh`,
+  so a Pi-only machine gets the collection from one `./install.sh --claude` run
+  (it needs `jq`), which also merges the Claude Code settings.
 
 Notes live in `~/agent-notes/project-notes/<project>/`, where `<project>` is
 the repository's folder name (shared by all its worktrees), or `common`
