@@ -2,9 +2,9 @@
 # install.sh — install the companion-agents adapters for Claude Code and Kiro CLI.
 #
 # Usage:
-#   ./install.sh [--claude] [--kiro] [--theme <name>] [--dry-run] [--force]
-#                [--kiro-home=<dir>] [--kiro-cli=<path>] [--no-dandelion]
-#                [--help]
+#   ./install.sh [--claude] [--kiro] [--dandelion] [--theme <name>] [--dry-run]
+#                [--force] [--kiro-home=<dir>] [--kiro-cli=<path>]
+#                [--no-dandelion] [--help]
 #
 # Claude Code: merges the recommended settings snippet
 # (platforms/claude/settings/recommended.json) into the user settings. The merge
@@ -19,17 +19,17 @@
 # $KIRO_HOME, else ~/.kiro. Needs kiro-cli 3.4.0 or newer and Node 22.6 or
 # newer.
 #
-# With no adapter flag, both are installed. When kiro-cli is absent, the Kiro
-# step is skipped with a message unless --kiro was named.
+# With no flag at all, both adapters are installed; --dandelion or --no-dandelion
+# alone runs only the Dandelion step. When kiro-cli is absent, the Kiro step is
+# skipped with a message unless --kiro was named.
 #
-# Dandelion: a real run, after the adapter steps succeed and whatever the
-# adapter flags, registers the visuals collection (the files /visualize writes)
-# with Dandelion's Documents page by writing
-# <plugins>/companion-agents-visuals.json. <plugins> is $DANDELION_PLUGINS_DIR
-# when set, else ${XDG_CONFIG_HOME:-~/.config}/dandelion/plugins. The step runs
-# only when Dandelion is present: $DANDELION_PLUGINS_DIR is set or the dandelion
-# config folder exists. --no-dandelion skips it and deletes that one file, never
-# the folder.
+# Dandelion (opt-in): --dandelion registers the visuals collection (the files
+# /visualize writes) with Dandelion's Documents page by writing
+# <plugins>/companion-agents-visuals.json, and runs no adapter step. <plugins>
+# is $DANDELION_PLUGINS_DIR when set, else ${XDG_CONFIG_HOME:-~/.config}/dandelion/plugins.
+# It writes only when Dandelion is present: $DANDELION_PLUGINS_DIR is set or the
+# dandelion config folder exists. --no-dandelion removes that one file, never the
+# folder. Without either flag, no manifest is written.
 
 set -euo pipefail
 
@@ -41,12 +41,14 @@ TARGET="$CONFIG_DIR/settings.json"
 DRY_RUN=0
 DO_CLAUDE=1
 DO_KIRO=1
+ANY_ADAPTER=0
 KIRO_EXPLICIT=0
 THEME=""
 FORCE=0
 KIRO_HOME_ARG="${KIRO_HOME:-}"
 KIRO_CLI_ARG="${KIRO_CLI:-kiro-cli}"
-DO_DANDELION=1
+DO_DANDELION=0
+DANDELION_REMOVE=0
 DANDELION_ID="companion-agents-visuals"
 
 usage() {
@@ -54,8 +56,9 @@ usage() {
 Install the companion-agents adapters for Claude Code and Kiro CLI.
 
 Usage:
-  ./install.sh [--claude] [--kiro] [--theme <name>] [--dry-run] [--force]
-               [--kiro-home=<dir>] [--kiro-cli=<path>] [--no-dandelion] [--help]
+  ./install.sh [--claude] [--kiro] [--dandelion] [--theme <name>] [--dry-run]
+               [--force] [--kiro-home=<dir>] [--kiro-cli=<path>]
+               [--no-dandelion] [--help]
 
   --claude           Install the Claude Code settings merge only.
   --kiro             Install the Kiro CLI adapter only.
@@ -66,14 +69,15 @@ Usage:
   --kiro-home=<dir>  The Kiro global directory (default: $KIRO_HOME or ~/.kiro).
   --kiro-cli=<path>  The kiro-cli command to check (default: $KIRO_CLI or
                      kiro-cli).
-  --no-dandelion     Do not register the visuals collection with Dandelion,
-                     and remove the registration if it exists.
+  --dandelion        Register the /visualize files as a Dandelion collection and
+                     run no adapter step (opt-in; needs Dandelion).
+  --no-dandelion     Remove the Dandelion collection registration.
 
-With no adapter flag, both are installed. When kiro-cli is absent, the Kiro
-step is skipped with a message unless --kiro was named.
-
-When Dandelion is installed, a real run also registers the /visualize documents
-as a collection on its Documents page.
+With no flag at all, both adapters are installed; --dandelion or --no-dandelion
+alone runs only the Dandelion step. When kiro-cli is absent, the Kiro step is
+skipped with a message unless --kiro was named. Options that affect an adapter
+(--theme, --force, --kiro-home, --kiro-cli) take effect only when an adapter
+step runs.
 
 Claude Code needs jq. Kiro CLI needs Node 22.6 or newer and kiro-cli 3.4.0 or
 newer.
@@ -89,11 +93,13 @@ while [[ $# -gt 0 ]]; do
     --claude)
         DO_CLAUDE=1
         DO_KIRO=0
+        ANY_ADAPTER=1
         shift
         ;;
     --kiro)
         DO_CLAUDE=0
         DO_KIRO=1
+        ANY_ADAPTER=1
         KIRO_EXPLICIT=1
         shift
         ;;
@@ -121,7 +127,13 @@ while [[ $# -gt 0 ]]; do
         KIRO_CLI_ARG="${1#*=}"
         shift
         ;;
+    --dandelion)
+        DO_DANDELION=1
+        DANDELION_REMOVE=0
+        shift
+        ;;
     --no-dandelion)
+        DANDELION_REMOVE=1
         DO_DANDELION=0
         shift
         ;;
@@ -136,6 +148,13 @@ while [[ $# -gt 0 ]]; do
         ;;
     esac
 done
+
+# --dandelion and --no-dandelion alone run only the manifest step; with an
+# adapter flag they combine.
+if ((!ANY_ADAPTER && (DO_DANDELION || DANDELION_REMOVE))); then
+    DO_CLAUDE=0
+    DO_KIRO=0
+fi
 
 install_claude() {
     if ! command -v jq >/dev/null 2>&1; then
@@ -259,7 +278,7 @@ install_dandelion() {
     local plugins="${DANDELION_PLUGINS_DIR:-$config_dir/plugins}"
     local file="$plugins/$DANDELION_ID.json"
 
-    if ((DO_DANDELION == 0)); then
+    if ((DANDELION_REMOVE)); then
         if [[ -f "$file" ]]; then
             if ((DRY_RUN)); then
                 echo "Dry run: would remove the Dandelion visuals collection: $file"
@@ -268,6 +287,12 @@ install_dandelion() {
                 echo "Removed the Dandelion visuals collection: $file"
             fi
         fi
+        return 0
+    fi
+
+    # Defensive: the call sites reach this function only for a write or a
+    # removal, so this guard is not expected to run.
+    if ((DO_DANDELION == 0)); then
         return 0
     fi
 
@@ -315,7 +340,7 @@ install_dandelion() {
 
 # --no-dandelion removes the registration before the adapter steps, so a
 # missing jq or a failing adapter still lets the removal run.
-if ((DO_DANDELION == 0)); then
+if ((DANDELION_REMOVE)); then
     install_dandelion
 fi
 

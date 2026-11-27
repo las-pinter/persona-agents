@@ -63,11 +63,16 @@ severity-to-verdict authority. The reviewer agent and the companion both use it.
 One review round yields one fix batch. Apply the batch once.
 
 Round one reports every finding in one verdict. That verdict starts one fix
-batch.
+batch; apply it once, then run one re-review (the **review** skill again),
+unless the batch earns the diff-only confirm below.
 
-A batch gets a re-review (the **review** skill again) in every case except the
-diff-only confirm below. Only one re-review follows a batch. A further review round runs only
-after a failed test or a failed live probe. A design objection that no test
+The change gets that one full re-review. A finding from it that is IMPORTANT or
+higher is fixed, and a logic change there earns one final re-review. Everything
+else from the re-review is optional polish: apply only the parts that change
+tests, comments, or names (the diff-only confirm), and defer any part that would
+change logic to a later session. Do not change logic after the re-review and
+review it again for SUGGESTION or NIT work. A full review round past these runs
+only after a failed test or a failed live probe. A design objection that no test
 covers goes to the owner for a decision.
 
 A fix batch gets a diff-only confirm, not a re-review, when all of these are

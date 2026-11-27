@@ -154,19 +154,91 @@ describe("install.sh: the Dandelion visuals collection", () => {
 	/** A machine where Dandelion is installed: its config folder exists. */
 	const withDandelion = (home: string) => fs.mkdirSync(path.join(home, ".config", "dandelion"), { recursive: true });
 
-	test("with no Dandelion on the machine, nothing is written", () => {
+	/** The manifest step alone: --dandelion selects it and zeroes the adapters. */
+	const register = (home: string, ...args: string[]): Run => {
+		const result = spawnSync("bash", [script, "--dandelion", ...args], {
+			env: hermeticEnv(home),
+			encoding: "utf8",
+		});
+		return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
+	};
+
+	test("without --dandelion, nothing is written even when Dandelion is present", () => {
 		withConfig((dir, home) => {
+			withDandelion(home);
 			const run = install(dir, home);
+			assert.equal(run.status, 0, run.stderr);
+			assert.equal(fs.existsSync(pluginsOf(home)), false);
+			assert.doesNotMatch(run.stdout, /Dandelion/);
+		});
+	});
+
+	test("a run with no adapter or Dandelion flag writes no manifest", () => {
+		withConfig((dir, home) => {
+			withDandelion(home);
+			const run = spawnSync("bash", [script, "--kiro-cli=/nonexistent/kiro-cli"], {
+				env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir }),
+				encoding: "utf8",
+			});
+			assert.equal(run.status, 0, run.stderr);
+			assert.equal(fs.existsSync(pluginsOf(home)), false);
+		});
+	});
+
+	test("--dandelion runs no adapter step", () => {
+		withConfig((dir, home) => {
+			withDandelion(home);
+			const run = spawnSync("bash", [script, "--dandelion"], {
+				env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir, KIRO_HOME: path.join(home, ".kiro") }),
+				encoding: "utf8",
+			});
+			assert.equal(run.status, 0, run.stderr);
+			assert.equal(fs.existsSync(path.join(dir, "settings.json")), false, "no Claude settings merged");
+			assert.equal(fs.existsSync(path.join(home, ".kiro")), false, "no Kiro payload written");
+		});
+	});
+
+	test("--no-dandelion alone runs no adapter step", () => {
+		withConfig((dir, home) => {
+			withDandelion(home);
+			const run = spawnSync("bash", [script, "--no-dandelion"], {
+				env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir, KIRO_HOME: path.join(home, ".kiro") }),
+				encoding: "utf8",
+			});
+			assert.equal(run.status, 0, run.stderr);
+			assert.equal(fs.existsSync(path.join(dir, "settings.json")), false, "no Claude settings merged");
+			assert.equal(fs.existsSync(path.join(home, ".kiro")), false, "no Kiro payload written");
+		});
+	});
+
+	test("--dandelion combines with an adapter flag in either order", () => {
+		for (const args of [["--dandelion", "--claude"], ["--claude", "--dandelion"]]) {
+			withConfig((dir, home) => {
+				withDandelion(home);
+				const run = spawnSync("bash", [script, ...args], {
+					env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir }),
+					encoding: "utf8",
+				});
+				assert.equal(run.status, 0, run.stderr);
+				assert.equal(manifestOf(pluginsOf(home)).id, ID, `${args.join(" ")} writes the manifest`);
+				assert.ok(fs.existsSync(path.join(dir, "settings.json")), `${args.join(" ")} merges settings`);
+			});
+		}
+	});
+
+	test("--dandelion with no Dandelion on the machine skips with a message", () => {
+		withConfig((_dir, home) => {
+			const run = register(home);
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /Dandelion not found/);
 			assert.equal(fs.existsSync(path.join(home, ".config", "dandelion")), false);
 		});
 	});
 
-	test("with Dandelion, the manifest declares the visuals tree and its root exists", () => {
-		withConfig((dir, home) => {
+	test("--dandelion writes the manifest declaring the visuals tree and its root", () => {
+		withConfig((_dir, home) => {
 			withDandelion(home);
-			const run = install(dir, home);
+			const run = register(home);
 			assert.equal(run.status, 0, run.stderr);
 			assert.deepEqual(fs.readdirSync(pluginsOf(home)), [`${ID}.json`]);
 			const manifest = manifestOf(pluginsOf(home));
@@ -183,34 +255,34 @@ describe("install.sh: the Dandelion visuals collection", () => {
 		});
 	});
 
-	test("a second run leaves the manifest as it is", () => {
-		withConfig((dir, home) => {
+	test("a second --dandelion run leaves the manifest as it is", () => {
+		withConfig((_dir, home) => {
 			withDandelion(home);
-			assert.equal(install(dir, home).status, 0);
+			assert.equal(register(home).status, 0);
 			const first = fs.readFileSync(path.join(pluginsOf(home), `${ID}.json`), "utf8");
-			const run = install(dir, home);
+			const run = register(home);
 			assert.match(run.stdout, /visuals collection already up to date/);
 			assert.equal(fs.readFileSync(path.join(pluginsOf(home), `${ID}.json`), "utf8"), first);
 		});
 	});
 
-	test("a re-run recreates a missing root even when the manifest matches", () => {
-		withConfig((dir, home) => {
+	test("a --dandelion re-run recreates a missing root even when the manifest matches", () => {
+		withConfig((_dir, home) => {
 			withDandelion(home);
-			assert.equal(install(dir, home).status, 0);
+			assert.equal(register(home).status, 0);
 			fs.rmSync(path.join(home, "agent-notes"), { recursive: true, force: true });
-			const run = install(dir, home);
+			const run = register(home);
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /visuals collection already up to date/);
 			assert.ok(fs.statSync(path.join(home, "agent-notes", "project-notes")).isDirectory());
 		});
 	});
 
-	test("DANDELION_PLUGINS_DIR picks the plugins folder", () => {
-		withConfig((dir, home) => {
+	test("--dandelion with DANDELION_PLUGINS_DIR picks the plugins folder", () => {
+		withConfig((_dir, home) => {
 			const plugins = path.join(home, "custom-plugins");
-			const run = spawnSync("bash", [script, "--claude"], {
-				env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir, DANDELION_PLUGINS_DIR: plugins }),
+			const run = spawnSync("bash", [script, "--dandelion"], {
+				env: hermeticEnv(home, { DANDELION_PLUGINS_DIR: plugins }),
 				encoding: "utf8",
 			});
 			assert.equal(run.status, 0, run.stderr);
@@ -219,44 +291,32 @@ describe("install.sh: the Dandelion visuals collection", () => {
 		});
 	});
 
-	test("a run with no adapter flag registers it too", () => {
-		withConfig((dir, home) => {
+	test("--dandelion --dry-run writes no manifest", () => {
+		withConfig((_dir, home) => {
 			withDandelion(home);
-			const run = spawnSync("bash", [script, "--kiro-cli=/nonexistent/kiro-cli"], {
-				env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir }),
-				encoding: "utf8",
-			});
-			assert.equal(run.status, 0, run.stderr);
-			assert.equal(manifestOf(pluginsOf(home)).id, ID);
-		});
-	});
-
-	test("--dry-run writes no manifest", () => {
-		withConfig((dir, home) => {
-			withDandelion(home);
-			const run = install(dir, home, "--dry-run");
+			const run = register(home, "--dry-run");
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, new RegExp(`${ID}\\.json would become`));
 			assert.equal(fs.existsSync(pluginsOf(home)), false);
 		});
 	});
 
-	test("--dry-run reports the root a first run would create", () => {
-		withConfig((dir, home) => {
+	test("--dandelion --dry-run reports the root a first run would create", () => {
+		withConfig((_dir, home) => {
 			withDandelion(home);
-			const run = install(dir, home, "--dry-run");
+			const run = register(home, "--dry-run");
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /Dry run: would create .*agent-notes\/project-notes/);
 			assert.equal(fs.existsSync(path.join(home, "agent-notes")), false);
 		});
 	});
 
-	test("--dry-run reports a missing root it would create", () => {
-		withConfig((dir, home) => {
+	test("--dandelion --dry-run reports a missing root it would create", () => {
+		withConfig((_dir, home) => {
 			withDandelion(home);
-			assert.equal(install(dir, home).status, 0);
+			assert.equal(register(home).status, 0);
 			fs.rmSync(path.join(home, "agent-notes"), { recursive: true, force: true });
-			const run = install(dir, home, "--dry-run");
+			const run = register(home, "--dry-run");
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /Dry run: would create .*agent-notes\/project-notes/);
 			assert.equal(fs.existsSync(path.join(home, "agent-notes")), false);
@@ -266,7 +326,7 @@ describe("install.sh: the Dandelion visuals collection", () => {
 	test("--no-dandelion with --dry-run keeps the manifest", () => {
 		withConfig((dir, home) => {
 			withDandelion(home);
-			assert.equal(install(dir, home).status, 0);
+			assert.equal(register(home).status, 0);
 			const run = install(dir, home, "--no-dandelion", "--dry-run");
 			assert.equal(run.status, 0, run.stderr);
 			assert.match(run.stdout, /would remove the Dandelion visuals collection/);
@@ -277,7 +337,7 @@ describe("install.sh: the Dandelion visuals collection", () => {
 	test("--no-dandelion removes only this manifest", () => {
 		withConfig((dir, home) => {
 			withDandelion(home);
-			assert.equal(install(dir, home).status, 0);
+			assert.equal(register(home).status, 0);
 			fs.writeFileSync(path.join(pluginsOf(home), "other-tool.json"), "{}");
 			const run = install(dir, home, "--no-dandelion");
 			assert.equal(run.status, 0, run.stderr);
@@ -301,7 +361,7 @@ describe("install.sh: the Dandelion visuals collection", () => {
 		withConfig((dir, home) => {
 			const plugins = path.join(home, "custom-plugins");
 			const env = hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir, DANDELION_PLUGINS_DIR: plugins });
-			const first = spawnSync("bash", [script, "--claude"], { env, encoding: "utf8" });
+			const first = spawnSync("bash", [script, "--dandelion"], { env, encoding: "utf8" });
 			assert.equal(first.status, 0, first.stderr);
 			assert.equal(manifestOf(plugins).id, ID);
 			const run = spawnSync("bash", [script, "--claude", "--no-dandelion"], { env, encoding: "utf8" });
@@ -314,7 +374,8 @@ describe("install.sh: the Dandelion visuals collection", () => {
 	test("--no-dandelion removes even when an adapter step fails afterward", () => {
 		withConfig((dir, home) => {
 			withDandelion(home);
-			assert.equal(install(dir, home).status, 0, "the manifest is written");
+			assert.equal(register(home).status, 0, "the manifest is written");
+			fs.mkdirSync(dir, { recursive: true });
 			fs.writeFileSync(path.join(dir, "settings.json"), "{ not json");
 			const run = install(dir, home, "--no-dandelion");
 			assert.equal(run.status, 1, "the Claude merge fails");
@@ -328,7 +389,10 @@ describe("install.sh: the Dandelion visuals collection", () => {
 			withDandelion(home);
 			fs.mkdirSync(dir, { recursive: true });
 			fs.writeFileSync(path.join(dir, "settings.json"), "{ not json");
-			const run = install(dir, home);
+			const run = spawnSync("bash", [script, "--dandelion", "--claude"], {
+				env: hermeticEnv(home, { CLAUDE_CONFIG_DIR: dir }),
+				encoding: "utf8",
+			});
 			assert.equal(run.status, 1, "the Claude merge fails");
 			assert.equal(fs.existsSync(path.join(pluginsOf(home), `${ID}.json`)), false, "no manifest is written");
 			assert.equal(fs.existsSync(path.join(home, "agent-notes")), false, "no notes root is created");
